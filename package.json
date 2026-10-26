@@ -1,0 +1,14 @@
+{
+  "name": "gia-su-10-diem-landing",
+  "version": "1.0.0",
+  "description": "10 Points Tutor Academy — Atelier Zero Landing Page",
+  "type": "module",
+  "scripts": {
+    "build:assets": "node scripts/generate-assets.js",
+    "build:page": "node scripts/build-page.js",
+    "build": "node scripts/generate-assets.js && node scripts/build-page.js",
+    "test": "node test/verify.js"
+  },
+  "keywords": ["landing-page", "tutoring", "threejs", "pixel-art", "open-design"],
+  "license": "UNLICENSED"
+}
