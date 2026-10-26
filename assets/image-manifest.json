@@ -1,0 +1,168 @@
+{
+  "$schema": "https://open-design.dev/schemas/image-manifest.v1.json",
+  "skill": "open-design-landing",
+  "design_system": "atelier-zero",
+  "brand": "Gia Sư 10 Điểm",
+  "slots": [
+    {
+      "id": "hero",
+      "file": "hero.png",
+      "width": 1024,
+      "height": 1024,
+      "ratio": "1:1",
+      "prompt_section": "Thầy Trò Đồng Hành · Chinh Phục Điểm 10 Tuyệt Đối",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "about",
+      "file": "about.png",
+      "width": 1024,
+      "height": 1024,
+      "ratio": "1:1",
+      "prompt_section": "Không Gian Học Thuật & Tư Duy Bản Chất Vững Vàng",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "capabilities",
+      "file": "capabilities.png",
+      "width": 1024,
+      "height": 1024,
+      "ratio": "1:1",
+      "prompt_section": "Quy Trình Sàng Lọc Gia Sư 4 Vòng Khắt Khe",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "lab-1",
+      "file": "lab-1.png",
+      "width": 1024,
+      "height": 680,
+      "ratio": "3:2",
+      "prompt_section": "Toán Học Nâng Cao & Tư Duy Bản Chất Logic",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "lab-2",
+      "file": "lab-2.png",
+      "width": 1024,
+      "height": 680,
+      "ratio": "3:2",
+      "prompt_section": "Phòng Thí Nghiệm Vật Lý & Hóa Học Trực Quan",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "lab-3",
+      "file": "lab-3.png",
+      "width": 1024,
+      "height": 680,
+      "ratio": "3:2",
+      "prompt_section": "Tiếng Anh Học Thuật & Chiến Lược IELTS 8.5+",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "lab-4",
+      "file": "lab-4.png",
+      "width": 1024,
+      "height": 680,
+      "ratio": "3:2",
+      "prompt_section": "Ngữ Văn Chuyên Sâu & Nghị Luận Xã Hội Sắc Bén",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "lab-5",
+      "file": "lab-5.png",
+      "width": 1024,
+      "height": 680,
+      "ratio": "3:2",
+      "prompt_section": "Luyện Thi Vào 10 Chuyên & Kỳ Thi THPT Quốc Gia",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "method-1",
+      "file": "method-1.png",
+      "width": 800,
+      "height": 480,
+      "ratio": "5:3",
+      "prompt_section": "Chẩn Đoán Toàn Diện Lỗ Hổng Kiến Thức 90 Phút",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "method-2",
+      "file": "method-2.png",
+      "width": 800,
+      "height": 480,
+      "ratio": "5:3",
+      "prompt_section": "Ghép Đôi Gia Sư Thủ Khoa Phù Hợp Trong 2 Giờ",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "method-3",
+      "file": "method-3.png",
+      "width": 800,
+      "height": 480,
+      "ratio": "5:3",
+      "prompt_section": "Lộ Trình \"May Đo\" Cá Nhân Hóa Từng Tuần",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "method-4",
+      "file": "method-4.png",
+      "width": 800,
+      "height": 480,
+      "ratio": "5:3",
+      "prompt_section": "Chinh Phục Điểm 10 Tuyệt Đối Trong Kỳ Thi Thật",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "work-1",
+      "file": "work-1.png",
+      "width": 1024,
+      "height": 680,
+      "ratio": "3:2",
+      "prompt_section": "Học Viên Thủ Khoa Khối A00 Toàn Quốc: 29.85/30",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "work-2",
+      "file": "work-2.png",
+      "width": 1024,
+      "height": 680,
+      "ratio": "3:2",
+      "prompt_section": "Bứt Phá Điểm Số Ngoạn Mục Từ 5.5 Lên 9.2 Điểm",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "testimonial",
+      "file": "testimonial.png",
+      "width": 1024,
+      "height": 1024,
+      "ratio": "1:1",
+      "prompt_section": "Niềm Tin & Trách Nhiệm Với Hơn 3.500 Gia Đình",
+      "required": true,
+      "rekey_on_brand_change": true
+    },
+    {
+      "id": "cta",
+      "file": "cta.png",
+      "width": 1024,
+      "height": 1024,
+      "ratio": "1:1",
+      "prompt_section": "Cánh Cửa Đại Học Mơ Ước Đang Chờ Đón Bạn",
+      "required": true,
+      "rekey_on_brand_change": true
+    }
+  ]
+}
