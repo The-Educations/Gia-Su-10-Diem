@@ -306,6 +306,26 @@ test("new tutor onboarding, availability and admin approval", async ({
     ),
   ).toBe(true);
 
+  const sc = await browser.newContext(), student = await sc.newPage();
+  await login(student, "student");
+  await student.goto(tutor.url());
+  await student.locator(".gallery-tile").first().click();
+  const studentDialog = student.getByRole("dialog");
+  await studentDialog.getByRole("button", { name: "Thích · 0", exact: true }).click();
+  await expect(studentDialog.getByRole("button", { name: "Đã thích · 1", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await studentDialog.getByLabel("Bình luận công khai").fill("Em thích góc học tập này <b>rất nhiều</b>.");
+  await studentDialog.getByRole("button", { name: "Gửi bình luận", exact: true }).click();
+  await expect(studentDialog.getByText("Em thích góc học tập này <b>rất nhiều</b>.", { exact: true })).toBeVisible();
+  await student.reload();
+  await student.locator(".gallery-tile").first().click();
+  await expect(student.getByRole("dialog")).toContainText("Em thích góc học tập này <b>rất nhiều</b>.");
+  await tutor.locator(".gallery-tile").first().click();
+  await tutor.getByRole("dialog").getByRole("button", { name: /Xóa bình luận của/ }).click();
+  await expect(tutor.getByRole("dialog")).toContainText("Chưa có bình luận.");
+  await student.reload();
+  await student.locator(".gallery-tile").first().click();
+  await expect(student.getByRole("dialog")).toContainText("Chưa có bình luận.");
+  await sc.close();
   await tc.close();
   await ac.close();
 });
@@ -515,7 +535,7 @@ test("landing entry, education parallax, mobile navigation and real tutor search
   for (const path of [
     "/favicon.ico",
     "/apple-touch-icon.png",
-    "/assets/icon-v2.svg",
+    "/assets/brand-icon-20261031.svg",
   ]) {
     const response = await page.request.get(path);
     expect(response.status()).toBe(200);

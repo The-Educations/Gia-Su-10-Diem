@@ -7,7 +7,7 @@ for (const path of ['/', '/app/auth?role=tutor', '/favicon.ico?favicon.0x3dzn~ox
   assert.equal(response.status, 308, `${alias}${path} must redirect away from the old origin`);
   assert.equal(response.headers.get('location'), canonical + path, 'Redirect must preserve path and query');
 }
-for (const path of ['/favicon.ico', '/assets/icon-v2.svg', '/apple-touch-icon.png']) {
+for (const path of ['/favicon.ico', '/assets/brand-icon-20261031.svg', '/assets/brand-icon-20261031.png', '/assets/brand-touch-20261031.png', '/apple-touch-icon.png']) {
   const [apex, www] = await Promise.all([canonical, alias].map(origin => fetch(origin + path, { signal: AbortSignal.timeout(15000) })));
   assert.equal(apex.status, 200, path);
   assert.equal(www.status, 200, path);
@@ -17,7 +17,7 @@ for (const path of ['/favicon.ico', '/assets/icon-v2.svg', '/apple-touch-icon.pn
 }
 const page = await fetch(alias, { signal: AbortSignal.timeout(15000) });
 assert.equal(new URL(page.url).origin, canonical);
-assert.match(await page.text(), /assets\/icon-v2\.svg/);
+assert.match(await page.text(), /assets\/brand-icon-20261031\.png/);
 console.log('Production routing passed: www redirects preserve paths/queries; both hostnames serve the same current favicon and landing.');
 const health = await fetch(canonical + '/api/health');
 assert.equal(health.status, 200);
@@ -34,6 +34,9 @@ const authPage = await fetch(canonical + '/app/auth');
 assert.equal(authPage.status, 200);
 assert.equal(authPage.headers.get('cache-control'), 'no-cache');
 const authHtml = await authPage.text();
+assert.match(authHtml, /assets\/brand-icon-20261031\.png/);
+const { readFile } = await import('node:fs/promises');
+assert.deepEqual(Buffer.from(await (await fetch(canonical + '/favicon.ico')).arrayBuffer()), await readFile(new URL('../assets/favicon.ico', import.meta.url)), 'Production ICO must match the actual brand asset');
 const entry = authHtml.match(/<script[^>]+src="([^"]+)"/);
 assert.ok(entry, 'Login app must reference its JavaScript entry');
 assert.equal((await fetch(new URL(entry[1], canonical))).status, 200);

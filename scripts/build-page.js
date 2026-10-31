@@ -40,9 +40,10 @@ const html = `<!DOCTYPE html>
 <meta name='theme-color' content='#852f36'>
 <title>${escape(i.brand.name)} — Tìm gia sư, học theo cách của em</title>
 <meta name='description' content='${escape(i.brand.description)}'>
-<link rel='icon' href='/favicon.ico?v=2' sizes='any'>
-<link rel='icon' href='/assets/icon-v2.svg' type='image/svg+xml'>
-<link rel='apple-touch-icon' href='/apple-touch-icon.png?v=2'>
+<link rel='icon' href='/assets/brand-icon-20261031.ico' sizes='any'>
+<link rel='icon' href='/assets/brand-icon-20261031.svg' type='image/svg+xml'>
+<link rel='icon' href='/assets/brand-icon-20261031.png' type='image/png' sizes='32x32'>
+<link rel='apple-touch-icon' href='/assets/brand-touch-20261031.png' sizes='180x180'>
 <link rel='preconnect' href='https://fonts.googleapis.com'>
 <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
 <link href='https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;1,400;1,500&display=swap' rel='stylesheet'>

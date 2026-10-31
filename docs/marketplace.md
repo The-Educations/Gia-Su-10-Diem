@@ -29,6 +29,7 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng ch�
 
 - Đăng nhập, cập nhật tên và mục tiêu, đổi mật khẩu.
 - Lưu / bỏ lưu gia sư.
+- Thích ảnh và bình luận công khai trong thư viện gia sư đã duyệt; xóa bình luận của mình. Bình luận không phải đánh giá buổi học.
 - Nhắn hỏi gia sư trước khi đặt lịch qua nút “Liên hệ gia sư”; mỗi cặp student/tutor có một hội thoại tư vấn riêng.
 - Chọn một giờ trống, môn nhận dạy, hình thức và ghi chú nhu cầu.
 - Xem lại học phí, giờ học và gia sư trước khi gửi yêu cầu.
@@ -48,6 +49,7 @@ Trong bản hiện tại, phụ huynh dùng cùng vai trò `student`; chưa có 
 - Tùy chỉnh màu bìa, phương pháp giảng dạy và nội dung một buổi học; xem trước trực tiếp trong trình sửa hồ sơ.
 - Gửi duyệt; chỉnh sửa hồ sơ hoặc tên công khai đã công bố sẽ đưa về chờ duyệt.
 - Thêm giờ trống, nhận / từ chối yêu cầu, hủy buổi tương lai khi phù hợp.
+- Xóa bình luận trên thư viện ảnh của mình; admin cũng có quyền kiểm duyệt bình luận.
 - Nhắn tin, cung cấp nội dung và liên kết phòng học.
 - Đánh dấu buổi đã diễn ra là hoàn thành.
 
