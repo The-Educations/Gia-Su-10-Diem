@@ -1,3 +1,4 @@
+import { TutorGallery } from "@/components/tutor-gallery";
 import { WorkspaceStats } from "@/components/workspace";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -522,6 +523,7 @@ export default function Admin() {
               <p className="reading-text">{tutor.lesson_plan}</p>
             </Section>
           )}
+          {tutor && <TutorGallery images={tutor.gallery || []} name={tutor.name} />}
           {tutor?.cv && (
             <Button variant="outline" asChild>
               <a href={tutor.cv.url}>Tải CV · {tutor.cv.name}</a>

@@ -43,7 +43,7 @@ export class Marketplace extends DurableObject {
         clientSecret: env.GOOGLE_CLIENT_SECRET,
         adminEmail: env.GOOGLE_ADMIN_EMAIL,
       },
-      processPhoto: async (data) => {
+      processPhoto: async (data, gallery = false) => {
         const stream = () => new Response(data).body;
         const info = await env.IMAGES.info(stream());
         if (
@@ -53,7 +53,11 @@ export class Marketplace extends DurableObject {
         )
           throw new Error("Invalid image");
         const output = await env.IMAGES.input(stream())
-          .transform({ width: 640, height: 640, fit: "cover" })
+          .transform({
+            width: gallery ? 1280 : 640,
+            height: gallery ? 1280 : 640,
+            fit: gallery ? "scale-down" : "cover",
+          })
           .output({ format: "image/webp", quality: 85 });
         return Buffer.from(await output.response().arrayBuffer());
       },

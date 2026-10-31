@@ -1,3 +1,4 @@
+import { registerGallery, galleryMetadata } from "./gallery.js";
 import { registerGoogleAuth } from "./google-auth.js";
 import { registerUploads, uploadMetadata } from "./uploads.js";
 import { registerInquiries } from "./inquiries.js";
@@ -49,8 +50,8 @@ export function createApi(
         return res.status(403).json({ error: "Nguồn yêu cầu không hợp lệ." });
       if (
         !(
-          req.method === "PUT" &&
-          /^\/tutor\/uploads\/(photo|cv)$/.test(req.path)
+          (req.method === "PUT" && /^\/tutor\/uploads\/(photo|cv)$/.test(req.path)) ||
+          (req.method === "POST" && req.path === "/tutor/gallery")
         ) &&
         !req.is("application/json")
       )
@@ -190,6 +191,7 @@ export function createApi(
     }));
   registerGoogleAuth(app, db, { origin, production, session, google });
   registerUploads(app, db, auth, audit, processPhoto);
+  registerGallery(app, db, auth, audit, processPhoto);
   registerInquiries(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
@@ -299,7 +301,7 @@ export function createApi(
       "SELECT r.*,u.name FROM reviews r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=b.student_id WHERE b.tutor_id=? ORDER BY r.created_at DESC",
       t.user_id,
     );
-    res.json({ ...t, slots, reviews });
+    res.json({ ...t, slots, reviews, gallery: galleryMetadata(db, t.user_id) });
   });
   app.get("/api/favorites", auth("student"), (req, res) =>
     res.json(
@@ -334,6 +336,7 @@ export function createApi(
     const t = one(db, "SELECT * FROM tutors WHERE user_id=?", req.user.id);
     res.json({
       ...t,
+      gallery: galleryMetadata(db, t.user_id),
       name: req.user.name,
       demo: req.user.demo,
       ...uploadMetadata(db, t.user_id),
@@ -594,6 +597,7 @@ export function createApi(
       ).map((t) => ({
         ...t,
         ...uploadMetadata(db, t.user_id),
+        gallery: galleryMetadata(db, t.user_id),
         subjects: JSON.parse(t.subjects),
         levels: JSON.parse(t.levels),
         goals: JSON.parse(t.goals),

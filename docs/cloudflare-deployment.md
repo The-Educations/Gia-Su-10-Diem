@@ -4,9 +4,9 @@ The canonical site is `https://giasudiem10.online`. `/` serves the education lan
 
 ## Persistent data
 
-The `MARKETPLACE` binding targets one SQLite-backed Durable Object, `marketplace-v1`. Accounts, sessions, profiles, bookings, messages, reviews, OAuth state and upload metadata persist across deployments. Files are stored as 100 KB SQLite chunks; existing local BLOB uploads remain readable. Local SQLite remains in `.data/marketplace.sqlite`; production does **not** import this local database or seed demo users. Catalogue subjects/exams are seeded idempotently. Keep the namespace and object name stable when deploying.
+The `MARKETPLACE` binding targets one SQLite-backed Durable Object, `marketplace-v1`. Accounts, sessions, profiles, bookings, messages, reviews, OAuth state and upload metadata persist across deployments. CVs, portraits and tutor gallery images are stored as 100 KB SQLite chunks; existing local BLOB uploads remain readable. Local SQLite remains in `.data/marketplace.sqlite`; production does **not** import this local database or seed demo users. Catalogue subjects/exams are seeded idempotently. Keep the namespace and object name stable when deploying.
 
-A single Durable Object keeps booking transactions atomic. This is an initial small-scale deployment, not a horizontally sharded database. The shared `transaction()` helper maps to `storage.transactionSync` on Cloudflare and native SQLite transactions locally. Portrait processing uses the Images binding in production and Sharp locally. Images binding usage can incur Cloudflare transformation charges.
+A single Durable Object keeps booking transactions atomic. This is an initial small-scale deployment, not a horizontally sharded database. The shared `transaction()` helper maps to `storage.transactionSync` on Cloudflare and native SQLite transactions locally. Portrait and gallery processing uses the Images binding in production and Sharp locally. Gallery images retain aspect ratio within 1280 × 1280; portraits remain 640 × 640 crops. Images binding usage can incur Cloudflare transformation charges.
 
 ## Google sign-in
 

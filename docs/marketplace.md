@@ -44,6 +44,7 @@ Trong bản hiện tại, phụ huynh dùng cùng vai trò `student`; chưa có 
 - Tạo tài khoản và hoàn thiện hồ sơ công khai.
 - Tải, thay hoặc xóa ảnh đại diện và CV PDF; upload mới đưa hồ sơ về pending. CV công khai sau khi admin duyệt.
 - Chọn môn dạy, cấp học, mục tiêu kỳ thi nhận luyện, mức phí, hình thức, địa điểm, học vấn và kinh nghiệm.
+- Thư viện kiểu lưới với tối đa 12 ảnh, tải nhiều ảnh, sửa chú thích, xóa và xem ảnh đầy đủ. Ảnh mới/chú thích mới đưa hồ sơ về chờ duyệt; chỉ chủ hồ sơ và admin xem được khi chưa duyệt.
 - Tùy chỉnh màu bìa, phương pháp giảng dạy và nội dung một buổi học; xem trước trực tiếp trong trình sửa hồ sơ.
 - Gửi duyệt; chỉnh sửa hồ sơ hoặc tên công khai đã công bố sẽ đưa về chờ duyệt.
 - Thêm giờ trống, nhận / từ chối yêu cầu, hủy buổi tương lai khi phù hợp.

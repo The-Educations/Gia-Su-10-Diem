@@ -1,3 +1,4 @@
+import { TutorGallery } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
 import { ContactTutor } from "@/components/contact-tutor";
 import { FileText, Download } from "lucide-react";
@@ -90,6 +91,7 @@ export default function TutorDetail() {
               Chọn giờ học · {money(t.rate)} / giờ
             </a>
           </TutorPresentation>
+          <TutorGallery images={t.gallery || []} name={t.name} />
           <Section title={`Đánh giá (${t.reviews.length})`}>
             {t.reviews.length ? (
               t.reviews.map((r, i) => (

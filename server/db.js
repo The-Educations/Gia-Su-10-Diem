@@ -81,6 +81,9 @@ export function migrateDatabase(db) {
     tutor_id INTEGER NOT NULL REFERENCES tutors(user_id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(student_id,tutor_id));
     CREATE TABLE IF NOT EXISTS inquiry_messages (id INTEGER PRIMARY KEY, inquiry_id INTEGER NOT NULL REFERENCES inquiries(id),
     sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE IF NOT EXISTS tutor_gallery (id TEXT PRIMARY KEY, tutor_id INTEGER NOT NULL REFERENCES tutors(user_id), caption TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+    CREATE INDEX IF NOT EXISTS gallery_tutor ON tutor_gallery(tutor_id);
+    CREATE TABLE IF NOT EXISTS gallery_chunks (image_id TEXT NOT NULL REFERENCES tutor_gallery(id) ON DELETE CASCADE, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(image_id,part));
     CREATE TABLE IF NOT EXISTS demo_seeds (key TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS oauth_identities (provider TEXT NOT NULL, subject TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), PRIMARY KEY(provider,subject), UNIQUE(provider,user_id));
     CREATE TABLE IF NOT EXISTS oauth_states (state TEXT PRIMARY KEY, browser_hash TEXT NOT NULL, verifier TEXT NOT NULL, nonce TEXT NOT NULL, role TEXT NOT NULL, next TEXT NOT NULL, link_user_id INTEGER REFERENCES users(id), expires INTEGER NOT NULL);

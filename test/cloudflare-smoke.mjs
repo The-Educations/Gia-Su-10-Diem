@@ -38,5 +38,12 @@ assert.equal(updated.profile_theme,'sage');
 assert.equal(updated.lesson_plan,'Ôn bài, luyện tập và phản hồi.');
 assert.equal(updated.status,'pending');
 
+const galleryResponse = await fetch(base+'/api/tutor/gallery', {method:'POST',headers:{Cookie:cookie,'Content-Type':'image/png','X-Caption':encodeURIComponent('Góc học tập')},body:photo});
+assert.equal(galleryResponse.status,201,await galleryResponse.clone().text());
+const [galleryPhoto] = await galleryResponse.json();
+assert.equal((await get(galleryPhoto.url)).status,200);
+assert.equal((await fetch(base+galleryPhoto.url)).status,404);
+const galleryReload = await(await get('/api/tutor/profile')).json();
+assert.equal(galleryReload.gallery[0].caption,'Góc học tập');
 const app=await fetch(base+'/app/',{redirect:'manual'});assert.equal(app.headers.get('location'),base+'/');
-console.log('Cloudflare runtime: registration, session, portrait/CV upload, private download, availability and landing routing passed.');
+console.log('Cloudflare runtime: registration, session, portrait/CV upload, private download, availability, custom profile, private gallery and landing routing passed.');
