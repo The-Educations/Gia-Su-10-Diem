@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import sharp from "sharp";
 import { PDFDocument } from "pdf-lib";
 const base=process.env.TEST_ORIGIN || 'http://127.0.0.1:4176';
+for (const path of ['/', '/app/tutors', '/app/auth', '/app/library']) {
+ const page = await fetch(base + path, {redirect: 'manual'});
+ assert.equal(page.status, 200, `${path} must serve HTML without asset canonicalization redirects`);
+ const html = await page.text();
+ assert.ok(path === '/' ? html.includes('learning-journey') : html.includes('id="root"'), path);
+}
 const email=`cf-${Date.now()}@example.test`;
 const res=await fetch(base+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Cloudflare test',email,password:'RuntimeTest2026!',role:'tutor'})});
 assert.equal(res.status,201,await res.text());

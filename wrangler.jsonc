@@ -4,7 +4,7 @@
   "main": "worker/index.js",
   "compatibility_date": "2026-10-30",
   "account_id": "1177b93da7312e51a226b6ecffb1e251",
-  "assets": { "directory": "dist/site", "binding": "ASSETS", "run_worker_first": true },
+  "assets": { "directory": "dist/site", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none" },
   "vars": { "APP_ORIGIN": "https://giasudiem10.online" },
   "durable_objects": { "bindings": [{ "name": "MARKETPLACE", "class_name": "Marketplace" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Marketplace"] }],
