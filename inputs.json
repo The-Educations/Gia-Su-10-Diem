@@ -1,79 +1,191 @@
 {
   "$schema": "./schema.ts",
   "_doc": "Gia Sư 10 Điểm — Canonical Landing Configuration in Atelier Zero editorial language.",
-
   "brand": {
     "name": "Gia Sư 10 Điểm",
     "mark": "⑩",
-    "meta": { "title": "Viện Gia Sư Nº 01", "subtitle": "Hà Nội · TP.HCM · Đà Nẵng" },
+    "meta": {
+      "title": "Nền tảng tìm gia sư",
+      "subtitle": "Hà Nội · TP.HCM · Đà Nẵng"
+    },
     "filed_under": "Giáo Dục · Thủ Khoa",
-    "tagline": "Chinh phục điểm 10 bằng tư duy bản chất cùng thủ khoa & giáo viên chuyên.",
-    "description": "Gia Sư 10 Điểm — Nền tảng kết nối gia sư thủ khoa đại học và giáo viên trường chuyên hàng đầu Việt Nam. Lộ trình cá nhân hóa 1 kèm 1, cam kết tăng tối thiểu 2 điểm sau 8 tuần, học thử 2 buổi 0 đồng.",
+    "tagline": "Tìm người đồng hành, học từ tư duy bản chất.",
+    "description": "Tìm gia sư theo môn, cấp học và mục tiêu. Xem hồ sơ, CV, liên hệ trực tiếp và chọn lịch học phù hợp.",
     "locale": "vi",
     "edition": "Niên khóa 2026 / Kỳ tuyển sinh Nº 10",
     "version": "v2.6",
-    "license": "Chuẩn GD Quốc Gia",
+    "license": "Kết nối gia sư",
     "primary_url": "#contact",
     "primary_url_label": "Đăng Ký Tư Vấn",
     "download_url": "#labs",
     "download_url_label": "Xem Môn Học",
-    "contact_email": "mailto:tuyensinh@giasu10diem.edu.vn",
+    "contact_email": "",
     "location": "Hà Nội / TP.HCM / Đà Nẵng",
     "coordinates": "21.0285° N · 105.8542° E",
     "year": "2026",
     "year_roman": "MMXXVI",
-    "founded": "Thành lập MMXX",
+    "founded": "Kết nối để học tốt hơn",
     "rails": {
-      "right": "Gia Sư 10 Điểm — Niên Khóa 2026 · Thủ Khoa Toàn Quốc",
+      "right": "Gia Sư 10 Điểm · Học theo cách của em",
       "left": "Toán · Lý · Hóa · Văn · Anh · Luyện Thi Chuyên & Đại Học"
     },
-    "languages": ["Tiếng Việt", "English"],
-    "status": "Đang tuyển sinh 2026"
+    "languages": [
+      "Tiếng Việt",
+      "English"
+    ],
+    "status": "Tìm gia sư phù hợp"
   },
-
   "nav": [
-    { "label": "Môn Học", "href": "#labs", "count": "08" },
-    { "label": "Tiêu Chuẩn", "href": "#capabilities", "count": "04" },
-    { "label": "Quy Trình", "href": "#method", "count": "04" },
-    { "label": "Bảng Vàng", "href": "#work", "count": "9+" },
-    { "label": "Liên Hệ", "href": "#contact" }
+    {
+      "label": "Môn Học",
+      "href": "#labs",
+      "count": "05"
+    },
+    {
+      "label": "Tiêu Chuẩn",
+      "href": "#capabilities",
+      "count": "04"
+    },
+    {
+      "label": "Quy Trình",
+      "href": "#method",
+      "count": "04"
+    },
+    {
+      "label": "Mục Tiêu",
+      "href": "#work",
+      "count": "9+"
+    },
+    {
+      "label": "Liên Hệ",
+      "href": "#contact"
+    }
   ],
-
   "rules": {
-    "about":        { "roman": "II.",   "meta": ["Triết Lý / Tuyên Ngôn", "•", "Gia Sư 10 Điểm / Tập 01"], "pagination": "002 / 008" },
-    "capabilities": { "roman": "III.",  "meta": ["Hệ Thống Tuyển Chọn", "•", "Sàng lọc 4 vòng khắt khe"], "pagination": "003 / 008" },
-    "labs":         { "roman": "IV.",   "meta": ["Danh Mục Môn Học & Cấp Độ", "•", "Từ Lớp 6 đến Luyện Thi ĐH"], "pagination": "004 / 008" },
-    "method":       { "roman": "V.",    "meta": ["Phương Pháp / Lộ Trình", "•", "04 giai đoạn bứt phá"], "pagination": "005 / 008" },
-    "work":         { "roman": "VI.",   "meta": ["Bảng Vàng Thành Tích", "•", "Thủ khoa & Á khoa 2026"], "pagination": "006 / 008" },
-    "testimonial":  { "roman": "VII.",  "meta": ["Tiếng Nói Phụ Huynh", "•", "Trách nhiệm & Cam kết"], "pagination": "007 / 008" },
-    "cta":          { "roman": "VIII.", "meta": ["Đăng Ký Học Thử", "•", "Ghép gia sư trong 2 giờ"], "pagination": "008 / 008" }
+    "about": {
+      "roman": "II.",
+      "meta": [
+        "Triết Lý / Tuyên Ngôn",
+        "•",
+        "Gia Sư 10 Điểm / Tập 01"
+      ],
+      "pagination": "002 / 008"
+    },
+    "capabilities": {
+      "roman": "III.",
+      "meta": [
+        "Hệ Thống Tuyển Chọn",
+        "•",
+        "Sàng lọc 4 vòng khắt khe"
+      ],
+      "pagination": "003 / 008"
+    },
+    "labs": {
+      "roman": "IV.",
+      "meta": [
+        "Danh Mục Môn Học & Cấp Độ",
+        "•",
+        "Từ Lớp 6 đến Luyện Thi ĐH"
+      ],
+      "pagination": "004 / 008"
+    },
+    "method": {
+      "roman": "V.",
+      "meta": [
+        "Phương Pháp / Lộ Trình",
+        "•",
+        "04 giai đoạn bứt phá"
+      ],
+      "pagination": "005 / 008"
+    },
+    "work": {
+      "roman": "VI.",
+      "meta": [
+        "Bảng Vàng Thành Tích",
+        "•",
+        "Thủ khoa & Á khoa 2026"
+      ],
+      "pagination": "006 / 008"
+    },
+    "testimonial": {
+      "roman": "VII.",
+      "meta": [
+        "Tiếng Nói Phụ Huynh",
+        "•",
+        "Trách nhiệm & Cam kết"
+      ],
+      "pagination": "007 / 008"
+    },
+    "cta": {
+      "roman": "VIII.",
+      "meta": [
+        "Đăng Ký Học Thử",
+        "•",
+        "Ghép gia sư trong 2 giờ"
+      ],
+      "pagination": "008 / 008"
+    }
   },
-
   "hero": {
     "label": "Nền tảng gia sư chọn lọc",
     "ix": "· Nº 01",
     "headline": [
-      { "text": "Chinh phục " },
-      { "text": "điểm 10", "em": true },
-      { "text": " bằng " },
-      { "text": "tư duy bản chất,", "em": true },
-      { "text": " không học vẹt" },
-      { "text": ".", "dot": true }
+      {
+        "text": "Gia sư 1:1.\n"
+      },
+      {
+        "text": "Hiểu tận gốc.",
+        "em": true
+      }
     ],
-    "lead": "Mạng lưới gia sư thủ khoa từ ĐH Ngoại Thương, Bách Khoa, Sư Phạm, Y Hà Nội và giáo viên trường chuyên (Hà Nội - Amsterdam, Lê Hồng Phong, Lam Sơn). Giáo án “may đo” 1 kèm 1 theo từng lỗ hổng kiến thức, cam kết tăng tối thiểu 2 điểm sau 8 tuần, học thử 2 buổi 0 đồng.",
-    "primary":   { "label": "Tìm gia sư ngay", "href": "#contact" },
-    "secondary": { "label": "Kiểm tra đầu vào", "href": "#labs" },
+    "lead": "Tìm gia sư phù hợp với môn học, lịch trình và cách học của em. Xem hồ sơ, trao đổi trước, rồi chọn một giờ học.",
+    "primary": {
+      "label": "Tìm gia sư ngay",
+      "href": "/app/tutors"
+    },
+    "secondary": {
+      "label": "Khám phá môn học",
+      "href": "#labs"
+    },
     "stats": [
-      { "value": "100%", "label": "xác thực", "sub": "bằng cấp & lý lịch", "variant": "solid" },
-      { "value": "96.8%", "label": "tiến bộ", "sub": "tăng 2+ điểm/2 tháng", "variant": "dashed" },
-      { "value": "02", "label": "buổi học thử", "sub": "hoàn toàn 0 đồng", "variant": "coral" }
+      {
+        "value": "1:1",
+        "label": "Một thầy, một trò",
+        "sub": "",
+        "variant": "solid"
+      },
+      {
+        "value": "6–12",
+        "label": "Khối lớp",
+        "sub": "",
+        "variant": "solid"
+      },
+      {
+        "value": "CV",
+        "label": "Xem hồ sơ gia sư",
+        "sub": "",
+        "variant": "coral"
+      }
     ],
-    "meta": "↳ &nbsp; Hotline 24/7: 0988 10 10 10 &nbsp; · &nbsp; Ghép gia sư chuẩn gu trong 2 giờ",
+    "meta": "Trực tuyến hoặc trực tiếp · Học theo lịch của em",
     "index": [
-      { "num": "01", "label": "Chẩn đoán" },
-      { "num": "02", "label": "Ghép đôi", "active": true },
-      { "num": "03", "label": "Học thử 0đ" },
-      { "num": "04", "label": "Đạt Điểm 10" }
+      {
+        "num": "01",
+        "label": "Chẩn đoán"
+      },
+      {
+        "num": "02",
+        "label": "Ghép đôi",
+        "active": true
+      },
+      {
+        "num": "03",
+        "label": "Học thử 0đ"
+      },
+      {
+        "num": "04",
+        "label": "Đạt Điểm 10"
+      }
     ],
     "annotations": {
       "tl": "BỘ TIÊU CHUẨN / GS-10D",
@@ -82,90 +194,114 @@
       "br": "21.0285° N · 105.8542° E"
     }
   },
-
   "about": {
     "label": "Tuyên ngôn học thuật",
     "ix": "· Nº 02",
     "headline": [
-      { "text": "Chúng tôi không dạy học vẹt. Chúng tôi xây dựng " },
-      { "text": "tư duy bản chất vững vàng", "em": true },
-      { "text": " giúp học sinh làm chủ mọi dạng đề thi" },
-      { "text": ".", "dot": true }
+      {
+        "text": "Hiểu sâu.\n"
+      },
+      {
+        "text": "Tự tin giải bài.",
+        "em": true
+      }
     ],
-    "lead": "Các phương pháp dạy kèm truyền thống thường ép học sinh giải hàng trăm bài mẫu một cách máy móc, khiến các em lúng túng khi gặp bài thi phân loại nâng cao. Tại Gia Sư 10 Điểm, mỗi bài học đều xuất phát từ tiên đề gốc, giúp học sinh hiểu sâu bản chất và tự tin chinh phục điểm số tuyệt đối.",
-    "cta_label": "Xem Bộ Tiêu Chuẩn Giảng Dạy",
+    "lead": "Bắt đầu từ gốc rễ của mỗi công thức. Gia sư cùng em tìm ra cách hiểu, cách lập luận và cách tự giải quyết một bài toán mới.",
+    "cta_label": "Khám phá cách dạy",
     "cta_href": "#capabilities",
-    "footer_text": "Gia Sư 10 Điểm — Thành lập MMXX · Chuẩn Giáo Dục Quốc Gia",
-    "stamp_top": "XÁC MINH",
-    "stamp_bottom": "TOP 1% THỦ KHOA",
+    "footer_text": "Gia Sư 10 Điểm · Kết nối học sinh và gia sư",
+    "stamp_top": "HỌC VỮNG",
+    "stamp_bottom": "HIỂU TỪ GỐC",
     "side_note": "Tiên đề học thuật: Khi học sinh hiểu rõ nguồn gốc công thức, cách giải quyết bài toán sẽ trở thành phản xạ tự nhiên.",
     "caption": "Cấu trúc 4 tầng tư duy bản chất: Trực giác, Cấu trúc, Tổng hợp và Làm chủ kiến thức."
   },
-
   "capabilities": {
     "label": "Quy chuẩn tuyển chọn",
     "ix": "· Nº 03",
     "headline": [
-      { "text": "Chỉ " },
-      { "text": "8.5% ứng viên", "em": true },
-      { "text": " vượt qua quy trình tuyển chọn 4 vòng độc quyền" },
-      { "text": ".", "dot": true }
+      {
+        "text": "Giỏi chuyên môn.\n"
+      },
+      {
+        "text": "Tận tâm giảng dạy.",
+        "em": true
+      }
     ],
-    "lead": "Gia sư tại Gia Sư 10 Điểm không chỉ có học lực xuất chúng mà còn phải sở hữu kỹ năng truyền đạt lôi cuốn, phương pháp sư phạm hiện đại và lòng kiên nhẫn đồng hành.",
-    "ribbon": "TIÊU CHUẨN · THỦ KHOA ĐẠI HỌC & GIÁO VIÊN TRƯỜNG CHUYÊN",
+    "lead": "Chọn người dạy từ chuyên môn, kinh nghiệm, CV và cách trao đổi với em.",
+    "ribbon": "CHUYÊN MÔN · CÁCH DẠY · LỊCH HỌC",
     "cards": [
       {
         "num": "01",
         "tag": "HỒ SƠ HỌC THUẬT",
-        "title": "Xác Minh 100% Hồ Sơ\n& Bằng Cấp Thủ Khoa",
-        "body": "Mọi gia sư đều phải xuất trình bảng điểm đại học xuất sắc (GPA > 3.6), giấy chứng nhận giải thưởng quốc gia hoặc thành tích thủ khoa, á khoa các kỳ thi toàn quốc.",
+        "title": "Hồ sơ & CV",
+        "body": "Xem học vấn, kinh nghiệm và CV do gia sư cung cấp. Hồ sơ cần được quản trị duyệt trước khi hiển thị.",
         "icon_svg": "<path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/>",
-        "href": "#contact"
+        "href": "/app/tutors"
       },
       {
         "num": "02",
         "tag": "KIỂM TRA NĂNG LỰC",
-        "title": "Giải Đề Trực Tiếp\n& Thi Thử Mù Khắt Khe",
-        "body": "Ứng viên làm bài kiểm tra giải đề nâng cao, đề thi Olympic và các dạng bài phân loại điểm 9-10 trực tiếp dưới sự giám sát của hội đồng chuyên môn.",
+        "title": "Môn học & mục tiêu",
+        "body": "Lọc theo môn học, cấp học và kỳ thi mà gia sư nhận dạy.",
         "icon_svg": "<circle cx='12' cy='12' r='10'/><path d='M12 6v6l4 2'/>",
-        "href": "#contact"
+        "href": "/app/tutors"
       },
       {
         "num": "03",
         "tag": "KỸ NĂNG SƯ PHẠM",
-        "title": "Dạy Thử Thực Chiến\n& Đánh Giá Truyền Đạt",
-        "body": "Giảng dạy thực tế trước hội đồng sư phạm để đánh giá kỹ năng diễn đạt dễ hiểu, sự kiên nhẫn, khả năng truyền cảm hứng và lắng nghe tâm lý học sinh.",
+        "title": "Trao đổi trước khi học",
+        "body": "Nhắn hỏi gia sư về phương pháp, học phí và nhu cầu của em trước khi đặt lịch.",
         "icon_svg": "<path d='M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75'/>",
-        "href": "#contact"
+        "href": "/app/tutors"
       },
       {
         "num": "04",
         "tag": "GIÁM SÁT TIẾN BỘ",
-        "title": "Theo Dõi Định Kỳ\n& Báo Cáo Hàng Tuần",
-        "body": "Định kỳ mỗi 2 tuần đều có bài kiểm tra mini đánh giá tiến độ. Phụ huynh nhận báo cáo chi tiết về mức độ hiểu bài và lộ trình học tập được cập nhật liên tục.",
+        "title": "Lịch học rõ ràng",
+        "body": "Xem giờ trống, gửi yêu cầu và theo dõi xác nhận. Lưu lịch học vào ứng dụng lịch của em.",
         "icon_svg": "<path d='M22 11.08V12a10 10 0 11-5.93-9.14'/><polyline points='22 4 12 14.01 9 11.01'/>",
-        "href": "#contact"
+        "href": "/app/tutors"
       }
     ]
   },
-
   "labs": {
     "label": "Hệ thống môn học",
     "ix": "· Nº 04",
     "headline": [
-      { "text": "Chương trình toàn diện từ " },
-      { "text": "lấy lại căn bản", "em": true },
-      { "text": " đến " },
-      { "text": "chinh phục trường chuyên", "em": true },
-      { "text": " và đại học top 1" },
-      { "text": ".", "dot": true }
+      {
+        "text": "Chọn môn học.\n"
+      },
+      {
+        "text": "Mở lối tiến bộ.",
+        "em": true
+      }
     ],
     "pills": [
-      { "label": "Tất cả môn", "count": "08", "active": true },
-      { "label": "Toán & Tự Nhiên", "count": "03" },
-      { "label": "Khoa Học", "count": "02" },
-      { "label": "Ngoại Ngữ", "count": "02" },
-      { "label": "Luyện Thi Chuyên", "count": "01" }
+      {
+        "label": "Tất cả",
+        "key": "all",
+        "active": true
+      },
+      {
+        "label": "Toán",
+        "key": "math"
+      },
+      {
+        "label": "Khoa học",
+        "key": "science"
+      },
+      {
+        "label": "Tiếng Anh",
+        "key": "english"
+      },
+      {
+        "label": "Ngữ văn",
+        "key": "literature"
+      },
+      {
+        "label": "Luyện thi",
+        "key": "exam"
+      }
     ],
     "meta": {
       "ring": "08",
@@ -177,237 +313,391 @@
         "badge": "MÔN HỌC 01",
         "num": "01",
         "year": "TOÁN HỌC",
-        "title": "Toán Học Nâng Cao & Tư Duy Bản Chất",
-        "body": "Đại số, hình học không gian, giải tích và phương pháp tư duy giải nhanh bài toán phân loại điểm 9-10 của kỳ thi THPTQG.",
-        "href": "#contact"
+        "title": "Toán học",
+        "body": "Nắm chắc đại số, hình học và giải tích. Rèn tư duy giải bài từ căn bản đến nâng cao.",
+        "href": "#contact",
+        "category": "math",
+        "subject": "toan"
       },
       {
         "badge": "MÔN HỌC 02",
         "num": "02",
         "year": "TỰ NHIÊN",
-        "title": "Vật Lý & Hóa Học Thực Nghiệm",
-        "body": "Cơ học, điện xoay chiều, nhiệt động lực, hóa vô cơ và hữu cơ kết hợp hình ảnh trực quan giúp học sinh ghi nhớ bản chất hiện tượng.",
-        "href": "#contact"
+        "title": "Vật lý & Hóa học",
+        "body": "Hiểu hiện tượng, hiểu phản ứng. Kết nối kiến thức với bài tập và ứng dụng thực tế.",
+        "href": "#contact",
+        "category": "science",
+        "subject": "khtn"
       },
       {
         "badge": "MÔN HỌC 03",
         "num": "03",
         "year": "NGOẠI NGỮ",
-        "title": "Tiếng Anh Chuyên Sâu & Luyện Thi IELTS",
-        "body": "Chiến lược bứt phá IELTS 8.5+, SAT, ngữ pháp nâng cao, phát âm chuẩn quốc tế và kỹ năng viết luận học thuật sắc bén.",
-        "href": "#contact"
+        "title": "Tiếng Anh & IELTS",
+        "body": "Củng cố ngữ pháp, giao tiếp và kỹ năng học thuật. Xây dựng lộ trình luyện thi IELTS.",
+        "href": "#contact",
+        "category": "english",
+        "subject": "anh"
       },
       {
         "badge": "MÔN HỌC 04",
         "num": "04",
         "year": "NGỮ VĂN",
-        "title": "Ngữ Văn & Nghị Luận Xã Hội Mạch Lạc",
-        "body": "Xây dựng tư duy lập luận logic, kỹ thuật triển khai luận điểm sáng tạo, kỹ năng phân tích tác phẩm văn học đạt điểm 9+.",
-        "href": "#contact"
+        "title": "Ngữ văn",
+        "body": "Đọc hiểu tác phẩm, phát triển luận điểm và viết bài nghị luận bằng tiếng nói riêng.",
+        "href": "#contact",
+        "category": "literature",
+        "subject": "van"
       },
       {
         "badge": "MÔN HỌC 05",
         "num": "05",
         "year": "LUYỆN THI",
-        "title": "Luyện Thi Vào 10 Chuyên & ĐGNL ĐHQG",
-        "body": "Lộ trình ôn thi chuyên biệt vào các trường chuyên Hà Nội - Amsterdam, Lê Hồng Phong, KHTN và kỳ thi đánh giá năng lực.",
-        "href": "#contact"
+        "title": "Luyện thi chuyên",
+        "body": "Ôn thi vào lớp 10 chuyên và đánh giá năng lực với mục tiêu, chuyên đề rõ ràng.",
+        "href": "#contact",
+        "category": "exam",
+        "subject": "chuyen"
       }
     ],
     "progress": {
       "filled": 5,
       "total": 5
     },
-    "foot": "Toàn bộ giáo trình đối chiếu chuẩn theo khung kỳ thi THPT Quốc Gia, Tuyển sinh Chuyên và chuẩn quốc tế (SAT / IELTS / AP)."
+    "foot": "Khám phá danh mục môn học và mục tiêu kỳ thi. Thông tin kỳ thi có liên kết đến nguồn của đơn vị tổ chức."
   },
-
   "method": {
     "label": "Lộ trình cá nhân hóa",
     "ix": "· Nº 05",
     "headline": [
-      { "text": "Quy trình 4 bước chuyển hóa " },
-      { "text": "lỗ hổng kiến thức thành điểm 10 rực rỡ", "em": true },
-      { "text": "." }
+      {
+        "text": "Một lộ trình.\n"
+      },
+      {
+        "text": "Từng bước vững vàng.",
+        "em": true
+      }
     ],
     "right": "TỪ CHẨN ĐOÁN ĐẾN LÀM CHỦ KIẾN THỨC",
     "steps": [
       {
         "num": "01",
-        "title": "Chẩn Đoán Lỗ Hổng Kiến Thức",
-        "body": "Bài kiểm tra đầu vào 90 phút độc quyền giúp xác định chính xác kiến thức rỗng và thói quen giải đề chưa tối ưu của học sinh."
+        "title": "Hiểu điểm xuất phát",
+        "body": "Chọn môn học, cấp học và điều em muốn cải thiện."
       },
       {
         "num": "02",
-        "title": "Ghép Đôi Gia Sư Thủ Khoa Phù Hợp",
-        "body": "Hệ thống kết nối học sinh với gia sư thủ khoa tương thích về tính cách, phương pháp giảng dạy và mục tiêu thi cử trong vòng 2 giờ."
+        "title": "Chọn người đồng hành",
+        "body": "Đọc hồ sơ, xem CV và lưu những gia sư phù hợp để cân nhắc."
       },
       {
         "num": "03",
-        "title": "Giáo Án “May Đo” 1 Kèm 1",
-        "body": "Kế hoạch học tập chi tiết theo từng tuần, tập trung bù đắp phần yếu, giải quyết triệt để bài tập khó và rèn luyện phản xạ thi cử."
+        "title": "Học theo cách của em",
+        "body": "Nhắn hỏi trước, chọn giờ trống và gửi yêu cầu học."
       },
       {
         "num": "04",
-        "title": "Chinh Phục Điểm 10 Tuyệt Đối",
-        "body": "Luyện đề thi thử dưới áp lực thời gian thực tế, tự tin bước vào kỳ thi chính thức với tâm thế vững vàng và tư duy tự chủ."
+        "title": "Nhìn lại tiến bộ",
+        "body": "Trao đổi sau buổi học và đánh giá trải nghiệm khi buổi học hoàn thành."
       }
     ],
-    "foot_left": "Cam kết: Tăng tối thiểu 2 điểm sau 8 tuần học nghiêm túc cùng gia sư.",
-    "foot_right_bold": "Học Thử 02 Buổi Miễn Phí.",
-    "foot_right_rest": "Hoàn tiền 100% nếu phụ huynh không hài lòng sau 2 tuần đầu."
+    "foot_left": "Học phí và hình thức được hiển thị trên hồ sơ gia sư.",
+    "foot_right_bold": "Chọn lịch phù hợp.",
+    "foot_right_rest": "Gia sư sẽ xác nhận yêu cầu của em."
   },
-
   "work": {
-    "label": "Bảng vàng thành tích",
+    "label": "Mục tiêu học tập",
     "headline": [
-      { "text": "Những con số " },
-      { "text": "biết nói", "em": true },
-      { "text": " từ học viên " },
-      { "text": "Gia Sư 10 Điểm", "em": true },
-      { "text": "." }
-    ],
-    "link_label": "Xem toàn bộ 120+ thủ khoa",
-    "link_href": "#contact",
-    "cards": [
       {
-        "small_label": "THỦ KHOA TOÀN QUỐC",
-        "index": "01 / 120",
-        "year": "2026 · KHỐI A00",
-        "tag": "THỦ KHOA",
-        "title": "Nguyễn Minh Anh · THPT Chuyên Hà Nội - Amsterdam",
-        "body": "Thủ khoa Khối A00 toàn quốc với 29.85 điểm (Toán 10.0, Lý 9.85, Hóa 10.0). Trúng tuyển Khoa Kinh tế Đối ngoại, Trường Đại học Ngoại Thương."
+        "text": "Học vững.\n"
       },
       {
-        "small_label": "BỨT PHÁ ĐIỂM SỐ",
-        "index": "02 / 120",
-        "year": "2026 · TĂNG 3.7Đ",
-        "tag": "BỨT PHÁ",
-        "title": "Trần Hoàng Nam · THPT Lê Quý Đôn (TP.HCM)",
-        "body": "Từ mức điểm 5.5 môn Toán và mất căn bản tiếng Anh, Nam bứt phá lên 9.2 điểm thi tốt nghiệp và đạt 8.0 IELTS chỉ sau 8 tuần đồng hành cùng gia sư."
+        "text": "Vươn xa.",
+        "em": true
+      }
+    ],
+    "link_label": "Tìm lộ trình phù hợp",
+    "link_href": "/app/library",
+    "cards": [
+      {
+        "small_label": "MỤC TIÊU CỦA EM",
+        "index": "",
+        "year": "",
+        "tag": "CỦNG CỐ",
+        "title": "Nắm chắc kiến thức nền",
+        "body": "Tìm gia sư có thể giải thích chậm rãi, cùng em ôn lại những phần chưa vững và xây dựng cách học phù hợp."
+      },
+      {
+        "small_label": "MỤC TIÊU CỦA EM",
+        "index": "",
+        "year": "",
+        "tag": "LUYỆN THI",
+        "title": "Chuẩn bị cho kỳ thi tiếp theo",
+        "body": "Tìm người dạy theo mục tiêu vào lớp 10, tốt nghiệp THPT, đánh giá năng lực hoặc chứng chỉ ngoại ngữ."
       }
     ]
   },
-
   "testimonial": {
-    "label": "Chia sẻ phụ huynh",
+    "label": "Cách chúng mình nhìn việc học",
     "ix": "· Nº 07",
     "quote": [
-      { "text": "Gia Sư 10 Điểm không chỉ giúp con từ học sinh sợ Toán vươn lên đạt " },
-      { "text": "9.5 điểm thi vào 10 chuyên,", "em": true },
-      { "text": " mà điều quý giá nhất là con đã hình thành " },
-      { "text": "niềm say mê học tập và sự tự giác", "em": true },
-      { "text": " mỗi tối mà bố mẹ không cần nhắc nhở." }
+      {
+        "text": "Một câu hỏi được lắng nghe. Một cách giải thích vừa đủ. "
+      },
+      {
+        "text": "Một người đồng hành phù hợp.",
+        "em": true
+      }
     ],
     "author": {
-      "initial": "H",
-      "name": "Bác sĩ Nguyễn Đức Hải",
-      "title": "Phó Giáo sư · Phụ huynh em Minh Đức (Trúng tuyển THPT Chuyên Hà Nội - Amsterdam)"
+      "initial": "10",
+      "name": "Gia Sư 10 Điểm",
+      "title": "Kết nối để học tốt hơn"
     },
-    "partners_text": "Đội ngũ gia sư thủ khoa & giáo viên đến từ các trường đại học & THPT chuyên hàng đầu:",
+    "partners_text": "Khám phá môn học theo điều em muốn hiểu:",
     "partners": [
-      { "name": "ĐH Ngoại Thương", "role": "Kinh Tế & Toán Ứng Dụng", "glyph_svg": "<path d='M5 24L20 6L35 24M12 18h16'/>", "href": "#" },
-      { "name": "ĐH Bách Khoa", "role": "Khoa Học Máy Tính & Kỹ Thuật", "glyph_svg": "<path d='M8 24L20 6L24 22L36 4'/>", "href": "#" },
-      { "name": "ĐH Sư Phạm Hà Nội", "role": "Khoa Học Sư Phạm Chuyên", "glyph_svg": "<rect x='6' y='6' width='4' height='18'/><rect x='14' y='6' width='4' height='18'/><rect x='22' y='6' width='4' height='18'/><rect x='30' y='6' width='4' height='18'/>", "href": "#" },
-      { "name": "ĐH Y Hà Nội", "role": "Y Khoa & Hóa Học 10.0", "glyph_svg": "<circle cx='15' cy='15' r='9'/><path d='M15 6v18M6 15h18'/>", "href": "#" },
-      { "name": "THPT Chuyên Hà Nội - Ams", "role": "Toán & Khoa Học Tự Nhiên", "glyph_svg": "<polygon points='15,4 27,24 3,24'/>", "href": "#" }
+      {
+        "name": "Toán học",
+        "role": "Đại số & Hình học",
+        "glyph_svg": "<path d='M5 24L20 6L35 24M12 18h16'/>",
+        "href": "/app/library"
+      },
+      {
+        "name": "Khoa học",
+        "role": "Vật lí, Hóa học, Sinh học",
+        "glyph_svg": "<path d='M8 24L20 6L24 22L36 4'/>",
+        "href": "/app/library"
+      },
+      {
+        "name": "Ngoại ngữ",
+        "role": "Tiếng Anh & Chứng chỉ",
+        "glyph_svg": "<rect x='6' y='6' width='4' height='18'/><rect x='14' y='6' width='4' height='18'/><rect x='22' y='6' width='4' height='18'/><rect x='30' y='6' width='4' height='18'/>",
+        "href": "/app/library"
+      },
+      {
+        "name": "Ngữ văn",
+        "role": "Đọc hiểu & Viết",
+        "glyph_svg": "<circle cx='15' cy='15' r='9'/><path d='M15 6v18M6 15h18'/>",
+        "href": "/app/library"
+      },
+      {
+        "name": "Tin học",
+        "role": "Tư duy & Lập trình",
+        "glyph_svg": "<polygon points='15,4 27,24 3,24'/>",
+        "href": "/app/library"
+      }
     ],
-    "read_more_label": "Xem Thêm Đánh Giá Của Phụ Huynh",
+    "read_more_label": "Khám phá gia sư",
     "read_more_href": "#contact"
   },
-
   "cta": {
     "label": "Đăng ký tư vấn",
     "ix": "· Nº 08",
     "headline": [
-      { "text": "Khởi đầu hành trình " },
-      { "text": "chinh phục điểm 10 ngay hôm nay", "em": true },
-      { "text": "." }
+      {
+        "text": "Bắt đầu từ\n"
+      },
+      {
+        "text": "một cuộc trò chuyện.",
+        "em": true
+      }
     ],
-    "lead": "Đăng ký kiểm tra đầu vào 90 phút và nhận ngay 02 buổi học thử 1 kèm 1 cùng gia sư thủ khoa. Hoàn toàn miễn phí, không cam kết trước.",
-    "primary": { "label": "Nhận 02 Buổi Học Thử Miễn Phí", "href": "#contact" },
-    "ribbon": "NIÊN KHÓA 2026 · CAM KẾT HOÀN TIỀN NẾU KHÔNG TIẾN BỘ"
+    "lead": "Chọn môn học và hình thức phù hợp. Xem hồ sơ gia sư, rồi nhắn hỏi trực tiếp.",
+    "primary": {
+      "label": "Tìm gia sư",
+      "href": "/app/tutors"
+    },
+    "ribbon": "MỘT NGƯỜI ĐỒNG HÀNH PHÙ HỢP"
   },
-
   "wire": {
     "title": "Mạng lưới học thuật",
-    "subtitle": "Kết nối gia sư thủ khoa tại 12 tỉnh thành trọng điểm",
+    "subtitle": "Học trực tuyến hoặc tìm gia sư gần em",
     "cities": [
-      { "name": "Hà Nội", "coord": "21.02°N" },
-      { "name": "TP. Hồ Chí Minh", "coord": "10.82°N" },
-      { "name": "Đà Nẵng", "coord": "16.05°N" },
-      { "name": "Hải Phòng", "coord": "20.84°N" },
-      { "name": "Cần Thơ", "coord": "10.04°N" },
-      { "name": "Huế", "coord": "16.46°N" },
-      { "name": "Nha Trang", "coord": "12.23°N" },
-      { "name": "Nam Định", "coord": "20.42°N" },
-      { "name": "Bắc Ninh", "coord": "21.18°N" },
-      { "name": "Thanh Hóa", "coord": "19.80°N" },
-      { "name": "Vinh", "coord": "18.67°N" },
-      { "name": "Vũng Tàu", "coord": "10.34°N" }
+      {
+        "name": "Hà Nội",
+        "coord": "21.02°N"
+      },
+      {
+        "name": "TP. Hồ Chí Minh",
+        "coord": "10.82°N"
+      },
+      {
+        "name": "Đà Nẵng",
+        "coord": "16.05°N"
+      },
+      {
+        "name": "Hải Phòng",
+        "coord": "20.84°N"
+      },
+      {
+        "name": "Cần Thơ",
+        "coord": "10.04°N"
+      },
+      {
+        "name": "Huế",
+        "coord": "16.46°N"
+      },
+      {
+        "name": "Nha Trang",
+        "coord": "12.23°N"
+      },
+      {
+        "name": "Nam Định",
+        "coord": "20.42°N"
+      },
+      {
+        "name": "Bắc Ninh",
+        "coord": "21.18°N"
+      },
+      {
+        "name": "Thanh Hóa",
+        "coord": "19.80°N"
+      },
+      {
+        "name": "Vinh",
+        "coord": "18.67°N"
+      },
+      {
+        "name": "Vũng Tàu",
+        "coord": "10.34°N"
+      }
     ],
     "contributors": [
-      { "handle": "ThuKhoa_NgoaiThuong", "role": "Toán 10.0", "href": "#" },
-      { "handle": "HuyChuongVang_BachKhoa", "role": "Vật Lý 9.85", "href": "#" },
-      { "handle": "IELTS_8.5_SuPham", "role": "Tiếng Anh Chuyên", "href": "#" },
-      { "handle": "BacSi_YHaNoi", "role": "Hóa Học 10.0", "href": "#" },
-      { "handle": "GiaiQG_ChuyenAms", "role": "Ngữ Văn 9.5", "href": "#" },
-      { "handle": "Chuyen_LeHongPhong", "role": "Toán & Tin Học", "href": "#" },
-      { "handle": "HocVien_TiepTheo", "role": "Mục Tiêu Điểm 10", "href": "#contact" }
+      {
+        "handle": "ThuKhoa_NgoaiThuong",
+        "role": "Toán 10.0",
+        "href": "#"
+      },
+      {
+        "handle": "HuyChuongVang_BachKhoa",
+        "role": "Vật Lý 9.85",
+        "href": "#"
+      },
+      {
+        "handle": "IELTS_8.5_SuPham",
+        "role": "Tiếng Anh Chuyên",
+        "href": "#"
+      },
+      {
+        "handle": "BacSi_YHaNoi",
+        "role": "Hóa Học 10.0",
+        "href": "#"
+      },
+      {
+        "handle": "GiaiQG_ChuyenAms",
+        "role": "Ngữ Văn 9.5",
+        "href": "#"
+      },
+      {
+        "handle": "Chuyen_LeHongPhong",
+        "role": "Toán & Tin Học",
+        "href": "#"
+      },
+      {
+        "handle": "HocVien_TiepTheo",
+        "role": "Mục Tiêu Điểm 10",
+        "href": "#contact"
+      }
     ]
   },
-
   "footer": {
-    "brand_description": "Hệ thống gia sư chất lượng cao hàng đầu Việt Nam. Chúng tôi đồng hành cùng phụ huynh và học sinh từ bước lấy lại căn bản đến đỉnh cao thủ khoa các kỳ thi THPTQG, Chuyên cấp 3 và Đánh giá năng lực.",
+    "brand_description": "Gia sư 1 kèm 1. Đồng hành cùng học sinh trên hành trình hiểu sâu, học vững và tự tin tiến bộ.",
     "brand_cta": {
-      "label": "Hotline: 0988 10 10 10",
-      "href": "tel:0988101010",
-      "meta": "Tư vấn miễn phí 24/7"
+      "label": "Trở thành gia sư ↗",
+      "href": "/app/auth?mode=register&role=tutor",
+      "meta": ""
     },
     "columns": [
       {
         "title": "Dịch Vụ",
         "links": [
-          { "label": "Gia sư tại nhà", "href": "#contact" },
-          { "label": "Gia sư trực tuyến 1-1", "href": "#contact" },
-          { "label": "Luyện thi THPTQG 9+", "href": "#labs" },
-          { "label": "Luyện thi Chuyên Cấp 3", "href": "#labs" }
+          {
+            "label": "Gia sư tại nhà",
+            "href": "#contact"
+          },
+          {
+            "label": "Gia sư trực tuyến 1-1",
+            "href": "#contact"
+          },
+          {
+            "label": "Luyện thi THPTQG 9+",
+            "href": "#labs"
+          },
+          {
+            "label": "Luyện thi Chuyên Cấp 3",
+            "href": "#labs"
+          }
         ]
       },
       {
         "title": "Môn Trọng Điểm",
         "links": [
-          { "label": "Toán học nâng cao", "href": "#labs" },
-          { "label": "Vật lý & Hóa học", "href": "#labs" },
-          { "label": "Tiếng Anh & IELTS", "href": "#labs" },
-          { "label": "Ngữ Văn & Nghị luận", "href": "#labs" }
+          {
+            "label": "Toán học nâng cao",
+            "href": "#labs"
+          },
+          {
+            "label": "Vật lý & Hóa học",
+            "href": "#labs"
+          },
+          {
+            "label": "Tiếng Anh & IELTS",
+            "href": "#labs"
+          },
+          {
+            "label": "Ngữ Văn & Nghị luận",
+            "href": "#labs"
+          }
         ]
       },
       {
-        "title": "Trung Tâm",
+        "title": "Tài khoản",
         "links": [
-          { "label": "Cơ sở Hà Nội: Cầu Giấy & Đống Đa", "href": "#contact" },
-          { "label": "Cơ sở TP.HCM: Q.1 & Q.Bình Thạnh", "href": "#contact" },
-          { "label": "Cơ sở Đà Nẵng: Q.Hải Châu", "href": "#contact" },
-          { "label": "Chính sách cam kết điểm số", "href": "#contact" }
+          {
+            "label": "Học sinh / Phụ huynh",
+            "href": "/app/auth?mode=register"
+          },
+          {
+            "label": "Đăng ký gia sư",
+            "href": "/app/auth?mode=register&role=tutor"
+          },
+          {
+            "label": "Đăng nhập",
+            "href": "/app/auth"
+          }
         ]
       },
       {
-        "title": "Đội Ngũ",
+        "title": "Khám phá",
         "links": [
-          { "label": "Dành cho Thủ khoa & Á khoa", "href": "#contact" },
-          { "label": "Giáo viên trường Chuyên", "href": "#contact" },
-          { "label": "Quy chuẩn giảng dạy 10 Điểm", "href": "#capabilities" },
-          { "label": "Sổ tay gia sư 2026", "href": "#capabilities" }
+          {
+            "label": "Tìm gia sư",
+            "href": "/app/tutors"
+          },
+          {
+            "label": "Môn học & kỳ thi",
+            "href": "/app/library"
+          },
+          {
+            "label": "Cách kết nối",
+            "href": "#journey"
+          }
         ]
       }
     ],
     "mega": [
-      { "text": "Gia Sư " },
-      { "text": "10 Điểm", "em": true },
-      { "text": "." }
+      {
+        "text": "Gia Sư "
+      },
+      {
+        "text": "10 Điểm",
+        "em": true
+      },
+      {
+        "text": "."
+      }
     ]
   },
-
   "imagery": {
     "strategy": "bring-your-own",
     "assets_path": "./assets/",

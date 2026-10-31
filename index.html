@@ -1,16 +1,198 @@
 <!DOCTYPE html>
 <html lang='vi'>
 <head>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <meta charset='utf-8' />
 <meta name='viewport' content='width=device-width, initial-scale=1' />
-<title>Gia Sư 10 Điểm — Chinh phục điểm 10 bằng tư duy bản chất cùng thủ khoa & giáo viên chuyên.</title>
-<meta name='description' content='Gia Sư 10 Điểm — Nền tảng kết nối gia sư thủ khoa đại học và giáo viên trường chuyên hàng đầu Việt Nam. Lộ trình cá nhân hóa 1 kèm 1, cam kết tăng tối thiểu 2 điểm sau 8 tuần, học thử 2 buổi 0 đồng.' />
+<title>Gia Sư 10 Điểm — Tìm người đồng hành, học từ tư duy bản chất.</title>
+<meta name='description' content='Tìm gia sư theo môn, cấp học và mục tiêu. Xem hồ sơ, CV, liên hệ trực tiếp và chọn lịch học phù hợp.' />
 <link rel='preconnect' href='https://fonts.googleapis.com' />
 <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin />
 <link href='https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter+Tight:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap' rel='stylesheet' />
 <!-- Three.js CDN for interactive 3D hero artifact -->
 <script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'></script>
 <style>
+
+/* Bespoke styling for Gia Sư 10 Điểm */
+.asset-mode-switcher {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+  background: rgba(239, 231, 210, 0.94);
+  backdrop-filter: blur(8px);
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.mode-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-mute);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.mode-btn:hover {
+  color: var(--ink);
+  background: rgba(21, 20, 15, 0.05);
+}
+.mode-btn.active {
+  color: var(--paper);
+  background: var(--ink);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.mobile-menu-toggle,
+.mobile-nav { display: none; }
+.hero-art-layer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+}
+.three-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  background: rgba(239, 231, 210, 0.88);
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Consultation Booking Box in Section VIII */
+.booking-box {
+  background: var(--paper-dark);
+  border: 1.5px solid var(--line-strong);
+  padding: 32px;
+  margin-top: 36px;
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(21, 20, 15, 0.06);
+}
+.booking-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+}
+@media (max-width: 640px) {
+  .booking-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-field label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.form-field select,
+.form-field input {
+  padding: 10px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-field select:focus,
+.form-field input:focus {
+  border-color: var(--coral);
+}
+.booking-submit-btn {
+  grid-column: 1 / -1;
+  background: var(--coral);
+  color: #ffffff;
+  border: none;
+  padding: 14px 20px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.2s, transform 0.1s;
+}
+.booking-submit-btn:hover {
+  background: #e35a46;
+}
+.booking-submit-btn:active {
+  transform: translateY(1px);
+}
+
+
+
+
+@media (max-width: 880px) {
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: 600 12px/1 var(--sans);
+    cursor: pointer;
+  }
+  .mobile-menu-toggle[aria-expanded='true'] { background: var(--ink); color: var(--paper); }
+  .mobile-nav[hidden] { display: none; }
+  .mobile-nav:not([hidden]) {
+    display: block;
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-nav-inner { display: grid; gap: 0; padding-top: 8px; padding-bottom: 12px; }
+  .mobile-nav-inner a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink);
+    text-decoration: none;
+    font: 600 15px/1.2 var(--sans);
+  }
+  .mobile-nav-inner a:last-child { border-bottom: 0; }
+  .mobile-nav-inner .num { color: var(--coral); font-size: 11px; margin-left: auto; padding-left: 8px; }
+  .mobile-nav-inner .mobile-nav-cta { color: var(--coral); }
+}
+
 /*
  * Atelier Zero — canonical landing-page stylesheet.
  *
@@ -1796,7 +1978,7 @@ footer {
   transition: border-color 160ms ease;
 }
 .library-link:hover { border-bottom-color: var(--coral); }
-.foot-col h5 {
+.foot-col h3 {
   font-family: var(--sans);
   font-size: 11px;
   color: var(--ink);
@@ -2019,489 +2201,536 @@ h1, h2, h3, h4, h5, .display {
 .sec-rule, .label, .wire-title b, .nav-links a {
   letter-spacing: 0.04em !important;
 }
+/* A quieter editorial layout, with the course and consultation flows in focus. */
+:root {
+  --line-strong: rgba(21, 20, 15, 0.28);
+  --coral: #a84030;
+  --coral-soft: #c45743;
+  --ink-faint: #655f50;
+}
+html { scroll-behavior: smooth; scroll-padding-top: 100px; }
+[hidden] { display: none !important; }
+a, button, input, select { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--coral); outline-offset: 5px; }
+button, a { touch-action: manipulation; }
+body::before { background-image: none; }
+.container { max-width: 1360px; padding-inline: 64px; width: 100%; }
+section { padding: 96px 0; }
+section:focus { outline: none; }
+.skip-link { position: fixed; top: -100px; left: 24px; z-index: 100; padding: 12px 20px; color: var(--paper); background: var(--ink); }
+.skip-link:focus { top: 12px; }
+.nav { padding: 24px 0; }
+.nav-inner { gap: 36px; }
+.nav-links { gap: 30px; }
+.nav-links a { white-space: nowrap; font-size: 13px; letter-spacing: 0 !important; }
+.brand { font-size: 19px; gap: 10px; }
+.brand-mark { width: 40px; height: 40px; font-size: 22px; background: var(--ink); color: var(--paper); }
+.nav-cta { background: var(--ink); padding: 13px 22px; font-size: 13px; letter-spacing: 0; }
+.nav-cta::after { content: '↗'; color: var(--paper); }
+.nav-side { gap: 0; }
+.hero { min-height: 0; border: 0; padding: 32px 0 64px; }
+.hero-grid { grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; }
+.hero-copy { padding: 0; }
+.hero h1 { font-size: clamp(42px, 4.6vw, 68px); margin: 0 0 28px; line-height: 1.2 !important; letter-spacing: -0.045em !important; }
+.hero-copy .lead { font-size: 17px; max-width: 40ch; line-height: 1.8; margin-bottom: 30px; }
+.hero-actions { flex-wrap: wrap; gap: 12px; margin-bottom: 40px; }
+.btn { min-height: 48px; padding: 13px 20px; letter-spacing: 0; }
+.btn-primary { background: var(--ink); box-shadow: none; }
+.btn-primary:hover { background: var(--coral); }
+.btn-ghost { border: 0; padding-inline: 4px; }
+.hero-stats { flex-wrap: wrap; gap: 30px; margin: 0; }
+.hero-stats .stat { display: grid; gap: 8px; }
+.hero-stats .stat .ring { border: 0; width: auto; height: auto; justify-content: start; font-size: 26px; font-weight: 600; font-family: var(--serif); }
+.hero-stats .stat-label, .hero-stats .stat-label b { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.hero-art { height: 500px; max-height: none; margin: 0; overflow: hidden; border-radius: 180px 180px 16px 16px; background: var(--paper-dark); }
+.hero-art .index { display: none; }
+.hero-art-layer, .hero-art-layer canvas { min-height: 0 !important; height: 100% !important; }
+.hero-art .asset-mode-switcher { top: auto; right: 50%; bottom: 20px; transform: translateX(50%); border: 0; border-radius: 24px; background: var(--paper); padding: 5px; gap: 0; white-space: nowrap; }
+.hero-art .mode-btn { font-family: var(--sans); font-size: 12px; padding: 9px 13px; border-radius: 20px; }
+.hero-art .three-hint { display: none; }
+.display { letter-spacing: -0.035em !important; }
+.about .display, .cap-head h2, .labs-head h2, .method-head h2, .cta .display { font-size: clamp(32px, 3.6vw, 49px); margin: 0 0 24px !important; }
+.about { background: var(--bone); }
+.about-grid { grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+.about-copy .lead { max-width: 43ch; font-size: 16px; line-height: 1.8; }
+.about-action { margin-top: 24px; }
+.about-art .plate { max-width: 440px; margin: auto; box-shadow: none; border-radius: 8px; }
+.cap-head { margin-bottom: 48px; }
+.cap-head h2 { max-width: none; }
+.cap-head .lead { max-width: 60ch; }
+.capabilities-grid { gap: 48px; grid-template-columns: 0.8fr 1.2fr; }
+.cards { gap: 32px; }
+.card { padding: 0; background: transparent; border: 0; box-shadow: none; }
+.card .num, .card .tag, .card .arrow-mark { display: none; }
+.card .icon { width: 28px; height: 28px; margin-bottom: 18px; color: var(--coral); }
+.card h3 { font-size: 19px; margin-bottom: 12px; }
+.card p { font-size: 15px; line-height: 1.75; color: var(--ink-soft); }
+.labs { background: var(--bone); }
+.labs-head { display: block; margin-bottom: 32px; }
+.labs-head .pills { justify-content: flex-start; margin-top: 32px; gap: 8px; }
+.pill { font-size: 13px; min-height: 44px; border: 0; background: var(--paper); padding: 10px 18px; }
+.pill.active { background: var(--ink); }
+.pill .count { font-size: 12px; letter-spacing: 0; border: 0; padding: 0; }
+.course-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin: 0 0 32px; }
+.search-field { display: flex; align-items: center; gap: 12px; width: min(100%, 360px); padding: 0 16px; background: var(--paper); border-radius: 6px; }
+.search-field > span { font-size: 30px; line-height: 1; }
+.search-field input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); padding: 14px 0; font: 14px var(--sans); }
+.search-field:focus-within { outline: 2px solid var(--ink); outline-offset: 3px; }
+.search-field input:focus { outline: none; }
+#course-count { font-size: 13px; white-space: nowrap; }
+.labs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 28px; }
+.lab-img { aspect-ratio: 1.6; border-radius: 8px; box-shadow: none; margin-bottom: 20px; }
+.lab-img img { transition: transform 300ms ease; }
+.lab:hover .lab-img img { transform: scale(1.035); }
+.lab h3 { font-size: 22px; margin-bottom: 12px; font-weight: 600; }
+.lab p { font-size: 15px; line-height: 1.7; color: var(--ink-soft); max-width: 36ch; margin-bottom: 16px; }
+.course-select { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: auto; text-decoration: none; color: var(--ink); font-size: 13px; font-weight: 600; padding-block: 10px; }
+.course-select span { font-size: 22px; }
+.course-select:hover { color: var(--coral); }
+.course-empty { padding: 56px 24px; background: var(--paper); text-align: center; }
+.course-empty button { border: 0; background: transparent; color: var(--coral); font: 600 14px var(--sans); padding: 16px; cursor: pointer; }
+.method-head { display: block; margin-bottom: 48px; }
+.method-grid { gap: 32px; }
+.method-grid::before { display: none; }
+.method-step h3 { font-size: 19px; min-height: 48px; margin-bottom: 16px; }
+.method-step p { font-size: 15px; line-height: 1.7; }
+.method-step .img { border-radius: 6px; box-shadow: none; margin-top: 24px; }
+.method-foot { gap: 24px; font-size: 13px; text-transform: none; letter-spacing: 0; }
+.method-foot .left, .method-foot .right { font-size: 13px; line-height: 1.7; letter-spacing: 0; text-transform: none; }
+.work { border-radius: 12px; padding: 64px; margin: 0 auto; max-width: 1232px; }
+.work-grid { grid-template-columns: 0.9fr 1fr 1fr; gap: 32px; }
+.work-copy h2 { font-size: 38px; }
+.work-card, .work-card.alt { transform: none; box-shadow: none; padding: 24px; }
+.work-card:hover, .work-card.alt:hover { transform: translateY(-4px); box-shadow: none; }
+.work-card h3 { font-size: 20px; }
+.work-card p { font-size: 14px; max-width: none; }
+.work-card .index { display: none; }
+.work-link { font-size: 13px; }
+.testimonial-copy h2 { font-size: 44px; }
+.testimonial-copy blockquote { font: 23px/1.7 var(--serif); margin-bottom: 32px; }
+.testimonial-copy blockquote em { font-style: normal; }
+.testimonial-grid { gap: 64px; }
+.partners { gap: 24px; }
+.partner span { font-size: 13px; }
+.partner .glyph { display: none; }
+.cta { background: var(--paper-dark); }
+.cta-grid { grid-template-columns: 1.25fr 0.75fr; gap: 64px; align-items: center; }
+.cta .lead { font-size: 16px; line-height: 1.8; max-width: 45ch; }
+.cta .art .plate { box-shadow: none; border-radius: 8px; }
+.cta .booking-box { border: 0; background: var(--bone); padding: 32px; border-radius: 8px; box-shadow: none; margin-top: 32px; }
+.booking-box h3 { font-size: 21px; margin-bottom: 8px; }
+.booking-box .form-field label { font-family: var(--sans); font-size: 13px; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--ink); }
+.booking-box input, .booking-box select { min-width: 0; width: 100%; font-size: 14px; min-height: 48px; padding: 12px; border-color: var(--line); }
+.booking-box input:focus, .booking-box select:focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+.booking-box .booking-submit-btn { background: var(--ink); letter-spacing: 0; text-transform: none; font-size: 14px; min-height: 50px; }
+.booking-box .booking-submit-btn:hover { background: var(--coral); }
+.booking-box .booking-summary { background: transparent; border: 0; padding: 0; gap: 18px; font-size: 14px; }
+.booking-summary dl { display: grid; grid-template-columns: auto 1fr; gap: 12px 20px; margin-block: 8px; }
+.booking-summary dt { color: var(--ink-mute); }
+.booking-summary dd { margin: 0; color: var(--ink); }
+.booking-summary .booking-email-link { display: block; text-align: center; width: 100%; color: var(--bone); background: var(--ink); padding: 15px; border-radius: 5px; text-decoration: none; }
+.booking-summary button { background: transparent; border: 0; color: var(--ink); font: 500 13px var(--sans); padding: 8px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+#booking-status:not(:empty) { margin-block: 16px; font-size: 14px; }
+.booking-box .form-note { font-size: 12px; line-height: 1.65; }
+.foot-grid { gap: 32px; }
+.foot-col h3 { font-size: 13px; text-transform: none; letter-spacing: 0; }
+.foot-col a { font-size: 13px; line-height: 1.6; }
+.foot-mega .word { font-size: clamp(56px, 10vw, 136px); }
+@media (max-width: 1180px) {
+  .container { padding-inline: 40px; }
+  .nav-inner { gap: 24px; }
+  .nav-links { gap: 20px; }
+  .hero-grid { gap: 32px; }
+  .hero-art { height: 440px; }
+  .hero-actions { gap: 8px; }
+  .hero-stats { gap: 20px; }
+  .hero h1 { font-size: 48px; }
+  .about-grid, .capabilities-grid, .cta-grid { gap: 40px; }
+  .work { margin-inline: 40px; padding: 40px; }
+  .work-grid { grid-template-columns: 1fr 1fr; }
+  .work-copy { grid-column: 1 / -1; }
+}
+@media (max-width: 880px) {
+  .container { padding-inline: 28px; }
+  section { padding: 72px 0; }
+  .nav { padding: 16px 0; }
+  .nav-inner { gap: 12px; }
+  .nav-side { display: none; }
+  .nav .mobile-menu-toggle { border-color: var(--line); min-height: 44px; }
+  .nav .mobile-nav-inner { padding-block: 12px; }
+  .hero { padding: 28px 0 64px; }
+  .hero-grid { grid-template-columns: 1fr 0.8fr; gap: 28px; }
+  .hero h1 { font-size: clamp(36px, 5vw, 48px); }
+  .hero-copy .lead { font-size: 15px; }
+  .hero-stats { gap: 18px; }
+  .hero-stats .stat-label b { font-size: 10px; }
+  .hero-art { height: 410px; border-radius: 140px 140px 12px 12px; }
+  .hero-art .mode-btn { padding: 8px 9px; }
+  .about-grid, .capabilities-grid, .testimonial-grid, .cta-grid { grid-template-columns: 1fr; gap: 40px; }
+  .about-grid { grid-template-columns: 1fr 0.8fr; }
+  .cards { grid-template-columns: 1fr 1fr; gap: 36px; }
+  .labs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .method-grid { grid-template-columns: 1fr 1fr; }
+  .work { margin-inline: 28px; padding: 32px; }
+  .testimonial-art { display: none; }
+  .cta-grid .art { display: none; }
+  .cta .booking-box { max-width: 680px; }
+  .foot-grid { grid-template-columns: 1fr 1fr; }
+  .foot-brand { grid-column: 1 / -1; }
+  .foot-grid .foot-col:nth-child(4), .foot-grid .foot-col:nth-child(5) { display: block; }
+  .foot-bottom { flex-direction: column; align-items: flex-start; gap: 18px; }
+}
+@media (max-width: 560px) {
+  html { scroll-padding-top: 86px; }
+  .container { padding-inline: 20px; }
+  section { padding: 60px 0; }
+  .brand { font-size: 16px; }
+  .brand-mark { width: 34px; height: 34px; }
+  .hero-grid, .about-grid { grid-template-columns: 1fr; gap: 36px; }
+  .hero { padding-top: 24px; }
+  .hero h1 { font-size: clamp(38px, 10.5vw, 54px); margin-bottom: 20px; }
+  .hero-copy .lead { font-size: 15px; max-width: none; margin-bottom: 24px; }
+  .hero-actions { margin-bottom: 28px; gap: 10px; }
+  .btn { font-size: 12px; padding: 12px 15px; }
+  .btn-ghost { padding-inline: 0; }
+  .hero-stats { justify-content: space-between; gap: 12px; }
+  .hero-stats .stat-label b { font-size: 11px; }
+  .hero-stats .stat .ring { font-size: 24px; }
+  .hero-art { height: 340px; border-radius: 140px 140px 12px 12px; }
+  .hero-art .asset-mode-switcher { bottom: 16px; }
+  .hero-art .mode-btn { padding: 8px 16px; }
+  .about .display, .cap-head h2, .labs-head h2, .method-head h2, .cta .display { font-size: 31px; }
+  .about-art .plate { max-width: 320px; }
+  .cards { grid-template-columns: 1fr; gap: 28px; }
+  .card { display: grid; grid-template-columns: 32px 1fr; column-gap: 18px; }
+  .card .icon { grid-row: 1 / 3; margin-top: 2px; }
+  .card h3 { font-size: 18px; }
+  .card p { grid-column: 2; }
+  .labs-head .pills { gap: 8px; margin-top: 24px; }
+  .pill { font-size: 12px; padding-inline: 13px; }
+  .course-toolbar { flex-wrap: wrap; gap: 14px; margin-bottom: 24px; }
+  .search-field { width: 100%; }
+  .labs-grid { grid-template-columns: 1fr; gap: 32px; }
+  .lab-img { aspect-ratio: 1.8; margin-bottom: 18px; }
+  .lab h3 { font-size: 22px; }
+  .method-grid { grid-template-columns: 1fr 1fr; gap: 28px 20px; }
+  .method-step h3 { font-size: 17px; }
+  .method-step p { font-size: 14px; }
+  .method-step .img { display: none; }
+  .method-foot { flex-direction: column; align-items: flex-start; margin-top: 32px; }
+  .method-foot .right { text-align: left; }
+  .work { margin-inline: 12px; padding: 36px 20px; }
+  .work-grid { grid-template-columns: 1fr; gap: 24px; }
+  .work-copy h2 { font-size: 30px; }
+  .work-card { padding: 24px; }
+  .testimonial-copy h2 { font-size: 30px; }
+  .testimonial-copy blockquote { font-size: 20px; line-height: 1.7; }
+  .partners { grid-template-columns: 1fr 1fr; }
+  .cta .booking-box { padding: 24px 20px; }
+  .booking-grid { grid-template-columns: 1fr; }
+  .booking-box input, .booking-box select { font-size: 16px; }
+  .booking-summary dl { grid-template-columns: 1fr; gap: 6px; }
+  .booking-summary dd { margin-bottom: 12px; }
+  .foot-bottom .right { flex-wrap: wrap; gap: 12px; }
+  .foot-mega .word { font-size: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+img { display: block; max-width: 100%; }
+picture { display: block; }
+.hero-grid > *, .cta-grid > * { min-width: 0; }
+.capabilities-art { width: 100%; align-self: center; }
+.capabilities-art .art-frame { border-radius: 8px; overflow: hidden; }
+.lab-img picture, .method-step .img picture, .work-card .img picture { width: 100%; height: 100%; }
+.cta-grid > .art img { width: 100%; height: auto; }
+@media (max-width: 880px) { .capabilities-art { display: none; } }
 
-/* Bespoke styling for Gia Sư 10 Điểm */
-.asset-mode-switcher {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 10;
-  display: flex;
-  gap: 6px;
-  background: rgba(239, 231, 210, 0.94);
-  backdrop-filter: blur(8px);
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-.mode-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--ink-mute);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.mode-btn:hover {
-  color: var(--ink);
-  background: rgba(21, 20, 15, 0.05);
-}
-.mode-btn.active {
-  color: var(--paper);
-  background: var(--ink);
-}
-.hero-art-layer {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 480px;
-}
-.three-hint {
-  position: absolute;
-  bottom: 14px;
-  left: 14px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-mute);
-  background: rgba(239, 231, 210, 0.88);
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  pointer-events: none;
+.method-grid { list-style-position: inside; }
+.method-step::marker { color: var(--coral); font: italic 28px var(--serif); }
+.method-step h3 { margin-top: 20px; }
+.method-foot, .work-card .meta-row, footer, .foot-bottom, .foot-mega { border: 0; }
+.foot-bottom, .foot-bottom span { font: 13px/1.7 var(--sans); letter-spacing: 0; text-transform: none; }
+.hero-stats .stat-label, .hero-stats .stat-label b, .hero-art .mode-btn, .pill, .btn, .booking-box .form-note { font-size: 13px; }
+.card p, .lab p, .method-step p, .hero-copy .lead { font-size: 16px; }
+.mode-btn:disabled { opacity: .45; cursor: not-allowed; }
+.hero-art:focus-within { outline: 3px solid var(--coral); outline-offset: 5px; }
+#three-canvas:focus { outline: none; }
+.search-field svg { flex: 0 0 auto; }
+@media (max-width: 880px) { .hero-stats { gap: 16px; } .hero-stats .stat-label b { font-size: 12px; } }
+@media (max-width: 560px) {
+  .hero-actions .btn { font-size: 12px; }
+  .hero-stats .stat-label b { font-size: 13px; }
+  .method-step p { font-size: 15px; }
 }
 
-/* Consultation Booking Box in Section VIII */
-.booking-box {
-  background: var(--paper-dark);
-  border: 1.5px solid var(--line-strong);
-  padding: 32px;
-  margin-top: 36px;
-  border-radius: 6px;
-  box-shadow: 0 4px 20px rgba(21, 20, 15, 0.06);
+/* Metadata stays readable at a glance on every viewport. */
+.small-label, .work-card .year, .work-card .meta-row, .meta, .mobile-menu-toggle { font-size: 13px !important; letter-spacing: 0 !important; text-transform: none !important; }
+.divider { display: none; }
+
+.booking-box .booking-summary { display: grid; }
+.booking-box .form-note { margin-top: 16px; color: var(--ink-mute); }
+.foot-cta { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; color: var(--ink); text-underline-offset: 4px; font-size: 14px; }
+.foot-cta .meta { display: none; }
+.partners-text { margin-top: 28px; }
+
+/* Scroll follows the learning journey; text and controls stay in normal reading order. */
+.nav-login { font-size: 12px; padding: 10px 0; }
+.nav-side { gap: 20px; }
+[data-parallax] { translate: 0 var(--parallax-y, 0px); }
+.study-float { position: absolute; z-index: 3; padding: 18px 24px; background: #eee5ce; color: #544a31; font: italic 32px/1.2 'Lora', serif; box-shadow: 0 12px 28px #3d2a1110; pointer-events: none; }
+.study-float small { display: block; margin-top: 8px; font: 11px/1.4 'Be Vietnam Pro', sans-serif; }
+.study-float-math { top: 12%; left: 0; rotate: -8deg; }
+.study-float-language { right: 0; bottom: 12%; rotate: 7deg; background: #dce5d8; color: #345344; }
+.learning-journey { --journey: 0; position: relative; height: 210vh; background: #eae8dd; margin-top: 20px; }
+.journey-stage { position: sticky; top: 0; min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 7%; padding-block: 70px; overflow: clip; }
+.journey-copy .display { font-size: clamp(34px, 3.6vw, 52px); margin-bottom: 36px; }
+.journey-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 24px; }
+.journey-steps li { display: flex; gap: 20px; opacity: .75; transition: opacity .3s ease-out; }
+.journey-steps li.is-current, .journey-steps li:focus-within { opacity: 1; }
+.journey-steps li > span { font: italic 26px 'Lora', serif; color: #852f36; }
+.journey-steps h3 { font-size: 17px; font-weight: 550; margin-bottom: 7px; }
+.journey-steps p { font-size: 13px; line-height: 1.8; max-width: 36ch; }
+.journey-steps a { display: inline-flex; padding-block: 9px; font-size: 12px; color: #852f36; }
+.learning-desk { position: relative; height: 560px; isolation: isolate; }
+.desk-orbit { position: absolute; inset: 8% -10%; border: 1px solid #bbb7a5; border-radius: 50%; rotate: -22deg; transform: rotate(calc(var(--journey) * 40deg)); }
+.desk-book { position: absolute; width: 165px; height: 225px; border-radius: 3px 10px 10px 3px; padding: 22px; border-left: 8px solid #ffffff30; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 12px 18px 25px #24231b15; }
+.desk-book > span { font-size: 12px; }.desk-book strong { font: 60px/1 'Lora', serif; }.desk-book i { font: italic 16px 'Lora', serif; }
+.book-math { top: 10px; left: -12px; background: #852f36; color: #fff8e8; transform: translateY(calc(var(--journey) * 65px)) rotate(calc(-18deg + var(--journey) * 14deg)); }
+.book-language { bottom: 0; right: -5px; background: #325b4a; color: #fff8e8; transform: translateY(calc(var(--journey) * -90px)) rotate(calc(14deg - var(--journey) * 18deg)); }
+.desk-notebook { position: absolute; top: 100px; left: 16%; width: 280px; min-height: 355px; background: #fffcf0; padding: 35px 25px 28px 35px; box-shadow: 0 18px 32px #2e26161c; transform: rotate(calc(8deg - var(--journey) * 13deg)); }
+.notebook-binding { position: absolute; left: 7px; top: 15px; bottom: 15px; width: 10px; background: repeating-linear-gradient(to bottom, transparent 0 16px, #918777 16px 19px, transparent 19px 26px); }
+.notebook-subject { font-size: 11px; color: #696351; }.desk-notebook strong { display: block; font: italic 22px 'Lora', serif; color: #852f36; }
+.notebook-lines { height: 48px; margin-top: 16px; background: repeating-linear-gradient(to bottom, transparent 0 22px, #e7dfca 22px 23px); }
+.desk-pencil { position: absolute; width: 13px; height: 270px; background: linear-gradient(90deg, #b78b32 0 30%, #e3bd62 30% 70%, #cda24a 70%); border-radius: 3px; top: 90px; right: 0; transform: translateY(calc(var(--journey) * 80px)) rotate(calc(24deg - var(--journey) * 15deg)); }
+.desk-pencil::after { content: ''; position: absolute; bottom: -22px; border: 6.5px solid transparent; border-top: 22px solid #7c6645; border-bottom: 0; }
+.desk-note { position: absolute; bottom: 20px; left: 0; padding: 20px; background: #e5be77; color: #47351f; font: 22px/1.5 'Lora', serif; transform: translateY(calc(var(--journey) * -40px)) rotate(-7deg); box-shadow: 0 8px 12px #33251a10; }
+.desk-note em { font-size: 16px; }
+@media (max-width: 1100px) { .journey-stage { gap: 3%; }.desk-notebook { left: 10%; width: 250px; }.learning-desk { scale: .9; }.nav-login { display: none; } }
+@media (max-width: 880px) {
+  .learning-journey { height: auto; }.journey-stage { position: relative; min-height: 0; grid-template-columns: 1fr; padding-block: 50px; gap: 25px; }.journey-copy .display { font-size: 36px; }.learning-desk { width: min(100%, 460px); height: 470px; margin-inline: auto; }.desk-notebook { left: 20%; }.desk-book { width: 140px; height: 190px; }.journey-steps li { opacity: 1; }.study-float { padding: 12px 16px; font-size: 26px; }
 }
-.booking-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-top: 20px;
-}
-@media (max-width: 640px) {
-  .booking-grid {
-    grid-template-columns: 1fr;
-  }
-}
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.form-field label {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-}
-.form-field select,
-.form-field input {
-  padding: 10px 14px;
-  background: var(--paper);
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  outline: none;
-  transition: border-color 0.2s;
-}
-.form-field select:focus,
-.form-field input:focus {
-  border-color: var(--coral);
-}
-.booking-submit-btn {
-  grid-column: 1 / -1;
-  background: var(--coral);
-  color: #ffffff;
-  border: none;
-  padding: 14px 20px;
-  font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 8px;
-  transition: background 0.2s, transform 0.1s;
-}
-.booking-submit-btn:hover {
-  background: #e35a46;
-}
-.booking-submit-btn:active {
-  transform: translateY(1px);
-}
-.toast-msg {
-  display: none;
-  background: #2a5a3a;
-  color: #ffffff;
-  padding: 12px 18px;
-  border-radius: 4px;
-  font-family: var(--sans);
-  font-size: 13px;
-  margin-top: 14px;
-  animation: fadeIn 0.3s ease;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .learning-journey { height: auto; }.journey-stage { position: relative; min-height: 0; }.journey-steps li { opacity: 1; transition: none; }[data-parallax] { translate: none; }.desk-orbit, .desk-book, .desk-notebook, .desk-pencil, .desk-note { transform: none; }
 }
 
-/* Dynamic filter transitions in Labs */
-.lab.hidden-card {
-  display: none !important;
-}
+.nav-login { color: var(--ink); text-decoration: none; }
+.nav-login:hover { text-decoration: underline; text-underline-offset: 4px; }
+/* Clip reveal travel without creating a scrolling ancestor for the sticky scene. */
+.shell { overflow-x: clip; }
 
 </style>
 </head>
 <body>
 
-<div class='side-rail right' data-od-id='rail-right'>
-  <span class='rail-text'>Gia Sư 10 Điểm — Niên Khóa 2026 · Thủ Khoa Toàn Quốc</span>
-</div>
-<div class='side-rail left' data-od-id='rail-left'>
-  <span class='rail-text'>Toán · Lý · Hóa · Văn · Anh · Luyện Thi Chuyên & Đại Học</span>
-</div>
-
+<a class='skip-link' href='#main'>Bỏ qua điều hướng</a>
 <div class='shell'>
 
-<div class='topbar' data-od-id='topbar'>
-  <div class='container topbar-inner'>
-    <span><b>Gia Sư 10 Điểm</b> &nbsp;·&nbsp; Niên khóa 2026 / Kỳ tuyển sinh Nº 10</span>
-    <span class='mid'>
-      <span>Lĩnh vực <b class='coral'>Giáo Dục · Thủ Khoa</b></span>
-      <span>Chuẩn GD Quốc Gia · Việt Nam</span>
-    </span>
-    <span class='right'>
-      <a class='topbar-link' href='#contact'><span class='pulse'></span>Đang tuyển sinh 2026</a>
-      <span><b>VI</b> · EN</span>
-    </span>
-  </div>
-</div>
 
 <header class='nav' data-od-id='nav'>
   <div class='container nav-inner'>
     <a href='#top' class='brand'>
       <span class='brand-mark'>⑩</span>
       <span>Gia Sư 10 Điểm</span>
-      <span class='brand-meta'><b>Viện Gia Sư Nº 01</b>Hà Nội · TP.HCM · Đà Nẵng</span>
     </a>
-    <nav>
+    <nav aria-label='Điều hướng chính'>
       <ul class='nav-links'>
-        <li><a href='#labs'>Môn Học<span class='num'>08</span></a></li>
-        <li><a href='#capabilities'>Tiêu Chuẩn<span class='num'>04</span></a></li>
-        <li><a href='#method'>Quy Trình<span class='num'>04</span></a></li>
-        <li><a href='#work'>Bảng Vàng<span class='num'>9+</span></a></li>
+        <li><a href='#labs'>Môn Học</a></li>
+        <li><a href='#capabilities'>Tiêu Chuẩn</a></li>
+        <li><a href='#method'>Quy Trình</a></li>
+        <li><a href='#work'>Mục Tiêu</a></li>
         <li><a href='#contact'>Liên Hệ</a></li>
       </ul>
     </nav>
-    <div class='nav-side'>
-      <a class='nav-cta ghost' href='#labs'>Xem Môn Học</a>
-      <a class='nav-cta' href='#contact'>Tìm Gia Sư</a>
-      <span class='status-dot' aria-hidden='true'></span>
+    <div class='nav-side'><a class='nav-login' href='/app/auth'>Đăng nhập</a>
+      <a class='nav-cta' href='/app/tutors'>Tìm Gia Sư</a>
     </div>
+    <button class='mobile-menu-toggle' type='button' aria-expanded='false' aria-controls='mobile-nav'>
+      <span class='sr-only'>Mở menu</span><span aria-hidden='true'>Menu</span>
+    </button>
   </div>
+  <nav class='mobile-nav' id='mobile-nav' aria-label='Điều hướng di động' hidden>
+    <div class='container mobile-nav-inner'>
+      <a href='#labs'>Môn Học</a>
+      <a href='#capabilities'>Tiêu Chuẩn</a>
+      <a href='#method'>Quy Trình</a>
+      <a href='#work'>Mục Tiêu</a>
+      <a href='#contact'>Liên Hệ</a>
+      <a href='/app/auth'>Đăng nhập</a>
+      <a class='mobile-nav-cta' href='/app/tutors'>Tìm gia sư <span aria-hidden='true'>↗</span></a>
+    </div>
+  </nav>
 </header>
 
-<section class='hero' id='top' data-od-id='hero'>
-  <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>I.</span>
-      <span class='meta-grp'>
-        <span>Khởi Đầu / Trang Bìa</span>
-        <span class='dot-mark'>•</span>
-        <span>Gia Sư 10 Điểm / Tập 01</span>
-      </span>
-      <span>001 / 008</span>
-    </div>
-  </div>
+<main id='main' tabindex='-1'>
+<section class='hero' id='top' aria-labelledby='hero-title' data-od-id='hero'>
   <div class='container hero-grid'>
     <div class='hero-copy'>
-      <span class='label' data-reveal>Nền tảng gia sư chọn lọc <span class='ix'>· Nº 01</span></span>
-      <h1 class='display' data-reveal>Chinh phục <em>điểm 10</em> bằng <em>tư duy bản chất,</em> không học vẹt<span class='dot'>.</span></h1>
-      <p class='lead' data-reveal>Mạng lưới gia sư thủ khoa từ ĐH Ngoại Thương, Bách Khoa, Sư Phạm, Y Hà Nội và giáo viên trường chuyên (Hà Nội - Amsterdam, Lê Hồng Phong, Lam Sơn). Giáo án “may đo” 1 kèm 1 theo từng lỗ hổng kiến thức, cam kết tăng tối thiểu 2 điểm sau 8 tuần, học thử 2 buổi 0 đồng.</p>
+      <h1 id='hero-title' class='display' data-reveal>Gia sư 1:1.<br><em>Hiểu tận gốc.</em></h1>
+      <p class='lead' data-reveal>Tìm gia sư phù hợp với môn học, lịch trình và cách học của em. Xem hồ sơ, trao đổi trước, rồi chọn một giờ học.</p>
       <div class='hero-actions' data-reveal>
-        <a class='btn btn-primary' href='#contact'>
+        <a class='btn btn-primary' href='/app/tutors'>
           Tìm gia sư ngay
           <span class='arrow'><svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg></span>
         </a>
         <a class='btn btn-ghost' href='#labs'>
-          Kiểm tra đầu vào
+          Khám phá môn học
           <span class='arrow'><svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='9'/><path d='M9 12h6M12 9v6'/></svg></span>
         </a>
       </div>
       <div class='hero-stats' data-reveal>
           <div class='stat'>
-      <span class='ring solid'>100%</span>
-      <span class='stat-label'><b>xác thực</b>bằng cấp & lý lịch</span>
+      <span class='ring solid'>1:1</span>
+      <span class='stat-label'><b>Một thầy, một trò</b></span>
     </div>
           <div class='stat'>
-      <span class='ring'>96.8%</span>
-      <span class='stat-label'><b>tiến bộ</b>tăng 2+ điểm/2 tháng</span>
+      <span class='ring solid'>6–12</span>
+      <span class='stat-label'><b>Khối lớp</b></span>
     </div>
           <div class='stat'>
-      <span class='ring coral'>02</span>
-      <span class='stat-label'><b>buổi học thử</b>hoàn toàn 0 đồng</span>
+      <span class='ring coral'>CV</span>
+      <span class='stat-label'><b>Xem hồ sơ gia sư</b></span>
     </div>
       </div>
-      <div class='hero-foot' data-reveal>
-        <span class='meta'>↳ &nbsp; Hotline 24/7: 0988 10 10 10 &nbsp; · &nbsp; Ghép gia sư chuẩn gu trong 2 giờ</span>
-        <span class='coord'>21.0285° N · 105.8542° E</span>
-      </div>
     </div>
-    
+
     <div class='hero-art' data-reveal='scale'>
-      <span class='corner tl'></span>
-      <span class='corner tr'></span>
-      <span class='corner bl'></span>
-      <span class='corner br'></span>
-      <span class='annot annot-tl coord'>BỘ TIÊU CHUẨN / GS-10D</span>
-      <span class='annot annot-tr'>Bản Quyền Nº 01</span>
-      <span class='annot annot-bl coord'>Hà Nội · Sài Gòn · Đà Nẵng</span>
-      <span class='annot annot-br'>21.0285° N · 105.8542° E</span>
+      <span class='study-float study-float-math' data-parallax='-0.12' aria-hidden='true'>x² + y² <small>Toán học</small></span>
+      <span class='study-float study-float-language' data-parallax='0.15' aria-hidden='true'>Aa <small>Ngôn ngữ</small></span>
 
       <!-- Mode Switcher for Interactive Assets -->
       <div class='asset-mode-switcher'>
-        <button class='mode-btn active' data-mode='3d'>✦ 3D Khối Điểm 10</button>
-        <button class='mode-btn' data-mode='pixel'>▤ Pixel Art</button>
-        <button class='mode-btn' data-mode='plate'>▧ Bản In Đồ Họa</button>
+        <button type='button' class='mode-btn active' data-mode='3d' aria-pressed='true'>3D</button>
+        <button type='button' class='mode-btn' data-mode='pixel' aria-pressed='false'>Pixel</button>
+        <button type='button' class='mode-btn' data-mode='plate' aria-pressed='false'>Ảnh</button>
       </div>
 
       <!-- 3D Three.js Interactive Container -->
       <div id='layer-3d' class='hero-art-layer' style='display:block;'>
-        <canvas id='three-canvas' style='width:100%;height:100%;display:block;min-height:480px;'></canvas>
+        <canvas id='three-canvas' tabindex='0' aria-label='Khối hình học 3D. Dùng phím mũi tên để xoay.' style='width:100%;height:100%;display:block;min-height:480px;'></canvas>
         <div class='three-hint'>✦ Di chuột / Kéo để xoay khối Điểm 10</div>
       </div>
 
       <!-- Pixel Art Interactive Canvas -->
       <div id='layer-pixel' class='hero-art-layer' style='display:none;'>
-        <canvas id='pixel-canvas' width='360' height='360' style='width:100%;height:100%;display:block;min-height:480px;image-rendering:pixelated;'></canvas>
+        <canvas id='pixel-canvas' role='img' aria-label='Minh họa lớp học bằng pixel' width='360' height='360' style='width:100%;height:100%;display:block;min-height:480px;image-rendering:pixelated;'></canvas>
         <div class='three-hint'>▤ Hoạt Họa Pixel Art · Lớp học 1 kèm 1</div>
       </div>
 
       <!-- Editorial Plate Fallback (with real photo asset) -->
       <div id='layer-plate' class='hero-art-layer' style='display:none;'>
         <picture>
-          <source srcset='./assets/hero.svg' type='image/svg+xml'>
           <img src="./assets/hero.png" alt="Gia Sư 10 Điểm" style="width:100%;height:100%;max-height:640px;object-fit:contain;display:block;margin:auto;" />
         </picture>
       </div>
 
-      <div class='index'>
-        <span><span class='n'>01</span>Chẩn đoán</span>
-      <span class='on'><span class='n'>02</span>Ghép đôi</span>
-      <span><span class='n'>03</span>Học thử 0đ</span>
-      <span><span class='n'>04</span>Đạt Điểm 10</span>
-      </div>
     </div>
   </div>
 </section>
 
-<section class='wire' data-od-id='wire' aria-label='Mạng lưới học thuật toàn quốc'>
-  <div class='container wire-inner'>
-    <div class='wire-left'>
-      <span class='wire-mark' aria-hidden='true'><span class='wire-pulse'></span></span>
-      <span class='wire-title'>
-        <b>Mạng lưới học thuật</b>
-        <span>Kết nối gia sư thủ khoa tại 12 tỉnh thành trọng điểm</span>
-      </span>
+
+<section class='learning-journey' id='journey' aria-labelledby='journey-title'>
+  <div class='container journey-stage'>
+    <div class='journey-copy'>
+      <h2 class='display' id='journey-title'>Mỗi cách học.<br><em>Một người đồng hành.</em></h2>
+      <ol class='journey-steps'>
+        <li class='is-current'><span>01</span><div><h3>Chọn môn em muốn hiểu.</h3><p>Toán, khoa học, ngôn ngữ. Bắt đầu từ mục tiêu của em.</p><a href='/app/library'>Khám phá môn học ↗</a></div></li>
+        <li><span>02</span><div><h3>Gặp người dạy phù hợp.</h3><p>Xem chuyên môn, CV và cách dạy. Nhắn hỏi trước khi chọn lịch.</p><a href='/app/tutors'>Tìm gia sư ↗</a></div></li>
+        <li><span>03</span><div><h3>Dành một giờ cho tiến bộ.</h3><p>Chọn giờ trống, gửi yêu cầu và trao đổi cùng gia sư.</p><a href='/app/auth?mode=register'>Bắt đầu học ↗</a></div></li>
+      </ol>
     </div>
-    <div class='wire-rows'>
-      <div class='wire-row'>
-        <div class='marquee-track' aria-hidden='true'>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>21.02°N</span><span class='wire-name'>Hà Nội</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>10.82°N</span><span class='wire-name'>TP. Hồ Chí Minh</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>16.05°N</span><span class='wire-name'>Đà Nẵng</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>20.84°N</span><span class='wire-name'>Hải Phòng</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>10.04°N</span><span class='wire-name'>Cần Thơ</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>16.46°N</span><span class='wire-name'>Huế</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>12.23°N</span><span class='wire-name'>Nha Trang</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>20.42°N</span><span class='wire-name'>Nam Định</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>21.18°N</span><span class='wire-name'>Bắc Ninh</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>19.80°N</span><span class='wire-name'>Thanh Hóa</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>18.67°N</span><span class='wire-name'>Vinh</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>10.34°N</span><span class='wire-name'>Vũng Tàu</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>21.02°N</span><span class='wire-name'>Hà Nội</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>10.82°N</span><span class='wire-name'>TP. Hồ Chí Minh</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>16.05°N</span><span class='wire-name'>Đà Nẵng</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>20.84°N</span><span class='wire-name'>Hải Phòng</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>10.04°N</span><span class='wire-name'>Cần Thơ</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>16.46°N</span><span class='wire-name'>Huế</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>12.23°N</span><span class='wire-name'>Nha Trang</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>20.42°N</span><span class='wire-name'>Nam Định</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>21.18°N</span><span class='wire-name'>Bắc Ninh</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>19.80°N</span><span class='wire-name'>Thanh Hóa</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>18.67°N</span><span class='wire-name'>Vinh</span></span>
-          <span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>10.34°N</span><span class='wire-name'>Vũng Tàu</span></span>
-        </div>
+    <div class='learning-desk' aria-hidden='true'>
+      <div class='desk-orbit'></div>
+      <div class='desk-book book-math'><span>Toán học</span><strong>π</strong><i>Hiểu từ gốc.</i></div>
+      <div class='desk-book book-language'><span>Ngôn ngữ</span><strong>Aa</strong><i>Mở góc nhìn.</i></div>
+      <div class='desk-notebook'>
+        <div class='notebook-binding'></div>
+        <span class='notebook-subject'>Một giờ học của em</span>
+        <svg viewBox='0 0 260 200' fill='none'><path d='M28 165H240M45 182V20' stroke='#bbb5a5'/><path d='M55 145Q100 140 140 103T220 35' stroke='#852f36' stroke-width='4' stroke-linecap='round'/><path d='M55 145L140 103L220 35' stroke='#b6a888' stroke-dasharray='5 6'/><circle cx='55' cy='145' r='6' fill='#852f36'/><circle cx='140' cy='103' r='6' fill='#852f36'/><circle cx='220' cy='35' r='6' fill='#852f36'/></svg>
+        <strong>Hiểu hơn hôm qua.</strong>
+        <div class='notebook-lines'></div>
       </div>
-      <div class='wire-row'>
-        <div class='marquee-track reverse' aria-hidden='true'>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>ThuKhoa_NgoaiThuong</span><span class='wire-role'>Toán 10.0</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>HuyChuongVang_BachKhoa</span><span class='wire-role'>Vật Lý 9.85</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>IELTS_8.5_SuPham</span><span class='wire-role'>Tiếng Anh Chuyên</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>BacSi_YHaNoi</span><span class='wire-role'>Hóa Học 10.0</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>GiaiQG_ChuyenAms</span><span class='wire-role'>Ngữ Văn 9.5</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>Chuyen_LeHongPhong</span><span class='wire-role'>Toán & Tin Học</span></a>
-          <a class='wire-item is-link' href='#contact'><span class='wire-dot'>·</span><span class='wire-handle'>HocVien_TiepTheo</span><span class='wire-role'>Mục Tiêu Điểm 10</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>ThuKhoa_NgoaiThuong</span><span class='wire-role'>Toán 10.0</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>HuyChuongVang_BachKhoa</span><span class='wire-role'>Vật Lý 9.85</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>IELTS_8.5_SuPham</span><span class='wire-role'>Tiếng Anh Chuyên</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>BacSi_YHaNoi</span><span class='wire-role'>Hóa Học 10.0</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>GiaiQG_ChuyenAms</span><span class='wire-role'>Ngữ Văn 9.5</span></a>
-          <a class='wire-item is-link' href='#'><span class='wire-dot'>·</span><span class='wire-handle'>Chuyen_LeHongPhong</span><span class='wire-role'>Toán & Tin Học</span></a>
-          <a class='wire-item is-link' href='#contact'><span class='wire-dot'>·</span><span class='wire-handle'>HocVien_TiepTheo</span><span class='wire-role'>Mục Tiêu Điểm 10</span></a>
-        </div>
-      </div>
+      <div class='desk-pencil'></div>
+      <div class='desk-note'>Cứ hỏi.<br><em>Mình cùng tìm hiểu.</em></div>
     </div>
   </div>
 </section>
 
-<section class='about' data-od-id='about'>
+<section class='about' aria-labelledby='about-title' data-od-id='about'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>II.</span>
-      <span class='meta-grp'>
-        <span>Triết Lý / Tuyên Ngôn</span>
-        <span class='dot-mark'>•</span>
-        <span>Gia Sư 10 Điểm / Tập 01</span>
-      </span>
-      <span>002 / 008</span>
-    </div>
     <div class='about-grid'>
       <div class='about-copy'>
-        <span class='label' data-reveal>Tuyên ngôn học thuật <span class='ix'>· Nº 02</span></span>
-        <h2 class='display' data-reveal>Chúng tôi không dạy học vẹt. Chúng tôi xây dựng <em>tư duy bản chất vững vàng</em> giúp học sinh làm chủ mọi dạng đề thi<span class='dot'>.</span></h2>
-        <p class='lead' data-reveal>Các phương pháp dạy kèm truyền thống thường ép học sinh giải hàng trăm bài mẫu một cách máy móc, khiến các em lúng túng khi gặp bài thi phân loại nâng cao. Tại Gia Sư 10 Điểm, mỗi bài học đều xuất phát từ tiên đề gốc, giúp học sinh hiểu sâu bản chất và tự tin chinh phục điểm số tuyệt đối.</p>
+        <h2 id='about-title' class='display' data-reveal>Hiểu sâu.<br><em>Tự tin giải bài.</em></h2>
+        <p class='lead' data-reveal>Bắt đầu từ gốc rễ của mỗi công thức. Gia sư cùng em tìm ra cách hiểu, cách lập luận và cách tự giải quyết một bài toán mới.</p>
         <div class='about-action' data-reveal>
           <a class='btn btn-ghost' href='#capabilities'>
-            Xem Bộ Tiêu Chuẩn Giảng Dạy
+            Khám phá cách dạy
             <span class='arrow'><svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg></span>
           </a>
         </div>
-        <div class='about-foot' data-reveal>
-          <span class='foot-text'>Gia Sư 10 Điểm — Thành lập MMXX · Chuẩn Giáo Dục Quốc Gia</span>
-          <span class='stamp'>
-            <b>XÁC MINH</b>
-            TOP 1% THỦ KHOA
-          </span>
-        </div>
       </div>
       <div class='about-art' data-reveal='scale'>
-        <div class='plate'>
+        <div class='plate' data-parallax='0.06'>
           <picture>
-            <source srcset='./assets/about.svg' type='image/svg+xml'>
             <img src='./assets/about.png' alt="Cấu trúc 4 tầng tư duy bản chất: Trực giác, Cấu trúc, Tổng hợp và Làm chủ kiến thức." />
           </picture>
         </div>
-        <div class='about-side-note'>
-          <span class='mono-label'>Tiên đề học thuật: Khi học sinh hiểu rõ nguồn gốc công thức, cách giải quyết bài toán sẽ trở thành phản xạ tự nhiên.</span>
-          <span class='plate-caption'>Cấu trúc 4 tầng tư duy bản chất: Trực giác, Cấu trúc, Tổng hợp và Làm chủ kiến thức.</span>
-        </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class='capabilities' id='capabilities' data-od-id='capabilities'>
+<section class='capabilities' id='capabilities' aria-labelledby='capabilities-title' data-od-id='capabilities'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>III.</span>
-      <span class='meta-grp'>
-        <span>Hệ Thống Tuyển Chọn</span>
-        <span class='dot-mark'>•</span>
-        <span>Sàng lọc 4 vòng khắt khe</span>
-      </span>
-      <span>003 / 008</span>
-    </div>
     <div class='cap-head'>
-      <span class='label' data-reveal>Quy chuẩn tuyển chọn <span class='ix'>· Nº 03</span></span>
-      <h2 class='display' data-reveal>Chỉ <em>8.5% ứng viên</em> vượt qua quy trình tuyển chọn 4 vòng độc quyền<span class='dot'>.</span></h2>
-      <p class='lead' data-reveal>Gia sư tại Gia Sư 10 Điểm không chỉ có học lực xuất chúng mà còn phải sở hữu kỹ năng truyền đạt lôi cuốn, phương pháp sư phạm hiện đại và lòng kiên nhẫn đồng hành.</p>
+      <h2 id='capabilities-title' class='display' data-reveal>Giỏi chuyên môn.<br><em>Tận tâm giảng dạy.</em></h2>
+      <p class='lead' data-reveal>Chọn người dạy từ chuyên môn, kinh nghiệm, CV và cách trao đổi với em.</p>
     </div>
-    <div class='cap-body'>
-      <div class='art' data-reveal='scale'>
-        <div class='art-frame'>
+    <div class='capabilities-grid'>
+      <div class='capabilities-art' data-reveal='scale'>
+        <div class='art-frame' data-parallax='-0.05'>
           <picture>
-            <source srcset='./assets/capabilities.svg' type='image/svg+xml'>
             <img src='./assets/capabilities.png' alt='Quy Chuẩn Tuyển Chọn Gia Sư' />
           </picture>
         </div>
-        <div class='art-caption'>
-          <span class='mono'>SÀNG LỌC 4 VÒNG KHẮT KHE</span>
-          <span>Chỉ 8.5% gia sư thủ khoa được chứng nhận</span>
-        </div>
       </div>
       <div class='content'>
-        <div class='ribbon' data-reveal>
-          <span class='ribbon-bar'></span>
-          <span>TIÊU CHUẨN · THỦ KHOA ĐẠI HỌC & GIÁO VIÊN TRƯỜNG CHUYÊN</span>
-        </div>
         <div class='cards'>
             
     <div class='card' data-reveal>
-      <div class='num'>01<span class='tag'>HỒ SƠ HỌC THUẬT</span></div>
       <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'>
         <path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/>
       </svg>
-      <h3>Xác Minh 100% Hồ Sơ<br/>& Bằng Cấp Thủ Khoa</h3>
-      <p>Mọi gia sư đều phải xuất trình bảng điểm đại học xuất sắc (GPA > 3.6), giấy chứng nhận giải thưởng quốc gia hoặc thành tích thủ khoa, á khoa các kỳ thi toàn quốc.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Tìm hiểu thêm về HỒ SƠ HỌC THUẬT'>
-        <svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg>
-      </a>
+      <h3>Hồ sơ & CV</h3>
+      <p>Xem học vấn, kinh nghiệm và CV do gia sư cung cấp. Hồ sơ cần được quản trị duyệt trước khi hiển thị.</p>
     </div>
   
             
     <div class='card' data-reveal>
-      <div class='num'>02<span class='tag'>KIỂM TRA NĂNG LỰC</span></div>
       <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'>
         <circle cx='12' cy='12' r='10'/><path d='M12 6v6l4 2'/>
       </svg>
-      <h3>Giải Đề Trực Tiếp<br/>& Thi Thử Mù Khắt Khe</h3>
-      <p>Ứng viên làm bài kiểm tra giải đề nâng cao, đề thi Olympic và các dạng bài phân loại điểm 9-10 trực tiếp dưới sự giám sát của hội đồng chuyên môn.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Tìm hiểu thêm về KIỂM TRA NĂNG LỰC'>
-        <svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg>
-      </a>
+      <h3>Môn học & mục tiêu</h3>
+      <p>Lọc theo môn học, cấp học và kỳ thi mà gia sư nhận dạy.</p>
     </div>
   
             
     <div class='card' data-reveal>
-      <div class='num'>03<span class='tag'>KỸ NĂNG SƯ PHẠM</span></div>
       <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'>
         <path d='M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75'/>
       </svg>
-      <h3>Dạy Thử Thực Chiến<br/>& Đánh Giá Truyền Đạt</h3>
-      <p>Giảng dạy thực tế trước hội đồng sư phạm để đánh giá kỹ năng diễn đạt dễ hiểu, sự kiên nhẫn, khả năng truyền cảm hứng và lắng nghe tâm lý học sinh.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Tìm hiểu thêm về KỸ NĂNG SƯ PHẠM'>
-        <svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg>
-      </a>
+      <h3>Trao đổi trước khi học</h3>
+      <p>Nhắn hỏi gia sư về phương pháp, học phí và nhu cầu của em trước khi đặt lịch.</p>
     </div>
   
             
     <div class='card' data-reveal>
-      <div class='num'>04<span class='tag'>GIÁM SÁT TIẾN BỘ</span></div>
       <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'>
         <path d='M22 11.08V12a10 10 0 11-5.93-9.14'/><polyline points='22 4 12 14.01 9 11.01'/>
       </svg>
-      <h3>Theo Dõi Định Kỳ<br/>& Báo Cáo Hàng Tuần</h3>
-      <p>Định kỳ mỗi 2 tuần đều có bài kiểm tra mini đánh giá tiến độ. Phụ huynh nhận báo cáo chi tiết về mức độ hiểu bài và lộ trình học tập được cập nhật liên tục.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Tìm hiểu thêm về GIÁM SÁT TIẾN BỘ'>
-        <svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg>
-      </a>
+      <h3>Lịch học rõ ràng</h3>
+      <p>Xem giờ trống, gửi yêu cầu và theo dõi xác nhận. Lưu lịch học vào ứng dụng lịch của em.</p>
     </div>
   
         </div>
@@ -2510,440 +2739,288 @@ h1, h2, h3, h4, h5, .display {
   </div>
 </section>
 
-<section class='labs' id='labs' data-od-id='labs'>
+<section class='labs' id='labs' aria-labelledby='labs-title' data-od-id='labs'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>IV.</span>
-      <span class='meta-grp'>
-        <span>Danh Mục Môn Học & Cấp Độ</span>
-        <span class='dot-mark'>•</span>
-        <span>Từ Lớp 6 đến Luyện Thi ĐH</span>
-      </span>
-      <span>004 / 008</span>
-    </div>
     <div class='labs-head'>
       <div data-reveal>
-        <span class='label'>Hệ thống môn học <span class='ix'>· Nº 04</span></span>
-        <h2 class='display' style='margin-top:30px;'>Chương trình toàn diện từ <em>lấy lại căn bản</em> đến <em>chinh phục trường chuyên</em> và đại học top 1<span class='dot'>.</span></h2>
+        <h2 id='labs-title' class='display'>Chọn môn học.<br><em>Mở lối tiến bộ.</em></h2>
       </div>
       <div class='pills' data-reveal='right'>
-          <button class='pill active' data-filter='all'>Tất cả môn<span class='count'>08</span></button>
-          <button class='pill' data-filter='math'>Toán & Tự Nhiên<span class='count'>03</span></button>
-          <button class='pill' data-filter='science'>Khoa Học<span class='count'>02</span></button>
-          <button class='pill' data-filter='english'>Ngoại Ngữ<span class='count'>02</span></button>
-          <button class='pill' data-filter='exam'>Luyện Thi Chuyên<span class='count'>01</span></button>
+          <button type='button' class='pill active' data-filter='all' aria-pressed='true'>Tất cả<span class='count'>5</span></button>
+          <button type='button' class='pill' data-filter='math' aria-pressed='false'>Toán<span class='count'>1</span></button>
+          <button type='button' class='pill' data-filter='science' aria-pressed='false'>Khoa học<span class='count'>1</span></button>
+          <button type='button' class='pill' data-filter='english' aria-pressed='false'>Tiếng Anh<span class='count'>1</span></button>
+          <button type='button' class='pill' data-filter='literature' aria-pressed='false'>Ngữ văn<span class='count'>1</span></button>
+          <button type='button' class='pill' data-filter='exam' aria-pressed='false'>Luyện thi<span class='count'>1</span></button>
       </div>
     </div>
-    <div class='labs-meta'>
-      <span class='ring'>08</span>
-      <div class='meta-text'>
-        <b>Khối môn mũi nhọn</b>
-        Toán · Lý · Hóa · Văn<br/>Tiếng Anh · IELTS 8.5+<br/>ĐGNL · Vào 10 Chuyên
-      </div>
+    <div class='course-toolbar'>
+      <label class='search-field' for='course-search'><svg aria-hidden='true' viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5'><circle cx='10' cy='10' r='6'/><path d='m15 15 5 5'/></svg><input id='course-search' type='search' placeholder='Tìm môn học…' aria-label='Tìm môn học' /></label>
+      <p id='course-count' role='status' aria-live='polite'>5 chương trình</p>
     </div>
     <div class='labs-grid' id='labs-container'>
         
     <div class='lab' data-category='math' data-reveal>
       <div class='lab-img'>
-        <span class='badge'>MÔN HỌC 01</span>
+
         <picture>
-          <source srcset='./assets/lab-1.svg' type='image/svg+xml'>
-          <img src='./assets/lab-1.png' alt="Toán Học Nâng Cao &amp; Tư Duy Bản Chất" loading='lazy' />
+          <img src='./assets/lab-1.png' alt="Toán học" loading='lazy' />
         </picture>
       </div>
-      <div class='num-row'><span>01</span><span>TOÁN HỌC</span></div>
-      <h4>Toán Học Nâng Cao & Tư Duy Bản Chất</h4>
-      <p>Đại số, hình học không gian, giải tích và phương pháp tư duy giải nhanh bài toán phân loại điểm 9-10 của kỳ thi THPTQG.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Xem chi tiết môn Toán Học Nâng Cao & Tư Duy Bản Chất'><svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg></a>
+
+      <h3>Toán học</h3>
+      <p>Nắm chắc đại số, hình học và giải tích. Rèn tư duy giải bài từ căn bản đến nâng cao.</p>
+      <a class='course-select' href='#contact' data-subject='toan' aria-label='Chọn môn học: Toán học'>Chọn môn học <span aria-hidden='true'>↗</span></a>
     </div>
   
         
     <div class='lab' data-category='science' data-reveal>
       <div class='lab-img'>
-        <span class='badge'>MÔN HỌC 02</span>
+
         <picture>
-          <source srcset='./assets/lab-2.svg' type='image/svg+xml'>
-          <img src='./assets/lab-2.png' alt="Vật Lý &amp; Hóa Học Thực Nghiệm" loading='lazy' />
+          <img src='./assets/lab-2.png' alt="Vật lý &amp; Hóa học" loading='lazy' />
         </picture>
       </div>
-      <div class='num-row'><span>02</span><span>TỰ NHIÊN</span></div>
-      <h4>Vật Lý & Hóa Học Thực Nghiệm</h4>
-      <p>Cơ học, điện xoay chiều, nhiệt động lực, hóa vô cơ và hữu cơ kết hợp hình ảnh trực quan giúp học sinh ghi nhớ bản chất hiện tượng.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Xem chi tiết môn Vật Lý & Hóa Học Thực Nghiệm'><svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg></a>
+
+      <h3>Vật lý & Hóa học</h3>
+      <p>Hiểu hiện tượng, hiểu phản ứng. Kết nối kiến thức với bài tập và ứng dụng thực tế.</p>
+      <a class='course-select' href='#contact' data-subject='khtn' aria-label='Chọn môn học: Vật lý &amp; Hóa học'>Chọn môn học <span aria-hidden='true'>↗</span></a>
     </div>
   
         
     <div class='lab' data-category='english' data-reveal>
       <div class='lab-img'>
-        <span class='badge'>MÔN HỌC 03</span>
+
         <picture>
-          <source srcset='./assets/lab-3.svg' type='image/svg+xml'>
-          <img src='./assets/lab-3.png' alt="Tiếng Anh Chuyên Sâu &amp; Luyện Thi IELTS" loading='lazy' />
+          <img src='./assets/lab-3.png' alt="Tiếng Anh &amp; IELTS" loading='lazy' />
         </picture>
       </div>
-      <div class='num-row'><span>03</span><span>NGOẠI NGỮ</span></div>
-      <h4>Tiếng Anh Chuyên Sâu & Luyện Thi IELTS</h4>
-      <p>Chiến lược bứt phá IELTS 8.5+, SAT, ngữ pháp nâng cao, phát âm chuẩn quốc tế và kỹ năng viết luận học thuật sắc bén.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Xem chi tiết môn Tiếng Anh Chuyên Sâu & Luyện Thi IELTS'><svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg></a>
+
+      <h3>Tiếng Anh & IELTS</h3>
+      <p>Củng cố ngữ pháp, giao tiếp và kỹ năng học thuật. Xây dựng lộ trình luyện thi IELTS.</p>
+      <a class='course-select' href='#contact' data-subject='anh' aria-label='Chọn môn học: Tiếng Anh &amp; IELTS'>Chọn môn học <span aria-hidden='true'>↗</span></a>
     </div>
   
         
     <div class='lab' data-category='literature' data-reveal>
       <div class='lab-img'>
-        <span class='badge'>MÔN HỌC 04</span>
+
         <picture>
-          <source srcset='./assets/lab-4.svg' type='image/svg+xml'>
-          <img src='./assets/lab-4.png' alt="Ngữ Văn &amp; Nghị Luận Xã Hội Mạch Lạc" loading='lazy' />
+          <img src='./assets/lab-4.png' alt="Ngữ văn" loading='lazy' />
         </picture>
       </div>
-      <div class='num-row'><span>04</span><span>NGỮ VĂN</span></div>
-      <h4>Ngữ Văn & Nghị Luận Xã Hội Mạch Lạc</h4>
-      <p>Xây dựng tư duy lập luận logic, kỹ thuật triển khai luận điểm sáng tạo, kỹ năng phân tích tác phẩm văn học đạt điểm 9+.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Xem chi tiết môn Ngữ Văn & Nghị Luận Xã Hội Mạch Lạc'><svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg></a>
+
+      <h3>Ngữ văn</h3>
+      <p>Đọc hiểu tác phẩm, phát triển luận điểm và viết bài nghị luận bằng tiếng nói riêng.</p>
+      <a class='course-select' href='#contact' data-subject='van' aria-label='Chọn môn học: Ngữ văn'>Chọn môn học <span aria-hidden='true'>↗</span></a>
     </div>
   
         
     <div class='lab' data-category='exam' data-reveal>
       <div class='lab-img'>
-        <span class='badge'>MÔN HỌC 05</span>
+
         <picture>
-          <source srcset='./assets/lab-5.svg' type='image/svg+xml'>
-          <img src='./assets/lab-5.png' alt="Luyện Thi Vào 10 Chuyên &amp; ĐGNL ĐHQG" loading='lazy' />
+          <img src='./assets/lab-5.png' alt="Luyện thi chuyên" loading='lazy' />
         </picture>
       </div>
-      <div class='num-row'><span>05</span><span>LUYỆN THI</span></div>
-      <h4>Luyện Thi Vào 10 Chuyên & ĐGNL ĐHQG</h4>
-      <p>Lộ trình ôn thi chuyên biệt vào các trường chuyên Hà Nội - Amsterdam, Lê Hồng Phong, KHTN và kỳ thi đánh giá năng lực.</p>
-      <a class='arrow-mark' href='#contact' aria-label='Xem chi tiết môn Luyện Thi Vào 10 Chuyên & ĐGNL ĐHQG'><svg viewBox='0 0 24 24'><path d='M5 19L19 5M19 5H8M19 5v11'/></svg></a>
+
+      <h3>Luyện thi chuyên</h3>
+      <p>Ôn thi vào lớp 10 chuyên và đánh giá năng lực với mục tiêu, chuyên đề rõ ràng.</p>
+      <a class='course-select' href='#contact' data-subject='chuyen' aria-label='Chọn môn học: Luyện thi chuyên'>Chọn môn học <span aria-hidden='true'>↗</span></a>
     </div>
   
     </div>
-    <div class='labs-foot'>
-      <div class='progress'>
-        <span class='on'></span><span class='on'></span><span class='on'></span><span class='on'></span><span class='on'></span>
-      </div>
-      <span class='meta'>Toàn bộ giáo trình đối chiếu chuẩn theo khung kỳ thi THPT Quốc Gia, Tuyển sinh Chuyên và chuẩn quốc tế (SAT / IELTS / AP).</span>
-    </div>
+    <div id='course-empty' class='course-empty' hidden><p>Chưa tìm thấy môn học phù hợp.</p><button type='button' id='reset-courses'>Xem tất cả môn học ↗</button></div>
   </div>
 </section>
 
-<section class='method' id='method' data-od-id='method'>
+<section class='method' id='method' aria-labelledby='method-title' data-od-id='method'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>V.</span>
-      <span class='meta-grp'>
-        <span>Phương Pháp / Lộ Trình</span>
-        <span class='dot-mark'>•</span>
-        <span>04 giai đoạn bứt phá</span>
-      </span>
-      <span>005 / 008</span>
-    </div>
     <div class='method-head'>
       <div data-reveal>
-        <span class='label'>Lộ trình cá nhân hóa <span class='ix'>· Nº 05</span></span>
-        <h2 class='display' style='margin-top:30px;'>Quy trình 4 bước chuyển hóa <em>lỗ hổng kiến thức thành điểm 10 rực rỡ</em>.</h2>
-      </div>
-      <div class='right' data-reveal='right'>
-        <span class='plus'>+</span>
-        <p>TỪ CHẨN ĐOÁN ĐẾN LÀM CHỦ KIẾN THỨC</p>
+        <h2 id='method-title' class='display'>Một lộ trình.<br><em>Từng bước vững vàng.</em></h2>
       </div>
     </div>
-    <div class='method-grid'>
+    <ol class='method-grid'>
         
-    <div class='method-step' data-reveal>
-      <div class='num'>01</div>
-      <h4>Chẩn Đoán Lỗ Hổng Kiến Thức <span class='arrow-r'>→</span></h4>
-      <p>Bài kiểm tra đầu vào 90 phút độc quyền giúp xác định chính xác kiến thức rỗng và thói quen giải đề chưa tối ưu của học sinh.</p>
+    <li class='method-step' data-reveal>
+      <h3>Hiểu điểm xuất phát</h3>
+      <p>Chọn môn học, cấp học và điều em muốn cải thiện.</p>
       <div class='img'>
         <picture>
-          <source srcset='./assets/method-1.svg' type='image/svg+xml'>
-          <img src='./assets/method-1.png' alt="Chẩn Đoán Lỗ Hổng Kiến Thức" loading='lazy' />
+          <img src='./assets/method-1.png' alt="Hiểu điểm xuất phát" loading='lazy' />
         </picture>
       </div>
-    </div>
+    </li>
   
         
-    <div class='method-step' data-reveal>
-      <div class='num'>02</div>
-      <h4>Ghép Đôi Gia Sư Thủ Khoa Phù Hợp <span class='arrow-r'>→</span></h4>
-      <p>Hệ thống kết nối học sinh với gia sư thủ khoa tương thích về tính cách, phương pháp giảng dạy và mục tiêu thi cử trong vòng 2 giờ.</p>
+    <li class='method-step' data-reveal>
+      <h3>Chọn người đồng hành</h3>
+      <p>Đọc hồ sơ, xem CV và lưu những gia sư phù hợp để cân nhắc.</p>
       <div class='img'>
         <picture>
-          <source srcset='./assets/method-2.svg' type='image/svg+xml'>
-          <img src='./assets/method-2.png' alt="Ghép Đôi Gia Sư Thủ Khoa Phù Hợp" loading='lazy' />
+          <img src='./assets/method-2.png' alt="Chọn người đồng hành" loading='lazy' />
         </picture>
       </div>
-    </div>
+    </li>
   
         
-    <div class='method-step' data-reveal>
-      <div class='num'>03</div>
-      <h4>Giáo Án “May Đo” 1 Kèm 1 <span class='arrow-r'>→</span></h4>
-      <p>Kế hoạch học tập chi tiết theo từng tuần, tập trung bù đắp phần yếu, giải quyết triệt để bài tập khó và rèn luyện phản xạ thi cử.</p>
+    <li class='method-step' data-reveal>
+      <h3>Học theo cách của em</h3>
+      <p>Nhắn hỏi trước, chọn giờ trống và gửi yêu cầu học.</p>
       <div class='img'>
         <picture>
-          <source srcset='./assets/method-3.svg' type='image/svg+xml'>
-          <img src='./assets/method-3.png' alt="Giáo Án “May Đo” 1 Kèm 1" loading='lazy' />
+          <img src='./assets/method-3.png' alt="Học theo cách của em" loading='lazy' />
         </picture>
       </div>
-    </div>
+    </li>
   
         
-    <div class='method-step' data-reveal>
-      <div class='num'>04</div>
-      <h4>Chinh Phục Điểm 10 Tuyệt Đối</h4>
-      <p>Luyện đề thi thử dưới áp lực thời gian thực tế, tự tin bước vào kỳ thi chính thức với tâm thế vững vàng và tư duy tự chủ.</p>
+    <li class='method-step' data-reveal>
+      <h3>Nhìn lại tiến bộ</h3>
+      <p>Trao đổi sau buổi học và đánh giá trải nghiệm khi buổi học hoàn thành.</p>
       <div class='img'>
         <picture>
-          <source srcset='./assets/method-4.svg' type='image/svg+xml'>
-          <img src='./assets/method-4.png' alt="Chinh Phục Điểm 10 Tuyệt Đối" loading='lazy' />
+          <img src='./assets/method-4.png' alt="Nhìn lại tiến bộ" loading='lazy' />
         </picture>
       </div>
-    </div>
+    </li>
   
-    </div>
+    </ol>
     <div class='method-foot'>
       <div class='left'>
         <span class='ring'></span>
-        <span>Cam kết: Tăng tối thiểu 2 điểm sau 8 tuần học nghiêm túc cùng gia sư.</span>
+        <span>Học phí và hình thức được hiển thị trên hồ sơ gia sư.</span>
       </div>
-      <div class='right'><a class='method-repo-link' href='#contact'><b>Học Thử 02 Buổi Miễn Phí.</b></a> &nbsp;·&nbsp; Hoàn tiền 100% nếu phụ huynh không hài lòng sau 2 tuần đầu.</div>
+      <div class='right'><a class='method-repo-link' href='#contact'><b>Chọn lịch phù hợp.</b></a> &nbsp;·&nbsp; Gia sư sẽ xác nhận yêu cầu của em.</div>
     </div>
   </div>
 </section>
 
-<section class='tight' id='work' data-od-id='work'>
+<section class='tight' id='work' aria-labelledby='tight-title' data-od-id='work'>
   <div class='work'>
-    <div class='work-rule'>
-      <span class='roman'>VI.</span>
-      <span style='display:inline-flex;gap:24px;'>
-        <span>Bảng Vàng Thành Tích</span>
-        <span style='color:var(--coral);'>•</span>
-        <span>Thủ khoa & Á khoa 2026</span>
-      </span>
-      <span>006 / 008</span>
-    </div>
     <div class='work-grid'>
       <div class='work-copy' data-reveal>
-        <span class='label'>Bảng vàng thành tích</span>
-        <h2>Những con số <em>biết nói</em> từ học viên <em>Gia Sư 10 Điểm</em>.</h2>
-        <a class='work-link' href='#contact'>Xem toàn bộ 120+ thủ khoa</a>
+        <h2 id='tight-title'>Học vững.<br><em>Vươn xa.</em></h2>
+        <a class='work-link' href='#contact'>Tìm lộ trình phù hợp</a>
       </div>
       
     <a class='work-card' data-reveal href='#contact'>
       <div class='label-row'>
-        <span class='small-label'>THỦ KHOA TOÀN QUỐC</span>
-        <span class='index'>01 / 120</span>
+        <span class='small-label'>MỤC TIÊU CỦA EM</span>
+        <span class='index'></span>
       </div>
-      <h3>Nguyễn Minh Anh · THPT Chuyên Hà Nội - Amsterdam</h3>
-      <p>Thủ khoa Khối A00 toàn quốc với 29.85 điểm (Toán 10.0, Lý 9.85, Hóa 10.0). Trúng tuyển Khoa Kinh tế Đối ngoại, Trường Đại học Ngoại Thương.</p>
+      <h3>Nắm chắc kiến thức nền</h3>
+      <p>Tìm gia sư có thể giải thích chậm rãi, cùng em ôn lại những phần chưa vững và xây dựng cách học phù hợp.</p>
       <div class='img'>
         <picture>
-          <source srcset='./assets/work-1.svg' type='image/svg+xml'>
-          <img src='./assets/work-1.png' alt="Nguyễn Minh Anh · THPT Chuyên Hà Nội - Amsterdam" loading='lazy' />
+          <img src='./assets/work-1.png' alt="Nắm chắc kiến thức nền" loading='lazy' />
         </picture>
       </div>
       <div class='meta-row'>
-        <span class='year'>2026 · KHỐI A00</span>
-        <span>THỦ KHOA</span>
+        <span class='year'></span>
+        <span>CỦNG CỐ</span>
       </div>
     </a>
   
       
     <a class='work-card alt' data-reveal href='#contact'>
       <div class='label-row'>
-        <span class='small-label'>BỨT PHÁ ĐIỂM SỐ</span>
-        <span class='index'>02 / 120</span>
+        <span class='small-label'>MỤC TIÊU CỦA EM</span>
+        <span class='index'></span>
       </div>
-      <h3>Trần Hoàng Nam · THPT Lê Quý Đôn (TP.HCM)</h3>
-      <p>Từ mức điểm 5.5 môn Toán và mất căn bản tiếng Anh, Nam bứt phá lên 9.2 điểm thi tốt nghiệp và đạt 8.0 IELTS chỉ sau 8 tuần đồng hành cùng gia sư.</p>
+      <h3>Chuẩn bị cho kỳ thi tiếp theo</h3>
+      <p>Tìm người dạy theo mục tiêu vào lớp 10, tốt nghiệp THPT, đánh giá năng lực hoặc chứng chỉ ngoại ngữ.</p>
       <div class='img'>
         <picture>
-          <source srcset='./assets/work-2.svg' type='image/svg+xml'>
-          <img src='./assets/work-2.png' alt="Trần Hoàng Nam · THPT Lê Quý Đôn (TP.HCM)" loading='lazy' />
+          <img src='./assets/work-2.png' alt="Chuẩn bị cho kỳ thi tiếp theo" loading='lazy' />
         </picture>
       </div>
       <div class='meta-row'>
-        <span class='year'>2026 · TĂNG 3.7Đ</span>
-        <span>BỨT PHÁ</span>
+        <span class='year'></span>
+        <span>LUYỆN THI</span>
       </div>
     </a>
   
-    </div>
-    <div class='work-arrows'>
-      <button class='nav-btn' aria-label='Trước'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M14 6l-6 6 6 6'/></svg></button>
-      <button class='nav-btn active' aria-label='Tiếp'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M10 6l6 6-6 6'/></svg></button>
     </div>
   </div>
 </section>
 
-<section class='testimonial' data-od-id='testimonial'>
+<section class='testimonial' aria-labelledby='testimonial-title' data-od-id='testimonial'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>VII.</span>
-      <span class='meta-grp'>
-        <span>Tiếng Nói Phụ Huynh</span>
-        <span class='dot-mark'>•</span>
-        <span>Trách nhiệm & Cam kết</span>
-      </span>
-      <span>007 / 008</span>
-    </div>
     <div class='testimonial-grid'>
       <div class='testimonial-copy' data-reveal>
-        <span class='label'>Chia sẻ phụ huynh <span class='ix'>· Nº 07</span></span>
-        <h2 style='margin-top:30px;'>&ldquo;Gia Sư 10 Điểm không chỉ giúp con từ học sinh sợ Toán vươn lên đạt <em>9.5 điểm thi vào 10 chuyên,</em> mà điều quý giá nhất là con đã hình thành <em>niềm say mê học tập và sự tự giác</em> mỗi tối mà bố mẹ không cần nhắc nhở.&rdquo;</h2>
+        <h2 id='testimonial-title' class='display'>Cùng con <em>trưởng thành.</em></h2>
+        <blockquote>&ldquo;Một câu hỏi được lắng nghe. Một cách giải thích vừa đủ. <em>Một người đồng hành phù hợp.</em>&rdquo;</blockquote>
         <div class='author'>
-          <span class='avatar'>H</span>
-          <p>Bác sĩ Nguyễn Đức Hải<br/><span>Phó Giáo sư · Phụ huynh em Minh Đức (Trúng tuyển THPT Chuyên Hà Nội - Amsterdam)</span></p>
+          <span class='avatar'>10</span>
+          <p>Gia Sư 10 Điểm<br/><span>Kết nối để học tốt hơn</span></p>
         </div>
         <div class='divider'></div>
-        <p class='partners-text'>Đội ngũ gia sư thủ khoa & giáo viên đến từ các trường đại học & THPT chuyên hàng đầu:</p>
+        <p class='partners-text'>Khám phá môn học theo điều em muốn hiểu:</p>
         <div class='partners'>
           
-    <a class='partner' data-reveal href='#'>
-      <div class='glyph'>
-        <svg viewBox='0 0 80 30' fill='none' stroke='currentColor' stroke-width='2'>
-          <path d='M5 24L20 6L35 24M12 18h16'/>
-        </svg>
-      </div>
-      <span>ĐH Ngoại Thương</span>
-      <small>Kinh Tế & Toán Ứng Dụng</small>
-    </a>
+    <div class='partner' data-reveal>
+      <span>Toán học</span>
+    </div>
   
         
-    <a class='partner' data-reveal href='#'>
-      <div class='glyph'>
-        <svg viewBox='0 0 80 30' fill='none' stroke='currentColor' stroke-width='2'>
-          <path d='M8 24L20 6L24 22L36 4'/>
-        </svg>
-      </div>
-      <span>ĐH Bách Khoa</span>
-      <small>Khoa Học Máy Tính & Kỹ Thuật</small>
-    </a>
+    <div class='partner' data-reveal>
+      <span>Khoa học</span>
+    </div>
   
         
-    <a class='partner' data-reveal href='#'>
-      <div class='glyph'>
-        <svg viewBox='0 0 80 30' fill='none' stroke='currentColor' stroke-width='2'>
-          <rect x='6' y='6' width='4' height='18'/><rect x='14' y='6' width='4' height='18'/><rect x='22' y='6' width='4' height='18'/><rect x='30' y='6' width='4' height='18'/>
-        </svg>
-      </div>
-      <span>ĐH Sư Phạm Hà Nội</span>
-      <small>Khoa Học Sư Phạm Chuyên</small>
-    </a>
+    <div class='partner' data-reveal>
+      <span>Ngoại ngữ</span>
+    </div>
   
         
-    <a class='partner' data-reveal href='#'>
-      <div class='glyph'>
-        <svg viewBox='0 0 80 30' fill='none' stroke='currentColor' stroke-width='2'>
-          <circle cx='15' cy='15' r='9'/><path d='M15 6v18M6 15h18'/>
-        </svg>
-      </div>
-      <span>ĐH Y Hà Nội</span>
-      <small>Y Khoa & Hóa Học 10.0</small>
-    </a>
+    <div class='partner' data-reveal>
+      <span>Ngữ văn</span>
+    </div>
   
         
-    <a class='partner' data-reveal href='#'>
-      <div class='glyph'>
-        <svg viewBox='0 0 80 30' fill='none' stroke='currentColor' stroke-width='2'>
-          <polygon points='15,4 27,24 3,24'/>
-        </svg>
-      </div>
-      <span>THPT Chuyên Hà Nội - Ams</span>
-      <small>Toán & Khoa Học Tự Nhiên</small>
-    </a>
+    <div class='partner' data-reveal>
+      <span>Tin học</span>
+    </div>
   
         </div>
-        <a class='read-more' href='#contact'>Xem Thêm Đánh Giá Của Phụ Huynh</a>
+        <a class='read-more' href='/app/tutors'>Khám phá gia sư</a>
       </div>
       <div class='testimonial-art' data-reveal='right'>
         <picture>
-          <source srcset='./assets/testimonial.svg' type='image/svg+xml'>
-          <img src='./assets/testimonial.png' alt='Phụ huynh chia sẻ' />
+          <img src='./assets/testimonial.png' alt='Minh họa việc học cùng người đồng hành' />
         </picture>
       </div>
     </div>
   </div>
 </section>
 
-<section class='cta' id='contact' data-od-id='cta'>
+<section class='cta' id='contact' aria-labelledby='cta-title' data-od-id='cta'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>VIII.</span>
-      <span class='meta-grp'>
-        <span>Đăng Ký Học Thử</span>
-        <span class='dot-mark'>•</span>
-        <span>Ghép gia sư trong 2 giờ</span>
-      </span>
-      <span>008 / 008</span>
-    </div>
     <div class='cta-grid'>
       <div data-reveal>
-        <span class='label'>Đăng ký tư vấn <span class='ix'>· Nº 08</span></span>
-        <h2 class='display'>Khởi đầu hành trình <em>chinh phục điểm 10 ngay hôm nay</em>.</h2>
-        <p class='lead'>Đăng ký kiểm tra đầu vào 90 phút và nhận ngay 02 buổi học thử 1 kèm 1 cùng gia sư thủ khoa. Hoàn toàn miễn phí, không cam kết trước.</p>
-        
-        <!-- Interactive Consultation Booking Form -->
+        <h2 id='cta-title' class='display'>Bắt đầu từ<br><em>một cuộc trò chuyện.</em></h2>
+        <p class='lead'>Chọn môn học và hình thức phù hợp. Xem hồ sơ gia sư, rồi nhắn hỏi trực tiếp.</p>
+
         <div class='booking-box' id='booking-form'>
-          <h4 style='font-family:var(--sans);font-size:16px;font-weight:700;color:var(--ink);'>Đăng ký tìm gia sư &amp; nhận 02 buổi học thử 0 đồng</h4>
-          <form id='tutor-booking-form' onsubmit='handleBookingSubmit(event)'>
+          <form id='tutor-booking-form' action='/app/tutors' method='get'>
             <div class='booking-grid'>
-              <div class='form-field'>
-                <label>Lớp của học sinh</label>
-                <select id='form-grade' required>
-                  <option value='grade12' selected>Lớp 12 &amp; Luyện thi THPTQG</option>
-                  <option value='grade11'>Lớp 11 (Chuyên đề nâng cao)</option>
-                  <option value='grade10'>Lớp 10 (Chương trình mới)</option>
-                  <option value='grade9'>Lớp 9 (Luyện thi vào 10 Chuyên)</option>
-                  <option value='secondary'>Cấp 2 (Lớp 6 đến Lớp 8)</option>
-                  <option value='dgnl'>Luyện thi ĐGNL / ĐGTD</option>
-                </select>
+              <div class='form-field'><label for='form-subject'>Môn học</label>
+                <select id='form-subject' name='subject'><option value=''>Tất cả môn học</option><option value='toan'>Toán</option><option value='vat-li'>Vật lí</option><option value='hoa-hoc'>Hóa học</option><option value='tieng-anh'>Tiếng Anh</option><option value='ngu-van'>Ngữ văn</option><option value='khtn'>Khoa học tự nhiên</option></select>
               </div>
-              <div class='form-field'>
-                <label>Môn học cần gia sư</label>
-                <select id='form-subject' required>
-                  <option value='toan' selected>Toán học (Đại số &amp; Giải tích)</option>
-                  <option value='ly'>Vật lý</option>
-                  <option value='hoa'>Hóa học</option>
-                  <option value='anh'>Tiếng Anh / Luyện thi IELTS</option>
-                  <option value='van'>Ngữ Văn</option>
-                  <option value='khtn'>Tổ hợp KHTN (Toán - Lý - Hóa)</option>
-                  <option value='chuyen'>Môn Chuyên</option>
-                </select>
+              <div class='form-field'><label for='form-mode'>Hình thức</label>
+                <select id='form-mode' name='mode'><option value=''>Tất cả hình thức</option><option value='online'>Trực tuyến</option><option value='offline'>Trực tiếp</option></select>
               </div>
-              <div class='form-field'>
-                <label>Mục tiêu điểm số</label>
-                <select id='form-target'>
-                  <option value='10'>Chinh phục điểm 9+ đến 10 tuyệt đối</option>
-                  <option value='chuyen'>Đỗ trường Chuyên / ĐH Top 1</option>
-                  <option value='goc'>Bứt phá lấy lại căn bản cấp tốc</option>
-                  <option value='ielts'>IELTS 7.5 - 8.5+</option>
-                </select>
-              </div>
-              <div class='form-field'>
-                <label>Hình thức học</label>
-                <select id='form-mode'>
-                  <option value='home'>Gia sư trực tiếp tại nhà</option>
-                  <option value='online'>Học trực tuyến 1-1 tương tác cao</option>
-                </select>
-              </div>
-              <div class='form-field' style='grid-column: 1 / -1;'>
-                <label>Số điện thoại phụ huynh</label>
-                <input type='tel' id='form-phone' placeholder='e.g. 0988 10 10 10' required />
-              </div>
-              <button type='submit' class='booking-submit-btn'>NHẬN 02 BUỔI HỌC THỬ MIỄN PHÍ NGAY &rarr;</button>
+              <button type='submit' class='booking-submit-btn'>Tìm gia sư phù hợp ↗</button>
             </div>
           </form>
-          <div id='toast-alert' class='toast-msg' role='alert'></div>
-          <p style='font-family:var(--sans);font-size:12px;color:var(--ink-mute);margin-top:12px;'>* Hoàn toàn không mất phí. Ghép gia sư thủ khoa chuẩn phong cách trong 2 giờ.</p>
         </div>
       </div>
-      
+
       <div class='art' data-reveal='scale'>
         <div class='plate'>
           <picture>
-            <source srcset='./assets/cta.svg' type='image/svg+xml'>
             <img src='./assets/cta.png' alt='Đăng Ký Tư Vấn' />
           </picture>
         </div>
@@ -2952,6 +3029,7 @@ h1, h2, h3, h4, h5, .display {
   </div>
 </section>
 
+</main>
 <footer data-od-id='footer'>
   <div class='container'>
     <div class='foot-grid'>
@@ -2960,12 +3038,12 @@ h1, h2, h3, h4, h5, .display {
           <span class='brand-mark'>⑩</span>
           <span>Gia Sư 10 Điểm</span>
         </a>
-        <p style='margin-top:18px;'>Hệ thống gia sư chất lượng cao hàng đầu Việt Nam. Chúng tôi đồng hành cùng phụ huynh và học sinh từ bước lấy lại căn bản đến đỉnh cao thủ khoa các kỳ thi THPTQG, Chuyên cấp 3 và Đánh giá năng lực.</p>
-        <a class='foot-cta' href='tel:0988101010'>Hotline: 0988 10 10 10<span class='meta'>Tư vấn miễn phí 24/7</span></a>
+        <p style='margin-top:18px;'>Gia sư 1 kèm 1. Đồng hành cùng học sinh trên hành trình hiểu sâu, học vững và tự tin tiến bộ.</p>
+        <a class='foot-cta' href='/app/auth?mode=register&role=tutor'>Trở thành gia sư ↗<span class='meta'></span></a>
       </div>
       
     <div class='foot-col'>
-      <h5>Dịch Vụ</h5>
+      <h3>Dịch Vụ</h3>
       <ul>
         <li><a href='#contact'>Gia sư tại nhà</a></li>
         <li><a href='#contact'>Gia sư trực tuyến 1-1</a></li>
@@ -2976,7 +3054,7 @@ h1, h2, h3, h4, h5, .display {
   
       
     <div class='foot-col'>
-      <h5>Môn Trọng Điểm</h5>
+      <h3>Môn Trọng Điểm</h3>
       <ul>
         <li><a href='#labs'>Toán học nâng cao</a></li>
         <li><a href='#labs'>Vật lý & Hóa học</a></li>
@@ -2987,35 +3065,26 @@ h1, h2, h3, h4, h5, .display {
   
       
     <div class='foot-col'>
-      <h5>Trung Tâm</h5>
+      <h3>Tài khoản</h3>
       <ul>
-        <li><a href='#contact'>Cơ sở Hà Nội: Cầu Giấy & Đống Đa</a></li>
-        <li><a href='#contact'>Cơ sở TP.HCM: Q.1 & Q.Bình Thạnh</a></li>
-        <li><a href='#contact'>Cơ sở Đà Nẵng: Q.Hải Châu</a></li>
-        <li><a href='#contact'>Chính sách cam kết điểm số</a></li>
+        <li><a href='/app/auth?mode=register'>Học sinh / Phụ huynh</a></li>
+        <li><a href='/app/auth?mode=register&role=tutor'>Đăng ký gia sư</a></li>
+        <li><a href='/app/auth'>Đăng nhập</a></li>
       </ul>
     </div>
   
       
     <div class='foot-col'>
-      <h5>Đội Ngũ</h5>
+      <h3>Khám phá</h3>
       <ul>
-        <li><a href='#contact'>Dành cho Thủ khoa & Á khoa</a></li>
-        <li><a href='#contact'>Giáo viên trường Chuyên</a></li>
-        <li><a href='#capabilities'>Quy chuẩn giảng dạy 10 Điểm</a></li>
-        <li><a href='#capabilities'>Sổ tay gia sư 2026</a></li>
+        <li><a href='/app/tutors'>Tìm gia sư</a></li>
+        <li><a href='/app/library'>Môn học & kỳ thi</a></li>
+        <li><a href='#journey'>Cách kết nối</a></li>
       </ul>
     </div>
   
     </div>
-    <div class='foot-bottom'>
-      <span><span class='pulse'></span>● <b style='color:var(--ink);'>Gia Sư 10 Điểm</b> · Chuẩn GD Quốc Gia · 2026 / Niên khóa 2026 / Kỳ tuyển sinh Nº 10</span>
-      <span class='right'>
-        <span>Hà Nội / TP.HCM / Đà Nẵng</span>
-        <span>21.0285° N · 105.8542° E</span>
-        <span style='color:var(--coral);'>♥ MMXXVI</span>
-      </span>
-    </div>
+    <div class='foot-bottom'><span>© 2026 Gia Sư 10 Điểm</span><span>Hà Nội / TP.HCM / Đà Nẵng</span></div>
     <div class='foot-mega'>
       <div class='word' data-reveal='rise-lg'>Gia Sư <em>10 Điểm</em>.</div>
     </div>
@@ -3030,7 +3099,7 @@ h1, h2, h3, h4, h5, .display {
    */
   (function () {
     var elements = document.querySelectorAll('[data-reveal]:not([data-revealed])');
-    if (!elements.length) return;
+    if (!elements.length || !('IntersectionObserver' in window)) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       for (var i = 0; i < elements.length; i++) elements[i].dataset.revealed = 'true';
       return;
@@ -3042,6 +3111,7 @@ h1, h2, h3, h4, h5, .display {
         observer.unobserve(entries[i].target);
       }
     }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    document.documentElement.classList.add('reveal-ready');
     for (var j = 0; j < elements.length; j++) observer.observe(elements[j]);
   })();
 
@@ -3057,7 +3127,7 @@ h1, h2, h3, h4, h5, .display {
     function onScroll() {
       var y = window.scrollY || 0;
       var d = y - lastY;
-      if (y <= SHOW_TOP) {
+      if (y <= SHOW_TOP || nav.contains(document.activeElement) || document.querySelector('.mobile-menu-toggle').getAttribute('aria-expanded') === 'true') {
         nav.classList.remove('is-hidden');
       } else if (d > DELTA) {
         nav.classList.add('is-hidden');
@@ -3067,43 +3137,72 @@ h1, h2, h3, h4, h5, .display {
       lastY = y;
     }
     window.addEventListener('scroll', onScroll, { passive: true });
+    nav.addEventListener('focusin', function () { nav.classList.remove('is-hidden'); });
   })();
 
-  /*
-   * Interactive Asset Switcher (Three.js 3D / Pixel Art / Bản In)
-   */
-  (function () {
-    var buttons = document.querySelectorAll('.mode-btn');
-    var layer3d = document.getElementById('layer-3d');
-    var layerPixel = document.getElementById('layer-pixel');
-    var layerPlate = document.getElementById('layer-plate');
-
-    buttons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        buttons.forEach(function (b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        var mode = btn.dataset.mode;
-        if (layer3d) layer3d.style.display = (mode === '3d') ? 'block' : 'none';
-        if (layerPixel) layerPixel.style.display = (mode === 'pixel') ? 'block' : 'none';
-        if (layerPlate) layerPlate.style.display = (mode === 'plate') ? 'block' : 'none';
-      });
+  function selectVisual(mode) {
+    document.querySelectorAll('.mode-btn').forEach(function (button) {
+      var selected = button.dataset.mode === mode;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+      document.getElementById('layer-' + button.dataset.mode).style.display = selected ? 'block' : 'none';
     });
-  })();
+    window.dispatchEvent(new Event('visualmodechange'));
+  }
+  document.querySelectorAll('.mode-btn').forEach(function (button) {
+    button.addEventListener('click', function () { selectVisual(button.dataset.mode); });
+  });
+  function disableThree() {
+    var button = document.querySelector('[data-mode="3d"]');
+    button.disabled = true;
+    button.title = '3D không khả dụng trên trình duyệt này';
+    selectVisual('plate');
+  }
+
+  // Render only the selected, on-screen visual; one still frame for reduced motion.
+  function animateVisual(canvas, draw) {
+    var motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var visible = false;
+    var request = 0;
+    var last = 0;
+    var elapsed = 0;
+    function active() {
+      return visible && !document.hidden && canvas.parentElement.style.display !== 'none';
+    }
+    function frame(now) {
+      request = 0;
+      if (!active()) return;
+      var delta = last ? Math.min((now - last) / 1000, 0.05) : 0;
+      last = now;
+      if (!motion.matches) elapsed += delta;
+      draw(motion.matches ? 0 : delta, elapsed);
+      if (!motion.matches) request = requestAnimationFrame(frame);
+    }
+    function sync() {
+      cancelAnimationFrame(request);
+      request = 0;
+      last = 0;
+      if (active()) request = requestAnimationFrame(frame);
+    }
+    var observer = new IntersectionObserver(function (entries) { visible = entries[0].isIntersecting; sync(); });
+    observer.observe(document.querySelector('.hero-art'));
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('visualmodechange', sync);
+    motion.addEventListener('change', sync);
+    return function () {
+      cancelAnimationFrame(request);
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('visualmodechange', sync);
+      motion.removeEventListener('change', sync);
+    };
+  }
 
   /*
    * Three.js Interactive 3D Academic Polyhedron
    */
   (function initThreeScene() {
-    if (typeof THREE === 'undefined') {
-      console.warn('Three.js not loaded, falling back to plate layer.');
-      var layerPlate = document.getElementById('layer-plate');
-      var layer3d = document.getElementById('layer-3d');
-      if (layer3d && layerPlate) {
-        layer3d.style.display = 'none';
-        layerPlate.style.display = 'block';
-      }
-      return;
-    }
+    if (typeof THREE === 'undefined') { disableThree(); return; }
 
     var canvas = document.getElementById('three-canvas');
     if (!canvas) return;
@@ -3114,27 +3213,13 @@ h1, h2, h3, h4, h5, .display {
 
     var scene = new THREE.Scene();
     var camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.z = 4.2;
+    camera.position.z = 6.8;
 
     var renderer;
     try {
       renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
       if (!renderer.getContext()) throw new Error("No WebGL context");
-    } catch (e) {
-      console.warn("WebGL not available, falling back to plate layer:", e);
-      var layerPlate = document.getElementById("layer-plate");
-      var layer3d = document.getElementById("layer-3d");
-      var buttons = document.querySelectorAll(".mode-btn");
-      if (layer3d && layerPlate) {
-        layer3d.style.display = "none";
-        layerPlate.style.display = "block";
-        buttons.forEach(function (b) {
-          if (b.dataset.mode === "plate") b.classList.add("active");
-          else b.classList.remove("active");
-        });
-      }
-      return;
-    }
+    } catch (e) { disableThree(); return; }
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -3236,10 +3321,15 @@ h1, h2, h3, h4, h5, .display {
         prevMouseY = e.clientY;
       } else {
         var rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height || e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
         var mx = (e.clientX - rect.left) / rect.width - 0.5;
         var my = (e.clientY - rect.top) / rect.height - 0.5;
         targetRotY = mx * 0.6;
         targetRotX = my * 0.6;
+      }
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        icosaMesh.rotation.set(targetRotX, targetRotY, 0);
+        renderer.render(scene, camera);
       }
     });
 
@@ -3260,37 +3350,55 @@ h1, h2, h3, h4, h5, .display {
         targetRotX += deltaY * 0.01;
         prevMouseX = e.touches[0].clientX;
         prevMouseY = e.touches[0].clientY;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          icosaMesh.rotation.set(targetRotX, targetRotY, 0);
+          renderer.render(scene, camera);
+        }
       }
     }, { passive: true });
 
     canvas.addEventListener('touchend', function () { isDragging = false; });
 
-    // Render loop
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // Smooth inertia
-      icosaMesh.rotation.y += (targetRotY - icosaMesh.rotation.y) * 0.05 + 0.003;
-      icosaMesh.rotation.x += (targetRotX - icosaMesh.rotation.x) * 0.05 + 0.002;
-
-      coreMesh.rotation.y -= 0.004;
-      coreMesh.rotation.z += 0.003;
-
-      ringGroup.rotation.y += 0.005;
-      ringGroup.rotation.x += 0.002;
-
-      particleSystem.rotation.y += 0.001;
-
+    canvas.addEventListener('keydown', function (event) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(event.key) === -1) return;
+      event.preventDefault();
+      targetRotY += event.key === 'ArrowLeft' ? -0.2 : event.key === 'ArrowRight' ? 0.2 : 0;
+      targetRotX += event.key === 'ArrowUp' ? -0.2 : event.key === 'ArrowDown' ? 0.2 : 0;
+      icosaMesh.rotation.set(targetRotX, targetRotY, 0);
+      renderer.render(scene, camera);
+    });
+    var stopAnimation = animateVisual(canvas, function (delta) {
+      var blend = 1 - Math.exp(-3 * delta);
+      icosaMesh.rotation.y += (targetRotY - icosaMesh.rotation.y) * blend + 0.18 * delta;
+      icosaMesh.rotation.x += (targetRotX - icosaMesh.rotation.x) * blend + 0.12 * delta;
+      coreMesh.rotation.y -= 0.24 * delta;
+      coreMesh.rotation.z += 0.18 * delta;
+      ringGroup.rotation.y += 0.30 * delta;
+      ringGroup.rotation.x += 0.12 * delta;
+      particleSystem.rotation.y += 0.06 * delta;
+      renderer.render(scene, camera);
+    });
+    function resizeScene() {
+      var w = container.clientWidth;
+      var h = container.clientHeight;
+      if (!w || !h) return;
+      camera.aspect = w / h;
+      camera.position.z = camera.aspect < 0.8 ? 8.5 : 6.8;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
       renderer.render(scene, camera);
     }
-    animate();
-
-    window.addEventListener('resize', function () {
-      var w = container.clientWidth || 480;
-      var h = container.clientHeight || 480;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+    var resizeObserver = new ResizeObserver(resizeScene);
+    resizeObserver.observe(container);
+    window.addEventListener('pagehide', function (event) {
+      if (event.persisted) return;
+      stopAnimation();
+      resizeObserver.disconnect();
+      scene.traverse(function (object) {
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) object.material.dispose();
+      });
+      renderer.dispose();
     });
   })();
 
@@ -3307,7 +3415,8 @@ h1, h2, h3, h4, h5, .display {
     var w = pCanvas.width;
     var h = pCanvas.height;
 
-    function drawPixelScene() {
+    function drawPixelScene(delta, elapsed) {
+      frame = elapsed * 60;
       // Paper background
       ctx.fillStyle = '#efe7d2';
       ctx.fillRect(0, 0, w, h);
@@ -3326,9 +3435,9 @@ h1, h2, h3, h4, h5, .display {
       ctx.fillStyle = '#e9b94a';
       ctx.fillText('lim (Diem) -> 10', 60, 115);
       ctx.fillStyle = '#ed6f5c';
-      ctx.fillText('E = mc^2 + ChamChi', 60, 145);
+      ctx.fillText('a^2 + b^2 = c^2', 60, 145);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('Thu Khoa A00: 29.85', 60, 175);
+      ctx.fillText('HOC HIEU - HOC VUNG', 60, 175);
 
       // Pixel Tutor Character
       var bob = Math.sin(frame * 0.08) * 3;
@@ -3375,53 +3484,105 @@ h1, h2, h3, h4, h5, .display {
       ctx.fillStyle = '#e9b94a';
       ctx.fillRect(300 - sx * 0.4, 290 + sy * 0.1, 8, 8);
 
-      frame++;
-      requestAnimationFrame(drawPixelScene);
     }
-    drawPixelScene();
+    var stopPixelAnimation = animateVisual(pCanvas, drawPixelScene);
+    window.addEventListener('pagehide', function (event) { if (!event.persisted) stopPixelAnimation(); });
   })();
 
-  /*
-   * Labs Subject Interactive Filtering
-   */
-  (function initLabsFilter() {
-    var pills = document.querySelectorAll('.labs-head .pill');
-    var cards = document.querySelectorAll('#labs-container .lab');
-
-    pills.forEach(function (pill) {
-      pill.addEventListener('click', function () {
-        pills.forEach(function (p) { p.classList.remove('active'); });
-        pill.classList.add('active');
-        var filter = pill.dataset.filter || 'all';
-
-        cards.forEach(function (card) {
-          var cat = card.dataset.category;
-          if (filter === 'all' || filter === cat) {
-            card.classList.remove('hidden-card');
-          } else {
-            card.classList.add('hidden-card');
-          }
-        });
-      });
+/* Inlined by build-page.js so the page also works without a web server. */
+(function initCourseDiscovery() {
+  const pills = [...document.querySelectorAll('[data-filter]')];
+  const cards = [...document.querySelectorAll('#labs-container .lab')];
+  const search = document.getElementById('course-search');
+  let category = 'all';
+  const normalize = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  function filterCourses() {
+    const query = normalize(search.value.trim());
+    let count = 0;
+    cards.forEach(card => {
+      const matches = (category === 'all' || card.dataset.category === category) && normalize(card.textContent).includes(query);
+      card.hidden = !matches;
+      if (matches) { count++; card.dataset.revealed = 'true'; }
     });
-  })();
-
-  /*
-   * Consultation Booking Form Handler
-   */
-  function handleBookingSubmit(event) {
-    event.preventDefault();
-    var phone = document.getElementById('form-phone').value;
-    var grade = document.getElementById('form-grade').value;
-    var subject = document.getElementById('form-subject').value;
-    var toast = document.getElementById('toast-alert');
-    if (!phone) return;
-
-    if (toast) {
-      toast.style.display = 'block';
-      toast.textContent = '✓ Tiếp nhận thành công! Chuyên viên học thuật sẽ liên hệ SĐT ' + phone + ' trong 15 phút để tư vấn ghép gia sư môn ' + subject.toUpperCase() + '.';
-    }
+    pills.forEach(pill => {
+      const selected = pill.dataset.filter === category;
+      pill.classList.toggle('active', selected);
+      pill.setAttribute('aria-pressed', String(selected));
+    });
+    document.getElementById('course-count').textContent = count + ' chương trình';
+    document.getElementById('course-empty').hidden = count !== 0;
   }
+  pills.forEach(pill => pill.addEventListener('click', () => { category = pill.dataset.filter; filterCourses(); }));
+  search.addEventListener('input', filterCourses);
+  document.getElementById('reset-courses').addEventListener('click', () => {
+    category = 'all'; search.value = ''; filterCourses(); search.focus();
+  });
+  document.querySelectorAll('[data-subject]').forEach(link => link.addEventListener('click', () => {
+    const subject = document.getElementById('form-subject');
+    subject.value = ({ly:'vat-li',hoa:'hoa-hoc',anh:'tieng-anh',van:'ngu-van',chuyen:''})[link.dataset.subject] ?? link.dataset.subject;
+    subject.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('tutor-booking-form').hidden = false;
+    // Let the anchor navigate before placing keyboard focus in the form.
+    setTimeout(() => subject.focus({ preventScroll: true }), 0);
+  }));
+})();
+
+(function initMobileMenu() {
+  const toggle = document.querySelector('.mobile-menu-toggle');
+  const menu = document.getElementById('mobile-nav');
+  function closeMenu(restoreFocus = false) {
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.querySelector('.sr-only').textContent = 'Mở menu';
+    menu.hidden = true;
+    if (restoreFocus) toggle.focus();
+  }
+  toggle.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', String(!open));
+    toggle.querySelector('.sr-only').textContent = open ? 'Mở menu' : 'Đóng menu';
+    menu.hidden = open;
+  });
+  menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
+    closeMenu();
+    const href = link.getAttribute('href');
+    const target = href?.startsWith('#') ? document.querySelector(href) : null;
+    if (target) { target.tabIndex = -1; target.focus({ preventScroll: true }); }
+  }));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !menu.hidden) closeMenu(true);
+  });
+  matchMedia('(min-width: 881px)').addEventListener('change', event => { if (event.matches) closeMenu(); });
+})();
+
+(function initLearningParallax() {
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  const narrow = matchMedia('(max-width: 880px)');
+  const journey = document.querySelector('.learning-journey');
+  const steps = [...document.querySelectorAll('.journey-steps li')];
+  const layers = [...document.querySelectorAll('[data-parallax]')];
+  let frame = 0;
+  function paint() {
+    frame = 0;
+    const still = motion.matches || narrow.matches;
+    const rect = journey.getBoundingClientRect();
+    const progress = still ? 0.5 : Math.min(1, Math.max(0, -rect.top / Math.max(1, rect.height - innerHeight)));
+    journey.style.setProperty('--journey', progress);
+    steps.forEach((step, index) => step.classList.toggle('is-current', still || index === Math.min(2, Math.floor(progress * 3))));
+    layers.forEach(layer => {
+      const parent = layer.parentElement.getBoundingClientRect();
+      const distance = Math.max(-innerHeight, Math.min(innerHeight, innerHeight * 0.5 - parent.top - parent.height * 0.5));
+      layer.style.setProperty('--parallax-y', (still ? 0 : distance * Number(layer.dataset.parallax)).toFixed(1) + 'px');
+    });
+  }
+  function schedule() { if (!frame && !document.hidden) frame = requestAnimationFrame(paint); }
+  addEventListener('scroll', schedule, { passive: true });
+  addEventListener('resize', schedule, { passive: true });
+  motion.addEventListener('change', schedule);
+  narrow.addEventListener('change', schedule);
+  document.addEventListener('visibilitychange', schedule);
+  schedule();
+})();
+
 </script>
 </body>
 </html>
