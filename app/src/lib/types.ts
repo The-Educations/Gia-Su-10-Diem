@@ -1,3 +1,4 @@
+export type GalleryPhoto = { id: string; url: string; caption: string; created_at: string };
 export type User = {
   id: number;
   name: string;
@@ -19,6 +20,7 @@ export type Slot = {
   reserved?: number;
 };
 export type Tutor = {
+  gallery: GalleryPhoto[];
   photo_url: string | null;
   cv: { name: string; size: number; url: string; uploaded_at: string } | null;
   user_id: number;

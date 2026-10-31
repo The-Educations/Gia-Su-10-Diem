@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tutor } from "@/lib/types";
-import { api } from "@/lib/api";
+import { api, useApp } from "@/lib/api";
 import { Person, ErrorState, Submit } from "./common";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -198,6 +198,7 @@ export function TutorUploads({
   t: Tutor;
   onPending: () => void;
 }) {
+  const { refresh } = useApp();
   const [assets, setAssets] = useState<Assets>({
     photo_url: t.photo_url,
     cv: t.cv,
@@ -210,6 +211,7 @@ export function TutorUploads({
         name={t.name || "Gia sư"}
         onChange={(a, pending) => {
           setAssets(a);
+          refresh();
           if (pending) onPending();
         }}
       />
@@ -219,6 +221,7 @@ export function TutorUploads({
         name={t.name || "Gia sư"}
         onChange={(a, pending) => {
           setAssets(a);
+          refresh();
           if (pending) onPending();
         }}
       />

@@ -1,3 +1,4 @@
+import { TutorGallery, TutorGalleryEditor } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -305,6 +306,7 @@ function ProfileForm({
             mode,
           }}
         />
+        <TutorGallery images={t.gallery || []} name={t.name} />
       </aside>
     </div>
   );
@@ -409,9 +411,9 @@ export default function TutorStudio() {
               t={t}
               onPending={() => {
                 setUploadPending(true);
-                refresh();
               }}
             />
+            <TutorGalleryEditor images={t.gallery || []} onPending={() => setUploadPending(true)} />
           </section>
         </TabsContent>
         <TabsContent value="profile" forceMount>

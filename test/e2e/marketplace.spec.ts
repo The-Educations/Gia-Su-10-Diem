@@ -209,6 +209,18 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(
     tutor.getByText("Teaching CV.pdf", { exact: true }),
   ).toBeVisible();
+  const galleryImage = await sharp({ create: { width: 120, height: 80, channels: 3, background: "#527158" } }).png().toBuffer();
+  await tutor.getByLabel("Thêm ảnh vào hồ sơ").setInputFiles([
+    { name: "study.png", mimeType: "image/png", buffer: galleryImage },
+    { name: "classroom.png", mimeType: "image/png", buffer: galleryImage },
+  ]);
+  await tutor.getByRole("button", { name: "Tải 2 ảnh lên", exact: true }).click();
+  await expect(tutor.locator(".gallery-editor-item")).toHaveCount(2);
+  await tutor.getByLabel("Chú thích ảnh 1", { exact: true }).fill("Góc học tập của tôi");
+  await tutor.locator(".gallery-editor-item").first().getByRole("button", { name: "Lưu chú thích", exact: true }).click();
+  await expect(tutor.getByText("Đã lưu chú thích. Hồ sơ sẽ được duyệt lại.", { exact: true })).toBeVisible();
+  await tutor.reload();
+  await expect(tutor.getByLabel("Chú thích ảnh 1", { exact: true })).toHaveValue("Góc học tập của tôi");
   await tutor.getByRole("tab", { name: "Hồ sơ nhận dạy" }).click();
   await tutor.getByLabel("Tiêu đề hồ sơ").fill("Gia sư Toán lớp 9");
   await tutor
@@ -260,6 +272,7 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(admin.getByRole("dialog")).toContainText(
     "Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.",
   );
+  await expect(admin.getByRole("dialog").locator(".gallery-tile")).toHaveCount(2);
   await admin.getByRole("button", { name: "Duyệt & công bố" }).click();
   await expect(admin.getByRole("dialog")).not.toBeVisible();
   await expect(admin.locator(".admin-list")).toContainText("Đã công bố");
@@ -270,6 +283,15 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor.getByRole("link", { name: "Tải CV", exact: true }).click();
   expect((await download).suggestedFilename()).toBe("Teaching CV.pdf");
   await expect(tutor.locator(".profile-hero img")).toBeVisible();
+  await expect(tutor.locator(".gallery-tile")).toHaveCount(2);
+  await tutor.locator(".gallery-tile").first().click();
+  await expect(tutor.getByRole("dialog")).toContainText("Góc học tập của tôi");
+  await expect(tutor.locator(".gallery-full-image")).toBeVisible();
+  await tutor.keyboard.press("ArrowRight");
+  await expect(tutor.getByRole("dialog")).toContainText("Ảnh 2 / 2");
+  await tutor.keyboard.press("Escape");
+  await expect(tutor.locator(".gallery-tile").first()).toBeFocused();
+
   await expect(tutor.locator(".tutor-presentation")).toHaveAttribute(
     "data-theme",
     "sage",

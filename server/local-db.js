@@ -12,6 +12,6 @@ export function openDatabase(
     "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
   );
   migrateDatabase(db);
-  db.exec("PRAGMA user_version = 4;");
+  db.exec("PRAGMA user_version = 5;");
   return db;
 }

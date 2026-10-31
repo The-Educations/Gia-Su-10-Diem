@@ -526,7 +526,7 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   );
   original.close();
   const migrated = openDatabase(file);
-  assert.equal(one(migrated, "PRAGMA user_version").user_version, 4);
+  assert.equal(one(migrated, "PRAGMA user_version").user_version, 5);
   assert.equal(
     one(migrated, "SELECT headline FROM tutors WHERE user_id=1").headline,
     "Hồ sơ giữ nguyên",
@@ -886,4 +886,57 @@ test("custom tutor presentation validates, persists and requires moderation; pub
   );
   assert.equal((await guest.request(`/tutors/${user.id}`)).status, 404);
   assert.equal((await tutor.request("/tutor/profile")).data.status, "pending");
+});
+
+test("tutor galleries preserve image proportions, enforce ownership, quotas and moderation", async (t) => {
+  const { client, base, db, file } = await fixture(t);
+  const tutor = client(), other = client(), student = client(), admin = client(), guest = client();
+  const owner = await tutor.login("chau");
+  await other.login("nam"); await student.login("student"); await admin.login("admin");
+  const { default: sharp } = await import("sharp");
+  const picture = await sharp({create:{width:120,height:80,channels:3,background:'#852f36'}}).png().toBuffer();
+  const upload = (actor, body = picture, caption = "Góc học tập", headers = {}) => fetch(base + "/tutor/gallery", {
+    method:"POST", headers:{ Cookie:actor.cookie, "Content-Type":"image/png", "X-Caption":encodeURIComponent(caption), ...headers }, body,
+  });
+  assert.equal((await upload(guest)).status,401);
+  assert.equal((await upload(student)).status,403);
+  assert.equal((await upload(tutor,picture,"",{Origin:"https://evil.test"})).status,403);
+  assert.equal((await upload(tutor,Buffer.from("<svg>fake</svg>"))).status,400);
+  assert.equal((await upload(tutor,picture,"a".repeat(501))).status,400);
+  assert.equal((await upload(tutor,Buffer.alloc(5*1024*1024+1))).status,413);
+  const response = await upload(tutor);
+  assert.equal(response.status,201);
+  const [photo] = await response.json();
+  const getImage = (actor) => fetch(new URL(photo.url,base),{headers:{Cookie:actor.cookie}});
+  assert.equal((await getImage(guest)).status,404);
+  assert.equal((await getImage(other)).status,404);
+  assert.equal((await getImage(admin)).status,200);
+  const decoded = await getImage(tutor);
+  assert.equal(decoded.headers.get("content-type"),"image/webp");
+  assert.equal(decoded.headers.get("cache-control"),"no-store");
+  const metadata = await sharp(Buffer.from(await decoded.arrayBuffer())).metadata();
+  assert.equal(metadata.width/metadata.height,1.5);
+  assert.equal((await other.request(`/tutor/gallery/${photo.id}`,"PATCH",{caption:"hijack"})).status,404);
+  assert.equal((await other.request(`/tutor/gallery/${photo.id}`,"DELETE")).status,404);
+  assert.equal((await tutor.request(`/tutor/gallery/${photo.id}`,"PATCH",{caption:"b".repeat(501)})).status,400);
+  const approve = () => admin.request(`/admin/tutors/${owner.id}`,"PATCH",{status:"approved",note:""});
+  assert.equal((await approve()).status,200);
+  assert.equal((await getImage(guest)).status,200);
+  assert.equal((await guest.request(`/tutors/${owner.id}`)).data.gallery[0].caption,"Góc học tập");
+  assert.equal((await tutor.request(`/tutor/gallery/${photo.id}`,"PATCH",{caption:"Cùng học Toán"})).status,200);
+  assert.equal((await getImage(guest)).status,404);
+  const reopened = openDatabase(file);
+  assert.equal(one(reopened,"SELECT caption FROM tutor_gallery WHERE id=?",photo.id).caption,"Cùng học Toán");
+  reopened.close();
+  for(let i=1;i<12;i++) assert.equal((await upload(tutor)).status,201);
+  assert.equal((await upload(tutor)).status,409);
+  assert.equal((await tutor.request('/tutor/profile')).data.gallery.length,12);
+  assert.equal((await tutor.request(`/tutor/gallery/${photo.id}`,"DELETE")).status,200);
+  assert.equal(one(db,"SELECT COUNT(*) AS count FROM gallery_chunks WHERE image_id=?",photo.id).count,0);
+  assert.equal((await getImage(tutor)).status,404);
+  assert.equal((await upload(tutor)).status,201);
+  await approve();
+  const another = (await guest.request(`/tutors/${owner.id}`)).data.gallery[0];
+  await admin.request(`/admin/users/${owner.id}`,"PATCH",{status:"suspended"});
+  assert.equal((await fetch(new URL(another.url,base))).status,404);
 });
