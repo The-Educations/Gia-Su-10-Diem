@@ -87,6 +87,7 @@ export default {
     if (["/app", "/app/"].includes(url.pathname))
       return Response.redirect(url.origin + "/", 302);
     const assetUrl = new URL(request.url);
+    if (url.pathname === "/") assetUrl.pathname = "/index.html";
     if (
       url.pathname.startsWith("/app/") &&
       !url.pathname.startsWith("/app/assets/")
@@ -97,7 +98,7 @@ export default {
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
     );
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     headers.set("X-Frame-Options", "DENY");
