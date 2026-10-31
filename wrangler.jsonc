@@ -9,7 +9,7 @@
   "durable_objects": { "bindings": [{ "name": "MARKETPLACE", "class_name": "Marketplace" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Marketplace"] }],
   "images": { "binding": "IMAGES" },
-  "routes": [{ "pattern": "giasudiem10.online", "custom_domain": true }],
+  "routes": [{ "pattern": "giasudiem10.online/*", "zone_name": "giasudiem10.online" }],
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 30000 }
 }
