@@ -120,7 +120,7 @@ export default {
       headers.set("Strict-Transport-Security", "max-age=31536000");
     if (
       headers.get("content-type")?.includes("text/html") ||
-      /(?:favicon|icon-v2|apple-touch-icon)/.test(url.pathname)
+      /(?:favicon|icon-v2|apple-touch-icon|brand-icon-|brand-touch-)/.test(url.pathname)
     )
       headers.set("Cache-Control", "no-cache");
     return new Response(response.body, { status: response.status, headers });

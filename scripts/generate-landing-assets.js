@@ -60,3 +60,9 @@ await writeFile("assets/favicon.ico", Buffer.concat([header, png]));
 console.log(
   "Created five original education vectors and SVG/PNG/ICO brand icons.",
 );
+
+// Use distinct filenames to invalidate browser favicon databases that retain old origins.
+await writeFile("assets/brand-icon-20261031.svg", icon);
+await writeFile("assets/brand-icon-20261031.png", png);
+await writeFile("assets/brand-icon-20261031.ico", Buffer.concat([header, png]));
+await sharp(Buffer.from(icon)).resize(180, 180).png().toFile("assets/brand-touch-20261031.png");

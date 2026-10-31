@@ -65,7 +65,7 @@ assert.ok(html.includes("<main id='main'"), 'Main landmark must exist');
 for (const [, src] of html.matchAll(/src=['"](\/assets\/[^'"]+)['"]/g)) {
   assert.ok(fs.existsSync(src.slice(1)), `Missing referenced asset ${src}`);
 }
-assert.ok(html.includes('/assets/icon-v2.svg'), 'Versioned brand icon is linked');
+assert.ok(html.includes("rel='icon' href='/assets/brand-icon-20261031.png'"), 'Versioned brand icon is linked');
 assert.ok(fs.readFileSync('assets/favicon.ico').readUInt16LE(2) === 1, 'ICO header is valid');
 console.log('✓ Landing sections, artwork and favicon verified.');
 

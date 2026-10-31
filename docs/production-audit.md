@@ -5,10 +5,11 @@ The site runs on Cloudflare Workers at `https://giasudiem10.online`; `www` redir
 ## Changes from this audit
 
 - Tutor profile editor: live preview, three cover themes, optional teaching method and lesson plan. Public profiles show the tutor's actual content instead of a fabricated universal lesson plan.
-- Instagram-style tutor gallery: up to 12 images, multiple-file upload, editable captions, deletion, full-size viewer and keyboard navigation. Image processing preserves proportions and strips metadata; pending content is private until approval.
+- Instagram-style tutor gallery: up to 12 images, multiple-file upload, editable captions, deletion, full-size viewer and keyboard navigation. Students can like images and post public comments; authors can delete their own comments, tutors can moderate their gallery, and admins can moderate all galleries. Comments are paginated (20 per page) and posting is limited to five per minute per student. Image processing preserves proportions and strips metadata; pending content is private until approval.
 - New content is validated, persisted and visible to the administrator reviewing the profile. Public name changes now atomically return tutor profiles to moderation; unchanged names do not.
 - Profile previews include the gallery and refresh portraits after upload/deletion while retaining form drafts across tabs. Mobile layout and reduced motion are supported.
 - A failed session check preserves the requested protected page and offers retry instead of treating the visitor as logged out.
+- Landing and app now use new versioned PNG/SVG/ICO/Apple icon filenames to invalidate stale Vercel favicon references. The legacy `/favicon.ico` also remains the current brand asset.
 - Google provider request errors now show retry rather than silently removing the sign-in button. Loading and unconfigured environments also have explicit states.
 - Additive SQLite migration preserves existing accounts/profiles and defaults existing tutor themes to paper. It runs on both Node and Cloudflare Durable Objects.
 
@@ -25,7 +26,7 @@ The site runs on Cloudflare Workers at `https://giasudiem10.online`; `www` redir
 | Privacy | Participant authorization for inquiries/bookings; unpublished uploads private; only approved active profiles public | Approved CVs are public downloads; admins can inspect booking conversations, not private inquiries |
 | Hosting | Worker HTML/assets/API, persistent SQLite Durable Object, HTTPS, www canonical redirect, current favicon | Single object; no sharding or demonstrated capacity/load target |
 
-Verification commands are `npm run typecheck`, `npm test`, `npm run test:e2e`, `npm run build:cloudflare`, `npm run test:cloudflare` against local Wrangler, and `node test/production-routing.mjs` against production. The API/OAuth suite covers 13 tests; the browser suite covers 10 flows, including profile preview-to-publication, multi-image gallery moderation/viewing and retrying authentication/provider failures. Production checks are read-only; test registrations/uploads/bookings run only in isolated local databases.
+Verification commands are `npm run typecheck`, `npm test`, `npm run test:e2e`, `npm run build:cloudflare`, `npm run test:cloudflare` against local Wrangler, and `node test/production-routing.mjs` against production. The API/OAuth suite covers 14 tests; the browser suite covers 10 flows, including profile preview-to-publication, multi-image gallery moderation/viewing, persistent student likes/comments and tutor comment removal and retrying authentication/provider failures. Production checks are read-only; test registrations/uploads/bookings run only in isolated local databases.
 
 Chrome DevTools inspection covered the desktop tutor editor and 390-pixel mobile profile with reduced motion, no horizontal overflow, and no console warnings/errors. The live Google button was observed on `/app/auth`, and clicking it reached Google's sign-in screen with the canonical callback. This verifies entry into OAuth, not a completed account consent/session.
 

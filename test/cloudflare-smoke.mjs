@@ -8,7 +8,7 @@ for (const path of ['/', '/app/tutors', '/app/auth', '/app/library']) {
  const html = await page.text();
  assert.ok(path === '/' ? html.includes('learning-journey') : html.includes('id="root"'), path);
 }
-for (const path of ['/favicon.ico', '/apple-touch-icon.png', '/favicon-32.png', '/assets/icon-v2.svg']) {
+for (const path of ['/favicon.ico', '/apple-touch-icon.png', '/favicon-32.png', '/assets/brand-icon-20261031.svg', '/assets/brand-icon-20261031.png']) {
  const icon = await fetch(base + path);
  assert.equal(icon.status, 200, path);
  assert.match(icon.headers.get('content-type'), /image/, path);
@@ -45,5 +45,9 @@ assert.equal((await get(galleryPhoto.url)).status,200);
 assert.equal((await fetch(base+galleryPhoto.url)).status,404);
 const galleryReload = await(await get('/api/tutor/profile')).json();
 assert.equal(galleryReload.gallery[0].caption,'Góc học tập');
+const social = await get('/api/gallery/'+galleryPhoto.id+'/social');
+assert.equal(social.status,200);
+assert.equal((await social.json()).comment_count,0);
+assert.equal((await fetch(base+'/api/gallery/'+galleryPhoto.id+'/social')).status,404);
 const app=await fetch(base+'/app/',{redirect:'manual'});assert.equal(app.headers.get('location'),base+'/');
 console.log('Cloudflare runtime: registration, session, portrait/CV upload, private download, availability, custom profile, private gallery and landing routing passed.');
