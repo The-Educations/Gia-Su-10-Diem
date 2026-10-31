@@ -25,6 +25,10 @@ const app = createApi(db, {
   },
 });
 app.use("/assets", express.static(path.resolve("assets")));
+app.get(["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"], (req, res) => {
+  res.set("Cache-Control", "no-cache");
+  res.sendFile(path.resolve("assets", req.path.slice(1)));
+});
 app.get(["/app", "/app/"], (req, res) => res.redirect("/"));
 app.get("/", (req, res) => res.sendFile(path.resolve("index.html")));
 if (production || process.env.SERVE_BUILD === "1") {

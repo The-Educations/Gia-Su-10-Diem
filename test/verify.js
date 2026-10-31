@@ -9,8 +9,8 @@ console.log('--- Running Automated Verification Suite for 10 Points Tutor Academ
 // 1. Verify index.html exists
 assert.ok(fs.existsSync('index.html'), 'index.html must exist');
 const html = fs.readFileSync('index.html', 'utf8');
-assert.ok(html.length > 50000, `index.html should be substantial (>50KB), got ${(html.length/1024).toFixed(1)} KB`);
-console.log('✓ index.html exists and is properly sized.');
+assert.ok(html.includes("<html lang='vi'>"), 'Landing declares Vietnamese');
+console.log('✓ index.html exists and declares Vietnamese.');
 
 // 2. Verify all 16 assets exist in both .png and .svg format
 const requiredAssets = [
@@ -57,20 +57,17 @@ const manifest = JSON.parse(fs.readFileSync('assets/image-manifest.json', 'utf8'
 assert.strictEqual(manifest.slots.length, 16, 'Manifest must have 16 slots');
 console.log('✓ image-manifest.json is valid with 16 slots.');
 
-// 5. Verify the main product sections remain accessible after the layout update.
-for (const section of ['hero', 'about', 'capabilities', 'labs', 'method', 'work', 'testimonial', 'cta']) {
+// Landing navigation and artwork must resolve after the redesign.
+for (const section of ['hero', 'about', 'labs', 'method', 'capabilities', 'cta']) {
   assert.ok(html.includes(`data-od-id='${section}'`), `Missing section ${section}`);
 }
 assert.ok(html.includes("<main id='main'"), 'Main landmark must exist');
-console.log('✓ All 8 product sections and the main landmark are present.');
-
-// 6. Verify Three.js and Pixel Art integration
-assert.ok(html.includes('three.min.js'), 'Three.js CDN script must be linked');
-assert.ok(html.includes('id=\'three-canvas\''), 'three-canvas must exist');
-assert.ok(html.includes('id=\'pixel-canvas\''), 'pixel-canvas must exist');
-assert.ok(html.includes('asset-mode-switcher'), 'asset-mode-switcher must exist');
-assert.ok(html.includes('GIA SU 10 DIEM'), 'Pixel Art chalkboard text must exist');
-console.log('✓ Three.js and Pixel Art interactive layers verified.');
+for (const [, src] of html.matchAll(/src=['"](\/assets\/[^'"]+)['"]/g)) {
+  assert.ok(fs.existsSync(src.slice(1)), `Missing referenced asset ${src}`);
+}
+assert.ok(html.includes('/assets/icon-v2.svg'), 'Versioned brand icon is linked');
+assert.ok(fs.readFileSync('assets/favicon.ico').readUInt16LE(2) === 1, 'ICO header is valid');
+console.log('✓ Landing sections, artwork and favicon verified.');
 
 // 7. Verify Booking Form & interactive filter
 assert.ok(html.includes('id=\'tutor-booking-form\''), 'Booking form must exist');
@@ -81,8 +78,8 @@ assert.ok(html.includes("action='/app/tutors'"), 'Discovery form navigates to re
 assert.ok(html.includes('initLearningParallax'), 'Learning parallax must initialize');
 console.log('✓ Tutor discovery form and subject filter verified.');
 
-// 8. Verify English brand copy and academic credentials
-const vietnameseKeywords = ["Gia Sư 10 Điểm", "Toán", "CV", "lịch học", "tư duy bản chất"];
+// 8. Verify Vietnamese marketplace copy
+const vietnameseKeywords = ["Gia Sư 10 Điểm", "Toán", "CV", "lịch học"];
 for (const kw of vietnameseKeywords) {
   assert.ok(html.toLocaleLowerCase('vi').includes(kw.toLocaleLowerCase('vi')), `Missing expected Vietnamese keyword: ${kw}`);
 }

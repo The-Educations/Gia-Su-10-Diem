@@ -453,9 +453,22 @@ test("landing entry, education parallax, mobile navigation and real tutor search
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  for (const path of ['/favicon.ico', '/apple-touch-icon.png', '/assets/icon-v2.svg']) {
+    const response = await page.request.get(path);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toMatch(/image/);
+  }
   await page.goto("/app/");
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("#hero-title")).toBeVisible();
+  const heroBefore = await page.locator('.hero-notebook').evaluate(e => getComputedStyle(e).translate);
+  await page.keyboard.press('PageDown');
+  await expect.poll(() => page.locator('.hero-notebook').evaluate(e => getComputedStyle(e).translate)).not.toBe(heroBefore);
+  await page.locator('#course-search').fill('ngu van');
+  await expect(page.locator('#labs-container .lab:visible')).toHaveCount(1);
+  await expect(page.locator('#labs-container .lab:visible')).toContainText('Ngữ văn');
+  await page.locator('#course-search').fill('');
+  await expect(page.locator('#labs-container .lab:visible')).toHaveCount(5);
   await page.locator("#journey").scrollIntoViewIfNeeded();
   const before = await page
     .locator(".desk-notebook")
