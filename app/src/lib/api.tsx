@@ -26,29 +26,63 @@ export async function api<T>(
 const Context = createContext<{
   user: User | null;
   loading: boolean;
+  authError: string;
+  retryAuth: () => void;
   revision: number;
   refresh: () => void;
   setUser: (u: User | null) => void;
 }>({
   user: null,
   loading: true,
+  authError: "",
+  retryAuth: () => {},
   revision: 0,
   refresh: () => {},
   setUser: () => {},
 });
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null),
+  const [user, setUserState] = useState<User | null>(null),
     [loading, setLoading] = useState(true),
-    [revision, setRevision] = useState(0);
-  useEffect(() => {
-    api<{ user: User | null }>("/auth/me")
-      .then((d) => setUser(d.user))
-      .finally(() => setLoading(false))
-      .catch(() => {});
+    [revision, setRevision] = useState(0),
+    [authError, setAuthError] = useState(""),
+    [authAttempt, setAuthAttempt] = useState(0);
+  const setUser = useCallback((value: User | null) => {
+    setUserState(value);
+    setAuthError("");
   }, []);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setAuthError("");
+    api<{ user: User | null }>("/auth/me")
+      .then((d) => {
+        if (active) setUser(d.user);
+      })
+      .catch(() => {
+        if (active)
+          setAuthError("Không thể kiểm tra phiên đăng nhập. Vui lòng thử lại.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [authAttempt, setUser]);
+  const retryAuth = useCallback(() => setAuthAttempt((n) => n + 1), []);
   const refresh = useCallback(() => setRevision((r) => r + 1), []);
   return (
-    <Context.Provider value={{ user, loading, revision, refresh, setUser }}>
+    <Context.Provider
+      value={{
+        user,
+        loading,
+        authError,
+        retryAuth,
+        revision,
+        refresh,
+        setUser,
+      }}
+    >
       {children}
     </Context.Provider>
   );

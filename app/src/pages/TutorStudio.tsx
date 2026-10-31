@@ -1,3 +1,5 @@
+import { TutorPresentation } from "@/components/tutor-presentation";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TutorUploads } from "@/components/tutor-uploads";
 import { Link, useSearchParams } from "react-router-dom";
@@ -38,6 +40,7 @@ function ProfileForm({
   goals: string[];
 }) {
   const { refresh } = useApp(),
+    [draft, setDraft] = useState(t),
     [mode, setMode] = useState(t.mode),
     [selected, setSelected] = useState(t.subjects),
     [levels, setLevels] = useState(t.levels),
@@ -52,6 +55,7 @@ function ProfileForm({
     try {
       await api("/tutor/profile", "PUT", {
         ...d,
+        profile_theme: draft.profile_theme,
         mode,
         subjects: selected,
         levels,
@@ -68,152 +72,241 @@ function ProfileForm({
     }
   }
   return (
-    <form onSubmit={save}>
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="headline">Tiêu đề hồ sơ</FieldLabel>
-          <Input
-            id="headline"
-            name="headline"
-            defaultValue={t.headline}
-            required
-            maxLength={120}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="bio">Giới thiệu & phương pháp dạy</FieldLabel>
-          <Textarea
-            id="bio"
-            name="bio"
-            defaultValue={t.bio}
-            required
-            maxLength={2000}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="education">Học vấn / Chuyên môn</FieldLabel>
-          <Input
-            id="education"
-            name="education"
-            defaultValue={t.education}
-            required
-            maxLength={200}
-          />
-        </Field>
-        <div className="form-two">
-          <Field>
-            <FieldLabel htmlFor="location">Tỉnh / Thành phố</FieldLabel>
-            <Input
-              id="location"
-              name="location"
-              defaultValue={t.location}
-              required
-              maxLength={100}
-            />
-          </Field>
-          <Choose
-            label="Hình thức dạy"
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: "online", label: "Trực tuyến" },
-              { value: "offline", label: "Trực tiếp" },
-              { value: "both", label: "Cả hai" },
-            ]}
-          />
-          <Field>
-            <FieldLabel htmlFor="rate">Học phí (VND / giờ)</FieldLabel>
-            <Input
-              id="rate"
-              name="rate"
-              type="number"
-              min={50000}
-              max={3000000}
-              step={1000}
-              defaultValue={t.rate}
-              required
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="experience">Số năm kinh nghiệm</FieldLabel>
-            <Input
-              id="experience"
-              name="experience"
-              type="number"
-              min={0}
-              max={60}
-              defaultValue={t.experience}
-              required
-            />
-          </Field>
+    <div className="studio-profile-layout">
+      <div className="studio-editor">
+        <form
+          onSubmit={save}
+          onChange={(e) => {
+            const input = e.target;
+            if (
+              (input instanceof HTMLInputElement ||
+                input instanceof HTMLTextAreaElement) &&
+              input.name
+            )
+              setDraft((previous) => ({
+                ...previous,
+                [input.name]:
+                  input.type === "number" ? Number(input.value) : input.value,
+              }));
+          }}
+        >
+          <fieldset disabled={busy} className="profile-fields">
+            <FieldGroup>
+              <FieldSet>
+                <FieldLegend>Phong cách hồ sơ</FieldLegend>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  value={draft.profile_theme}
+                  onValueChange={(value) => {
+                    if (value)
+                      setDraft((previous) => ({
+                        ...previous,
+                        profile_theme: value as Tutor["profile_theme"],
+                      }));
+                  }}
+                  aria-label="Phong cách hồ sơ"
+                >
+                  <ToggleGroupItem value="paper">Giấy ấm</ToggleGroupItem>
+                  <ToggleGroupItem value="sage">Xanh lá</ToggleGroupItem>
+                  <ToggleGroupItem value="ink">Mực đỏ</ToggleGroupItem>
+                </ToggleGroup>
+              </FieldSet>
+              <Field>
+                <FieldLabel htmlFor="headline">Tiêu đề hồ sơ</FieldLabel>
+                <Input
+                  id="headline"
+                  name="headline"
+                  defaultValue={t.headline}
+                  required
+                  maxLength={120}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="bio">
+                  Giới thiệu & phương pháp dạy
+                </FieldLabel>
+                <Textarea
+                  id="bio"
+                  name="bio"
+                  defaultValue={t.bio}
+                  required
+                  maxLength={2000}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="teaching_style">
+                  Phương pháp giảng dạy
+                </FieldLabel>
+                <Textarea
+                  id="teaching_style"
+                  name="teaching_style"
+                  defaultValue={t.teaching_style}
+                  maxLength={1500}
+                  rows={4}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="lesson_plan">
+                  Một buổi học cùng tôi
+                </FieldLabel>
+                <Textarea
+                  id="lesson_plan"
+                  name="lesson_plan"
+                  defaultValue={t.lesson_plan}
+                  maxLength={1500}
+                  rows={4}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="education">
+                  Học vấn / Chuyên môn
+                </FieldLabel>
+                <Input
+                  id="education"
+                  name="education"
+                  defaultValue={t.education}
+                  required
+                  maxLength={200}
+                />
+              </Field>
+              <div className="form-two">
+                <Field>
+                  <FieldLabel htmlFor="location">Tỉnh / Thành phố</FieldLabel>
+                  <Input
+                    id="location"
+                    name="location"
+                    defaultValue={t.location}
+                    required
+                    maxLength={100}
+                  />
+                </Field>
+                <Choose
+                  label="Hình thức dạy"
+                  value={mode}
+                  onChange={setMode}
+                  options={[
+                    { value: "online", label: "Trực tuyến" },
+                    { value: "offline", label: "Trực tiếp" },
+                    { value: "both", label: "Cả hai" },
+                  ]}
+                />
+                <Field>
+                  <FieldLabel htmlFor="rate">Học phí (VND / giờ)</FieldLabel>
+                  <Input
+                    id="rate"
+                    name="rate"
+                    type="number"
+                    min={50000}
+                    max={3000000}
+                    step={1000}
+                    defaultValue={t.rate}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="experience">
+                    Số năm kinh nghiệm
+                  </FieldLabel>
+                  <Input
+                    id="experience"
+                    name="experience"
+                    type="number"
+                    min={0}
+                    max={60}
+                    defaultValue={t.experience}
+                    required
+                  />
+                </Field>
+              </div>
+              <FieldSet>
+                <FieldLegend>Môn nhận dạy</FieldLegend>
+                <div className="subject-checkboxes">
+                  {subjects.map((s) => (
+                    <label key={s.id}>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(s.id)}
+                        onChange={(e) =>
+                          setSelected(
+                            e.target.checked
+                              ? [...selected, s.id]
+                              : selected.filter((id) => id !== s.id),
+                          )
+                        }
+                      />
+                      {s.name}
+                    </label>
+                  ))}
+                </div>
+              </FieldSet>
+              <FieldSet>
+                <FieldLegend>Cấp học nhận dạy</FieldLegend>
+                <div className="subject-checkboxes">
+                  {["Tiểu học", "THCS", "THPT", "Người đi làm"].map((v) => (
+                    <label key={v}>
+                      <input
+                        type="checkbox"
+                        checked={levels.includes(v)}
+                        onChange={(e) =>
+                          setLevels(
+                            e.target.checked
+                              ? [...levels, v]
+                              : levels.filter((l) => l !== v),
+                          )
+                        }
+                      />
+                      {v}
+                    </label>
+                  ))}
+                </div>
+              </FieldSet>
+              <FieldSet>
+                <FieldLegend>Mục tiêu kỳ thi nhận luyện</FieldLegend>
+                <div className="subject-checkboxes">
+                  {goals.map((v) => (
+                    <label key={v}>
+                      <input
+                        type="checkbox"
+                        checked={examGoals.includes(v)}
+                        onChange={(e) =>
+                          setExamGoals(
+                            e.target.checked
+                              ? [...examGoals, v]
+                              : examGoals.filter((g) => g !== v),
+                          )
+                        }
+                      />
+                      {v}
+                    </label>
+                  ))}
+                </div>
+              </FieldSet>
+              {error && <ErrorState error={error} />}
+              <Submit busy={busy}>Lưu & gửi duyệt</Submit>
+            </FieldGroup>
+          </fieldset>
+        </form>
+      </div>
+      <aside className="studio-preview" aria-label="Xem trước hồ sơ">
+        <div className="studio-preview-heading">
+          <h2>Xem trước hồ sơ</h2>
+          <span>{money(draft.rate)} / giờ</span>
         </div>
-        <FieldSet>
-          <FieldLegend>Môn nhận dạy</FieldLegend>
-          <div className="subject-checkboxes">
-            {subjects.map((s) => (
-              <label key={s.id}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(s.id)}
-                  onChange={(e) =>
-                    setSelected(
-                      e.target.checked
-                        ? [...selected, s.id]
-                        : selected.filter((id) => id !== s.id),
-                    )
-                  }
-                />
-                {s.name}
-              </label>
-            ))}
-          </div>
-        </FieldSet>
-        <FieldSet>
-          <FieldLegend>Cấp học nhận dạy</FieldLegend>
-          <div className="subject-checkboxes">
-            {["Tiểu học", "THCS", "THPT", "Người đi làm"].map((v) => (
-              <label key={v}>
-                <input
-                  type="checkbox"
-                  checked={levels.includes(v)}
-                  onChange={(e) =>
-                    setLevels(
-                      e.target.checked
-                        ? [...levels, v]
-                        : levels.filter((l) => l !== v),
-                    )
-                  }
-                />
-                {v}
-              </label>
-            ))}
-          </div>
-        </FieldSet>
-        <FieldSet>
-          <FieldLegend>Mục tiêu kỳ thi nhận luyện</FieldLegend>
-          <div className="subject-checkboxes">
-            {goals.map((v) => (
-              <label key={v}>
-                <input
-                  type="checkbox"
-                  checked={examGoals.includes(v)}
-                  onChange={(e) =>
-                    setExamGoals(
-                      e.target.checked
-                        ? [...examGoals, v]
-                        : examGoals.filter((g) => g !== v),
-                    )
-                  }
-                />
-                {v}
-              </label>
-            ))}
-          </div>
-        </FieldSet>
-        {error && <ErrorState error={error} />}
-        <Submit busy={busy}>Lưu & gửi duyệt</Submit>
-      </FieldGroup>
-    </form>
+        <TutorPresentation
+          preview
+          subjects={subjects}
+          tutor={{
+            ...draft,
+            photo_url: t.photo_url,
+            subjects: selected,
+            levels,
+            goals: examGoals,
+            mode,
+          }}
+        />
+      </aside>
+    </div>
   );
 }
 export default function TutorStudio() {
@@ -312,36 +405,21 @@ export default function TutorStudio() {
         </TabsList>
         <TabsContent value="files" forceMount>
           <section id="studio-files" className="studio-files">
-            <TutorUploads t={t} onPending={() => setUploadPending(true)} />
+            <TutorUploads
+              t={t}
+              onPending={() => {
+                setUploadPending(true);
+                refresh();
+              }}
+            />
           </section>
         </TabsContent>
         <TabsContent value="profile" forceMount>
-          <div className="studio-profile-layout">
-            <div className="studio-editor">
-              <Section title="Hồ sơ nhận dạy">
-                <ProfileForm
-                  t={t}
-                  subjects={subjects.data || []}
-                  goals={[...new Set(exams.data?.map((r) => r.category))]}
-                />
-              </Section>
-            </div>
-            <aside className="studio-guidance">
-              <UserRound size={26} />
-              <h2>{t.name}</h2>
-              <p>{t.headline || "Hồ sơ nhận dạy"}</p>
-              <p>{money(t.rate)} / giờ</p>
-              <State
-                value={t.status === "pending" ? "pending_profile" : t.status}
-              />
-              <Button
-                variant="outline"
-                onClick={() => setParams({ tab: "files" }, { replace: true })}
-              >
-                Xem ảnh & CV
-              </Button>
-            </aside>
-          </div>
+          <ProfileForm
+            t={t}
+            subjects={subjects.data || []}
+            goals={[...new Set(exams.data?.map((r) => r.category))]}
+          />
         </TabsContent>
         <TabsContent value="slots" forceMount>
           <div className="studio-availability" id="studio-slots">

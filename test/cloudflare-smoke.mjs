@@ -31,5 +31,12 @@ for(const [kind,body,type] of [['photo',photo,'image/png'],['cv',await (async()=
 const slot=await fetch(base+'/api/tutor/slots',{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({starts_at:new Date(Date.now()+3*86400000).toISOString().slice(0,13)+':00:00.000Z'})});
 assert.equal(slot.status,201,await slot.text());
 const profile=await(await get('/api/tutor/profile')).json();assert.equal(profile.slots.length,1);
+const saved = await fetch(base + '/api/tutor/profile', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({...profile, headline:'Gia sư kiểm thử runtime', bio:'Hướng dẫn học sinh theo mục tiêu.', education:'Sư phạm Toán', location:'Hà Nội', subjects:['toan'], teaching_style:'Giải thích bằng hình vẽ.', lesson_plan:'Ôn bài, luyện tập và phản hồi.', profile_theme:'sage'})});
+assert.equal(saved.status,200,await saved.text());
+const updated = await(await get('/api/tutor/profile')).json();
+assert.equal(updated.profile_theme,'sage');
+assert.equal(updated.lesson_plan,'Ôn bài, luyện tập và phản hồi.');
+assert.equal(updated.status,'pending');
+
 const app=await fetch(base+'/app/',{redirect:'manual'});assert.equal(app.headers.get('location'),base+'/');
 console.log('Cloudflare runtime: registration, session, portrait/CV upload, private download, availability and landing routing passed.');

@@ -1,6 +1,6 @@
 # Phạm vi sản phẩm — Gia Sư 10 Điểm
 
-Cập nhật: 31/10/2026. Phạm vi và quy tắc của bản local. Bằng chứng kiểm tra và việc còn lại nằm trong [bàn giao](development-handoff.md).
+Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng chứng kiểm tra hiện tại và giới hạn triển khai nằm trong [kiểm tra production](production-audit.md).
 
 ## Quyết định của chủ dự án
 
@@ -9,7 +9,7 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của bản local. Bằng ch�
 - Danh mục môn học và mục tiêu kỳ thi tại Việt Nam hỗ trợ tìm gia sư phù hợp.
 - Chuyển động mong muốn: **expressive — playful motion throughout**, có reduced motion và không cản thao tác.
 - Điều chỉnh phạm vi mới nhất: **“no quiz answers only finding tutors.”** Không tiếp tục phát triển quiz, đáp án, chấm điểm, lịch sử làm bài hoặc phòng thực hành.
-- Người dùng đã yêu cầu tiếp tục; các luồng chính hiện được kiểm tra local, chưa triển khai.
+- Production chạy trên Cloudflare tại `giasudiem10.online`; Vercel không còn là nền tảng triển khai.
 
 ## Luồng sản phẩm chính
 
@@ -44,7 +44,8 @@ Trong bản hiện tại, phụ huynh dùng cùng vai trò `student`; chưa có 
 - Tạo tài khoản và hoàn thiện hồ sơ công khai.
 - Tải, thay hoặc xóa ảnh đại diện và CV PDF; upload mới đưa hồ sơ về pending. CV công khai sau khi admin duyệt.
 - Chọn môn dạy, cấp học, mục tiêu kỳ thi nhận luyện, mức phí, hình thức, địa điểm, học vấn và kinh nghiệm.
-- Gửi duyệt; chỉnh sửa hồ sơ đã công bố sẽ đưa về chờ duyệt.
+- Tùy chỉnh màu bìa, phương pháp giảng dạy và nội dung một buổi học; xem trước trực tiếp trong trình sửa hồ sơ.
+- Gửi duyệt; chỉnh sửa hồ sơ hoặc tên công khai đã công bố sẽ đưa về chờ duyệt.
 - Thêm giờ trống, nhận / từ chối yêu cầu, hủy buổi tương lai khi phù hợp.
 - Nhắn tin, cung cấp nội dung và liên kết phòng học.
 - Đánh dấu buổi đã diễn ra là hoàn thành.

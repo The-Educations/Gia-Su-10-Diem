@@ -62,6 +62,16 @@ export function migrateDatabase(db) {
         `ALTER TABLE tutors ADD COLUMN ${name} TEXT NOT NULL DEFAULT '[]'`,
       );
   }
+  for (const [name, fallback] of Object.entries({
+    teaching_style: "",
+    lesson_plan: "",
+    profile_theme: "paper",
+  })) {
+    if (!tutorColumns.includes(name))
+      db.exec(
+        `ALTER TABLE tutors ADD COLUMN ${name} TEXT NOT NULL DEFAULT '${fallback}'`,
+      );
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS tutor_uploads (
     id TEXT PRIMARY KEY, tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
     kind TEXT NOT NULL CHECK(kind IN ('photo','cv')), data BLOB NOT NULL, mime TEXT NOT NULL,

@@ -13,6 +13,9 @@ export const registerSchema = loginSchema.extend({
 });
 export const tutorSchema = z.object({
   headline: text(120),
+  teaching_style: z.string().trim().max(1500).default(""),
+  lesson_plan: z.string().trim().max(1500).default(""),
+  profile_theme: z.enum(["paper", "sage", "ink"]).default("paper"),
   bio: text(2000),
   location: text(100),
   mode: z.enum(["online", "offline", "both"]),

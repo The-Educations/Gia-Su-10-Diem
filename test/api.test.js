@@ -522,11 +522,11 @@ test("additive tutor migration preserves existing accounts and profile data", (t
     "INSERT INTO tutors(user_id,headline,subjects) VALUES (1,'Hồ sơ giữ nguyên','[\"toan\"]')",
   );
   original.exec(
-    "ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; PRAGMA user_version = 0",
+    "ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; PRAGMA user_version = 0",
   );
   original.close();
   const migrated = openDatabase(file);
-  assert.equal(one(migrated, "PRAGMA user_version").user_version, 3);
+  assert.equal(one(migrated, "PRAGMA user_version").user_version, 4);
   assert.equal(
     one(migrated, "SELECT headline FROM tutors WHERE user_id=1").headline,
     "Hồ sơ giữ nguyên",
@@ -538,6 +538,15 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   assert.equal(
     one(migrated, "SELECT levels FROM tutors WHERE user_id=1").levels,
     "[]",
+  );
+  assert.deepEqual(
+    {
+      ...one(
+        migrated,
+        "SELECT teaching_style,lesson_plan,profile_theme FROM tutors WHERE user_id=1",
+      ),
+    },
+    { teaching_style: "", lesson_plan: "", profile_theme: "paper" },
   );
   run(
     migrated,
@@ -792,4 +801,89 @@ test("rich demo seeding is repeatable and preserves profile edits", async (t) =>
     one(db, "SELECT bio FROM tutors WHERE user_id=3").bio,
     "Tutor edited this profile",
   );
+});
+
+test("custom tutor presentation validates, persists and requires moderation; public rename is reviewed", async (t) => {
+  const { client, file } = await fixture(t);
+  const tutor = client(),
+    admin = client(),
+    guest = client(),
+    student = client();
+  const user = await tutor.login("chau");
+  await admin.login("admin");
+  await student.login("student");
+  const profile = (await tutor.request("/tutor/profile")).data;
+  const custom = {
+    ...profile,
+    teaching_style: "Học qua ví dụ thực tế.",
+    lesson_plan: "Trao đổi mục tiêu\nCùng luyện tập\nTổng kết",
+    profile_theme: "sage",
+  };
+  assert.equal(
+    (await student.request("/tutor/profile", "PUT", custom)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await tutor.request("/tutor/profile", "PUT", {
+        ...custom,
+        profile_theme: "javascript:red",
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await tutor.request("/tutor/profile", "PUT", {
+        ...custom,
+        lesson_plan: "x".repeat(1501),
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await tutor.request("/tutor/profile", "PUT", custom)).status,
+    200,
+  );
+  assert.equal((await guest.request(`/tutors/${user.id}`)).status, 404);
+  const reopened = openDatabase(file);
+  assert.equal(
+    one(reopened, "SELECT teaching_style FROM tutors WHERE user_id=?", user.id)
+      .teaching_style,
+    custom.teaching_style,
+  );
+  reopened.close();
+  assert.equal(
+    (
+      await admin.request(`/admin/tutors/${user.id}`, "PATCH", {
+        status: "approved",
+        note: "",
+      })
+    ).status,
+    200,
+  );
+  const published = (await guest.request(`/tutors/${user.id}`)).data;
+  assert.equal(published.lesson_plan, custom.lesson_plan);
+  assert.equal(published.profile_theme, "sage");
+  assert.equal(
+    (
+      await tutor.request("/account", "PATCH", {
+        name: user.name,
+        goal: "Keep identity",
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await guest.request(`/tutors/${user.id}`)).status, 200);
+  assert.equal(
+    (
+      await tutor.request("/account", "PATCH", {
+        name: "Tên công khai mới",
+        goal: "",
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await guest.request(`/tutors/${user.id}`)).status, 404);
+  assert.equal((await tutor.request("/tutor/profile")).data.status, "pending");
 });

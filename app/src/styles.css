@@ -644,21 +644,6 @@ main {
   color: var(--muted-foreground);
   white-space: pre-wrap;
 }
-.lesson-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.lesson-steps li {
-  display: flex;
-  gap: 16px;
-  padding: 13px 0;
-  border-bottom: 1px solid var(--border);
-}
-.lesson-steps span {
-  font-family: "Lora", serif;
-  color: var(--primary);
-}
 .booking-panel {
   position: sticky;
   top: 24px;
@@ -2284,7 +2269,7 @@ main {
 }
 .studio-profile-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
   gap: 26px;
   align-items: start;
 }
@@ -2298,28 +2283,6 @@ main {
 .studio-editor .section-block,
 .studio-availability .section-block {
   margin-top: 0;
-}
-.studio-guidance {
-  background: #e8eee6;
-  border-radius: 12px;
-  padding: 24px;
-}
-.studio-guidance > svg {
-  color: var(--positive);
-  margin-bottom: 16px;
-}
-.studio-guidance h2 {
-  font:
-    500 22px/1.5 "Lora",
-    serif;
-  margin-bottom: 16px;
-}
-.studio-guidance p {
-  font-size: 12px;
-  margin-bottom: 16px;
-}
-.studio-guidance .state {
-  margin-bottom: 24px;
 }
 .studio-availability {
   max-width: 760px;
@@ -2468,9 +2431,6 @@ main {
   .studio-availability {
     padding: 20px;
   }
-  .studio-guidance {
-    display: none;
-  }
   .studio-availability .slot-form [data-slot="field-group"] {
     flex-direction: column;
     align-items: stretch;
@@ -2488,3 +2448,133 @@ main {
 .google-sign-in { margin: 22px 0; }
 .auth-divider { display: flex; align-items: center; gap: 14px; margin-top: 22px; color: var(--muted-foreground); font-size: 11px; }
 .auth-divider::before, .auth-divider::after { content: ""; height: 1px; background: var(--border); flex: 1; }
+
+/* The same presentation renders in the editor and the public profile. */
+.tutor-presentation {
+  --cover: #eee1cf;
+  --cover-ink: #702c35;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tutor-presentation[data-theme="sage"] {
+  --cover: #dde8db;
+  --cover-ink: #294d36;
+}
+.tutor-presentation[data-theme="ink"] {
+  --cover: #702c35;
+  --cover-ink: #fff4e3;
+}
+.tutor-cover {
+  height: 132px;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  color: var(--cover-ink);
+  background: var(--cover);
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 25px,
+    #ffffff20 26px
+  );
+  transition:
+    background-color 240ms ease,
+    color 240ms ease;
+}
+.tutor-cover span {
+  position: absolute;
+  right: 24px;
+  top: -40px;
+  font:
+    italic 180px/1.2 "Lora",
+    serif;
+  opacity: 0.18;
+}
+.tutor-presentation .profile-hero {
+  padding: 24px 0;
+}
+.tutor-presentation .profile-hero > div:last-child {
+  min-width: 0;
+}
+.tutor-presentation .profile-hero .person {
+  flex-shrink: 0;
+}
+.tutor-headline {
+  color: var(--muted-foreground);
+  margin: 8px 0 14px;
+  line-height: 1.7;
+}
+.profile-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.studio-preview {
+  position: sticky;
+  top: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  background: var(--card);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+.studio-preview-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.studio-preview-heading h2 {
+  font-size: 14px;
+}
+.studio-preview-heading span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.studio-preview .profile-hero {
+  flex-direction: column;
+  gap: 14px;
+}
+.studio-preview .profile-hero h3 {
+  font:
+    500 24px/1.4 "Lora",
+    serif;
+}
+.studio-preview .profile-hero .person {
+  width: 64px;
+  height: 64px;
+  margin-top: -56px;
+  border: 4px solid var(--card);
+  position: relative;
+}
+.studio-preview .section-heading {
+  margin-bottom: 12px;
+}
+.studio-preview .profile-meta {
+  margin-bottom: 0;
+}
+@media (max-width: 1100px) {
+  .studio-profile-layout {
+    grid-template-columns: 1fr;
+  }
+  .studio-preview {
+    position: static;
+    max-height: none;
+  }
+}
+@media (max-width: 600px) {
+  .studio-preview {
+    padding: 20px;
+  }
+  .tutor-cover {
+    height: 100px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutor-cover {
+    transition: none;
+  }
+}
