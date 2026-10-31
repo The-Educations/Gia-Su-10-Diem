@@ -89,6 +89,12 @@ export default {
     const assetUrl = new URL(request.url);
     if (url.pathname === "/") assetUrl.pathname = "/index.html";
     if (
+      ["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"].includes(
+        url.pathname,
+      )
+    )
+      assetUrl.pathname = "/assets" + url.pathname;
+    if (
       url.pathname.startsWith("/app/") &&
       !url.pathname.startsWith("/app/assets/")
     )
@@ -108,7 +114,10 @@ export default {
     );
     if (url.protocol === "https:")
       headers.set("Strict-Transport-Security", "max-age=31536000");
-    if (headers.get("content-type")?.includes("text/html"))
+    if (
+      headers.get("content-type")?.includes("text/html") ||
+      /(?:favicon|icon-v2|apple-touch-icon)/.test(url.pathname)
+    )
       headers.set("Cache-Control", "no-cache");
     return new Response(response.body, { status: response.status, headers });
   },

@@ -8,6 +8,12 @@ for (const path of ['/', '/app/tutors', '/app/auth', '/app/library']) {
  const html = await page.text();
  assert.ok(path === '/' ? html.includes('learning-journey') : html.includes('id="root"'), path);
 }
+for (const path of ['/favicon.ico', '/apple-touch-icon.png', '/favicon-32.png', '/assets/icon-v2.svg']) {
+ const icon = await fetch(base + path);
+ assert.equal(icon.status, 200, path);
+ assert.match(icon.headers.get('content-type'), /image/, path);
+ assert.equal(icon.headers.get('cache-control'), 'no-cache', path);
+}
 const email=`cf-${Date.now()}@example.test`;
 const res=await fetch(base+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Cloudflare test',email,password:'RuntimeTest2026!',role:'tutor'})});
 assert.equal(res.status,201,await res.text());

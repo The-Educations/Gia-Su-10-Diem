@@ -15,7 +15,7 @@ Phạm vi giữ nguyên: **tìm gia sư**, dành cho học sinh / phụ huynh, g
 - Nối CTA landing đến marketplace; landing form mở tìm gia sư theo môn/hình thức.
 - Sửa route Vite để không trả HTML cho JS; thêm `npm run preview` phục vụ bản build local.
 - Sửa MessageScroller thiếu provider (đã gây crash khi mở hội thoại); thêm error boundary với tải lại / về tìm kiếm.
-- Tách React và motion khỏi bundle chính; bỏ dependency Three.js không dùng trong app. Three.js của landing vẫn dùng CDN.
+- Tách React và motion khỏi bundle chính; bỏ dependency Three.js không dùng trong app. Landing hiện dùng SVG phân lớp theo scroll thay cho khối Three.js / pixel thử nghiệm.
 - Định dạng nguồn mới để tiếp tục phát triển dễ đọc.
 
 **Đính chính bàn giao trước:** nhận định SQL seed có 9 cột nhưng 8 placeholder là sai. Câu seed thực tế có 8 cột / 8 giá trị và chạy được; không ghi nhận đây là một lỗi đã sửa.

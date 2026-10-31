@@ -68,6 +68,7 @@ npm run test:e2e
 | --- | --- |
 | `inputs.json`, `styles.css`, `scripts/build-page.js` | Nguồn landing → `index.html`; chạy `npm run build:page` sau khi sửa |
 | `scripts/site.js`, `assets/` | Tương tác và hình ảnh landing |
+| `scripts/generate-landing-assets.js` | Sinh SVG giáo dục và favicon SVG/PNG/ICO; chạy bằng Node |
 | `app/src/` | React, TypeScript, các trang và UI |
 | `server/` | Express, SQLite, xác thực và nghiệp vụ |
 | `test/` | Landing, API và browser tests |
