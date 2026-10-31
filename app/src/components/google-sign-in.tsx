@@ -1,3 +1,4 @@
+import { ErrorState } from "./common";
 import { Button } from "./ui/button";
 import { useLoad } from "@/lib/api";
 export const googleErrors: Record<string, string> = {
@@ -20,7 +21,28 @@ export function GoogleSignIn({
   next?: string | null;
 }) {
   const providers = useLoad<{ google: boolean }>("/auth/providers");
-  if (!providers.data?.google) return null;
+  if (providers.error)
+    return (
+      <ErrorState
+        error="Không tải được đăng nhập Google."
+        retry={providers.reload}
+      />
+    );
+  if (!providers.data?.google)
+    return (
+      <div className="google-sign-in">
+        <Button
+          variant="outline"
+          className="w-full"
+          disabled
+          aria-busy={providers.loading}
+        >
+          {providers.loading
+            ? "Đang tải đăng nhập Google…"
+            : "Google chưa được cấu hình"}
+        </Button>
+      </div>
+    );
   const params = new URLSearchParams({ role });
   if (next) params.set("next", next);
   return (

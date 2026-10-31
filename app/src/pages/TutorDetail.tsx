@@ -1,22 +1,14 @@
+import { TutorPresentation } from "@/components/tutor-presentation";
 import { ContactTutor } from "@/components/contact-tutor";
 import { FileText, Download } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  CalendarDays,
-  GraduationCap,
-  MapPin,
-  Check,
-  Star,
-} from "lucide-react";
+import { ArrowLeft, CalendarDays, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useApp, useLoad, api, money, dateTime } from "@/lib/api";
 import type { Tutor, Subject } from "@/lib/types";
 import {
   Page,
-  Heading,
-  Person,
   Choose,
   Loading,
   ErrorState,
@@ -25,7 +17,6 @@ import {
   Section,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import {
@@ -82,88 +73,23 @@ export default function TutorDetail() {
       </Link>
       <div className="profile-layout">
         <div>
-          <div className="profile-hero">
-            <Person
-              name={t.name}
-              id={t.user_id}
-              src={t.photo_url || undefined}
-              large
-            />
-            <div>
-              <Heading title={t.name} description={t.headline} />
-              <div className="subject-tags">
-                {t.subjects.map((s) => (
-                  <Badge variant="secondary" key={s}>
-                    {subjects.data?.find((x) => x.id === s)?.name}
-                  </Badge>
-                ))}
-                <Badge variant="outline">
-                  {t.demo ? "Hồ sơ minh họa" : "Đã được quản trị duyệt"}
-                </Badge>
-              </div>
+          <TutorPresentation tutor={t} subjects={subjects.data || []}>
+            <div className="profile-actions">
+              <ContactTutor tutor={t} />
+              {t.cv && (
+                <Button variant="outline" asChild>
+                  <a href={t.cv.url}>
+                    <FileText data-icon="inline-start" />
+                    Tải CV
+                    <Download data-icon="inline-end" />
+                  </a>
+                </Button>
+              )}
             </div>
-          </div>
-          <div className="profile-actions">
-            <ContactTutor tutor={t} />
-            {t.cv && (
-              <Button variant="outline" asChild>
-                <a href={t.cv.url}>
-                  <FileText data-icon="inline-start" />
-                  Tải CV
-                  <Download data-icon="inline-end" />
-                </a>
-              </Button>
-            )}
-          </div>
-          <a className="mobile-book-link text-link" href="#booking-panel">
-            Chọn giờ học · {money(t.rate)} / giờ
-          </a>
-          <div className="profile-meta">
-            <span>
-              <GraduationCap />
-              {t.experience} năm kinh nghiệm
-            </span>
-            <span>
-              <MapPin />
-              {t.location}
-            </span>
-            <span>
-              <Star />
-              {t.review_count
-                ? `${t.rating.toFixed(1)} / 5`
-                : "Chưa có đánh giá"}
-            </span>
-          </div>
-          <Section title="Về gia sư">
-            <p className="reading-text">{t.bio}</p>
-            {!!t.demo && (
-              <p className="demo-note">
-                Hồ sơ, ảnh và CV minh họa cho trải nghiệm sản phẩm.
-              </p>
-            )}
-          </Section>
-          <Section title="Nhận dạy">
-            <p>{t.levels.join(" · ") || "Trao đổi với gia sư"}</p>
-            {t.goals.length > 0 && (
-              <p className="muted">{t.goals.join(" · ")}</p>
-            )}
-          </Section>
-          <Section title="Học vấn">
-            <p>{t.education}</p>
-          </Section>
-          <Section title="Một buổi học 60 phút">
-            <ol className="lesson-steps">
-              <li>
-                <span>01</span>Trao đổi mục tiêu & kiến thức còn vướng
-              </li>
-              <li>
-                <span>02</span>Cùng giải bài & hiểu cách làm
-              </li>
-              <li>
-                <span>03</span>Tự luyện, nhận phản hồi & lên bước tiếp theo
-              </li>
-            </ol>
-          </Section>
+            <a className="mobile-book-link text-link" href="#booking-panel">
+              Chọn giờ học · {money(t.rate)} / giờ
+            </a>
+          </TutorPresentation>
           <Section title={`Đánh giá (${t.reviews.length})`}>
             {t.reviews.length ? (
               t.reviews.map((r, i) => (

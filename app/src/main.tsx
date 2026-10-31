@@ -33,7 +33,7 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "./components/ui/sheet";
-import { Person, Loading } from "./components/common";
+import { Person, Loading, ErrorState } from "./components/common";
 import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
@@ -55,9 +55,10 @@ function Require({
   role?: string;
   children: React.ReactNode;
 }) {
-  const { user, loading } = useApp(),
+  const { user, loading, authError, retryAuth } = useApp(),
     loc = useLocation();
   if (loading) return <Loading />;
+  if (authError) return <ErrorState error={authError} retry={retryAuth} />;
   if (!user)
     return (
       <Navigate

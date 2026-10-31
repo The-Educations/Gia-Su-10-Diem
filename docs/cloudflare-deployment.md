@@ -34,7 +34,7 @@ npx wrangler deploy --dry-run
 npx wrangler deploy
 ```
 
-`wrangler.jsonc` owns the `giasudiem10.online/*` and `www.giasudiem10.online/*` Worker routes. The Worker redirects `www` to the canonical apex host, preserving path and query, so it cannot serve the previous origin’s HTML or favicon. The existing proxied DNS record is retained: the route serves all requests through the Worker without replacing the previous Vercel origin. Only this Worker/domain is in scope. No other Cloudflare applications are changed. The compatibility date is pinned to `2026-10-30`, supported by the installed workerd binary.
+`wrangler.jsonc` owns the `giasudiem10.online/*` and `www.giasudiem10.online/*` Worker routes. The Worker redirects `www` to the canonical apex host, preserving path and query, so it cannot serve the previous origin’s HTML or favicon. Both hosts need proxied DNS records in the Cloudflare zone. The Worker serves HTML, assets and API requests directly; it does not fetch a Vercel origin and does not require a Vercel project. Only this Worker/domain is in scope. No other Cloudflare applications are changed. The compatibility date is pinned to `2026-10-30`, supported by the installed workerd binary.
 
 Local runtime check:
 
@@ -49,6 +49,6 @@ npm run test:cloudflare
 
 Check `/api/health`, `/api/auth/providers`, `/api/subjects`, `/app/tutors`, and `/`. Confirm HTTPS, Google authorization redirect and callback URI, Secure/HttpOnly/SameSite cookies, mobile layout, and console/network errors. Complete Google consent manually with an authorized account to verify the full external login. Production starts without demo tutors; approved real profiles populate search.
 
-Use `npx wrangler deployments list` to find versions and `npx wrangler rollback <version-id>` to restore code. Code rollback does not roll back database changes. Migrations are additive; do not delete the Durable Object namespace or rename `marketplace-v1`. Use Cloudflare SQLite Durable Object Time Travel for database recovery; never restore production data from the local demo file. There is no previous app deployment to roll back to on the first release. Removing the `giasudiem10.online/*` and `www.giasudiem10.online/*` Worker routes restores traffic to the existing DNS origins; this does not delete the Worker or its database.
+Use `npx wrangler deployments list` to find versions and `npx wrangler rollback <version-id>` to restore code. Code rollback does not roll back database changes. Migrations are additive; do not delete the Durable Object namespace or rename `marketplace-v1`. Use Cloudflare SQLite Durable Object Time Travel for database recovery; never restore production data from the local demo file. There is no previous app deployment to roll back to on the first release. Keep both Worker routes enabled. With the Vercel project removed, removing the routes can leave the site unavailable even though the Worker and its database still exist.
 
 Run `node test/production-routing.mjs` after deployment to check both hostnames, canonical redirects, and matching favicon bytes. This check is read-only.

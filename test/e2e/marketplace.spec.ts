@@ -215,6 +215,23 @@ test("new tutor onboarding, availability and admin approval", async ({
     .getByLabel("Giới thiệu & phương pháp dạy")
     .fill("Học từ cơ bản, giải thích từng bước.");
   await tutor.getByLabel("Học vấn / Chuyên môn").fill("Sư phạm Toán");
+  await tutor
+    .getByLabel("Phương pháp giảng dạy", { exact: true })
+    .fill("Dùng hình vẽ để hiểu bản chất trước khi làm bài.");
+  await tutor
+    .getByLabel("Một buổi học cùng tôi", { exact: true })
+    .fill("Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.");
+  await tutor.getByRole("radio", { name: "Xanh lá", exact: true }).click();
+  const preview = tutor.getByRole("complementary", { name: "Xem trước hồ sơ" });
+  await expect(preview).toContainText("Gia sư Toán lớp 9");
+  await expect(preview).toContainText(
+    "Dùng hình vẽ để hiểu bản chất trước khi làm bài.",
+  );
+  await expect(preview.locator(".tutor-presentation")).toHaveAttribute(
+    "data-theme",
+    "sage",
+  );
+
   await tutor.getByRole("checkbox", { name: "Toán", exact: true }).check();
   await tutor.getByRole("checkbox", { name: "THCS", exact: true }).check();
   await tutor
@@ -237,6 +254,12 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(
     admin.getByRole("link", { name: "Tải CV · Teaching CV.pdf" }),
   ).toBeVisible();
+  await expect(admin.getByRole("dialog")).toContainText(
+    "Dùng hình vẽ để hiểu bản chất trước khi làm bài.",
+  );
+  await expect(admin.getByRole("dialog")).toContainText(
+    "Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.",
+  );
   await admin.getByRole("button", { name: "Duyệt & công bố" }).click();
   await expect(admin.getByRole("dialog")).not.toBeVisible();
   await expect(admin.locator(".admin-list")).toContainText("Đã công bố");
@@ -247,6 +270,20 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor.getByRole("link", { name: "Tải CV", exact: true }).click();
   expect((await download).suggestedFilename()).toBe("Teaching CV.pdf");
   await expect(tutor.locator(".profile-hero img")).toBeVisible();
+  await expect(tutor.locator(".tutor-presentation")).toHaveAttribute(
+    "data-theme",
+    "sage",
+  );
+  await expect(tutor.locator(".tutor-presentation")).toContainText(
+    "Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.",
+  );
+  await tutor.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await tutor.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+
   await tc.close();
   await ac.close();
 });
@@ -453,22 +490,36 @@ test("landing entry, education parallax, mobile navigation and real tutor search
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  for (const path of ['/favicon.ico', '/apple-touch-icon.png', '/assets/icon-v2.svg']) {
+  for (const path of [
+    "/favicon.ico",
+    "/apple-touch-icon.png",
+    "/assets/icon-v2.svg",
+  ]) {
     const response = await page.request.get(path);
     expect(response.status()).toBe(200);
-    expect(response.headers()['content-type']).toMatch(/image/);
+    expect(response.headers()["content-type"]).toMatch(/image/);
   }
   await page.goto("/app/");
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("#hero-title")).toBeVisible();
-  const heroBefore = await page.locator('.hero-notebook').evaluate(e => getComputedStyle(e).translate);
-  await page.keyboard.press('PageDown');
-  await expect.poll(() => page.locator('.hero-notebook').evaluate(e => getComputedStyle(e).translate)).not.toBe(heroBefore);
-  await page.locator('#course-search').fill('ngu van');
-  await expect(page.locator('#labs-container .lab:visible')).toHaveCount(1);
-  await expect(page.locator('#labs-container .lab:visible')).toContainText('Ngữ văn');
-  await page.locator('#course-search').fill('');
-  await expect(page.locator('#labs-container .lab:visible')).toHaveCount(5);
+  const heroBefore = await page
+    .locator(".hero-notebook")
+    .evaluate((e) => getComputedStyle(e).translate);
+  await page.keyboard.press("PageDown");
+  await expect
+    .poll(() =>
+      page
+        .locator(".hero-notebook")
+        .evaluate((e) => getComputedStyle(e).translate),
+    )
+    .not.toBe(heroBefore);
+  await page.locator("#course-search").fill("ngu van");
+  await expect(page.locator("#labs-container .lab:visible")).toHaveCount(1);
+  await expect(page.locator("#labs-container .lab:visible")).toContainText(
+    "Ngữ văn",
+  );
+  await page.locator("#course-search").fill("");
+  await expect(page.locator("#labs-container .lab:visible")).toHaveCount(5);
   await page.locator("#journey").scrollIntoViewIfNeeded();
   const before = await page
     .locator(".desk-notebook")
@@ -537,4 +588,45 @@ test("Google sign-in role choice and callback error are accessible", async ({
   await expect(page.getByRole("alert")).toContainText(
     "Email này đã có tài khoản",
   );
+});
+
+test("session connection failure preserves protected route and retries", async ({
+  page,
+}) => {
+  await login(page, "student");
+  await page.route("**/api/auth/me", (route) => route.abort("failed"));
+  await page.goto("/app/settings");
+  await expect(page.getByRole("alert")).toContainText(
+    "Không thể kiểm tra phiên đăng nhập",
+  );
+  await expect(page).toHaveURL(/settings/);
+  await page.unroute("**/api/auth/me");
+  await page.getByRole("button", { name: "Thử lại", exact: true }).click();
+  await expect(page.getByLabel("Mục tiêu học tập")).toBeVisible();
+});
+
+test("Google provider failures stay visible and can be retried", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/providers", (route) => route.abort("failed"));
+  await page.goto("/app/auth");
+  await expect(page.getByRole("alert")).toContainText(
+    "Không tải được đăng nhập Google.",
+  );
+  await page.unroute("**/api/auth/providers");
+  await page.route("**/api/auth/providers", (route) =>
+    route.fulfill({ json: { google: true } }),
+  );
+  await page.getByRole("button", { name: "Thử lại", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Tiếp tục với Google" }),
+  ).toBeVisible();
+  await page.unroute("**/api/auth/providers");
+  await page.route("**/api/auth/providers", (route) =>
+    route.fulfill({ json: { google: false } }),
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Google chưa được cấu hình" }),
+  ).toBeDisabled();
 });

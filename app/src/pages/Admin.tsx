@@ -15,6 +15,7 @@ import { api, useApp, useLoad, fold, dateTime, money } from "@/lib/api";
 import type { AdminData, Resource, Subject, Tutor, User } from "@/lib/types";
 import {
   Page,
+  Section,
   Heading,
   Person,
   State,
@@ -511,6 +512,16 @@ export default function Admin() {
             )}
             <p>{tutor?.bio}</p>
           </div>
+          {tutor?.teaching_style && (
+            <Section title="Phương pháp giảng dạy">
+              <p className="reading-text">{tutor.teaching_style}</p>
+            </Section>
+          )}
+          {tutor?.lesson_plan && (
+            <Section title="Một buổi học cùng tôi">
+              <p className="reading-text">{tutor.lesson_plan}</p>
+            </Section>
+          )}
           {tutor?.cv && (
             <Button variant="outline" asChild>
               <a href={tutor.cv.url}>Tải CV · {tutor.cv.name}</a>

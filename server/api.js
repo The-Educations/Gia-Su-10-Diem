@@ -247,13 +247,21 @@ export function createApi(
     const d = z
       .object({ name: text(80), goal: z.string().trim().max(1000) })
       .parse(req.body);
-    run(
-      db,
-      "UPDATE users SET name=?,goal=? WHERE id=?",
-      d.name,
-      d.goal,
-      req.user.id,
-    );
+    transaction(db, () => {
+      run(
+        db,
+        "UPDATE users SET name=?,goal=? WHERE id=?",
+        d.name,
+        d.goal,
+        req.user.id,
+      );
+      if (req.user.role === "tutor" && d.name !== req.user.name)
+        run(
+          db,
+          "UPDATE tutors SET status='pending',moderation_note='' WHERE user_id=?",
+          req.user.id,
+        );
+    });
     res.json({
       user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)),
     });
@@ -351,7 +359,7 @@ export function createApi(
       fail(400, "Mục tiêu kỳ thi không có trong danh mục.");
     run(
       db,
-      `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,status='pending',moderation_note='' WHERE user_id=?`,
+      `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=?,status='pending',moderation_note='' WHERE user_id=?`,
       d.headline,
       d.bio,
       d.location,
@@ -362,6 +370,9 @@ export function createApi(
       JSON.stringify(d.subjects),
       JSON.stringify(d.levels),
       JSON.stringify(d.goals),
+      d.teaching_style,
+      d.lesson_plan,
+      d.profile_theme,
       req.user.id,
     );
     res.json({ ok: true });

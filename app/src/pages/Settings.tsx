@@ -13,7 +13,7 @@ export default function Settings() {
     google: boolean;
     googleAvailable: boolean;
   }>("/account/auth-methods");
-  const { user, setUser } = useApp(),
+  const { user, setUser, refresh } = useApp(),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
   async function save(e: React.SubmitEvent<HTMLFormElement>, password = false) {
@@ -29,6 +29,11 @@ export default function Settings() {
       } else {
         const result = await api<{ user: User }>("/account", "PATCH", values);
         setUser(result.user);
+        refresh();
+        if (user?.role === "tutor" && result.user.name !== user.name) {
+          toast.success("Đã đổi tên. Hồ sơ gia sư đang chờ duyệt lại.");
+          return;
+        }
       }
       toast.success(
         password
