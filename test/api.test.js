@@ -526,7 +526,7 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   );
   original.close();
   const migrated = openDatabase(file);
-  assert.equal(one(migrated, "PRAGMA user_version").user_version, 5);
+  assert.equal(one(migrated, "PRAGMA user_version").user_version, 6);
   assert.equal(
     one(migrated, "SELECT headline FROM tutors WHERE user_id=1").headline,
     "Hồ sơ giữ nguyên",
@@ -939,4 +939,52 @@ test("tutor galleries preserve image proportions, enforce ownership, quotas and 
   const another = (await guest.request(`/tutors/${owner.id}`)).data.gallery[0];
   await admin.request(`/admin/users/${owner.id}`,"PATCH",{status:"suspended"});
   assert.equal((await fetch(new URL(another.url,base))).status,404);
+});
+
+test("gallery likes and paginated comments enforce student ownership and moderation", async (t) => {
+  const { client, db } = await fixture(t);
+  const tutor=client(), student=client(), other=client(), admin=client(), guest=client();
+  const owner=await tutor.login('chau'); const learner=await student.login('student'); await admin.login('admin');
+  await other.request('/auth/register','POST',{name:'Another student',email:'other-gallery@test.vn',password:'TestStudy2026!',role:'student'});
+  run(db,"INSERT INTO tutor_gallery(id,tutor_id,caption) VALUES ('social-test',?,'Học cùng tôi')",owner.id);
+  const social='/gallery/social-test';
+  assert.equal((await guest.request(social+'/social')).status,200);
+  assert.equal((await guest.request(social+'/like','PUT')).status,401);
+  assert.equal((await tutor.request(social+'/like','PUT')).status,403);
+  await student.request(social+'/like','PUT'); await student.request(social+'/like','PUT');
+  assert.equal((await student.request(social+'/social')).data.likes,1);
+  assert.equal((await student.request(social+'/social')).data.liked,true);
+  assert.equal((await other.request(social+'/social')).data.liked,false);
+  await student.request(social+'/like','DELETE');
+  assert.equal((await guest.request(social+'/social')).data.likes,0);
+  assert.equal((await student.request(social+'/comments','POST',{body:' '})).status,400);
+  assert.equal((await student.request(social+'/comments','POST',{body:'x'.repeat(1001)})).status,400);
+  assert.equal((await student.request(social+'/comments','POST',{body:'Em muốn tìm hiểu phương pháp này.'})).status,201);
+  let comment=(await student.request(social+'/social')).data.comments[0];
+  assert.equal((await other.request(social+'/comments/'+comment.id,'DELETE')).status,404);
+  assert.equal((await student.request(social+'/comments/'+comment.id,'DELETE')).status,200);
+  await student.request(social+'/comments','POST',{body:'<script>alert(1)</script>'});
+  comment=(await guest.request(social+'/social')).data.comments[0];
+  assert.equal(comment.body,'<script>alert(1)</script>');
+  assert.equal((await tutor.request(social+'/comments/'+comment.id,'DELETE')).status,200);
+  for(let i=0;i<21;i++) run(db,"INSERT INTO gallery_comments(image_id,student_id,body,created_at) VALUES ('social-test',?,?,'2020-01-01 00:00:00')",learner.id,`Comment ${i}`);
+  const first=(await guest.request(social+'/social')).data;
+  assert.equal(first.comments.length,20); assert.equal(first.comment_count,21); assert.ok(first.next);
+  const second=(await guest.request(social+'/social?before='+first.next)).data;
+  assert.equal(second.comments.length,1); assert.equal(second.next,null);
+  assert.equal((await guest.request(social+'/social?before=invalid')).status,400);
+  for(let i=0;i<5;i++) assert.equal((await student.request(social+'/comments','POST',{body:'Thảo luận '+i})).status,201);
+  assert.equal((await student.request(social+'/comments','POST',{body:'Quá nhanh'})).status,429);
+  const latest=(await admin.request(social+'/social')).data.comments[0];
+  assert.equal((await admin.request(social+'/comments/'+latest.id,'DELETE')).status,200);
+  await student.request(social+'/like','PUT');
+  run(db,"UPDATE tutors SET status='pending' WHERE user_id=?",owner.id);
+  assert.equal((await guest.request(social+'/social')).status,404);
+  assert.equal((await student.request(social+'/like','PUT')).status,404);
+  assert.equal((await student.request(social+'/comments','POST',{body:'Hidden'})).status,404);
+  assert.equal((await tutor.request(social+'/social')).status,200);
+  assert.equal((await admin.request(social+'/social')).status,200);
+  await tutor.request('/tutor/gallery/social-test','DELETE');
+  assert.equal(one(db,"SELECT COUNT(*) AS count FROM gallery_comments WHERE image_id='social-test'").count,0);
+  assert.equal(one(db,"SELECT COUNT(*) AS count FROM gallery_likes WHERE image_id='social-test'").count,0);
 });

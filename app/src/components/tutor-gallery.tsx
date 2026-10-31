@@ -1,3 +1,4 @@
+import { GallerySocial } from "./gallery-social";
 import { useEffect, useState, useRef } from "react";
 import {
   ChevronLeft,
@@ -77,6 +78,12 @@ export function TutorGallery({
           }}
           className="gallery-viewer"
           onKeyDown={(e) => {
+            if (
+              (e.target as HTMLElement).closest(
+                "input,textarea,[contenteditable]",
+              )
+            )
+              return;
             if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
               e.preventDefault();
               move(e.key === "ArrowLeft" ? -1 : 1);
@@ -97,6 +104,7 @@ export function TutorGallery({
             />
           )}
           {active?.caption && <p className="reading-text">{active.caption}</p>}
+          {active && <GallerySocial key={active.id} imageId={active.id} />}
           {images.length > 1 && (
             <div className="gallery-navigation">
               <Button

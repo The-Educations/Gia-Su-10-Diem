@@ -1,7 +1,7 @@
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
-import { z } from "./validation.js";
+import { z, text } from "./validation.js";
 import { UPLOAD_LIMIT } from "./uploads.js";
 
 const captionSchema = z.string().trim().max(500);
@@ -41,12 +41,10 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
         data = await processPhoto(req.body, true);
         if (data.length > UPLOAD_LIMIT) throw new Error();
       } catch {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Dùng ảnh JPG, PNG hoặc WebP tối đa 5 MB, 16 triệu pixel; chú thích tối đa 500 ký tự.",
-          });
+        return res.status(400).json({
+          error:
+            "Dùng ảnh JPG, PNG hoặc WebP tối đa 5 MB, 16 triệu pixel; chú thích tối đa 500 ký tự.",
+        });
       }
       // Decode outside the transaction; recheck ownership state and quota before writing.
       const result = transaction(db, () => {
@@ -134,21 +132,137 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
     audit(req.user.id, "gallery.remove", req.params.id);
     res.json(galleryMetadata(db, req.user.id));
   });
-  app.get("/api/gallery/:id", (req, res) => {
-    const row = one(
+  const visible = (req, res, publicOnly = false) => {
+    const image = one(
       db,
       "SELECT g.tutor_id,t.status,u.status AS account_status FROM tutor_gallery g JOIN tutors t ON t.user_id=g.tutor_id JOIN users u ON u.id=g.tutor_id WHERE g.id=?",
       req.params.id,
     );
+    const published =
+      image?.status === "approved" && image?.account_status === "active";
     if (
-      !row ||
+      !image ||
       !(
-        (row.status === "approved" && row.account_status === "active") ||
-        req.user?.id === row.tutor_id ||
-        req.user?.role === "admin"
+        published ||
+        (!publicOnly &&
+          (req.user?.id === image.tutor_id || req.user?.role === "admin"))
+      )
+    ) {
+      res.status(404).json({ error: "Ảnh không có sẵn." });
+      return null;
+    }
+    return { ...image, published };
+  };
+  app.get("/api/gallery/:id/social", (req, res) => {
+    const image = visible(req, res);
+    if (!image) return;
+    const before = req.query.before
+      ? z.coerce.number().int().positive().parse(req.query.before)
+      : Number.MAX_SAFE_INTEGER;
+    const comments = all(
+      db,
+      "SELECT c.id,c.student_id,c.body,c.created_at,u.name FROM gallery_comments c JOIN users u ON u.id=c.student_id WHERE c.image_id=? AND c.id<? ORDER BY c.id DESC LIMIT 21",
+      req.params.id,
+      before,
+    );
+    const more = comments.length > 20;
+    if (more) comments.pop();
+    res.json({
+      likes: one(
+        db,
+        "SELECT COUNT(*) AS count FROM gallery_likes WHERE image_id=?",
+        req.params.id,
+      ).count,
+      liked: !!one(
+        db,
+        "SELECT 1 FROM gallery_likes WHERE image_id=? AND student_id=?",
+        req.params.id,
+        req.user?.id || 0,
+      ),
+      comment_count: one(
+        db,
+        "SELECT COUNT(*) AS count FROM gallery_comments WHERE image_id=?",
+        req.params.id,
+      ).count,
+      can_interact: image.published && req.user?.role === "student",
+      can_moderate:
+        req.user?.id === image.tutor_id || req.user?.role === "admin",
+      comments,
+      next: more ? comments.at(-1).id : null,
+    });
+  });
+  app.put("/api/gallery/:id/like", auth("student"), (req, res) => {
+    if (!visible(req, res, true)) return;
+    run(
+      db,
+      "INSERT OR IGNORE INTO gallery_likes(image_id,student_id) VALUES (?,?)",
+      req.params.id,
+      req.user.id,
+    );
+    res.json({ ok: true });
+  });
+  app.delete("/api/gallery/:id/like", auth("student"), (req, res) => {
+    if (!visible(req, res, true)) return;
+    run(
+      db,
+      "DELETE FROM gallery_likes WHERE image_id=? AND student_id=?",
+      req.params.id,
+      req.user.id,
+    );
+    res.json({ ok: true });
+  });
+  app.post("/api/gallery/:id/comments", auth("student"), (req, res) => {
+    if (!visible(req, res, true)) return;
+    const { body } = z.object({ body: text(1000) }).parse(req.body);
+    const recent = one(
+      db,
+      "SELECT COUNT(*) AS count FROM gallery_comments WHERE student_id=? AND created_at > datetime('now','-1 minute')",
+      req.user.id,
+    ).count;
+    if (recent >= 5)
+      return res
+        .status(429)
+        .json({ error: "Bạn bình luận quá nhanh. Thử lại sau một phút." });
+    run(
+      db,
+      "INSERT INTO gallery_comments(image_id,student_id,body) VALUES (?,?,?)",
+      req.params.id,
+      req.user.id,
+      body,
+    );
+    res.status(201).json({ ok: true });
+  });
+  app.delete("/api/gallery/:id/comments/:commentId", auth(), (req, res) => {
+    const image = visible(req, res);
+    if (!image) return;
+    const comment = one(
+      db,
+      "SELECT student_id FROM gallery_comments WHERE id=? AND image_id=?",
+      req.params.commentId,
+      req.params.id,
+    );
+    if (
+      !comment ||
+      !(
+        comment.student_id === req.user.id ||
+        image.tutor_id === req.user.id ||
+        req.user.role === "admin"
       )
     )
-      return res.status(404).json({ error: "Ảnh không có sẵn." });
+      return res.status(404).json({ error: "Không tìm thấy bình luận." });
+    transaction(db, () => {
+      run(
+        db,
+        "DELETE FROM gallery_comments WHERE id=? AND image_id=?",
+        req.params.commentId,
+        req.params.id,
+      );
+      audit(req.user.id, "gallery.comment.remove", req.params.commentId);
+    });
+    res.json({ ok: true });
+  });
+  app.get("/api/gallery/:id", (req, res) => {
+    if (!visible(req, res)) return;
     const chunks = all(
       db,
       "SELECT data FROM gallery_chunks WHERE image_id=? ORDER BY part",
