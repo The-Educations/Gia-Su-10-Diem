@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert';
+import vm from 'node:vm';
 import { execSync } from 'node:child_process';
 
 console.log('--- Running Automated Verification Suite for 10 Points Tutor Academy ---');
@@ -56,12 +57,12 @@ const manifest = JSON.parse(fs.readFileSync('assets/image-manifest.json', 'utf8'
 assert.strictEqual(manifest.slots.length, 16, 'Manifest must have 16 slots');
 console.log('✓ image-manifest.json is valid with 16 slots.');
 
-// 5. Verify all 8 Roman sections are present in index.html
-const romanNumerals = ['I.', 'II.', 'III.', 'IV.', 'V.', 'VI.', 'VII.', 'VIII.'];
-for (const roman of romanNumerals) {
-  assert.ok(html.includes(`<span class='roman'>${roman}</span>`), `Missing section ${roman}`);
+// 5. Verify the main product sections remain accessible after the layout update.
+for (const section of ['hero', 'about', 'capabilities', 'labs', 'method', 'work', 'testimonial', 'cta']) {
+  assert.ok(html.includes(`data-od-id='${section}'`), `Missing section ${section}`);
 }
-console.log('✓ All 8 Roman sections (I. to VIII.) present.');
+assert.ok(html.includes("<main id='main'"), 'Main landmark must exist');
+console.log('✓ All 8 product sections and the main landmark are present.');
 
 // 6. Verify Three.js and Pixel Art integration
 assert.ok(html.includes('three.min.js'), 'Three.js CDN script must be linked');
@@ -73,26 +74,31 @@ console.log('✓ Three.js and Pixel Art interactive layers verified.');
 
 // 7. Verify Booking Form & interactive filter
 assert.ok(html.includes('id=\'tutor-booking-form\''), 'Booking form must exist');
-assert.ok(html.includes('id=\'form-phone\''), 'Phone input must exist');
-assert.ok(html.includes('id=\'form-grade\''), 'Grade dropdown must exist');
 assert.ok(html.includes('id=\'form-subject\''), 'Subject dropdown must exist');
 assert.ok(html.includes('data-filter'), 'Interactive filter pills must exist in labs');
-console.log('✓ Consultation booking form and subject filter verified.');
+assert.ok(html.includes('mobile-menu-toggle'), 'Mobile menu toggle must exist');
+assert.ok(html.includes("action='/app/tutors'"), 'Discovery form navigates to real tutor search');
+assert.ok(html.includes('initLearningParallax'), 'Learning parallax must initialize');
+console.log('✓ Tutor discovery form and subject filter verified.');
 
 // 8. Verify English brand copy and academic credentials
-const vietnameseKeywords = [
-  "Gia Sư 10 Điểm",
-  "Thủ Khoa",
-  "Ngoại Thương",
-  "Bách Khoa",
-  "Y Hà Nội",
-  "Sư Phạm",
-  "tư duy bản chất",
-  "buổi học thử"
-];
+const vietnameseKeywords = ["Gia Sư 10 Điểm", "Toán", "CV", "lịch học", "tư duy bản chất"];
 for (const kw of vietnameseKeywords) {
-  assert.ok(html.includes(kw), `Missing expected Vietnamese keyword: ${kw}`);
+  assert.ok(html.toLocaleLowerCase('vi').includes(kw.toLocaleLowerCase('vi')), `Missing expected Vietnamese keyword: ${kw}`);
 }
-console.log("✓ Vietnamese academic credentials and brand copy verified.");
+console.log("✓ Vietnamese marketplace copy verified.");
 
+// Compile the generated scripts: template escaping must not break browser JavaScript.
+for (const [, source] of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+  new vm.Script(source);
+}
+const ids = [...html.split('<body>')[1].split('<script>')[0].matchAll(/\sid=['"]([^'"]+)['"]/g)].map(match => match[1]);
+assert.equal(new Set(ids).size, ids.length, 'IDs must be unique');
+for (const [, target] of html.matchAll(/href=['"]#([^'"]+)['"]/g)) {
+  assert.ok(ids.includes(target), `Broken section link #${target}`);
+}
+for (const [, target] of html.matchAll(/aria-labelledby=['"]([^'"]+)['"]/g)) {
+  assert.ok(ids.includes(target), `Missing accessible heading ${target}`);
+}
+console.log('✓ Browser script syntax and section links verified.');
 console.log('\n--- ALL VERIFICATION CHECKS PASSED WITH ZERO ERRORS ---');

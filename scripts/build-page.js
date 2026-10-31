@@ -3,11 +3,13 @@ import path from 'node:path';
 
 const inputs = JSON.parse(fs.readFileSync('inputs.json', 'utf8'));
 const baseCss = fs.readFileSync('styles.css', 'utf8');
+const siteScript = fs.readFileSync('scripts/site.js', 'utf8');
 
 function mixed(text) {
   if (typeof text === 'string') return text;
   if (!Array.isArray(text)) return String(text ?? '');
   return text.map(seg => {
+    seg = { ...seg, text: seg.text.replace(/\n/g, '<br>') };
     if (seg.dot) return `<span class='dot'>${seg.text}</span>`;
     if (seg.em) return `<em>${seg.text}</em>`;
     return seg.text;
@@ -72,6 +74,19 @@ const customStyles = `
   color: var(--paper);
   background: var(--ink);
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.mobile-menu-toggle,
+.mobile-nav { display: none; }
 .hero-art-layer {
   position: relative;
   width: 100%;
@@ -163,25 +178,46 @@ const customStyles = `
 .booking-submit-btn:active {
   transform: translateY(1px);
 }
-.toast-msg {
-  display: none;
-  background: #2a5a3a;
-  color: #ffffff;
-  padding: 12px 18px;
-  border-radius: 4px;
-  font-family: var(--sans);
-  font-size: 13px;
-  margin-top: 14px;
-  animation: fadeIn 0.3s ease;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
-/* Dynamic filter transitions in Labs */
-.lab.hidden-card {
-  display: none !important;
+
+
+
+@media (max-width: 880px) {
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: 600 12px/1 var(--sans);
+    cursor: pointer;
+  }
+  .mobile-menu-toggle[aria-expanded='true'] { background: var(--ink); color: var(--paper); }
+  .mobile-nav[hidden] { display: none; }
+  .mobile-nav:not([hidden]) {
+    display: block;
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-nav-inner { display: grid; gap: 0; padding-top: 8px; padding-bottom: 12px; }
+  .mobile-nav-inner a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink);
+    text-decoration: none;
+    font: 600 15px/1.2 var(--sans);
+  }
+  .mobile-nav-inner a:last-child { border-bottom: 0; }
+  .mobile-nav-inner .num { color: var(--coral); font-size: 11px; margin-left: auto; padding-left: 8px; }
+  .mobile-nav-inner .mobile-nav-cta { color: var(--coral); }
 }
 `;
 
@@ -198,65 +234,49 @@ function renderPage(i, css) {
     </div>`;
   }).join('\n          ');
 
-  const indexHtml = i.hero.index.map(item => 
-    `<span${item.active ? ` class='on'` : ''}><span class='n'>${item.num}</span>${item.label}</span>`
-  ).join('\n      ');
-
   // Capability cards
   const capCards = i.capabilities.cards.map(c => `
     <div class='card' data-reveal>
-      <div class='num'>${c.num}<span class='tag'>${c.tag}</span></div>
       <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'>
         ${c.icon_svg}
       </svg>
       <h3>${br(c.title)}</h3>
       <p>${c.body}</p>
-      <a class='arrow-mark' href='${c.href}'${ext(c.href)} aria-label='Tìm hiểu thêm về ${c.tag}'>
-        ${ARROW_OUT}
-      </a>
     </div>
   `).join('\n            ');
 
   // Lab pills & cards
-  const filterKeys = ['all', 'math', 'science', 'english', 'exam'];
-  const labPills = i.labs.pills.map((p, idx) => 
-    `<button class='pill${p.active ? ' active' : ''}' data-filter='${filterKeys[idx] || 'all'}'>${p.label}<span class='count'>${p.count}</span></button>`
+  const filterKeys = i.labs.pills.map(p => p.key);
+  const labPills = i.labs.pills.map((p, idx) =>
+    `<button type='button' class='pill${p.active ? ' active' : ''}' data-filter='${filterKeys[idx] || 'all'}' aria-pressed='${p.active ? 'true' : 'false'}'>${p.label}<span class='count'>${p.key === 'all' ? i.labs.cards.length : i.labs.cards.filter(c => c.category === p.key).length}</span></button>`
   ).join('\n          ');
 
-  const labCategoryMap = ['math', 'science', 'english', 'literature', 'exam'];
   const labCards = i.labs.cards.map((c, idx) => `
-    <div class='lab' data-category='${labCategoryMap[idx] || 'math'}' data-reveal>
+    <div class='lab' data-category='${c.category}' data-reveal>
       <div class='lab-img'>
-        <span class='badge'>${c.badge}</span>
+
         <picture>
-          <source srcset='${assets}lab-${idx + 1}.svg' type='image/svg+xml'>
           <img src='${assets}lab-${idx + 1}.png' alt="${attr(c.title)}" loading='lazy' />
         </picture>
       </div>
-      <div class='num-row'><span>${c.num}</span><span>${c.year}</span></div>
-      <h4>${c.title}</h4>
+
+      <h3>${c.title}</h3>
       <p>${c.body}</p>
-      <a class='arrow-mark' href='${c.href}'${ext(c.href)} aria-label='Xem chi tiết môn ${c.title}'>${ARROW_OUT}</a>
+      <a class='course-select' href='#contact' data-subject='${c.subject}' aria-label='Chọn môn học: ${attr(c.title)}'>Chọn môn học <span aria-hidden='true'>↗</span></a>
     </div>
   `).join('\n        ');
 
-  const progressHtml = Array.from({ length: i.labs.progress.total }, (_, k) =>
-    k < i.labs.progress.filled ? `<span class='on'></span>` : `<span></span>`
-  ).join('');
-
   // Method steps
-  const methodSteps = i.method.steps.map((s, idx, arr) => `
-    <div class='method-step' data-reveal>
-      <div class='num'>${s.num}</div>
-      <h4>${s.title}${idx === arr.length - 1 ? '' : ` <span class='arrow-r'>→</span>`}</h4>
+  const methodSteps = i.method.steps.map((s, idx) => `
+    <li class='method-step' data-reveal>
+      <h3>${s.title}</h3>
       <p>${s.body}</p>
       <div class='img'>
         <picture>
-          <source srcset='${assets}method-${idx + 1}.svg' type='image/svg+xml'>
           <img src='${assets}method-${idx + 1}.png' alt="${attr(s.title)}" loading='lazy' />
         </picture>
       </div>
-    </div>
+    </li>
   `).join('\n        ');
 
   // Work cards
@@ -270,7 +290,6 @@ function renderPage(i, css) {
       <p>${c.body}</p>
       <div class='img'>
         <picture>
-          <source srcset='${assets}work-${idx + 1}.svg' type='image/svg+xml'>
           <img src='${assets}work-${idx + 1}.png' alt="${attr(c.title)}" loading='lazy' />
         </picture>
       </div>
@@ -283,30 +302,15 @@ function renderPage(i, css) {
 
   // Testimonial partners
   const partnersHtml = i.testimonial.partners.map(p => `
-    <a class='partner' data-reveal href='${p.href || '#'}'${ext(p.href || '#')}>
-      <div class='glyph'>
-        <svg viewBox='0 0 80 30' fill='none' stroke='currentColor' stroke-width='2'>
-          ${p.glyph_svg}
-        </svg>
-      </div>
+    <div class='partner' data-reveal>
       <span>${p.name}</span>
-      <small>${p.role}</small>
-    </a>
+    </div>
   `).join('\n        ');
-
-  // Wire items
-  const cityRow = [...i.wire.cities, ...i.wire.cities].map(c => 
-    `<span class='wire-item'><span class='wire-dot'>·</span><span class='wire-coord'>${c.coord}</span><span class='wire-name'>${c.name}</span></span>`
-  ).join('\n          ');
-
-  const contribRow = [...i.wire.contributors, ...i.wire.contributors].map(c =>
-    `<a class='wire-item is-link' href='${c.href}'${ext(c.href)}><span class='wire-dot'>·</span><span class='wire-handle'>${c.handle}</span><span class='wire-role'>${c.role}</span></a>`
-  ).join('\n          ');
 
   // Footer columns
   const footerCols = i.footer.columns.map(c => `
     <div class='foot-col'>
-      <h5>${c.title}</h5>
+      <h3>${c.title}</h3>
       <ul>
         ${c.links.map(l => `<li><a href='${l.href}'${ext(l.href)}>${l.label}</a></li>`).join('\n        ')}
       </ul>
@@ -316,6 +320,7 @@ function renderPage(i, css) {
   return `<!DOCTYPE html>
 <html lang='${i.brand.locale ?? 'vi'}'>
 <head>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <meta charset='utf-8' />
 <meta name='viewport' content='width=device-width, initial-scale=1' />
 <title>${i.brand.name} — ${i.brand.tagline}</title>
@@ -326,71 +331,48 @@ function renderPage(i, css) {
 <!-- Three.js CDN for interactive 3D hero artifact -->
 <script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'></script>
 <style>
-${css}
 ${customStyles}
+${css}
 </style>
 </head>
 <body>
 
-<div class='side-rail right' data-od-id='rail-right'>
-  <span class='rail-text'>${i.brand.rails.right}</span>
-</div>
-<div class='side-rail left' data-od-id='rail-left'>
-  <span class='rail-text'>${i.brand.rails.left}</span>
-</div>
-
+<a class='skip-link' href='#main'>Bỏ qua điều hướng</a>
 <div class='shell'>
 
-<div class='topbar' data-od-id='topbar'>
-  <div class='container topbar-inner'>
-    <span><b>${i.brand.name}</b> &nbsp;·&nbsp; ${i.brand.edition}</span>
-    <span class='mid'>
-      <span>Lĩnh vực <b class='coral'>${i.brand.filed_under}</b></span>
-      <span>${i.brand.license} · Việt Nam</span>
-    </span>
-    <span class='right'>
-      <a class='topbar-link' href='#contact'><span class='pulse'></span>${i.brand.status}</a>
-      <span><b>VI</b> · EN</span>
-    </span>
-  </div>
-</div>
 
 <header class='nav' data-od-id='nav'>
   <div class='container nav-inner'>
     <a href='#top' class='brand'>
       <span class='brand-mark'>${i.brand.mark}</span>
       <span>${i.brand.name}</span>
-      <span class='brand-meta'><b>${i.brand.meta.title}</b>${i.brand.meta.subtitle}</span>
     </a>
-    <nav>
+    <nav aria-label='Điều hướng chính'>
       <ul class='nav-links'>
-        ${i.nav.map(n => `<li><a href='${n.href}'>${n.label}${n.count ? `<span class='num'>${n.count}</span>` : ''}</a></li>`).join('\n        ')}
+        ${i.nav.map(n => `<li><a href='${n.href}'>${n.label}</a></li>`).join('\n        ')}
       </ul>
     </nav>
-    <div class='nav-side'>
-      <a class='nav-cta ghost' href='#labs'>Xem Môn Học</a>
-      <a class='nav-cta' href='#contact'>Tìm Gia Sư</a>
-      <span class='status-dot' aria-hidden='true'></span>
+    <div class='nav-side'><a class='nav-login' href='/app/auth'>Đăng nhập</a>
+      <a class='nav-cta' href='/app/tutors'>Tìm Gia Sư</a>
     </div>
+    <button class='mobile-menu-toggle' type='button' aria-expanded='false' aria-controls='mobile-nav'>
+      <span class='sr-only'>Mở menu</span><span aria-hidden='true'>Menu</span>
+    </button>
   </div>
+  <nav class='mobile-nav' id='mobile-nav' aria-label='Điều hướng di động' hidden>
+    <div class='container mobile-nav-inner'>
+      ${i.nav.map(n => `<a href='${n.href}'>${n.label}</a>`).join('\n      ')}
+      <a href='/app/auth'>Đăng nhập</a>
+      <a class='mobile-nav-cta' href='/app/tutors'>Tìm gia sư <span aria-hidden='true'>↗</span></a>
+    </div>
+  </nav>
 </header>
 
-<section class='hero' id='top' data-od-id='hero'>
-  <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>I.</span>
-      <span class='meta-grp'>
-        <span>Khởi Đầu / Trang Bìa</span>
-        <span class='dot-mark'>•</span>
-        <span>${i.brand.name} / Tập 01</span>
-      </span>
-      <span>001 / 008</span>
-    </div>
-  </div>
+<main id='main' tabindex='-1'>
+<section class='hero' id='top' aria-labelledby='hero-title' data-od-id='hero'>
   <div class='container hero-grid'>
     <div class='hero-copy'>
-      <span class='label' data-reveal>${i.hero.label} <span class='ix'>${i.hero.ix}</span></span>
-      <h1 class='display' data-reveal>${mixed(i.hero.headline)}</h1>
+      <h1 id='hero-title' class='display' data-reveal>${mixed(i.hero.headline)}</h1>
       <p class='lead' data-reveal>${i.hero.lead}</p>
       <div class='hero-actions' data-reveal>
         <a class='btn btn-primary' href='${i.hero.primary.href}'>
@@ -405,95 +387,75 @@ ${customStyles}
       <div class='hero-stats' data-reveal>
           ${statsHtml}
       </div>
-      <div class='hero-foot' data-reveal>
-        <span class='meta'>${i.hero.meta}</span>
-        <span class='coord'>${i.brand.coordinates}</span>
-      </div>
     </div>
-    
+
     <div class='hero-art' data-reveal='scale'>
-      <span class='corner tl'></span>
-      <span class='corner tr'></span>
-      <span class='corner bl'></span>
-      <span class='corner br'></span>
-      <span class='annot annot-tl coord'>${i.hero.annotations.tl}</span>
-      <span class='annot annot-tr'>${i.hero.annotations.tr}</span>
-      <span class='annot annot-bl coord'>${i.hero.annotations.bl}</span>
-      <span class='annot annot-br'>${i.hero.annotations.br}</span>
+      <span class='study-float study-float-math' data-parallax='-0.12' aria-hidden='true'>x² + y² <small>Toán học</small></span>
+      <span class='study-float study-float-language' data-parallax='0.15' aria-hidden='true'>Aa <small>Ngôn ngữ</small></span>
 
       <!-- Mode Switcher for Interactive Assets -->
       <div class='asset-mode-switcher'>
-        <button class='mode-btn active' data-mode='3d'>✦ 3D Khối Điểm 10</button>
-        <button class='mode-btn' data-mode='pixel'>▤ Pixel Art</button>
-        <button class='mode-btn' data-mode='plate'>▧ Bản In Đồ Họa</button>
+        <button type='button' class='mode-btn active' data-mode='3d' aria-pressed='true'>3D</button>
+        <button type='button' class='mode-btn' data-mode='pixel' aria-pressed='false'>Pixel</button>
+        <button type='button' class='mode-btn' data-mode='plate' aria-pressed='false'>Ảnh</button>
       </div>
 
       <!-- 3D Three.js Interactive Container -->
       <div id='layer-3d' class='hero-art-layer' style='display:block;'>
-        <canvas id='three-canvas' style='width:100%;height:100%;display:block;min-height:480px;'></canvas>
+        <canvas id='three-canvas' tabindex='0' aria-label='Khối hình học 3D. Dùng phím mũi tên để xoay.' style='width:100%;height:100%;display:block;min-height:480px;'></canvas>
         <div class='three-hint'>✦ Di chuột / Kéo để xoay khối Điểm 10</div>
       </div>
 
       <!-- Pixel Art Interactive Canvas -->
       <div id='layer-pixel' class='hero-art-layer' style='display:none;'>
-        <canvas id='pixel-canvas' width='360' height='360' style='width:100%;height:100%;display:block;min-height:480px;image-rendering:pixelated;'></canvas>
+        <canvas id='pixel-canvas' role='img' aria-label='Minh họa lớp học bằng pixel' width='360' height='360' style='width:100%;height:100%;display:block;min-height:480px;image-rendering:pixelated;'></canvas>
         <div class='three-hint'>▤ Hoạt Họa Pixel Art · Lớp học 1 kèm 1</div>
       </div>
 
       <!-- Editorial Plate Fallback (with real photo asset) -->
       <div id='layer-plate' class='hero-art-layer' style='display:none;'>
         <picture>
-          <source srcset='${assets}hero.svg' type='image/svg+xml'>
           <img src="${assets}hero.png" alt="Gia Sư 10 Điểm" style="width:100%;height:100%;max-height:640px;object-fit:contain;display:block;margin:auto;" />
         </picture>
       </div>
 
-      <div class='index'>
-        ${indexHtml}
-      </div>
     </div>
   </div>
 </section>
 
-<section class='wire' data-od-id='wire' aria-label='Mạng lưới học thuật toàn quốc'>
-  <div class='container wire-inner'>
-    <div class='wire-left'>
-      <span class='wire-mark' aria-hidden='true'><span class='wire-pulse'></span></span>
-      <span class='wire-title'>
-        <b>${i.wire.title}</b>
-        <span>${i.wire.subtitle}</span>
-      </span>
+
+<section class='learning-journey' id='journey' aria-labelledby='journey-title'>
+  <div class='container journey-stage'>
+    <div class='journey-copy'>
+      <h2 class='display' id='journey-title'>Mỗi cách học.<br><em>Một người đồng hành.</em></h2>
+      <ol class='journey-steps'>
+        <li class='is-current'><span>01</span><div><h3>Chọn môn em muốn hiểu.</h3><p>Toán, khoa học, ngôn ngữ. Bắt đầu từ mục tiêu của em.</p><a href='/app/library'>Khám phá môn học ↗</a></div></li>
+        <li><span>02</span><div><h3>Gặp người dạy phù hợp.</h3><p>Xem chuyên môn, CV và cách dạy. Nhắn hỏi trước khi chọn lịch.</p><a href='/app/tutors'>Tìm gia sư ↗</a></div></li>
+        <li><span>03</span><div><h3>Dành một giờ cho tiến bộ.</h3><p>Chọn giờ trống, gửi yêu cầu và trao đổi cùng gia sư.</p><a href='/app/auth?mode=register'>Bắt đầu học ↗</a></div></li>
+      </ol>
     </div>
-    <div class='wire-rows'>
-      <div class='wire-row'>
-        <div class='marquee-track' aria-hidden='true'>
-          ${cityRow}
-        </div>
+    <div class='learning-desk' aria-hidden='true'>
+      <div class='desk-orbit'></div>
+      <div class='desk-book book-math'><span>Toán học</span><strong>π</strong><i>Hiểu từ gốc.</i></div>
+      <div class='desk-book book-language'><span>Ngôn ngữ</span><strong>Aa</strong><i>Mở góc nhìn.</i></div>
+      <div class='desk-notebook'>
+        <div class='notebook-binding'></div>
+        <span class='notebook-subject'>Một giờ học của em</span>
+        <svg viewBox='0 0 260 200' fill='none'><path d='M28 165H240M45 182V20' stroke='#bbb5a5'/><path d='M55 145Q100 140 140 103T220 35' stroke='#852f36' stroke-width='4' stroke-linecap='round'/><path d='M55 145L140 103L220 35' stroke='#b6a888' stroke-dasharray='5 6'/><circle cx='55' cy='145' r='6' fill='#852f36'/><circle cx='140' cy='103' r='6' fill='#852f36'/><circle cx='220' cy='35' r='6' fill='#852f36'/></svg>
+        <strong>Hiểu hơn hôm qua.</strong>
+        <div class='notebook-lines'></div>
       </div>
-      <div class='wire-row'>
-        <div class='marquee-track reverse' aria-hidden='true'>
-          ${contribRow}
-        </div>
-      </div>
+      <div class='desk-pencil'></div>
+      <div class='desk-note'>Cứ hỏi.<br><em>Mình cùng tìm hiểu.</em></div>
     </div>
   </div>
 </section>
 
-<section class='about' data-od-id='about'>
+<section class='about' aria-labelledby='about-title' data-od-id='about'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>${i.rules.about.roman}</span>
-      <span class='meta-grp'>
-        <span>${i.rules.about.meta[0]}</span>
-        <span class='dot-mark'>${i.rules.about.meta[1]}</span>
-        <span>${i.rules.about.meta[2]}</span>
-      </span>
-      <span>${i.rules.about.pagination}</span>
-    </div>
     <div class='about-grid'>
       <div class='about-copy'>
-        <span class='label' data-reveal>${i.about.label} <span class='ix'>${i.about.ix}</span></span>
-        <h2 class='display' data-reveal>${mixed(i.about.headline)}</h2>
+        <h2 id='about-title' class='display' data-reveal>${mixed(i.about.headline)}</h2>
         <p class='lead' data-reveal>${i.about.lead}</p>
         <div class='about-action' data-reveal>
           <a class='btn btn-ghost' href='${i.about.cta_href}'>
@@ -501,64 +463,33 @@ ${customStyles}
             <span class='arrow'>${ARROW_OUT}</span>
           </a>
         </div>
-        <div class='about-foot' data-reveal>
-          <span class='foot-text'>${i.about.footer_text}</span>
-          <span class='stamp'>
-            <b>${i.about.stamp_top}</b>
-            ${i.about.stamp_bottom}
-          </span>
-        </div>
       </div>
       <div class='about-art' data-reveal='scale'>
-        <div class='plate'>
+        <div class='plate' data-parallax='0.06'>
           <picture>
-            <source srcset='${assets}about.svg' type='image/svg+xml'>
             <img src='${assets}about.png' alt="${attr(i.about.caption)}" />
           </picture>
-        </div>
-        <div class='about-side-note'>
-          <span class='mono-label'>${i.about.side_note}</span>
-          <span class='plate-caption'>${i.about.caption}</span>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class='capabilities' id='capabilities' data-od-id='capabilities'>
+<section class='capabilities' id='capabilities' aria-labelledby='capabilities-title' data-od-id='capabilities'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>${i.rules.capabilities.roman}</span>
-      <span class='meta-grp'>
-        <span>${i.rules.capabilities.meta[0]}</span>
-        <span class='dot-mark'>${i.rules.capabilities.meta[1]}</span>
-        <span>${i.rules.capabilities.meta[2]}</span>
-      </span>
-      <span>${i.rules.capabilities.pagination}</span>
-    </div>
     <div class='cap-head'>
-      <span class='label' data-reveal>${i.capabilities.label} <span class='ix'>${i.capabilities.ix}</span></span>
-      <h2 class='display' data-reveal>${mixed(i.capabilities.headline)}</h2>
+      <h2 id='capabilities-title' class='display' data-reveal>${mixed(i.capabilities.headline)}</h2>
       <p class='lead' data-reveal>${i.capabilities.lead}</p>
     </div>
-    <div class='cap-body'>
-      <div class='art' data-reveal='scale'>
-        <div class='art-frame'>
+    <div class='capabilities-grid'>
+      <div class='capabilities-art' data-reveal='scale'>
+        <div class='art-frame' data-parallax='-0.05'>
           <picture>
-            <source srcset='${assets}capabilities.svg' type='image/svg+xml'>
             <img src='${assets}capabilities.png' alt='Quy Chuẩn Tuyển Chọn Gia Sư' />
           </picture>
         </div>
-        <div class='art-caption'>
-          <span class='mono'>SÀNG LỌC 4 VÒNG KHẮT KHE</span>
-          <span>Chỉ 8.5% gia sư thủ khoa được chứng nhận</span>
-        </div>
       </div>
       <div class='content'>
-        <div class='ribbon' data-reveal>
-          <span class='ribbon-bar'></span>
-          <span>${i.capabilities.ribbon}</span>
-        </div>
         <div class='cards'>
             ${capCards}
         </div>
@@ -567,69 +498,37 @@ ${customStyles}
   </div>
 </section>
 
-<section class='labs' id='labs' data-od-id='labs'>
+<section class='labs' id='labs' aria-labelledby='labs-title' data-od-id='labs'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>${i.rules.labs.roman}</span>
-      <span class='meta-grp'>
-        <span>${i.rules.labs.meta[0]}</span>
-        <span class='dot-mark'>${i.rules.labs.meta[1]}</span>
-        <span>${i.rules.labs.meta[2]}</span>
-      </span>
-      <span>${i.rules.labs.pagination}</span>
-    </div>
     <div class='labs-head'>
       <div data-reveal>
-        <span class='label'>${i.labs.label} <span class='ix'>${i.labs.ix}</span></span>
-        <h2 class='display' style='margin-top:30px;'>${mixed(i.labs.headline)}</h2>
+        <h2 id='labs-title' class='display'>${mixed(i.labs.headline)}</h2>
       </div>
       <div class='pills' data-reveal='right'>
           ${labPills}
       </div>
     </div>
-    <div class='labs-meta'>
-      <span class='ring'>${i.labs.meta.ring}</span>
-      <div class='meta-text'>
-        <b>${i.labs.meta.bold}</b>
-        ${i.labs.meta.sub}
-      </div>
+    <div class='course-toolbar'>
+      <label class='search-field' for='course-search'><svg aria-hidden='true' viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5'><circle cx='10' cy='10' r='6'/><path d='m15 15 5 5'/></svg><input id='course-search' type='search' placeholder='Tìm môn học…' aria-label='Tìm môn học' /></label>
+      <p id='course-count' role='status' aria-live='polite'>5 chương trình</p>
     </div>
     <div class='labs-grid' id='labs-container'>
         ${labCards}
     </div>
-    <div class='labs-foot'>
-      <div class='progress'>
-        ${progressHtml}
-      </div>
-      <span class='meta'>${i.labs.foot}</span>
-    </div>
+    <div id='course-empty' class='course-empty' hidden><p>Chưa tìm thấy môn học phù hợp.</p><button type='button' id='reset-courses'>Xem tất cả môn học ↗</button></div>
   </div>
 </section>
 
-<section class='method' id='method' data-od-id='method'>
+<section class='method' id='method' aria-labelledby='method-title' data-od-id='method'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>${i.rules.method.roman}</span>
-      <span class='meta-grp'>
-        <span>${i.rules.method.meta[0]}</span>
-        <span class='dot-mark'>${i.rules.method.meta[1]}</span>
-        <span>${i.rules.method.meta[2]}</span>
-      </span>
-      <span>${i.rules.method.pagination}</span>
-    </div>
     <div class='method-head'>
       <div data-reveal>
-        <span class='label'>${i.method.label} <span class='ix'>${i.method.ix}</span></span>
-        <h2 class='display' style='margin-top:30px;'>${mixed(i.method.headline)}</h2>
-      </div>
-      <div class='right' data-reveal='right'>
-        <span class='plus'>+</span>
-        <p>${i.method.right}</p>
+        <h2 id='method-title' class='display'>${mixed(i.method.headline)}</h2>
       </div>
     </div>
-    <div class='method-grid'>
+    <ol class='method-grid'>
         ${methodSteps}
-    </div>
+    </ol>
     <div class='method-foot'>
       <div class='left'>
         <span class='ring'></span>
@@ -640,47 +539,24 @@ ${customStyles}
   </div>
 </section>
 
-<section class='tight' id='work' data-od-id='work'>
+<section class='tight' id='work' aria-labelledby='tight-title' data-od-id='work'>
   <div class='work'>
-    <div class='work-rule'>
-      <span class='roman'>${i.rules.work.roman}</span>
-      <span style='display:inline-flex;gap:24px;'>
-        <span>${i.rules.work.meta[0]}</span>
-        <span style='color:var(--coral);'>${i.rules.work.meta[1]}</span>
-        <span>${i.rules.work.meta[2]}</span>
-      </span>
-      <span>${i.rules.work.pagination}</span>
-    </div>
     <div class='work-grid'>
       <div class='work-copy' data-reveal>
-        <span class='label'>${i.work.label}</span>
-        <h2>${mixed(i.work.headline)}</h2>
+        <h2 id='tight-title'>${mixed(i.work.headline)}</h2>
         <a class='work-link' href='#contact'>${i.work.link_label}</a>
       </div>
       ${workCards}
     </div>
-    <div class='work-arrows'>
-      <button class='nav-btn' aria-label='Trước'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M14 6l-6 6 6 6'/></svg></button>
-      <button class='nav-btn active' aria-label='Tiếp'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M10 6l6 6-6 6'/></svg></button>
-    </div>
   </div>
 </section>
 
-<section class='testimonial' data-od-id='testimonial'>
+<section class='testimonial' aria-labelledby='testimonial-title' data-od-id='testimonial'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>${i.rules.testimonial.roman}</span>
-      <span class='meta-grp'>
-        <span>${i.rules.testimonial.meta[0]}</span>
-        <span class='dot-mark'>${i.rules.testimonial.meta[1]}</span>
-        <span>${i.rules.testimonial.meta[2]}</span>
-      </span>
-      <span>${i.rules.testimonial.pagination}</span>
-    </div>
     <div class='testimonial-grid'>
       <div class='testimonial-copy' data-reveal>
-        <span class='label'>${i.testimonial.label} <span class='ix'>${i.testimonial.ix}</span></span>
-        <h2 style='margin-top:30px;'>&ldquo;${mixed(i.testimonial.quote)}&rdquo;</h2>
+        <h2 id='testimonial-title' class='display'>Cùng con <em>trưởng thành.</em></h2>
+        <blockquote>&ldquo;${mixed(i.testimonial.quote)}&rdquo;</blockquote>
         <div class='author'>
           <span class='avatar'>${i.testimonial.author.initial}</span>
           <p>${i.testimonial.author.name}<br/><span>${i.testimonial.author.title}</span></p>
@@ -690,95 +566,42 @@ ${customStyles}
         <div class='partners'>
           ${partnersHtml}
         </div>
-        <a class='read-more' href='#contact'>${i.testimonial.read_more_label}</a>
+        <a class='read-more' href='/app/tutors'>${i.testimonial.read_more_label}</a>
       </div>
       <div class='testimonial-art' data-reveal='right'>
         <picture>
-          <source srcset='${assets}testimonial.svg' type='image/svg+xml'>
-          <img src='${assets}testimonial.png' alt='Phụ huynh chia sẻ' />
+          <img src='${assets}testimonial.png' alt='Minh họa việc học cùng người đồng hành' />
         </picture>
       </div>
     </div>
   </div>
 </section>
 
-<section class='cta' id='contact' data-od-id='cta'>
+<section class='cta' id='contact' aria-labelledby='cta-title' data-od-id='cta'>
   <div class='container'>
-    <div class='sec-rule'>
-      <span class='roman'>${i.rules.cta.roman}</span>
-      <span class='meta-grp'>
-        <span>${i.rules.cta.meta[0]}</span>
-        <span class='dot-mark'>${i.rules.cta.meta[1]}</span>
-        <span>${i.rules.cta.meta[2]}</span>
-      </span>
-      <span>${i.rules.cta.pagination}</span>
-    </div>
     <div class='cta-grid'>
       <div data-reveal>
-        <span class='label'>${i.cta.label} <span class='ix'>${i.cta.ix}</span></span>
-        <h2 class='display'>${mixed(i.cta.headline)}</h2>
+        <h2 id='cta-title' class='display'>${mixed(i.cta.headline)}</h2>
         <p class='lead'>${i.cta.lead}</p>
-        
-        <!-- Interactive Consultation Booking Form -->
+
         <div class='booking-box' id='booking-form'>
-          <h4 style='font-family:var(--sans);font-size:16px;font-weight:700;color:var(--ink);'>Đăng ký tìm gia sư &amp; nhận 02 buổi học thử 0 đồng</h4>
-          <form id='tutor-booking-form' onsubmit='handleBookingSubmit(event)'>
+          <form id='tutor-booking-form' action='/app/tutors' method='get'>
             <div class='booking-grid'>
-              <div class='form-field'>
-                <label>Lớp của học sinh</label>
-                <select id='form-grade' required>
-                  <option value='grade12' selected>Lớp 12 &amp; Luyện thi THPTQG</option>
-                  <option value='grade11'>Lớp 11 (Chuyên đề nâng cao)</option>
-                  <option value='grade10'>Lớp 10 (Chương trình mới)</option>
-                  <option value='grade9'>Lớp 9 (Luyện thi vào 10 Chuyên)</option>
-                  <option value='secondary'>Cấp 2 (Lớp 6 đến Lớp 8)</option>
-                  <option value='dgnl'>Luyện thi ĐGNL / ĐGTD</option>
-                </select>
+              <div class='form-field'><label for='form-subject'>Môn học</label>
+                <select id='form-subject' name='subject'><option value=''>Tất cả môn học</option><option value='toan'>Toán</option><option value='vat-li'>Vật lí</option><option value='hoa-hoc'>Hóa học</option><option value='tieng-anh'>Tiếng Anh</option><option value='ngu-van'>Ngữ văn</option><option value='khtn'>Khoa học tự nhiên</option></select>
               </div>
-              <div class='form-field'>
-                <label>Môn học cần gia sư</label>
-                <select id='form-subject' required>
-                  <option value='toan' selected>Toán học (Đại số &amp; Giải tích)</option>
-                  <option value='ly'>Vật lý</option>
-                  <option value='hoa'>Hóa học</option>
-                  <option value='anh'>Tiếng Anh / Luyện thi IELTS</option>
-                  <option value='van'>Ngữ Văn</option>
-                  <option value='khtn'>Tổ hợp KHTN (Toán - Lý - Hóa)</option>
-                  <option value='chuyen'>Môn Chuyên</option>
-                </select>
+              <div class='form-field'><label for='form-mode'>Hình thức</label>
+                <select id='form-mode' name='mode'><option value=''>Tất cả hình thức</option><option value='online'>Trực tuyến</option><option value='offline'>Trực tiếp</option></select>
               </div>
-              <div class='form-field'>
-                <label>Mục tiêu điểm số</label>
-                <select id='form-target'>
-                  <option value='10'>Chinh phục điểm 9+ đến 10 tuyệt đối</option>
-                  <option value='chuyen'>Đỗ trường Chuyên / ĐH Top 1</option>
-                  <option value='goc'>Bứt phá lấy lại căn bản cấp tốc</option>
-                  <option value='ielts'>IELTS 7.5 - 8.5+</option>
-                </select>
-              </div>
-              <div class='form-field'>
-                <label>Hình thức học</label>
-                <select id='form-mode'>
-                  <option value='home'>Gia sư trực tiếp tại nhà</option>
-                  <option value='online'>Học trực tuyến 1-1 tương tác cao</option>
-                </select>
-              </div>
-              <div class='form-field' style='grid-column: 1 / -1;'>
-                <label>Số điện thoại phụ huynh</label>
-                <input type='tel' id='form-phone' placeholder='e.g. 0988 10 10 10' required />
-              </div>
-              <button type='submit' class='booking-submit-btn'>NHẬN 02 BUỔI HỌC THỬ MIỄN PHÍ NGAY &rarr;</button>
+              <button type='submit' class='booking-submit-btn'>Tìm gia sư phù hợp ↗</button>
             </div>
           </form>
-          <div id='toast-alert' class='toast-msg' role='alert'></div>
-          <p style='font-family:var(--sans);font-size:12px;color:var(--ink-mute);margin-top:12px;'>* Hoàn toàn không mất phí. Ghép gia sư thủ khoa chuẩn phong cách trong 2 giờ.</p>
         </div>
       </div>
-      
+
       <div class='art' data-reveal='scale'>
         <div class='plate'>
           <picture>
-            <source srcset='${assets}cta.svg' type='image/svg+xml'>
             <img src='${assets}cta.png' alt='Đăng Ký Tư Vấn' />
           </picture>
         </div>
@@ -787,6 +610,7 @@ ${customStyles}
   </div>
 </section>
 
+</main>
 <footer data-od-id='footer'>
   <div class='container'>
     <div class='foot-grid'>
@@ -800,14 +624,7 @@ ${customStyles}
       </div>
       ${footerCols}
     </div>
-    <div class='foot-bottom'>
-      <span><span class='pulse'></span>● <b style='color:var(--ink);'>${i.brand.name}</b> · ${i.brand.license} · ${i.brand.year} / ${i.brand.edition}</span>
-      <span class='right'>
-        <span>${i.brand.location}</span>
-        <span>${i.brand.coordinates}</span>
-        <span style='color:var(--coral);'>♥ ${i.brand.year_roman}</span>
-      </span>
-    </div>
+    <div class='foot-bottom'><span>© ${i.brand.year} ${i.brand.name}</span><span>${i.brand.location}</span></div>
     <div class='foot-mega'>
       <div class='word' data-reveal='rise-lg'>${mixed(i.footer.mega)}</div>
     </div>
@@ -822,7 +639,7 @@ ${customStyles}
    */
   (function () {
     var elements = document.querySelectorAll('[data-reveal]:not([data-revealed])');
-    if (!elements.length) return;
+    if (!elements.length || !('IntersectionObserver' in window)) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       for (var i = 0; i < elements.length; i++) elements[i].dataset.revealed = 'true';
       return;
@@ -834,6 +651,7 @@ ${customStyles}
         observer.unobserve(entries[i].target);
       }
     }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    document.documentElement.classList.add('reveal-ready');
     for (var j = 0; j < elements.length; j++) observer.observe(elements[j]);
   })();
 
@@ -849,7 +667,7 @@ ${customStyles}
     function onScroll() {
       var y = window.scrollY || 0;
       var d = y - lastY;
-      if (y <= SHOW_TOP) {
+      if (y <= SHOW_TOP || nav.contains(document.activeElement) || document.querySelector('.mobile-menu-toggle').getAttribute('aria-expanded') === 'true') {
         nav.classList.remove('is-hidden');
       } else if (d > DELTA) {
         nav.classList.add('is-hidden');
@@ -859,43 +677,72 @@ ${customStyles}
       lastY = y;
     }
     window.addEventListener('scroll', onScroll, { passive: true });
+    nav.addEventListener('focusin', function () { nav.classList.remove('is-hidden'); });
   })();
 
-  /*
-   * Interactive Asset Switcher (Three.js 3D / Pixel Art / Bản In)
-   */
-  (function () {
-    var buttons = document.querySelectorAll('.mode-btn');
-    var layer3d = document.getElementById('layer-3d');
-    var layerPixel = document.getElementById('layer-pixel');
-    var layerPlate = document.getElementById('layer-plate');
-
-    buttons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        buttons.forEach(function (b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        var mode = btn.dataset.mode;
-        if (layer3d) layer3d.style.display = (mode === '3d') ? 'block' : 'none';
-        if (layerPixel) layerPixel.style.display = (mode === 'pixel') ? 'block' : 'none';
-        if (layerPlate) layerPlate.style.display = (mode === 'plate') ? 'block' : 'none';
-      });
+  function selectVisual(mode) {
+    document.querySelectorAll('.mode-btn').forEach(function (button) {
+      var selected = button.dataset.mode === mode;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+      document.getElementById('layer-' + button.dataset.mode).style.display = selected ? 'block' : 'none';
     });
-  })();
+    window.dispatchEvent(new Event('visualmodechange'));
+  }
+  document.querySelectorAll('.mode-btn').forEach(function (button) {
+    button.addEventListener('click', function () { selectVisual(button.dataset.mode); });
+  });
+  function disableThree() {
+    var button = document.querySelector('[data-mode="3d"]');
+    button.disabled = true;
+    button.title = '3D không khả dụng trên trình duyệt này';
+    selectVisual('plate');
+  }
+
+  // Render only the selected, on-screen visual; one still frame for reduced motion.
+  function animateVisual(canvas, draw) {
+    var motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var visible = false;
+    var request = 0;
+    var last = 0;
+    var elapsed = 0;
+    function active() {
+      return visible && !document.hidden && canvas.parentElement.style.display !== 'none';
+    }
+    function frame(now) {
+      request = 0;
+      if (!active()) return;
+      var delta = last ? Math.min((now - last) / 1000, 0.05) : 0;
+      last = now;
+      if (!motion.matches) elapsed += delta;
+      draw(motion.matches ? 0 : delta, elapsed);
+      if (!motion.matches) request = requestAnimationFrame(frame);
+    }
+    function sync() {
+      cancelAnimationFrame(request);
+      request = 0;
+      last = 0;
+      if (active()) request = requestAnimationFrame(frame);
+    }
+    var observer = new IntersectionObserver(function (entries) { visible = entries[0].isIntersecting; sync(); });
+    observer.observe(document.querySelector('.hero-art'));
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('visualmodechange', sync);
+    motion.addEventListener('change', sync);
+    return function () {
+      cancelAnimationFrame(request);
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('visualmodechange', sync);
+      motion.removeEventListener('change', sync);
+    };
+  }
 
   /*
    * Three.js Interactive 3D Academic Polyhedron
    */
   (function initThreeScene() {
-    if (typeof THREE === 'undefined') {
-      console.warn('Three.js not loaded, falling back to plate layer.');
-      var layerPlate = document.getElementById('layer-plate');
-      var layer3d = document.getElementById('layer-3d');
-      if (layer3d && layerPlate) {
-        layer3d.style.display = 'none';
-        layerPlate.style.display = 'block';
-      }
-      return;
-    }
+    if (typeof THREE === 'undefined') { disableThree(); return; }
 
     var canvas = document.getElementById('three-canvas');
     if (!canvas) return;
@@ -906,27 +753,13 @@ ${customStyles}
 
     var scene = new THREE.Scene();
     var camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.z = 4.2;
+    camera.position.z = 6.8;
 
     var renderer;
     try {
       renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
       if (!renderer.getContext()) throw new Error("No WebGL context");
-    } catch (e) {
-      console.warn("WebGL not available, falling back to plate layer:", e);
-      var layerPlate = document.getElementById("layer-plate");
-      var layer3d = document.getElementById("layer-3d");
-      var buttons = document.querySelectorAll(".mode-btn");
-      if (layer3d && layerPlate) {
-        layer3d.style.display = "none";
-        layerPlate.style.display = "block";
-        buttons.forEach(function (b) {
-          if (b.dataset.mode === "plate") b.classList.add("active");
-          else b.classList.remove("active");
-        });
-      }
-      return;
-    }
+    } catch (e) { disableThree(); return; }
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -1028,10 +861,15 @@ ${customStyles}
         prevMouseY = e.clientY;
       } else {
         var rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height || e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
         var mx = (e.clientX - rect.left) / rect.width - 0.5;
         var my = (e.clientY - rect.top) / rect.height - 0.5;
         targetRotY = mx * 0.6;
         targetRotX = my * 0.6;
+      }
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        icosaMesh.rotation.set(targetRotX, targetRotY, 0);
+        renderer.render(scene, camera);
       }
     });
 
@@ -1052,37 +890,55 @@ ${customStyles}
         targetRotX += deltaY * 0.01;
         prevMouseX = e.touches[0].clientX;
         prevMouseY = e.touches[0].clientY;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          icosaMesh.rotation.set(targetRotX, targetRotY, 0);
+          renderer.render(scene, camera);
+        }
       }
     }, { passive: true });
 
     canvas.addEventListener('touchend', function () { isDragging = false; });
 
-    // Render loop
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // Smooth inertia
-      icosaMesh.rotation.y += (targetRotY - icosaMesh.rotation.y) * 0.05 + 0.003;
-      icosaMesh.rotation.x += (targetRotX - icosaMesh.rotation.x) * 0.05 + 0.002;
-
-      coreMesh.rotation.y -= 0.004;
-      coreMesh.rotation.z += 0.003;
-
-      ringGroup.rotation.y += 0.005;
-      ringGroup.rotation.x += 0.002;
-
-      particleSystem.rotation.y += 0.001;
-
+    canvas.addEventListener('keydown', function (event) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(event.key) === -1) return;
+      event.preventDefault();
+      targetRotY += event.key === 'ArrowLeft' ? -0.2 : event.key === 'ArrowRight' ? 0.2 : 0;
+      targetRotX += event.key === 'ArrowUp' ? -0.2 : event.key === 'ArrowDown' ? 0.2 : 0;
+      icosaMesh.rotation.set(targetRotX, targetRotY, 0);
+      renderer.render(scene, camera);
+    });
+    var stopAnimation = animateVisual(canvas, function (delta) {
+      var blend = 1 - Math.exp(-3 * delta);
+      icosaMesh.rotation.y += (targetRotY - icosaMesh.rotation.y) * blend + 0.18 * delta;
+      icosaMesh.rotation.x += (targetRotX - icosaMesh.rotation.x) * blend + 0.12 * delta;
+      coreMesh.rotation.y -= 0.24 * delta;
+      coreMesh.rotation.z += 0.18 * delta;
+      ringGroup.rotation.y += 0.30 * delta;
+      ringGroup.rotation.x += 0.12 * delta;
+      particleSystem.rotation.y += 0.06 * delta;
+      renderer.render(scene, camera);
+    });
+    function resizeScene() {
+      var w = container.clientWidth;
+      var h = container.clientHeight;
+      if (!w || !h) return;
+      camera.aspect = w / h;
+      camera.position.z = camera.aspect < 0.8 ? 8.5 : 6.8;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
       renderer.render(scene, camera);
     }
-    animate();
-
-    window.addEventListener('resize', function () {
-      var w = container.clientWidth || 480;
-      var h = container.clientHeight || 480;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+    var resizeObserver = new ResizeObserver(resizeScene);
+    resizeObserver.observe(container);
+    window.addEventListener('pagehide', function (event) {
+      if (event.persisted) return;
+      stopAnimation();
+      resizeObserver.disconnect();
+      scene.traverse(function (object) {
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) object.material.dispose();
+      });
+      renderer.dispose();
     });
   })();
 
@@ -1099,7 +955,8 @@ ${customStyles}
     var w = pCanvas.width;
     var h = pCanvas.height;
 
-    function drawPixelScene() {
+    function drawPixelScene(delta, elapsed) {
+      frame = elapsed * 60;
       // Paper background
       ctx.fillStyle = '#efe7d2';
       ctx.fillRect(0, 0, w, h);
@@ -1118,9 +975,9 @@ ${customStyles}
       ctx.fillStyle = '#e9b94a';
       ctx.fillText('lim (Diem) -> 10', 60, 115);
       ctx.fillStyle = '#ed6f5c';
-      ctx.fillText('E = mc^2 + ChamChi', 60, 145);
+      ctx.fillText('a^2 + b^2 = c^2', 60, 145);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('Thu Khoa A00: 29.85', 60, 175);
+      ctx.fillText('HOC HIEU - HOC VUNG', 60, 175);
 
       // Pixel Tutor Character
       var bob = Math.sin(frame * 0.08) * 3;
@@ -1167,53 +1024,12 @@ ${customStyles}
       ctx.fillStyle = '#e9b94a';
       ctx.fillRect(300 - sx * 0.4, 290 + sy * 0.1, 8, 8);
 
-      frame++;
-      requestAnimationFrame(drawPixelScene);
     }
-    drawPixelScene();
+    var stopPixelAnimation = animateVisual(pCanvas, drawPixelScene);
+    window.addEventListener('pagehide', function (event) { if (!event.persisted) stopPixelAnimation(); });
   })();
 
-  /*
-   * Labs Subject Interactive Filtering
-   */
-  (function initLabsFilter() {
-    var pills = document.querySelectorAll('.labs-head .pill');
-    var cards = document.querySelectorAll('#labs-container .lab');
-
-    pills.forEach(function (pill) {
-      pill.addEventListener('click', function () {
-        pills.forEach(function (p) { p.classList.remove('active'); });
-        pill.classList.add('active');
-        var filter = pill.dataset.filter || 'all';
-
-        cards.forEach(function (card) {
-          var cat = card.dataset.category;
-          if (filter === 'all' || filter === cat) {
-            card.classList.remove('hidden-card');
-          } else {
-            card.classList.add('hidden-card');
-          }
-        });
-      });
-    });
-  })();
-
-  /*
-   * Consultation Booking Form Handler
-   */
-  function handleBookingSubmit(event) {
-    event.preventDefault();
-    var phone = document.getElementById('form-phone').value;
-    var grade = document.getElementById('form-grade').value;
-    var subject = document.getElementById('form-subject').value;
-    var toast = document.getElementById('toast-alert');
-    if (!phone) return;
-
-    if (toast) {
-      toast.style.display = 'block';
-      toast.textContent = '✓ Tiếp nhận thành công! Chuyên viên học thuật sẽ liên hệ SĐT ' + phone + ' trong 15 phút để tư vấn ghép gia sư môn ' + subject.toUpperCase() + '.';
-    }
-  }
+${siteScript}
 </script>
 </body>
 </html>`;
