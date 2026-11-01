@@ -51,6 +51,8 @@ npm run test:cloudflare
 
 ## Verify and recover
 
+Cloudflare defers active Durable Object code updates for up to five minutes by default. New frontend assets can be live before the API updates. After deploying account changes, check that unauthenticated `PUT /api/account/onboarding` returns 401 (not the old-version 404) before declaring the rollout complete. See [Cloudflare code update strategy](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
+
 Check `/api/health`, `/api/auth/providers`, `/api/subjects`, `/app/tutors`, and `/`. Confirm HTTPS, Google authorization redirect and callback URI, Secure/HttpOnly/SameSite cookies, mobile layout, and console/network errors. Complete Google consent manually with an authorized account to verify the full external login. Production starts without demo tutors; approved real profiles populate search.
 
 Use `npx wrangler deployments list` to find versions and `npx wrangler rollback <version-id>` to restore code. Code rollback does not roll back database changes. Migrations are additive; do not delete the Durable Object namespace or rename `marketplace-v1`. Use Cloudflare SQLite Durable Object Time Travel for database recovery; never restore production data from the local demo file. There is no previous app deployment to roll back to on the first release. Keep both Worker routes enabled. With the Vercel project removed, removing the routes can leave the site unavailable even though the Worker and its database still exist.
