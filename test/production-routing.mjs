@@ -41,3 +41,12 @@ const entry = authHtml.match(/<script[^>]+src="([^"]+)"/);
 assert.ok(entry, 'Login app must reference its JavaScript entry');
 assert.equal((await fetch(new URL(entry[1], canonical))).status, 200);
 console.log('Production health, Google provider, login bundle and guest authorization checks passed.');
+
+const expectedHtml = await readFile(new URL('../dist/site/app/index.html', import.meta.url), 'utf8');
+const expectedEntry = expectedHtml.match(/<script[^>]+src="([^"]+)"/);
+assert.equal(entry[1], expectedEntry[1], 'Production must serve the build verified by this CI run');
+for (const [path, method] of [['/api/account/onboarding', 'PUT'], ['/api/admin/users/1/role', 'PATCH']]) {
+  const response = await fetch(canonical + path, { method, headers: { 'Content-Type': 'application/json', Origin: canonical }, body: '{}', signal: AbortSignal.timeout(15000) });
+  assert.equal(response.status, 401, `${path}: current API must be deployed and require authentication`);
+}
+console.log('Production serves the verified build and current account/admin endpoints.');

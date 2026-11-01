@@ -20,11 +20,21 @@ Set Worker secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_ADMIN
 
 `hungquocnguyen252@gmail.com` is also explicitly allowed in `server/admin-access.js`; the configured `GOOGLE_ADMIN_EMAIL` remains allowed. Admin status is granted on verified Google sign-in (or explicit linking from the matching account). Promotion revokes earlier sessions, records an audit entry, and requires Google for subsequent sign-ins. Password accounts with that email must sign in and link Google from Settings first; email matching alone does not merge accounts.
 
+Administrators can promote an existing active account from **Quản trị → Tài khoản → Cấp quyền quản trị**. Confirmation shows the target name/email and explains the role change. `PATCH /api/admin/users/:id/role` accepts only `{ "role": "admin" }`, requires a current administrator, revokes the target's sessions and records `user.promoted_to_admin` atomically. The target signs in again using their existing authentication method. Suspended accounts must be activated first; public signup still cannot request admin. This changes the account's single role; tutor records and past bookings remain stored, while the former tutor is no longer discoverable or available for new bookings. Admin demotion and suspension remain unavailable.
+
 New email and Google accounts enter `/app/onboarding`: choose a role, save the student goal or tutor profile, then review the account and read the first-use guide. `users.onboarding_step` persists each completed step. Existing accounts migrate to step 3 (complete); admins skip setup. Tutor profiles remain pending review. `PUT /api/account/onboarding` validates step order and profile fields server-side, and role selection locks after the first step. Unsaved field edits are not persisted across reloads.
 
 The flow uses an expiring one-use database state, HttpOnly browser binding, PKCE S256, nonce verification, and Google JWKS validation of signature, issuer, audience and expiry. Google access/refresh tokens are not stored. Cancelled/expired/error callbacks return to sign-in with a concise message. If secrets are missing, Google sign-in is hidden and email/password remains available.
 
 For local Node development, use `node --env-file=.env server/index.js`. Use `.dev.vars` (ignored) for Wrangler. Never reuse production sessions in tests.
+
+## Automatic CI and deployment
+
+`.github/workflows/ci-deploy.yml` runs on pull requests and pushes to `main` in `The-Educations/Gia-Su-10-Diem`. The **Validate** job installs locked dependencies, checks types, runs API/OAuth and Chrome browser tests, audits dependencies, builds the site, exercises the local Cloudflare runtime, and checks the Worker bundle. Failed checks prevent the dependent deployment job from starting.
+
+On `main`, **Deploy Cloudflare** downloads the static artifact from that same run and deploys the matching source commit using the encrypted repository secret `CLOUDFLARE_API_TOKEN`. Pull requests and forks cannot deploy. Production deployments are serialized. Durable Object updates are immediate to avoid serving old account APIs with new frontend assets. The final check verifies canonical routing, health, Google availability, the exact frontend entry file, and authenticated account/admin API routes. A manual workflow dispatch also runs all checks before deployment and only deploys from `main`.
+
+The token must permit Worker script deployment and route management for the account and `giasudiem10.online` zone in `wrangler.jsonc` (Cloudflare's **Edit Cloudflare Workers** template covers these permissions). Store it only in GitHub Actions secrets; no Google application secrets are copied into CI. Existing Worker secrets and the Durable Object namespace remain in place. For emergency rollback, use `npx wrangler rollback <version-id> --durable-objects-code-update-mode immediate`, then rerun the production checks against the restored build.
 
 ## Build and deploy
 
