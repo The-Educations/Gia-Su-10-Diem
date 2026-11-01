@@ -18,6 +18,10 @@ Create an OAuth **Web application** client and register:
 
 Set Worker secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_ADMIN_EMAIL` with `wrangler secret put <name>`. Never place secrets in `wrangler.jsonc`, browser bundles, or committed files. The designated admin email must authenticate through verified Google identity; public email registration for that address is blocked. Google-only users do not receive a password. Existing password accounts link Google from Settings after signing in; email equality alone never links an account.
 
+`hungquocnguyen252@gmail.com` is also explicitly allowed in `server/admin-access.js`; the configured `GOOGLE_ADMIN_EMAIL` remains allowed. Admin status is granted on verified Google sign-in (or explicit linking from the matching account). Promotion revokes earlier sessions, records an audit entry, and requires Google for subsequent sign-ins. Password accounts with that email must sign in and link Google from Settings first; email matching alone does not merge accounts.
+
+New email and Google accounts enter `/app/onboarding`: choose a role, save the student goal or tutor profile, then review the account and read the first-use guide. `users.onboarding_step` persists each completed step. Existing accounts migrate to step 3 (complete); admins skip setup. Tutor profiles remain pending review. `PUT /api/account/onboarding` validates step order and profile fields server-side, and role selection locks after the first step. Unsaved field edits are not persisted across reloads.
+
 The flow uses an expiring one-use database state, HttpOnly browser binding, PKCE S256, nonce verification, and Google JWKS validation of signature, issuer, audience and expiry. Google access/refresh tokens are not stored. Cancelled/expired/error callbacks return to sign-in with a concise message. If secrets are missing, Google sign-in is hidden and email/password remains available.
 
 For local Node development, use `node --env-file=.env server/index.js`. Use `.dev.vars` (ignored) for Wrangler. Never reuse production sessions in tests.

@@ -23,7 +23,7 @@ import {
   Menu,
   ArrowUpRight,
 } from "lucide-react";
-import { AppProvider, useApp, api } from "./lib/api";
+import { AppProvider, useApp, api, accountDestination } from "./lib/api";
 import { Button } from "./components/ui/button";
 import { Toaster } from "./components/ui/sonner";
 import {
@@ -40,6 +40,7 @@ import "./styles.css";
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
 const Library = lazy(() => import("./pages/Library"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Bookings = lazy(() => import("./pages/Bookings"));
@@ -66,6 +67,8 @@ function Require({
         replace
       />
     );
+  if (user.role !== "admin" && user.onboarding_step < 3 && loc.pathname !== "/onboarding")
+    return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
   if (role && user.role !== role) return <Navigate to="/workspace" replace />;
   return children;
 }
@@ -233,6 +236,7 @@ function Shell() {
                 <Route path="/tutors/:id" element={<TutorDetail />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/onboarding" element={<Require><Onboarding /></Require>} />
                 <Route
                   path="/workspace"
                   element={

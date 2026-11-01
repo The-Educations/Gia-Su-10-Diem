@@ -51,6 +51,9 @@ export function migrateDatabase(db) {
       published INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, actor_id INTEGER NOT NULL REFERENCES users(id), action TEXT NOT NULL, target TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   `);
+  // Existing accounts keep their workspace; only new signups enter setup.
+  if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "onboarding_step"))
+    db.exec("ALTER TABLE users ADD COLUMN onboarding_step INTEGER NOT NULL DEFAULT 3");
   // Additive migration: keep existing accounts and bookings intact.
   const tutorColumns = db
     .prepare("PRAGMA table_info(tutors)")
@@ -107,6 +110,7 @@ export const publicUser = (u) =>
         role: u.role,
         goal: u.goal,
         demo: !!u.demo,
+        onboarding_step: u.onboarding_step,
       }
     : null;
 

@@ -1,13 +1,13 @@
 import { GoogleSignIn, googleErrors } from "@/components/google-sign-in";
 import { useState } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link, Navigate } from "react-router-dom";
 import {
   ArrowUpRight,
   BookOpen,
   CalendarDays,
   MessageCircle,
 } from "lucide-react";
-import { api, useApp } from "@/lib/api";
+import { api, useApp, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -17,7 +17,7 @@ export default function Auth() {
   const [params, setParams] = useSearchParams(),
     register = params.get("mode") === "register",
     navigate = useNavigate(),
-    { setUser, refresh } = useApp();
+    { user, setUser, refresh } = useApp();
   const [role, setRole] = useState(
       params.get("role") === "tutor" ? "tutor" : "student",
     ),
@@ -30,6 +30,11 @@ export default function Auth() {
     setError("");
     setBusy(true);
     const d = Object.fromEntries(new FormData(e.currentTarget));
+    if (register && d.password !== d.confirmPassword) {
+      setError("Mật khẩu xác nhận chưa khớp.");
+      setBusy(false);
+      return;
+    }
     try {
       const result = await api<{ user: User }>(
         `/auth/${register ? "register" : "login"}`,
@@ -38,22 +43,14 @@ export default function Auth() {
       );
       setUser(result.user);
       refresh();
-      const next = params.get("next");
-      navigate(
-        next?.startsWith("/") && !next.startsWith("//")
-          ? next
-          : result.user.role === "tutor"
-            ? "/studio"
-            : result.user.role === "admin"
-              ? "/admin"
-              : "/workspace",
-      );
+      navigate(accountDestination(result.user, params.get("next")), { replace: true });
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+  if (user) return <Navigate to={accountDestination(user, params.get("next"))} replace />;
   return (
     <Page>
       <div className="auth-layout">
@@ -99,7 +96,7 @@ export default function Auth() {
             />
           )}
           <GoogleSignIn role={role} next={params.get("next")} />
-          <form onSubmit={submit}>
+          <form key={register ? "register" : "login"} onSubmit={submit}>
             <FieldGroup>
               {register && (
                 <>
@@ -140,6 +137,10 @@ export default function Auth() {
                   required
                 />
               </Field>
+              {register && <Field>
+                <FieldLabel htmlFor="confirm-password">Xác nhận mật khẩu</FieldLabel>
+                <Input id="confirm-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} required />
+              </Field>}
               {error && <ErrorState error={error} />}
               <Submit busy={busy}>
                 {register ? "Tạo tài khoản" : "Đăng nhập"}

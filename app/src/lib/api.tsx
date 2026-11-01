@@ -167,3 +167,11 @@ export const statusNames: Record<string, string> = {
   active: "Hoạt động",
   suspended: "Tạm khóa",
 };
+
+export function accountDestination(user: User, next?: string | null) {
+  const safe = next && /^\/(?!\/)/.test(next) && !/[\\\x00-\x20]/.test(next)
+    && !/^\/(auth|onboarding)([/?#]|$)/.test(next) ? next : "";
+  if (user.role !== "admin" && user.onboarding_step < 3)
+    return `/onboarding${safe ? `?next=${encodeURIComponent(safe)}` : ""}`;
+  return safe || (user.role === "tutor" ? "/studio" : user.role === "admin" ? "/admin" : "/workspace");
+}
