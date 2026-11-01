@@ -75,7 +75,7 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
     /expired/,
   );
   let response = await callback(flow);
-  assert.equal(response.headers.get("location"), "/app/studio");
+  assert.equal(response.headers.get("location"), "/app/onboarding");
   const tutor = one(db, "SELECT * FROM users WHERE email=?", claims.email);
   assert.equal(tutor.role, "tutor");
   assert.equal(tutor.password, "");
@@ -86,7 +86,7 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
     /HttpOnly/,
   );
   flow = await start("?role=student&next=/messages");
-  assert.equal((await callback(flow)).headers.get("location"), "/app/messages");
+  assert.equal((await callback(flow)).headers.get("location"), "/app/onboarding?next=%2Fmessages");
   assert.equal(one(db, "SELECT count(*) AS n FROM users").n, 1);
   badNonce = true;
   flow = await start();
@@ -146,6 +146,42 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
     one(db, "SELECT role FROM users WHERE email='owner@gmail.com'").role,
     "admin",
   );
+});
+test("requested administrator is reserved and existing Google users are promoted only after verification", async (t) => {
+  const db = openDatabase(":memory:");
+  let verified = false, nonce;
+  const email = "hungquocnguyen252@gmail.com";
+  const hash = await passwordHash("OldPassword2026!");
+  run(db, "INSERT INTO users(name,email,password,role,onboarding_step) VALUES (?,?,?,'student',1)", "Hung", email, hash);
+  const id = one(db, "SELECT id FROM users WHERE email=?", email).id;
+  run(db, "INSERT INTO oauth_identities VALUES ('google','hung-google',?)", id);
+  run(db, "INSERT INTO sessions VALUES ('old-session',?,?)", id, Date.now() + 60000);
+  const server = createApi(db, { limit: false, google: {
+    clientId: "client", clientSecret: "test", adminEmail: "existing-owner@gmail.com",
+    exchange: async () => ({ sub: "hung-google", email, email_verified: verified, nonce }),
+  } }).listen(0, "127.0.0.1");
+  await new Promise((r) => server.once("listening", r));
+  t.after(async () => { await new Promise((r) => server.close(r)); db.close(); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const register = await fetch(base + "/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Fake", email: email.toUpperCase(), password: "FakePassword2026!", role: "student" }) });
+  assert.equal(register.status, 403);
+  async function loginGoogle() {
+    const start = await fetch(base + "/api/auth/google/start", { redirect: "manual" });
+    const url = new URL(start.headers.get("location"));
+    nonce = url.searchParams.get("nonce");
+    return fetch(base + `/api/auth/google/callback?state=${url.searchParams.get("state")}&code=test`, { redirect: "manual", headers: { Cookie: start.headers.getSetCookie()[0].split(";")[0] } });
+  }
+  assert.match((await loginGoogle()).headers.get("location"), /failed/);
+  assert.equal(one(db, "SELECT role FROM users WHERE id=?", id).role, "student");
+  verified = true;
+  const result = await loginGoogle();
+  assert.equal(result.headers.get("location"), "/app/admin");
+  assert.equal(one(db, "SELECT role FROM users WHERE id=?", id).role, "admin");
+  assert.equal(one(db, "SELECT * FROM sessions WHERE token='old-session'"), undefined);
+  const cookie = result.headers.getSetCookie().find((c) => c.startsWith("giasu_session=")).split(";")[0];
+  assert.equal((await fetch(base + "/api/admin", { headers: { Cookie: cookie } })).status, 200);
+  const passwordLogin = await fetch(base + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "OldPassword2026!" }) });
+  assert.equal(passwordLogin.status, 403);
 });
 test("OAuth return paths cannot escape the application", () => {
   for (const path of [

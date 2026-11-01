@@ -522,11 +522,12 @@ test("additive tutor migration preserves existing accounts and profile data", (t
     "INSERT INTO tutors(user_id,headline,subjects) VALUES (1,'Hồ sơ giữ nguyên','[\"toan\"]')",
   );
   original.exec(
-    "ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; PRAGMA user_version = 0",
+    "ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; PRAGMA user_version = 0",
   );
   original.close();
   const migrated = openDatabase(file);
   assert.equal(one(migrated, "PRAGMA user_version").user_version, 6);
+  assert.equal(one(migrated, "SELECT onboarding_step FROM users WHERE id=1").onboarding_step, 3);
   assert.equal(
     one(migrated, "SELECT headline FROM tutors WHERE user_id=1").headline,
     "Hồ sơ giữ nguyên",
@@ -987,4 +988,88 @@ test("gallery likes and paginated comments enforce student ownership and moderat
   await tutor.request('/tutor/gallery/social-test','DELETE');
   assert.equal(one(db,"SELECT COUNT(*) AS count FROM gallery_comments WHERE image_id='social-test'").count,0);
   assert.equal(one(db,"SELECT COUNT(*) AS count FROM gallery_likes WHERE image_id='social-test'").count,0);
+});
+
+test("new accounts complete resumable role-specific setup without escalating roles or skipping validation", async (t) => {
+  const { client, db } = await fixture(t);
+  const guest = client();
+  assert.equal((await guest.request("/account/onboarding", "PUT", { step: 0, role: "student" })).status, 401);
+  for (const role of ["student", "tutor"]) {
+    const account = client();
+    const signup = await account.request("/auth/register", "POST", { name: "Người mới", email: `${role}-setup@example.com`, password: "NewAccount2026!", role: "student" });
+    assert.equal(signup.data.user.onboarding_step, 0);
+    assert.equal((await account.request("/account/onboarding", "PUT", { step: 2 })).status, 409);
+    assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "admin" })).status, 400);
+    const choice = await account.request("/account/onboarding", "PUT", { step: 0, role });
+    assert.equal(choice.data.user.role, role);
+    assert.equal(choice.data.user.onboarding_step, 1);
+    assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "student" })).status, 409);
+    assert.equal((await account.request("/account/onboarding", "PUT", { step: 1, name: "Incomplete" })).status, 400);
+    const profile = role === "student" ? { name: "Học sinh mới", goal: "Ôn Toán lớp 9" } : { name: "Gia sư mới", headline: "Toán THCS", bio: "Dạy theo năng lực từng học sinh", education: "Đại học Sư phạm", subjects: ["toan"], rate: 180000, experience: 2, location: "Hà Nội", mode: "both" };
+    if (role === "tutor") {
+      assert.equal((await account.request("/account/onboarding", "PUT", { ...profile, step: 1, subjects: ["unknown"] })).status, 400);
+      assert.equal((await account.request("/account/onboarding", "PUT", { ...profile, step: 1, rate: 0 })).status, 400);
+    }
+    const saved = await account.request("/account/onboarding", "PUT", { ...profile, step: 1 });
+    assert.equal(saved.data.user.onboarding_step, 2);
+    await account.request("/auth/logout", "POST");
+    const resumed = await account.request("/auth/login", "POST", { email: `${role}-setup@example.com`, password: "NewAccount2026!" });
+    assert.equal(resumed.data.user.onboarding_step, 2);
+    assert.equal(resumed.data.user.name, profile.name);
+    const complete = await account.request("/account/onboarding", "PUT", { step: 2 });
+    assert.equal(complete.data.user.onboarding_step, 3);
+    assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "admin" })).status, 409);
+    assert.equal((await account.request("/auth/me")).data.user.onboarding_step, 3);
+    if (role === "tutor") {
+      const tutor = one(db, "SELECT * FROM tutors WHERE user_id=?", signup.data.user.id);
+      assert.equal(tutor.status, "pending");
+      assert.equal(tutor.rate, 180000);
+      assert.deepEqual(JSON.parse(tutor.subjects), ["toan"]);
+      assert.equal((await guest.request(`/tutors/${signup.data.user.id}`)).status, 404);
+    }
+  }
+  const existing = client();
+  assert.equal((await existing.login("student")).onboarding_step, 3);
+});
+
+test("only administrators can promote active accounts, with session revocation and an audit trail", async (t) => {
+  const { client, db } = await fixture(t);
+  const admin = client(), student = client(), guest = client();
+  const actor = await admin.login("admin");
+  const target = await student.login("student");
+  const path = `/admin/users/${target.id}/role`;
+  assert.equal((await guest.request(path, "PATCH", { role: "admin" })).status, 401);
+  assert.equal((await student.request(path, "PATCH", { role: "admin" })).status, 403);
+  assert.equal((await admin.request(path, "PATCH", { role: "tutor" })).status, 400);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin", status: "active" })).status, 400);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" }, { Origin: "https://attacker.test" })).status, 403);
+  assert.equal((await admin.request("/admin/users/999999/role", "PATCH", { role: "admin" })).status, 404);
+  run(db, "UPDATE users SET status='suspended' WHERE id=?", target.id);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" })).status, 409);
+  run(db, "UPDATE users SET status='active',onboarding_step=1 WHERE id=?", target.id);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" })).status, 200);
+  assert.equal(one(db, "SELECT role FROM users WHERE id=?", target.id).role, "admin");
+  assert.equal(one(db, "SELECT onboarding_step FROM users WHERE id=?", target.id).onboarding_step, 3);
+  assert.equal((await student.request("/admin")).status, 401);
+  assert.equal((await student.login("student")).role, "admin");
+  assert.equal((await student.request("/admin")).status, 200);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" })).status, 200);
+  assert.equal((await student.request("/admin")).status, 200);
+  const entry = one(db, "SELECT * FROM audit WHERE action='user.promoted_to_admin' AND target=?", String(target.id));
+  assert.equal(entry.actor_id, actor.id);
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM audit WHERE action='user.promoted_to_admin'").n, 1);
+  assert.equal((await student.request(`/admin/users/${actor.id}`, "PATCH", { status: "suspended" })).status, 403);
+
+  const tutor = client();
+  const tutorUser = await tutor.login("chau");
+  assert.equal((await student.request(`/admin/users/${tutorUser.id}/role`, "PATCH", { role: "admin" })).status, 200);
+  assert.ok(one(db, "SELECT * FROM tutors WHERE user_id=?", tutorUser.id));
+  assert.equal((await guest.request(`/tutors/${tutorUser.id}`)).status, 404);
+  assert.ok(!(await guest.request("/tutors")).data.some((u) => u.user_id === tutorUser.id));
+  const learner = client();
+  await learner.request("/auth/register", "POST", { name: "Learner", email: "learner-promotion@test.vn", password: "TestStudy2026!", role: "student" });
+  const slot = one(db, "SELECT id FROM slots WHERE tutor_id=? AND starts_at>?", tutorUser.id, new Date(Date.now() + 3600000).toISOString());
+  assert.ok(slot);
+  assert.equal((await learner.request("/bookings", "POST", { slot_id: slot.id, subject_id: "toan", mode: "online", note: "" })).status, 400);
+  assert.equal((await learner.request("/inquiries", "POST", { tutor_id: tutorUser.id, body: "Xin hỏi lịch học" })).status, 404);
 });

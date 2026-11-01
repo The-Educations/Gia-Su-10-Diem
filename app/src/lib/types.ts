@@ -6,6 +6,7 @@ export type User = {
   role: "student" | "tutor" | "admin";
   goal: string;
   demo: boolean;
+  onboarding_step: number;
 };
 export type Subject = {
   id: string;

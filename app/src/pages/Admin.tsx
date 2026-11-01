@@ -37,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import ResourceEditor from "./ResourceEditor";
 export default function Admin() {
@@ -55,6 +56,7 @@ export default function Admin() {
     [subject, setSubject] = useState<Subject | null | undefined>(undefined),
     [tutor, setTutor] = useState<Tutor | null>(null),
     [account, setAccount] = useState<(User & { status: string }) | null>(null),
+    [accountAction, setAccountAction] = useState<"status" | "admin">("status"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function mutate(path: string, method: string, data: unknown) {
@@ -271,11 +273,25 @@ export default function Admin() {
                     </span>
                   </div>
                   <State value={u.status} />
+                  {u.role !== "admin" && u.status === "active" && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setError("");
+                        setAccountAction("admin");
+                        setAccount(u);
+                      }}
+                    >
+                      <ShieldCheck data-icon="inline-start" />
+                      Cấp quyền quản trị
+                    </Button>
+                  )}
                   {u.role !== "admin" && (
                     <Button
                       variant="outline"
                       onClick={() => {
                         setError("");
+                        setAccountAction("status");
                         setAccount(u);
                       }}
                     >
@@ -607,18 +623,21 @@ export default function Admin() {
       <Dialog
         open={!!account}
         onOpenChange={(o) => {
-          if (!o) setAccount(null);
+          if (!o && !busy) setAccount(null);
         }}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {account?.status === "active" ? "Tạm khóa" : "Kích hoạt"} tài
-              khoản?
+              {accountAction === "admin"
+                ? "Cấp quyền quản trị?"
+                : `${account?.status === "active" ? "Tạm khóa" : "Kích hoạt"} tài khoản?`}
             </DialogTitle>
             <DialogDescription>
-              {account?.name} · {account?.email}. Tạm khóa sẽ đăng xuất mọi
-              phiên của tài khoản.
+              {account?.name} · {account?.email}.
+              {accountAction === "admin"
+                ? " Tài khoản sẽ chuyển sang quản trị viên, có quyền quản lý tài khoản, hồ sơ và danh mục. Người này cần đăng nhập lại."
+                : " Tạm khóa sẽ đăng xuất mọi phiên của tài khoản."}
             </DialogDescription>
           </DialogHeader>
           {error && <ErrorState error={error} />}
@@ -626,12 +645,23 @@ export default function Admin() {
             onSubmit={(e) => {
               e.preventDefault();
               if (account)
-                mutate(`/admin/users/${account.id}`, "PATCH", {
-                  status: account.status === "active" ? "suspended" : "active",
-                });
+                mutate(
+                  `/admin/users/${account.id}${accountAction === "admin" ? "/role" : ""}`,
+                  "PATCH",
+                  accountAction === "admin"
+                    ? { role: "admin" }
+                    : { status: account.status === "active" ? "suspended" : "active" },
+                );
             }}
           >
-            <Submit busy={busy}>Xác nhận</Submit>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setAccount(null)}>
+                Hủy
+              </Button>
+              <Submit busy={busy}>
+                {accountAction === "admin" ? "Xác nhận cấp quyền" : "Xác nhận"}
+              </Submit>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

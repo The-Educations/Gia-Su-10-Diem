@@ -1,3 +1,4 @@
+import { isGoogleAdmin } from "./admin-access.js";
 import { registerGallery, galleryMetadata } from "./gallery.js";
 import { registerGoogleAuth } from "./google-auth.js";
 import { registerUploads, uploadMetadata } from "./uploads.js";
@@ -181,7 +182,7 @@ export function createApi(
       db,
       `SELECT t.*,u.name,u.demo,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
     FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
-    WHERE t.status='approved' AND u.status='active' GROUP BY t.user_id`,
+    WHERE t.status='approved' AND u.status='active' AND u.role='tutor' GROUP BY t.user_id`,
     ).map(({ moderation_note, ...t }) => ({
       ...t,
       ...uploadMetadata(db, t.user_id),
@@ -199,7 +200,7 @@ export function createApi(
   );
   app.post("/api/auth/register", async (req, res) => {
     const data = registerSchema.parse(req.body);
-    if (google.adminEmail && data.email === google.adminEmail.toLowerCase())
+    if (isGoogleAdmin(data.email, google.adminEmail))
       fail(403, "Tài khoản này cần đăng nhập bằng Google.");
     if (one(db, "SELECT id FROM users WHERE email=?", data.email))
       fail(409, "Email đã được sử dụng.");
@@ -207,7 +208,7 @@ export function createApi(
     const id = Number(
       run(
         db,
-        "INSERT INTO users(name,email,password,role) VALUES (?,?,?,?)",
+        "INSERT INTO users(name,email,password,role,onboarding_step) VALUES (?,?,?,?,0)",
         data.name,
         data.email,
         hash,
@@ -233,6 +234,8 @@ export function createApi(
         401,
         "Email hoặc mật khẩu không đúng, hoặc tài khoản đã bị tạm khóa.",
       );
+    if (user.role === "admin" && isGoogleAdmin(user.email, google.adminEmail))
+      fail(403, "Tài khoản này cần đăng nhập bằng Google.");
     res.json({ user: session(res, user) });
   });
   app.post("/api/auth/logout", (req, res) => {
@@ -267,6 +270,50 @@ export function createApi(
     res.json({
       user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)),
     });
+  });
+  app.put("/api/account/onboarding", auth(), (req, res) => {
+    const { step } = z.object({ step: z.number().int().min(0).max(2) }).parse(req.body);
+    // Recheck inside the transaction to reject stale tabs and out-of-order saves.
+    transaction(db, () => {
+      const user = one(db, "SELECT * FROM users WHERE id=?", req.user.id);
+      if (user.role === "admin" || user.onboarding_step === 3)
+        fail(409, "Tài khoản đã hoàn tất thiết lập.");
+      if (step > user.onboarding_step || (step === 0 && user.onboarding_step !== 0))
+        fail(409, "Bước thiết lập đã thay đổi. Vui lòng tải lại trang.");
+      if (step === 0) {
+        const { role } = z.object({ role: z.enum(["student", "tutor"]) }).parse(req.body);
+        if (role !== user.role) {
+          // Role changes are allowed only before the new account has any activity.
+          const active = one(db, `SELECT
+            (SELECT COUNT(*) FROM bookings WHERE student_id=? OR tutor_id=?) +
+            (SELECT COUNT(*) FROM inquiries WHERE student_id=? OR tutor_id=?) +
+            (SELECT COUNT(*) FROM favorites WHERE student_id=?) +
+            (SELECT COUNT(*) FROM slots WHERE tutor_id=?) +
+            (SELECT COUNT(*) FROM tutor_uploads WHERE tutor_id=?) +
+            (SELECT COUNT(*) FROM tutor_gallery WHERE tutor_id=?) AS n`,
+            user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id);
+          if (active.n) fail(409, "Tài khoản đã có hoạt động. Hãy giữ vai trò hiện tại.");
+          if (role === "student") run(db, "DELETE FROM tutors WHERE user_id=?", user.id);
+          else run(db, "INSERT INTO tutors(user_id) VALUES (?)", user.id);
+        }
+        run(db, "UPDATE users SET role=?,onboarding_step=1 WHERE id=?", role, user.id);
+      } else if (step === 1) {
+        const { name } = z.object({ name: text(80) }).parse(req.body);
+        if (user.role === "student") {
+          const { goal } = z.object({ goal: text(1000) }).parse(req.body);
+          run(db, "UPDATE users SET name=?,goal=?,onboarding_step=2 WHERE id=?", name, goal, user.id);
+        } else {
+          const d = tutorSchema.parse(req.body);
+          ensureSubjects(d.subjects);
+          run(db, `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,status='pending',moderation_note='' WHERE user_id=?`,
+            d.headline, d.bio, d.location, d.mode, d.rate, d.experience, d.education, JSON.stringify(d.subjects), user.id);
+          run(db, "UPDATE users SET name=?,onboarding_step=2 WHERE id=?", name, user.id);
+        }
+      } else {
+        run(db, "UPDATE users SET onboarding_step=3 WHERE id=?", user.id);
+      }
+    });
+    res.json({ user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)) });
   });
   app.post("/api/account/password", auth(), async (req, res) => {
     const d = z
@@ -441,7 +488,7 @@ export function createApi(
       .parse(req.body);
     const s = one(
       db,
-      `SELECT s.*,t.rate,t.mode,t.subjects FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND t.status='approved' AND u.status='active'`,
+      `SELECT s.*,t.rate,t.mode,t.subjects FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'`,
       d.slot_id,
     );
     if (!s || new Date(s.starts_at).getTime() < Date.now() + 3600000)
@@ -633,6 +680,21 @@ export function createApi(
       req.params.id,
     );
     audit(req.user.id, `tutor.${d.status}`, req.params.id);
+    res.json({ ok: true });
+  });
+  app.patch("/api/admin/users/:id/role", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    z.object({ role: z.literal("admin") }).strict().parse(req.body);
+    transaction(db, () => {
+      const user = one(db, "SELECT * FROM users WHERE id=?", id);
+      if (!user) fail(404, "Không tìm thấy tài khoản.");
+      if (user.status !== "active")
+        fail(409, "Hãy kích hoạt tài khoản trước khi cấp quyền quản trị.");
+      if (user.role === "admin") return;
+      run(db, "UPDATE users SET role='admin',onboarding_step=3 WHERE id=?", id);
+      run(db, "DELETE FROM sessions WHERE user_id=?", id);
+      audit(req.user.id, "user.promoted_to_admin", id);
+    });
     res.json({ ok: true });
   });
   app.patch("/api/admin/users/:id", auth("admin"), (req, res) => {

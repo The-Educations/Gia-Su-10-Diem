@@ -20,6 +20,16 @@ assert.equal(res.status,201,await res.text());
 const cookie=res.headers.getSetCookie().find(c=>c.startsWith('giasu_session='))?.split(';')[0];
 const get=path=>fetch(base+path,{headers:{Cookie:cookie}});
 assert.equal((await get('/api/auth/me')).status,200);
+const setup = async (body) => {
+ const response = await fetch(base + '/api/account/onboarding', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'}, body:JSON.stringify(body)});
+ assert.equal(response.status,200,await response.clone().text());
+ return (await response.json()).user;
+};
+assert.equal((await (await get('/api/auth/me')).json()).user.onboarding_step,0);
+assert.equal((await setup({step:0,role:'tutor'})).onboarding_step,1);
+assert.equal((await setup({step:1,name:'Cloudflare test',headline:'Gia sư kiểm thử',bio:'Học theo mục tiêu.',education:'Sư phạm Toán',subjects:['toan'],rate:150000,experience:1,location:'Trực tuyến',mode:'online'})).onboarding_step,2);
+assert.equal((await setup({step:2})).onboarding_step,3);
+
 const photo=await sharp({create:{width:80,height:80,channels:3,background:'#852f36'}}).png().toBuffer();
 for(const [kind,body,type] of [['photo',photo,'image/png'],['cv',await (async()=>{const p=await PDFDocument.create();p.addPage();return p.save();})(),'application/pdf']]){
  const upload=await fetch(base+'/api/tutor/uploads/'+kind,{method:'PUT',headers:{Cookie:cookie,'Content-Type':type,'X-File-Name':kind+'.'+(kind==='cv'?'pdf':'png')},body});
@@ -50,4 +60,4 @@ assert.equal(social.status,200);
 assert.equal((await social.json()).comment_count,0);
 assert.equal((await fetch(base+'/api/gallery/'+galleryPhoto.id+'/social')).status,404);
 const app=await fetch(base+'/app/',{redirect:'manual'});assert.equal(app.headers.get('location'),base+'/');
-console.log('Cloudflare runtime: registration, session, portrait/CV upload, private download, availability, custom profile, private gallery and landing routing passed.');
+console.log('Cloudflare runtime: registration, resumable onboarding, session, portrait/CV upload, private download, availability, custom profile, private gallery and landing routing passed.');

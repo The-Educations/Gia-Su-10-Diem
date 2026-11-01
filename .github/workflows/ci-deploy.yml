@@ -1,0 +1,98 @@
+name: CI and Cloudflare deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm audit --audit-level=high
+      - run: npm run build:cloudflare
+      - run: npx playwright install --with-deps chrome
+      - run: npx playwright test
+      - name: Check Cloudflare runtime
+        shell: bash
+        run: |
+          npx wrangler dev --port 4176 --var APP_ORIGIN:http://127.0.0.1:4176 > "$RUNNER_TEMP/worker.log" 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for _ in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4176/api/health > /dev/null; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != true ]; then
+            cat "$RUNNER_TEMP/worker.log"
+            exit 1
+          fi
+          npm run test:cloudflare
+      - run: npx wrangler deploy --dry-run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-${{ github.sha }}
+          path: dist/site
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-failures-${{ github.sha }}
+          path: |
+            test-results
+            ${{ runner.temp }}/worker.log
+          retention-days: 7
+
+  deploy:
+    name: Deploy Cloudflare
+    needs: checks
+    if: github.repository == 'The-Educations/Gia-Su-10-Diem' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://giasudiem10.online
+    concurrency:
+      group: cloudflare-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-${{ github.sha }}
+          path: dist/site
+      - name: Deploy the verified build
+        run: npx wrangler deploy --durable-objects-code-update-mode immediate
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Verify production
+        run: node test/production-routing.mjs

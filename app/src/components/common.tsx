@@ -172,13 +172,15 @@ export function ErrorState({
 }
 export function Submit({
   busy,
+  disabled,
   children,
 }: {
   busy: boolean;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   return (
-    <Button disabled={busy} type="submit">
+    <Button disabled={busy || disabled} type="submit">
       {busy && (
         <LoaderCircle className="animate-spin" data-icon="inline-start" />
       )}

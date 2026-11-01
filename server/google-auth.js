@@ -1,3 +1,4 @@
+import { isGoogleAdmin } from "./admin-access.js";
 import { randomBytes, createHash } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { one, run, tokenHash, transaction } from "./db.js";
@@ -219,16 +220,17 @@ export function registerGoogleAuth(
             ? claims.name.trim().slice(0, 80)
             : "";
         const role =
-          adminEmail && email === adminEmail.toLowerCase()
+          isGoogleAdmin(email, adminEmail)
             ? "admin"
             : state.role;
         const id = Number(
           run(
             db,
-            "INSERT INTO users(name,email,password,role) VALUES (?,?,'',?)",
+            "INSERT INTO users(name,email,password,role,onboarding_step) VALUES (?,?,'',?,?)",
             name || email.split("@")[0],
             email,
             role,
+            role === "admin" ? 3 : 0,
           ).lastInsertRowid,
         );
         if (role === "tutor")
@@ -244,10 +246,22 @@ export function registerGoogleAuth(
       if (result.error) return fail(result.error);
       if (!result.user || result.user.status !== "active")
         return fail("suspended");
+      // Promotion requires a verified, explicitly linked Google identity. Revoke
+      // pre-promotion sessions so they cannot inherit administrator privileges.
+      if (isGoogleAdmin(email, adminEmail) && result.user.email.toLowerCase() === email && result.user.role !== "admin") {
+        transaction(db, () => {
+          run(db, "DELETE FROM sessions WHERE user_id=?", result.user.id);
+          run(db, "UPDATE users SET role='admin',onboarding_step=3 WHERE id=?", result.user.id);
+          run(db, "INSERT INTO audit(actor_id,action,target) VALUES (?,'google_admin_granted',?)", result.user.id, String(result.user.id));
+        });
+        result.user = one(db, "SELECT * FROM users WHERE id=?", result.user.id);
+      }
       session(res, result.user);
       const target = result.linked
         ? "/settings?google=linked"
-        : state.next ||
+        : result.user.onboarding_step < 3 && result.user.role !== "admin"
+          ? `/onboarding${state.next ? `?next=${encodeURIComponent(state.next)}` : ""}`
+          : state.next ||
           (result.user.role === "tutor"
             ? "/studio"
             : result.user.role === "admin"

@@ -32,7 +32,7 @@ export function registerInquiries(app, db, auth) {
     if (
       !one(
         db,
-        "SELECT user_id FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active'",
+        "SELECT user_id FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'",
         d.tutor_id,
       )
     )
