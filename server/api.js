@@ -182,7 +182,7 @@ export function createApi(
       db,
       `SELECT t.*,u.name,u.demo,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
     FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
-    WHERE t.status='approved' AND u.status='active' GROUP BY t.user_id`,
+    WHERE t.status='approved' AND u.status='active' AND u.role='tutor' GROUP BY t.user_id`,
     ).map(({ moderation_note, ...t }) => ({
       ...t,
       ...uploadMetadata(db, t.user_id),
@@ -488,7 +488,7 @@ export function createApi(
       .parse(req.body);
     const s = one(
       db,
-      `SELECT s.*,t.rate,t.mode,t.subjects FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND t.status='approved' AND u.status='active'`,
+      `SELECT s.*,t.rate,t.mode,t.subjects FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'`,
       d.slot_id,
     );
     if (!s || new Date(s.starts_at).getTime() < Date.now() + 3600000)
@@ -680,6 +680,21 @@ export function createApi(
       req.params.id,
     );
     audit(req.user.id, `tutor.${d.status}`, req.params.id);
+    res.json({ ok: true });
+  });
+  app.patch("/api/admin/users/:id/role", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    z.object({ role: z.literal("admin") }).strict().parse(req.body);
+    transaction(db, () => {
+      const user = one(db, "SELECT * FROM users WHERE id=?", id);
+      if (!user) fail(404, "Không tìm thấy tài khoản.");
+      if (user.status !== "active")
+        fail(409, "Hãy kích hoạt tài khoản trước khi cấp quyền quản trị.");
+      if (user.role === "admin") return;
+      run(db, "UPDATE users SET role='admin',onboarding_step=3 WHERE id=?", id);
+      run(db, "DELETE FROM sessions WHERE user_id=?", id);
+      audit(req.user.id, "user.promoted_to_admin", id);
+    });
     res.json({ ok: true });
   });
   app.patch("/api/admin/users/:id", auth("admin"), (req, res) => {

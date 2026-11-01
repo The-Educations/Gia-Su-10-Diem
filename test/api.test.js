@@ -1031,3 +1031,45 @@ test("new accounts complete resumable role-specific setup without escalating rol
   const existing = client();
   assert.equal((await existing.login("student")).onboarding_step, 3);
 });
+
+test("only administrators can promote active accounts, with session revocation and an audit trail", async (t) => {
+  const { client, db } = await fixture(t);
+  const admin = client(), student = client(), guest = client();
+  const actor = await admin.login("admin");
+  const target = await student.login("student");
+  const path = `/admin/users/${target.id}/role`;
+  assert.equal((await guest.request(path, "PATCH", { role: "admin" })).status, 401);
+  assert.equal((await student.request(path, "PATCH", { role: "admin" })).status, 403);
+  assert.equal((await admin.request(path, "PATCH", { role: "tutor" })).status, 400);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin", status: "active" })).status, 400);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" }, { Origin: "https://attacker.test" })).status, 403);
+  assert.equal((await admin.request("/admin/users/999999/role", "PATCH", { role: "admin" })).status, 404);
+  run(db, "UPDATE users SET status='suspended' WHERE id=?", target.id);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" })).status, 409);
+  run(db, "UPDATE users SET status='active',onboarding_step=1 WHERE id=?", target.id);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" })).status, 200);
+  assert.equal(one(db, "SELECT role FROM users WHERE id=?", target.id).role, "admin");
+  assert.equal(one(db, "SELECT onboarding_step FROM users WHERE id=?", target.id).onboarding_step, 3);
+  assert.equal((await student.request("/admin")).status, 401);
+  assert.equal((await student.login("student")).role, "admin");
+  assert.equal((await student.request("/admin")).status, 200);
+  assert.equal((await admin.request(path, "PATCH", { role: "admin" })).status, 200);
+  assert.equal((await student.request("/admin")).status, 200);
+  const entry = one(db, "SELECT * FROM audit WHERE action='user.promoted_to_admin' AND target=?", String(target.id));
+  assert.equal(entry.actor_id, actor.id);
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM audit WHERE action='user.promoted_to_admin'").n, 1);
+  assert.equal((await student.request(`/admin/users/${actor.id}`, "PATCH", { status: "suspended" })).status, 403);
+
+  const tutor = client();
+  const tutorUser = await tutor.login("chau");
+  assert.equal((await student.request(`/admin/users/${tutorUser.id}/role`, "PATCH", { role: "admin" })).status, 200);
+  assert.ok(one(db, "SELECT * FROM tutors WHERE user_id=?", tutorUser.id));
+  assert.equal((await guest.request(`/tutors/${tutorUser.id}`)).status, 404);
+  assert.ok(!(await guest.request("/tutors")).data.some((u) => u.user_id === tutorUser.id));
+  const learner = client();
+  await learner.request("/auth/register", "POST", { name: "Learner", email: "learner-promotion@test.vn", password: "TestStudy2026!", role: "student" });
+  const slot = one(db, "SELECT id FROM slots WHERE tutor_id=? AND starts_at>?", tutorUser.id, new Date(Date.now() + 3600000).toISOString());
+  assert.ok(slot);
+  assert.equal((await learner.request("/bookings", "POST", { slot_id: slot.id, subject_id: "toan", mode: "online", note: "" })).status, 400);
+  assert.equal((await learner.request("/inquiries", "POST", { tutor_id: tutorUser.id, body: "Xin hỏi lịch học" })).status, 404);
+});

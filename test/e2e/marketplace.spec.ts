@@ -727,3 +727,50 @@ test("student signup validates confirmation, resumes setup, retries saving and p
   await expect(page).toHaveURL(/app\/workspace$/);
   expect(errors).toEqual([]);
 });
+
+test("administrator confirms or cancels promotion and the new administrator signs in again", async ({ browser }) => {
+  const ac = await browser.newContext(), uc = await browser.newContext();
+  const admin = await ac.newPage(), user = await uc.newPage();
+  const errors: string[] = [];
+  admin.on("pageerror", (e) => errors.push(e.message));
+  const email = "promoted-admin@browser.test";
+  const signup = await uc.request.post("/api/auth/register", { data: {
+    name: "Quản trị viên mới", email, password: "BrowserStudy2026!", role: "student",
+  } });
+  expect(signup.status()).toBe(201);
+  const target = (await signup.json()).user;
+  await login(admin, "admin");
+  await admin.goto("/app/admin?tab=users");
+  await admin.getByLabel("Tìm trong danh sách").fill(email);
+  const row = admin.locator(".admin-list article").filter({ hasText: email });
+  await row.getByRole("button", { name: "Cấp quyền quản trị", exact: true }).click();
+  const dialog = admin.getByRole("dialog");
+  await expect(dialog).toContainText(email);
+  await dialog.getByRole("button", { name: "Hủy", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect((await (await uc.request.get("/api/auth/me")).json()).user.role).toBe("student");
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await row.getByRole("button", { name: "Cấp quyền quản trị", exact: true }).click();
+  expect(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await admin.route(`**/api/admin/users/${target.id}/role`, (route) => route.fulfill({ status: 503, json: { error: "Không thể lưu. Vui lòng thử lại." } }));
+  await dialog.getByRole("button", { name: "Xác nhận cấp quyền", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Không thể lưu");
+  await admin.unroute(`**/api/admin/users/${target.id}/role`);
+  await dialog.getByRole("button", { name: "Xác nhận cấp quyền", exact: true }).focus();
+  await admin.keyboard.press("Enter");
+  await expect(dialog).not.toBeVisible();
+  await expect(row).toContainText("Quản trị viên");
+  await expect(row.getByRole("button", { name: "Cấp quyền quản trị", exact: true })).toHaveCount(0);
+  expect((await uc.request.get("/api/admin")).status()).toBe(401);
+  await user.goto("/app/auth");
+  await user.getByLabel("Email", { exact: true }).fill(email);
+  await user.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
+  await user.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  await expect(user).toHaveURL(/app\/admin$/);
+  await expect(user.getByRole("heading", { name: "Quản trị nền tảng" })).toBeVisible();
+  await admin.goto("/app/admin?tab=audit");
+  await expect(admin.getByText(`user.promoted_to_admin · #${target.id}`, { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+  await ac.close();
+  await uc.close();
+});
