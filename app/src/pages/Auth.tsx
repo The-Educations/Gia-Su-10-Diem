@@ -1,6 +1,6 @@
 import { GoogleSignIn, googleErrors } from "@/components/google-sign-in";
 import { useState } from "react";
-import { useNavigate, useSearchParams, Link, Navigate } from "react-router-dom";
+import { useSearchParams, Link, Navigate } from "react-router-dom";
 import { ArrowRight, Mail } from "lucide-react";
 import { api, useApp, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -16,11 +16,11 @@ export default function Auth() {
   const [emailOpen, setEmailOpen] = useState(params.has("mode"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(googleErrors[params.get("oauth_error") || ""] || "");
-  const navigate = useNavigate();
+  const [deliveryFailed, setDeliveryFailed] = useState(false);
   const { user, loading, authError, retryAuth, setUser, refresh } = useApp();
   if (loading) return <Loading />;
   if (authError) return <ErrorState error={authError} retry={retryAuth} />;
-  if (user) return <Navigate to={accountDestination(user, params.get("next"))} replace />;
+  if (user) return <Navigate to={accountDestination(user, params.get("next"))} state={{ deliveryFailed }} replace />;
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -32,10 +32,10 @@ export default function Auth() {
     }
     setBusy(true);
     try {
-      const result = await api<{ user: User }>(`/auth/${register ? "register" : "login"}`, "POST", data);
+      const result = await api<{ user: User; verification_sent?: boolean }>(`/auth/${register ? "register" : "login"}`, "POST", data);
+      setDeliveryFailed(result.verification_sent === false);
       setUser(result.user);
       refresh();
-      navigate(accountDestination(result.user, params.get("next")), { replace: true });
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }

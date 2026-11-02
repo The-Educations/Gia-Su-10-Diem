@@ -1,3 +1,4 @@
+import { timezoneLabel } from "./components/tutor-timezone";
 import { accountRole } from "@/lib/types";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -12,6 +13,7 @@ import {
 } from "react-router-dom";
 import { AnimateUIProvider } from "@animate-ui/react/provider";
 import {
+  Clock3,
   BookOpen,
   Newspaper,
   Users,
@@ -42,11 +44,13 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
 import { PageMetadata } from "./components/page-metadata";
+const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
 const News = lazy(() => import("./pages/News"));
 const Library = lazy(() => import("./pages/Library"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Bookings = lazy(() => import("./pages/Bookings"));
@@ -120,6 +124,8 @@ function Require({
         replace
       />
     );
+  if (user.email_verification_required)
+    return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
   if (user.role !== "admin" && user.onboarding_step < 3 && loc.pathname !== "/onboarding")
     return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
   if (role && user.role !== role) return <Navigate to="/workspace" replace />;
@@ -177,7 +183,7 @@ function Shell() {
       ? [{ to: "/studio", label: "Hồ sơ & giờ trống", icon: Settings }]
       : []),
     ...(user?.role === "student"
-      ? [{ to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
+      ? [{ to: "/availability", label: "Lịch rảnh", icon: CalendarDays }, { to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
       : []),
     { to: "/tutors", label: "Tìm gia sư", icon: Users },
     { to: "/library", label: "Tìm môn học", icon: BookOpen },
@@ -222,11 +228,12 @@ function Shell() {
         </a>
         {user ? (
           <>
-            <Link to="/settings" className="account-link" aria-label={`Cài đặt tài khoản: ${user.name}`} title={user.name} onClick={() => setOpen(false)}>
+            <Link to="/settings" className="account-link" aria-label={`Cài đặt tài khoản: ${user.name}`} title={`${user.name} · ${timezoneLabel(user.timezone, true)}`} onClick={() => setOpen(false)}>
               <Person name={user.name} id={user.id} />
               <span className="nav-label">
                 <strong>{user.name}</strong>
                 <small>{accountRole(user)}</small>
+                <small className="account-timezone"><Clock3 size={12} aria-hidden="true" />{timezoneLabel(user.timezone, true)}</small>
               </span>
             </Link>
             <Button
@@ -310,6 +317,7 @@ function Shell() {
                 <Route path="/news/:id" element={<News />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/onboarding" element={<Require><Onboarding /></Require>} />
                 <Route
                   path="/workspace"
@@ -343,6 +351,7 @@ function Shell() {
                     </Require>
                   }
                 />
+                <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route
                   path="/settings"
                   element={

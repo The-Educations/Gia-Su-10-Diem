@@ -17,7 +17,7 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
   const pending = (id) =>
     run(
       db,
-      "UPDATE tutors SET status='pending',moderation_note='' WHERE user_id=?",
+      "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
       id,
     );
   app.post(
@@ -129,6 +129,7 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
     );
     if (!result.changes)
       return res.status(404).json({ error: "Không tìm thấy ảnh." });
+    run(db, "UPDATE tutors SET review_revision=review_revision+1 WHERE user_id=?", req.user.id);
     audit(req.user.id, "gallery.remove", req.params.id);
     res.json(galleryMetadata(db, req.user.id));
   });

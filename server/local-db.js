@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { migrateDatabase } from "./db.js";
+import { migrateDatabase, transaction } from "./db.js";
 export function openDatabase(
   filename = process.env.DB_PATH || ".data/marketplace.sqlite",
 ) {
@@ -11,7 +11,7 @@ export function openDatabase(
   db.exec(
     "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
   );
-  migrateDatabase(db);
+  transaction(db, () => migrateDatabase(db));
   db.exec("PRAGMA user_version = 6;");
   return db;
 }

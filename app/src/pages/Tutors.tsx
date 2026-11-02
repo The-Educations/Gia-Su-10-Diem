@@ -1,3 +1,4 @@
+import { TutorLocalTime } from "@/components/tutor-timezone";
 import { Collapsible } from "@animate-ui/react/primitives/radix-ui/collapsible";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -9,11 +10,10 @@ import {
   SlidersHorizontal,
   GraduationCap,
   Star,
-  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, money } from "@/lib/api";
-import type { Tutor, Subject, Resource } from "@/lib/types";
+import type { Tutor, Subject, Resource, WeeklySchedule } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +45,9 @@ export default function Tutors({
     favorites = useLoad<number[]>(
       user?.role === "student" ? "/favorites" : null,
     );
+  const schedule = useLoad<WeeklySchedule>(user?.role === "student" ? "/account/availability" : null);
+  const myHours = new Set(schedule.data?.blocks.map(b => `${b.weekday}:${b.hour}`));
+  const matchingHours = (t: Tutor) => t.weekly_blocks.filter(b => myHours.has(`${b.weekday}:${b.hour}`)).length;
   const q = params.get("q") || "",
     subject = params.get("subject") || "",
     mode = params.get("mode") || "",
@@ -74,7 +77,9 @@ export default function Tutors({
         (!budget || t.rate <= Number(budget)),
     )
     .sort((a, b) =>
-      sort === "price"
+      sort === "schedule" && myHours.size > 0
+        ? matchingHours(b) - matchingHours(a) || b.rating - a.rating
+        : sort === "price"
         ? a.rate - b.rate
         : sort === "experience"
           ? b.experience - a.experience
@@ -219,6 +224,8 @@ export default function Tutors({
           </div>
         )}
       </section>
+      {sort === "schedule" && user?.role === "student" && !schedule.loading && !myHours.size && <Button asChild variant="outline"><Link to="/availability">Thêm lịch rảnh để so khớp gia sư</Link></Button>}
+      {sort === "schedule" && schedule.error && <ErrorState error={schedule.error} retry={schedule.reload} />}
       <div className="results-heading" id="tutor-results">
         <h2>
           {rows.length} gia sư{favoritesOnly ? " đã lưu" : ""}
@@ -230,6 +237,7 @@ export default function Tutors({
             onChange={(v) => set("sort", v)}
             options={[
               { value: "recommended", label: "Đánh giá cao" },
+              ...(user?.role === "student" ? [{ value: "schedule", label: "Khớp lịch của tôi" }] : []),
               { value: "price", label: "Học phí tăng dần" },
               { value: "experience", label: "Nhiều kinh nghiệm" },
             ]}
@@ -262,7 +270,7 @@ export default function Tutors({
       ) : (
         <div className="tutor-grid">
           {rows.map((t) => (
-            <article className="tutor-card" key={t.user_id}>
+            <article className="tutor-card" data-theme={t.profile_theme} key={t.user_id}>
               <div className="tutor-card-top">
                 <Person
                   name={t.name}
@@ -302,12 +310,8 @@ export default function Tutors({
                   </Badge>
                 ))}
                 {!!t.demo && <Badge variant="outline">Hồ sơ mẫu</Badge>}
-                {t.cv && (
-                  <Badge variant="outline">
-                    <FileText size={12} />
-                    Có CV
-                  </Badge>
-                )}
+                {sort === "schedule" && myHours.size > 0 && <Badge variant="outline">Trùng {matchingHours(t)} giờ / tuần</Badge>}
+
               </div>
               <div className="tutor-facts">
                 <span>
@@ -326,6 +330,7 @@ export default function Tutors({
                       ? "Online & trực tiếp"
                       : "Trực tiếp"}
                 </span>
+                <TutorLocalTime zone={t.timezone} />
                 <span>
                   <Star size={16} />
                   {t.review_count

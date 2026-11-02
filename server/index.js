@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+import { createMailflareSender } from "./email-verification.js";
 import { pageSeo, renderSeo, robots, newsSitemap } from "./seo.js";
 import { all, one } from "./db.js";
 import { processPhoto } from "./photo.js";
@@ -8,6 +10,7 @@ import { openDatabase } from "./local-db.js";
 
 import { seedCatalog } from "./seed.js";
 import { createApi } from "./api.js";
+export async function startServer({ sendEmail } = {}) {
 const production = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT || 4174);
 const origin = process.env.APP_ORIGIN || `http://127.0.0.1:${port}`;
@@ -17,6 +20,7 @@ const db = openDatabase();
 seedCatalog(db);
 const app = createApi(db, {
   processPhoto,
+  sendEmail: sendEmail || createMailflareSender({ url: process.env.MAILFLARE_URL, key: process.env.MAILFLARE_API_KEY, mailboxId: process.env.MAILFLARE_MAILBOX_ID }),
   limit: process.env.NODE_ENV !== "test",
   production,
   origin,
@@ -81,3 +85,7 @@ for (const signal of ["SIGINT", "SIGTERM"])
       process.exit(0);
     }),
   );
+
+return { app, server, db };
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await startServer();

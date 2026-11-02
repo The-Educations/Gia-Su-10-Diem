@@ -9,8 +9,9 @@ export async function verifySeo(base) {
     assert.match(html, /name="robots" content="index, follow/);
     assert.match(html, /property="og:image"/);
   }
-  for (const path of ["/app/auth", "/app/admin", "/app/onboarding"]) {
+  for (const path of ["/app/auth", "/app/admin", "/app/onboarding", "/app/verify-email"]) {
     const response = await fetch(base + path);
+    assert.equal(response.status, 200, path);
     assert.match(response.headers.get("x-robots-tag"), /noindex/);
     assert.match(await response.text(), /name="robots" content="noindex/);
   }

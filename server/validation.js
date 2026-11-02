@@ -11,11 +11,24 @@ export const registerSchema = loginSchema.extend({
   name: text(80),
   role: z.enum(["student", "tutor"]).default("student"),
 });
+const educationEntry = z.object({
+  level: z.enum(["high_school", "college", "university", "postgraduate", "other"]),
+  institution: text(160),
+  field: z.string().trim().max(160).default(""),
+  start_year: z.number().int().min(1950).refine(year => year <= new Date().getUTCFullYear(), "Năm học không được ở tương lai."),
+  end_year: z.number().int().min(1950).refine(year => year <= new Date().getUTCFullYear(), "Năm học không được ở tương lai.").nullable(),
+}).refine(entry => entry.end_year === null || entry.end_year >= entry.start_year, { message: "Năm kết thúc phải từ năm bắt đầu trở đi.", path: ["end_year"] });
+export const timezoneSchema = z.string().max(80).refine(value => {
+    try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; } catch { return false; }
+  }, "Múi giờ không hợp lệ.").optional();
 export const tutorSchema = z.object({
   headline: text(120),
+  timezone: timezoneSchema,
+  education_history: z.array(educationEntry).max(8).optional(),
+  profile_sections: z.array(z.object({ title: text(80), body: text(2000) })).max(10).optional(),
   teaching_style: z.string().trim().max(1500).default(""),
   lesson_plan: z.string().trim().max(1500).default(""),
-  profile_theme: z.enum(["paper", "sage", "ink"]).default("paper"),
+  profile_theme: z.enum(["paper", "sage", "ink"]).optional(),
   bio: text(2000),
   location: text(100),
   mode: z.enum(["online", "offline", "both"]),
@@ -47,3 +60,8 @@ export const subjectSchema = z.object({
   description: text(500),
 });
 export { z, text };
+
+export const availabilitySchema = z.object({
+  revision: z.number().int().nonnegative(),
+  blocks: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(23) })).max(168),
+}).refine(d => new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size === d.blocks.length, "Khung giờ bị trùng.");

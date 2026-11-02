@@ -1,5 +1,4 @@
 import express from "express";
-import { PDFDocument } from "pdf-lib";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 
@@ -10,31 +9,27 @@ export function uploadMetadata(db, tutorId) {
     "SELECT id,kind,name,size,created_at FROM tutor_uploads WHERE tutor_id=?",
     tutorId,
   );
-  const photo = rows.find((r) => r.kind === "photo"),
-    cv = rows.find((r) => r.kind === "cv");
+  const photo = rows.find((r) => r.kind === "photo");
+  const banner = one(db, "SELECT id FROM tutor_banners WHERE tutor_id=?", tutorId);
   return {
     photo_url: photo ? `/api/uploads/${photo.id}` : null,
-    cv: cv
-      ? {
-          name: cv.name,
-          size: cv.size,
-          url: `/api/uploads/${cv.id}`,
-          uploaded_at: cv.created_at,
-        }
-      : null,
+    banner_url: banner ? `/api/uploads/${banner.id}` : null,
   };
 }
+
 export function saveUpload(db, tutorId, kind, data, mime, name) {
   const id = randomUUID();
+  const table = kind === "banner" ? "tutor_banners" : "tutor_uploads";
+  const chunks = kind === "banner" ? "banner_chunks" : "upload_chunks";
   run(
     db,
-    "DELETE FROM tutor_uploads WHERE tutor_id=? AND kind=?",
+    `DELETE FROM ${table} WHERE tutor_id=? AND kind=?`,
     tutorId,
     kind,
   );
   run(
     db,
-    "INSERT INTO tutor_uploads(id,tutor_id,kind,data,mime,name,size) VALUES (?,?,?,?,?,?,?)",
+    `INSERT INTO ${table}(id,tutor_id,kind,data,mime,name,size) VALUES (?,?,?,?,?,?,?)`,
     id,
     tutorId,
     kind,
@@ -46,7 +41,7 @@ export function saveUpload(db, tutorId, kind, data, mime, name) {
   for (let offset = 0, part = 0; offset < data.length; offset += 100000, part++)
     run(
       db,
-      "INSERT INTO upload_chunks VALUES (?,?,?)",
+      `INSERT INTO ${chunks} VALUES (?,?,?)`,
       id,
       part,
       data.subarray(offset, offset + 100000),
@@ -60,7 +55,7 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
     express.raw({ type: () => true, limit: UPLOAD_LIMIT }),
     async (req, res) => {
       const kind = req.params.kind;
-      if (!["photo", "cv"].includes(kind))
+      if (!["photo", "banner"].includes(kind))
         return res.status(404).json({ error: "Loại tệp không tồn tại." });
       if (!Buffer.isBuffer(req.body) || !req.body.length)
         return res.status(400).json({ error: "Chọn một tệp để tải lên." });
@@ -68,51 +63,19 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
         mime,
         name;
       try {
-        name = decodeURIComponent(req.get("X-File-Name") || "")
-          .replace(/[\x00-\x1f\x7f/\\]/g, "")
-          .trim()
-          .slice(0, 120);
-        if (kind === "photo") {
-          if (
-            !["image/jpeg", "image/png", "image/webp"].includes(
-              req.get("Content-Type")?.split(";")[0],
-            )
-          )
-            throw new Error();
-          data = await processPhoto(data);
-          mime = "image/webp";
-          name = "profile.webp";
-        } else {
-          if (
-            req.get("Content-Type") !== "application/pdf" ||
-            data.subarray(0, 5).toString() !== "%PDF-"
-          )
-            throw new Error();
-          const pdf = await PDFDocument.load(data, {
-            throwOnInvalidObject: true,
-          });
-          if (
-            pdf.isEncrypted ||
-            pdf.getPageCount() < 1 ||
-            pdf.getPageCount() > 20
-          )
-            throw new Error();
-          mime = "application/pdf";
-          name = (name || "CV.pdf").replace(/\.pdf$/i, "") + ".pdf";
-        }
+        if (!["image/jpeg", "image/png", "image/webp"].includes(req.get("Content-Type")?.split(";")[0])) throw new Error();
+        data = await processPhoto(data, kind === "banner" ? "banner" : false);
+        if (data.length > UPLOAD_LIMIT) throw new Error();
+        mime = "image/webp";
+        name = kind === "banner" ? "banner.webp" : "profile.webp";
       } catch {
-        return res.status(400).json({
-          error:
-            kind === "photo"
-              ? "Ảnh không hợp lệ. Dùng JPG, PNG hoặc WebP, tối đa 16 triệu pixel."
-              : "CV phải là PDF hợp lệ, không khóa mật khẩu, từ 1–20 trang.",
-        });
+        return res.status(400).json({ error: "Ảnh không hợp lệ. Dùng JPG, PNG hoặc WebP, tối đa 5 MB và 16 triệu pixel." });
       }
       // Recheck account after asynchronous decoding; a suspended session cannot publish a file.
       if (
         !one(
           db,
-          "SELECT id FROM users WHERE id=? AND status='active'",
+          "SELECT id FROM users WHERE id=? AND status='active' AND role='tutor'",
           req.user.id,
         )
       )
@@ -121,7 +84,7 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
         saveUpload(db, req.user.id, kind, data, mime, name);
         run(
           db,
-          "UPDATE tutors SET status='pending',moderation_note='' WHERE user_id=?",
+          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
           req.user.id,
         );
         audit(req.user.id, `upload.${kind}`, req.user.id);
@@ -130,28 +93,29 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
     },
   );
   app.delete("/api/tutor/uploads/:kind", auth("tutor"), (req, res) => {
-    if (!["photo", "cv"].includes(req.params.kind))
+    if (!["photo", "banner"].includes(req.params.kind))
       return res.status(404).json({ error: "Loại tệp không tồn tại." });
     run(
       db,
-      "DELETE FROM tutor_uploads WHERE tutor_id=? AND kind=?",
+      `DELETE FROM ${req.params.kind === "banner" ? "tutor_banners" : "tutor_uploads"} WHERE tutor_id=? AND kind=?`,
       req.user.id,
       req.params.kind,
     );
+    run(db, "UPDATE tutors SET review_revision=review_revision+1 WHERE user_id=?", req.user.id);
     audit(req.user.id, `upload.remove.${req.params.kind}`, req.user.id);
     res.json(uploadMetadata(db, req.user.id));
   });
   app.get("/api/uploads/:id", (req, res) => {
     const row = one(
       db,
-      `SELECT f.*,t.status AS profile_status,u.status AS account_status FROM tutor_uploads f JOIN tutors t ON t.user_id=f.tutor_id JOIN users u ON u.id=t.user_id WHERE f.id=?`,
+      `SELECT f.*,t.status AS profile_status,u.status AS account_status,u.role AS account_role FROM (SELECT * FROM tutor_uploads UNION ALL SELECT * FROM tutor_banners) f JOIN tutors t ON t.user_id=f.tutor_id JOIN users u ON u.id=t.user_id WHERE f.id=?`,
       req.params.id,
     );
     if (
-      !row ||
+      !row || row.kind === "cv" ||
       !(
         (row.profile_status === "approved" &&
-          row.account_status === "active") ||
+          row.account_status === "active" && row.account_role === "tutor") ||
         req.user?.id === row.tutor_id ||
         req.user?.role === "admin"
       )
@@ -161,11 +125,11 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
     res.set("Content-Security-Policy", "default-src 'none'; sandbox");
     res.set(
       "Content-Disposition",
-      `${row.kind === "cv" ? "attachment" : "inline"}; filename="${row.kind === "cv" ? "CV.pdf" : "profile.webp"}"; filename*=UTF-8''${encodeURIComponent(row.name).replace(/'/g, "%27")}`,
+      `inline; filename="${row.kind === "banner" ? "banner.webp" : "profile.webp"}"`,
     );
     const chunks = all(
       db,
-      "SELECT data FROM upload_chunks WHERE upload_id=? ORDER BY part",
+      `SELECT data FROM ${row.kind === "banner" ? "banner_chunks" : "upload_chunks"} WHERE upload_id=? ORDER BY part`,
       row.id,
     );
     res.send(

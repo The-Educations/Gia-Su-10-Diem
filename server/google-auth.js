@@ -254,6 +254,11 @@ export function registerGoogleAuth(
         });
         result.user = one(db, "SELECT * FROM users WHERE id=?", result.user.id);
       }
+      if (result.user.email.toLowerCase() === email) {
+        run(db, "UPDATE users SET email_verified_at=COALESCE(email_verified_at,CURRENT_TIMESTAMP) WHERE id=?", result.user.id);
+        run(db, "DELETE FROM email_verifications WHERE user_id=?", result.user.id);
+        result.user = one(db, "SELECT * FROM users WHERE id=?", result.user.id);
+      }
       session(res, result.user);
       const target = result.linked
         ? "/settings?google=linked"

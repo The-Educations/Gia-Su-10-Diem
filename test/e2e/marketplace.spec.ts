@@ -1,4 +1,3 @@
-import { sampleCV } from "../../server/demo-content.js";
 import sharp from "sharp";
 import { test, expect, type Page } from "@playwright/test";
 async function login(page: Page, slug: string) {
@@ -10,6 +9,18 @@ async function login(page: Page, slug: string) {
   await page.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
   await expect(page).not.toHaveURL(/\/auth/);
+}
+async function verifyEmail(page: Page, email: string) {
+  await expect(page).toHaveURL(/verify-email/);
+  const next = new URL(page.url()).search;
+  const response = await page.request.get(`/__test/email?email=${encodeURIComponent(email)}`);
+  const mail = await response.json();
+  const link = new URL(mail.link); link.search = next;
+  await page.goto(link.href);
+  await expect(page.getByRole("heading", { name: "Xác nhận email của bạn" })).toBeVisible();
+  await page.getByRole("button", { name: "Xác nhận email", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Email đã được xác nhận" })).toBeVisible();
+  await page.getByRole("button", { name: "Tiếp tục", exact: true }).click();
 }
 async function choose(page: Page, label: string, option: string) {
   await page.getByRole("combobox", { name: label, exact: true }).click();
@@ -28,6 +39,7 @@ test("guest filters, subject navigation and responsive layouts", async ({
     .getByRole("textbox", { name: "Tìm gia sư", exact: true })
     .fill("nguyen minh chau");
   await expect(page.locator(".tutor-card")).toHaveCount(1);
+  await expect(page.locator(".tutor-card .tutor-local-time")).toContainText("(UTC +07:00)");
   await page
     .getByRole("textbox", { name: "Tìm gia sư", exact: true })
     .fill("zzzzz");
@@ -64,7 +76,7 @@ test("guest filters, subject navigation and responsive layouts", async ({
   ).toBeVisible();
   await page.getByRole("tab", { name: "Mục tiêu kỳ thi" }).click();
   await expect(page.locator(".resource-row")).toHaveCount(8);
-  for (const width of [360, 390, 768, 1024, 1440]) {
+  for (const width of [320, 360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/app/tutors");
     await expect(page.locator(".tutor-card").first()).toBeVisible();
@@ -93,8 +105,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
     tutor = await tutorContext.newPage();
   await login(student, "student");
   await student.goto("/app/tutors/3");
-  await student.getByRole("combobox", { name: "Giờ học (Việt Nam)" }).click();
-  await student.getByRole("option").nth(1).click();
+  await student.getByRole("group", { name: "Chọn giờ học" }).getByRole("button").first().click();
   await student.getByLabel("Bạn muốn học gì?").fill("Ôn phương trình bậc hai");
   await student.getByRole("button", { name: "Xem lại yêu cầu" }).click();
   await expect(student.getByRole("dialog")).toBeVisible();
@@ -160,12 +171,16 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor
     .getByRole("button", { name: "Tạo tài khoản", exact: true })
     .click();
+  await verifyEmail(tutor, "new-tutor@browser.test");
   await expect(tutor).toHaveURL(/onboarding/);
   await tutor.getByRole("radio", { name: "Gia sư", exact: true }).click();
   await tutor.getByRole("button", { name: "Tiếp tục", exact: true }).click();
   await tutor.getByLabel("Tiêu đề hồ sơ", { exact: true }).fill("Gia sư Toán tận tâm");
   await tutor.getByLabel("Giới thiệu cách bạn dạy", { exact: true }).fill("Luyện tập theo năng lực của từng học sinh.");
   await tutor.getByLabel("Học vấn / Chuyên môn", { exact: true }).fill("Đại học Sư phạm");
+  await tutor.getByLabel("Tên trường 1", { exact: true }).fill("Đại học Sư phạm Hà Nội");
+  await tutor.getByLabel("Năm bắt đầu 1", { exact: true }).fill("2020");
+  await tutor.getByLabel("Múi giờ của bạn").fill("Asia/Tokyo");
   await tutor.getByRole("checkbox", { name: "Toán", exact: true }).check();
   await tutor.getByRole("button", { name: "Lưu và tiếp tục", exact: true }).click();
   await expect(tutor.getByRole("heading", { name: "Sẵn sàng bắt đầu" })).toBeVisible();
@@ -174,14 +189,14 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor.getByRole("button", { name: "Hoàn tất thiết lập", exact: true }).click();
   await expect(tutor).toHaveURL(/studio/);
   await tutor.setViewportSize({ width: 390, height: 844 });
-  await tutor.getByLabel("Chọn CV (PDF)", { exact: true }).setInputFiles({
-    name: "Teaching CV.pdf",
-    mimeType: "application/pdf",
-    buffer: await sampleCV("Browser Tutor"),
+  await tutor.getByLabel("Chọn ảnh bìa", { exact: true }).setInputFiles({
+    name: "banner.png",
+    mimeType: "image/png",
+    buffer: await sharp({ create: { width: 800, height: 200, channels: 3, background: "#527158" } }).png().toBuffer(),
   });
-  await tutor.getByRole("button", { name: "Tải CV lên", exact: true }).click();
+  await tutor.getByRole("button", { name: "Lưu ảnh bìa", exact: true }).click();
   await expect(
-    tutor.getByRole("link", { name: "Tải CV", exact: true }),
+    tutor.getByRole("link", { name: "Xem ảnh bìa", exact: true }),
   ).toBeVisible();
   await tutor.getByLabel("Chọn ảnh đại diện", { exact: true }).setInputFiles({
     name: "portrait.png",
@@ -203,24 +218,24 @@ test("new tutor onboarding, availability and admin approval", async ({
   ).toBe(true);
   await tutor.reload();
   await expect(
-    tutor.getByText("Teaching CV.pdf", { exact: true }),
+    tutor.getByRole("img", { name: "Ảnh bìa của bạn", exact: true }),
   ).toBeVisible();
   await tutor.setViewportSize({ width: 1440, height: 1000 });
-  await tutor.getByLabel("Chọn CV (PDF)", { exact: true }).setInputFiles({
-    name: "invalid.pdf",
-    mimeType: "application/pdf",
+  await tutor.getByLabel("Chọn ảnh bìa", { exact: true }).setInputFiles({
+    name: "invalid.png",
+    mimeType: "image/png",
     buffer: Buffer.from("invalid file"),
   });
-  await tutor.getByRole("button", { name: "Tải CV lên", exact: true }).click();
+  await tutor.getByRole("button", { name: "Lưu ảnh bìa", exact: true }).click();
   await expect(
     tutor
       .locator(".upload-card")
-      .filter({ hasText: "CV của bạn" })
+      .filter({ hasText: "Chọn ảnh bìa" })
       .getByRole("alert"),
-  ).toContainText("CV phải là PDF hợp lệ");
+  ).toContainText("Ảnh không hợp lệ");
   await tutor.reload();
   await expect(
-    tutor.getByText("Teaching CV.pdf", { exact: true }),
+    tutor.getByRole("img", { name: "Ảnh bìa của bạn", exact: true }),
   ).toBeVisible();
   const galleryImage = await sharp({ create: { width: 120, height: 80, channels: 3, background: "#527158" } }).png().toBuffer();
   await tutor.getByLabel("Thêm ảnh vào hồ sơ").setInputFiles([
@@ -246,15 +261,36 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor
     .getByLabel("Một buổi học cùng tôi", { exact: true })
     .fill("Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.");
-  await tutor.getByRole("radio", { name: "Xanh lá", exact: true }).click();
+  await expect(tutor.getByRole("radiogroup", { name: "Phong cách hồ sơ" })).toHaveCount(0);
+  await choose(tutor, "Thêm thông tin", "Mục tùy chỉnh");
+  await tutor.getByRole("button", { name: "Thêm mục", exact: true }).click();
+  await tutor.getByLabel("Tiêu đề mục 1", { exact: true }).fill("Hoạt động giáo dục");
+  await tutor.getByLabel("Nội dung mục 1", { exact: true }).fill("Hướng dẫn câu lạc bộ Toán từ năm 2022.");
+  await tutor.getByRole("button", { name: "Thêm học vấn", exact: true }).click();
+  await expect(tutor.getByLabel("Tên trường 2", { exact: true })).toBeFocused();
+  await tutor.getByLabel("Tên trường 2", { exact: true }).fill("THPT Nguyễn Trãi");
+  await choose(tutor, "Bậc học 2", "THPT");
+  await tutor.getByLabel("Năm bắt đầu 2", { exact: true }).fill("2017");
+  await tutor.getByRole("checkbox", { name: "Đang theo học", exact: true }).nth(1).uncheck();
+  await tutor.getByLabel("Năm kết thúc 2", { exact: true }).fill("2020");
   const preview = tutor.getByRole("complementary", { name: "Xem trước hồ sơ" });
+  await expect(preview.locator(".education-timeline li")).toHaveCount(2);
+  await expect(preview.locator(".education-timeline li").first()).toContainText("THPT Nguyễn Trãi");
+  await expect(preview.locator(".timezone-tag")).toContainText("Asia/Tokyo");
+  await expect(preview.locator(".tutor-cover img")).toBeVisible();
+  await expect(preview).toContainText("Hướng dẫn câu lạc bộ Toán từ năm 2022.");
+  for (const width of [320, 768, 1024, 1440]) {
+    await tutor.setViewportSize({ width, height: 900 });
+    expect(await tutor.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+
   await expect(preview).toContainText("Gia sư Toán lớp 9");
   await expect(preview).toContainText(
     "Dùng hình vẽ để hiểu bản chất trước khi làm bài.",
   );
   await expect(preview.locator(".tutor-presentation")).toHaveAttribute(
     "data-theme",
-    "sage",
+    "paper",
   );
 
   await tutor.getByRole("checkbox", { name: "Toán", exact: true }).check();
@@ -267,17 +303,16 @@ test("new tutor onboarding, availability and admin approval", async ({
     tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt."),
   ).toBeVisible();
   await tutor.getByRole("tab", { name: "Giờ trống", exact: true }).click();
-  const day = new Date(Date.now() + 35 * 86400000).toISOString().slice(0, 10);
-  await tutor.getByLabel("Giờ bắt đầu (giờ Việt Nam)").fill(`${day}T18:00`);
-  await tutor.getByRole("button", { name: "Thêm giờ trống" }).click();
-  await expect(tutor.locator(".slot-list>div")).toHaveCount(1);
+  await tutor.getByRole("button", { name: "Thứ 2, 18:00–19:00", exact: true }).click();
+  await tutor.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(tutor.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
   await login(admin, "admin");
   await admin
     .getByRole("textbox", { name: "Tìm trong danh sách" })
     .fill("Gia sư kiểm thử");
   await admin.getByRole("button", { name: "Xem & duyệt" }).click();
   await expect(
-    admin.getByRole("link", { name: "Tải CV · Teaching CV.pdf" }),
+    admin.getByRole("img", { name: "Ảnh bìa của Gia sư kiểm thử" }),
   ).toBeVisible();
   await expect(admin.getByRole("dialog")).toContainText(
     "Dùng hình vẽ để hiểu bản chất trước khi làm bài.",
@@ -291,10 +326,12 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(admin.locator(".admin-list")).toContainText("Đã công bố");
   await tutor.goto("/app/tutors?q=Gia+sư+kiểm+thử");
   await expect(tutor.locator(".tutor-card")).toHaveCount(1);
+  await expect(tutor.locator(".tutor-card .tutor-local-time")).toContainText("(UTC +09:00)");
+  await expect(tutor.locator(".tutor-card .tutor-local-time time")).toHaveAttribute("title", "Asia/Tokyo");
   await tutor.getByRole("link", { name: "Xem hồ sơ", exact: true }).click();
-  const download = tutor.waitForEvent("download");
-  await tutor.getByRole("link", { name: "Tải CV", exact: true }).click();
-  expect((await download).suggestedFilename()).toBe("Teaching CV.pdf");
+  await expect(tutor.locator(".tutor-cover img")).toBeVisible();
+  await expect(tutor.getByRole("link", { name: "Tải CV", exact: true })).toHaveCount(0);
+  await expect(tutor.getByText("Hướng dẫn câu lạc bộ Toán từ năm 2022.")).toBeVisible();
   await expect(tutor.locator(".profile-hero img")).toBeVisible();
   await expect(tutor.locator(".gallery-tile")).toHaveCount(2);
   await tutor.locator(".gallery-tile").first().click();
@@ -307,7 +344,7 @@ test("new tutor onboarding, availability and admin approval", async ({
 
   await expect(tutor.locator(".tutor-presentation")).toHaveAttribute(
     "data-theme",
-    "sage",
+    "paper",
   );
   await expect(tutor.locator(".tutor-presentation")).toContainText(
     "Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.",
@@ -360,14 +397,17 @@ test("student favorites, profile and reduced-motion account layouts", async ({
   ).toBeVisible();
   await page.goto("/app/settings");
   await page.getByLabel("Mục tiêu học tập").fill("Tìm gia sư Toán lớp 9");
+  await page.getByLabel("Múi giờ của bạn").fill("Asia/Tokyo");
   await page.getByRole("button", { name: "Lưu thông tin" }).click();
   await expect(page.getByText("Đã lưu hồ sơ", { exact: true })).toBeVisible();
+  await expect(page.locator(".account-timezone")).toContainText("Tokyo · GMT+9");
   await page.reload();
   await expect(page.getByLabel("Mục tiêu học tập")).toHaveValue(
     "Tìm gia sư Toán lớp 9",
   );
+  await expect(page.getByLabel("Múi giờ của bạn")).toHaveValue("Asia/Tokyo");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.setViewportSize({ width: 360, height: 800 });
+  await page.setViewportSize({ width: 320, height: 800 });
   for (const route of [
     "/app/settings",
     "/app/bookings",
@@ -521,7 +561,7 @@ test("role workspaces, studio drafts and admin tab persistence", async ({
         "Bản nháp chưa lưu",
       );
       await page.setViewportSize({ width: 360, height: 800 });
-      for (const name of ["Ảnh & CV", "Hồ sơ nhận dạy", "Giờ trống"]) {
+      for (const name of ["Hồ sơ nhận dạy", "Giờ trống"]) {
         await page.getByRole("tab", { name, exact: true }).click();
         expect(
           await page.evaluate(
@@ -691,6 +731,7 @@ test("student signup validates confirmation, resumes setup, retries saving and p
   await expect(page.getByRole("alert")).toContainText("Mật khẩu xác nhận chưa khớp.");
   await page.getByLabel("Xác nhận mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await page.getByRole("button", { name: "Tạo tài khoản", exact: true }).click();
+  await verifyEmail(page, "new-student@browser.test");
   await expect(page).toHaveURL(/onboarding\?next=%2Fmessages/);
   for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -735,6 +776,8 @@ test("administrator confirms or cancels promotion and the new administrator sign
   } });
   expect(signup.status()).toBe(201);
   const target = (await signup.json()).user;
+  await user.goto("/app/verify-email");
+  await verifyEmail(user, email);
   await login(admin, "admin");
   await admin.goto("/app/admin?tab=users");
   await admin.getByLabel("Tìm trong danh sách").fill(email);
@@ -779,6 +822,7 @@ test("parent chooses a separate setup and reaches shared booking tools", async (
   await page.getByLabel("Mật khẩu (ít nhất 10 ký tự)", { exact: true }).fill("BrowserStudy2026!");
   await page.getByLabel("Xác nhận mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await page.getByRole("button", { name: "Tạo tài khoản", exact: true }).click();
+  await verifyEmail(page, "parent@browser.test");
   await page.getByRole("radio", { name: "Phụ huynh", exact: true }).click();
   await page.getByRole("button", { name: "Tiếp tục", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Tìm gia sư cho con" })).toBeVisible();
@@ -839,4 +883,235 @@ test("admin creates, publishes and unpublishes a safe public news article", asyn
   await guest.reload();
   await expect(guest.getByRole("alert")).toContainText("Không tìm thấy bài viết");
   await guestContext.close();
+});
+
+test("verification handles delivery errors, cross-browser activation and an already-open tab", async ({ browser }) => {
+  const first = await browser.newContext(), second = await browser.newContext();
+  const page = await first.newPage(), other = await second.newPage();
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  await page.route("**/api/auth/register", async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...await response.json(), verification_sent: false } });
+  });
+  await page.goto("/app/auth?mode=register");
+  await page.getByLabel("Họ và tên", { exact: true }).fill("Email ownership test");
+  await page.getByLabel("Email", { exact: true }).fill("verify-browser@browser.test");
+  await page.getByLabel("Mật khẩu (ít nhất 10 ký tự)", { exact: true }).fill("BrowserStudy2026!");
+  await page.getByLabel("Xác nhận mật khẩu", { exact: true }).fill("BrowserStudy2026!");
+  await page.getByRole("button", { name: "Tạo tài khoản", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Chưa gửi được email");
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.getByRole("button", { name: "Gửi lại email xác nhận" }).click();
+  await expect(page.getByRole("alert")).toContainText("Vui lòng chờ");
+  const captured = await (await page.request.get("/__test/email?email=verify-browser%40browser.test")).json();
+  await other.goto(captured.link);
+  // Loading the link alone must not activate the account.
+  expect((await (await first.request.get("/api/auth/me")).json()).user.email_verification_required).toBe(true);
+  await other.getByRole("button", { name: "Xác nhận email", exact: true }).focus();
+  await other.keyboard.press("Enter");
+  await expect(other.getByRole("heading", { name: "Email đã được xác nhận" })).toBeVisible();
+  expect((await (await second.request.get("/api/auth/me")).json()).user).toBeNull();
+  await other.getByRole("button", { name: "Tiếp tục", exact: true }).click();
+  await expect(other).toHaveURL(/\/auth$/);
+  await page.getByRole("button", { name: "Tôi đã xác nhận email" }).click();
+  await page.getByRole("button", { name: "Tiếp tục", exact: true }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto(captured.link);
+  await page.getByRole("button", { name: "Xác nhận email", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("đã được sử dụng");
+  expect(errors).toEqual([]);
+  await first.close(); await second.close();
+});
+
+test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-hour booking export", async ({ browser, page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await login(page, "chau");
+  await page.goto("/app/studio?tab=files");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.getByLabel("Tiêu đề hồ sơ")).toBeVisible();
+  await expect(page.locator("#studio-files")).toBeVisible();
+  await page.getByRole("tab", { name: "Giờ trống", exact: true }).click();
+  const cell = (day: string, time: string) => page.getByRole("button", { name: `${day}, ${time}`, exact: true });
+  const first = cell("Thứ 2", "00:00–01:00"), end = cell("Thứ 4", "01:00–02:00");
+  await first.scrollIntoViewIfNeeded();
+  const a = (await first.boundingBox())!, b = (await end.boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(6);
+  await first.focus(); await page.keyboard.press("Space");
+  await expect(first).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("ArrowRight");
+  await expect(cell("Thứ 3", "00:00–01:00")).toBeFocused();
+  await page.getByRole("button", { name: "Hoàn tác", exact: true }).click();
+  await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(0);
+  await cell("Chủ nhật", "00:00–01:00").click();
+  await page.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(page.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(cell("Chủ nhật", "00:00–01:00")).toHaveAttribute("aria-pressed", "true");
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const box = await first.boundingBox();
+    // Chromium may report a 44px box as 43.999969px after a transform.
+    expect(Math.round(box!.width * 100) / 100).toBeGreaterThanOrEqual(44);
+    expect(Math.round(box!.height * 100) / 100).toBeGreaterThanOrEqual(44);
+  }
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const mobile = await mobileContext.newPage();
+  await login(mobile, "chau"); await mobile.goto("/app/studio?tab=slots");
+  const mobileCell = mobile.getByRole("button", { name: "Thứ 2, 00:00–01:00", exact: true });
+  await mobileCell.tap(); await expect(mobileCell).toHaveAttribute("aria-pressed", "true");
+  await mobileCell.tap(); await expect(mobileCell).toHaveAttribute("aria-pressed", "false");
+  await mobileContext.close();
+  const me = await (await page.request.get("/api/auth/me")).json();
+  const profile = await (await page.request.get(`/api/tutors/${me.user.id}`)).json();
+  const weekly = profile.slots.find((s: { source: string }) => s.source === "weekly");
+  const studentContext = await browser.newContext(), student = await studentContext.newPage();
+  await login(student, "student");
+  // Reproduce CI's slower profile response so the test cannot skip the first week while loading.
+  await student.route(`**/api/tutors/${me.user.id}`, async route => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await route.continue();
+  });
+  await student.goto(`/app/tutors/${me.user.id}`);
+  const dayKey = new Date(Date.parse(weekly.starts_at) + 7 * 3600000).toISOString().slice(0, 10);
+  const dayButton = student.locator(`.lesson-date-grid button[data-date="${dayKey}"]`);
+  const firstDay = student.locator(".lesson-date-grid button").first();
+  await expect(firstDay).toBeVisible();
+  for (let week = 0; week < 8 && !(await dayButton.count()); week++) {
+    const previous = await firstDay.getAttribute("data-date");
+    await student.getByRole("button", { name: "Tuần sau", exact: true }).click();
+    await expect(firstDay).not.toHaveAttribute("data-date", previous!);
+  }
+  await expect(dayButton).toBeVisible();
+  await dayButton.click();
+  await student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true }).click();
+  await expect(student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await student.getByRole("button", { name: "Tuần sau", exact: true }).click();
+  await expect(student.getByRole("group", { name: "Chọn giờ học" }).locator('[aria-pressed="true"]')).toHaveCount(0);
+  await student.getByRole("button", { name: "Tuần trước", exact: true }).click();
+  await dayButton.click();
+  await student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true }).click();
+  await student.getByLabel("Bạn muốn học gì?").fill("Weekly browser test");
+  await student.getByRole("button", { name: "Xem lại yêu cầu", exact: true }).click();
+  const dialog = student.getByRole("dialog");
+  await expect(dialog).toContainText("Học phí / 60 phút");
+  await expect(dialog).toContainText(new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(profile.rate));
+  const bookedResponse = student.waitForResponse(r => r.url().endsWith("/api/bookings") && r.request().method() === "POST");
+  await dialog.getByRole("button", { name: "Gửi yêu cầu học", exact: true }).click();
+  const booked = await bookedResponse;
+  expect(booked.status()).toBe(201); const booking = await booked.json();
+  const accepted = await page.request.patch(`/api/bookings/${booking.id}`, { data: { status: "accepted" } });
+  expect(accepted.status()).toBe(200);
+  await student.goto("/app/bookings");
+  const lesson = student.locator(".lesson-card").filter({ hasText: "Weekly browser test" });
+  await expect(lesson).toContainText("60 phút");
+  const downloadPromise = student.waitForEvent("download");
+  await lesson.getByRole("button", { name: /Lưu lịch/ }).click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream(); let ics = "";
+  for await (const chunk of stream!) ics += chunk.toString();
+  const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  expect(ics).toContain(`DTSTART:${stamp(new Date(weekly.starts_at))}`);
+  expect(ics).toContain(`DTEND:${stamp(new Date(Date.parse(weekly.starts_at) + 3600000))}`);
+  await student.request.patch(`/api/bookings/${booking.id}`, { data: { status: "cancelled" } });
+  const schedule = (await (await page.request.get("/api/tutor/profile")).json()).weekly_schedule;
+  await page.request.put("/api/tutor/availability", { data: { revision: schedule.revision, blocks: [] } });
+  await studentContext.close();
+  expect(errors).toEqual([]);
+});
+
+
+test("tutor card local clocks update at the next minute", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-11-02T08:37:00Z") });
+  await page.goto("/app/tutors?q=nguyen+minh+chau");
+  const clock = page.locator(".tutor-card .tutor-local-time");
+  await expect(clock).toHaveText("15:37 (UTC +07:00)");
+  await page.clock.fastForward(60000);
+  await expect(clock).toHaveText("15:38 (UTC +07:00)");
+});
+
+test("student timetable persists, matches tutors and supports mobile selection", async ({ browser, page }) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  const tutorContext = await browser.newContext(), tutor = await tutorContext.newPage();
+  await login(tutor, "chau");
+  const original = await (await tutor.request.get("/api/tutor/profile")).json();
+  const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 19 }];
+  expect((await tutor.request.put("/api/tutor/availability", { data: { revision: original.weekly_schedule.revision, blocks } })).ok()).toBe(true);
+  await login(page, "student"); await page.goto("/app/availability");
+  await expect(page.getByRole("heading", { name: "Lịch rảnh của tôi" })).toBeVisible();
+  await page.getByRole("button", { name: "Tối", exact: true }).click();
+  for (const day of ["Thứ 2", "Thứ 4"])
+    await page.getByRole("button", { name: `${day}, 19:00–20:00`, exact: true }).click();
+  await page.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(page.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(2);
+  await page.getByRole("link", { name: "Tìm gia sư khớp lịch", exact: true }).click();
+  const first = page.locator(".tutor-card").first();
+  await expect(first).toContainText(original.name);
+  await expect(first).toContainText("Trùng 2 giờ / tuần");
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/app/availability");
+  await page.getByRole("button", { name: "Tối", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Thứ 2, 19:00–20:00", exact: true })).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // A second session must not silently overwrite a schedule saved in this one.
+  const stale = await (await page.request.get("/api/account/availability")).json();
+  expect((await page.request.put("/api/account/availability", { data: { revision: stale.revision, blocks: [] } })).ok()).toBe(true);
+  await page.getByRole("button", { name: "Thứ 2, 19:00–20:00", exact: true }).click();
+  await page.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(page.getByText("Lịch đã thay đổi. Tải lại trang trước khi lưu.", { exact: true })).toBeVisible();
+  await tutor.request.put("/api/tutor/availability", { data: { revision: original.weekly_schedule.revision + 1, blocks: original.weekly_schedule.blocks } });
+  await tutorContext.close(); expect(errors).toEqual([]);
+});
+
+test("admin grants frames, tutor equips and email review requires resubmission", async ({ browser, page }) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  const tutorContext = await browser.newContext(), tutor = await tutorContext.newPage();
+  await login(tutor, "linh");
+  const profile = await (await tutor.request.get("/api/tutor/profile")).json();
+  await login(page, "admin");
+  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
+  const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Cấp Ngọc bích", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Đã cấp", exact: true })).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible(); await expect(trigger).toBeFocused();
+  await tutor.goto("/app/studio?tab=profile");
+  await tutor.getByRole("button", { name: "Trang bị Ngọc bích", exact: true }).click();
+  await expect(tutor.getByText("Đã trang bị Ngọc bích", { exact: true })).toBeVisible();
+  await tutor.goto(`/app/tutors?q=${encodeURIComponent(profile.name)}`);
+  await expect(tutor.locator(".tutor-card")).toHaveAttribute("data-theme", "sage");
+  await tutor.getByRole("link", { name: "Xem hồ sơ", exact: true }).click();
+  await expect(tutor.locator('.tutor-presentation[data-theme="sage"]')).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await trigger.click();
+  expect(await dialog.evaluate(el => el.getBoundingClientRect().width <= innerWidth)).toBe(true);
+  await dialog.getByRole("button", { name: "Gửi email yêu cầu bổ sung", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const email = await (await page.request.get(`/__test/email?email=${encodeURIComponent(profile.email || "linh@demo.giasu.test")}`)).json();
+  expect(email.kind).toBe("profile_update"); expect(email.link).toContain("/app/studio?tab=profile");
+  await tutor.goto("/app/studio?tab=profile");
+  await expect(tutor.getByText(/Kiểm tra email/)).toBeVisible();
+  await tutor.getByRole("button", { name: "Lưu & gửi duyệt", exact: true }).click();
+  await expect(tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt.", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
+  await page.getByRole("button", { name: "Xem & duyệt", exact: true }).click();
+  await dialog.getByRole("button", { name: "Duyệt & công bố", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect((await (await tutor.request.get(`/api/tutors/${profile.user_id}`)).json()).profile_theme).toBe("sage");
+  await tutorContext.close(); expect(errors).toEqual([]);
 });

@@ -1,14 +1,18 @@
+import { TutorInventory } from "@/components/tutor-inventory";
+import { WeeklyAvailability } from "@/components/weekly-availability";
+import { ProfileSectionsEditor } from "@/components/tutor-sections";
+import { EducationEditor } from "@/components/tutor-education";
+import { TimezoneField } from "@/components/tutor-timezone";
 import { TutorGallery, TutorGalleryEditor } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TutorUploads } from "@/components/tutor-uploads";
 import { Link, useSearchParams } from "react-router-dom";
 import { useState } from "react";
-import { Plus, Trash2, Camera, UserRound, CalendarDays } from "lucide-react";
+import { UserRound, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
-import { api, useApp, useLoad, dateTime, money } from "@/lib/api";
-import type { Tutor, Subject, Resource } from "@/lib/types";
+import { api, useApp, useLoad, money } from "@/lib/api";
+import type { Tutor, Subject, Resource, User } from "@/lib/types";
 import {
   Page,
   Heading,
@@ -17,8 +21,6 @@ import {
   State,
   Loading,
   ErrorState,
-  Section,
-  Blank,
 } from "@/components/common";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,7 +42,7 @@ function ProfileForm({
   subjects: Subject[];
   goals: string[];
 }) {
-  const { refresh } = useApp(),
+  const { refresh, setUser } = useApp(),
     [draft, setDraft] = useState(t),
     [mode, setMode] = useState(t.mode),
     [selected, setSelected] = useState(t.subjects),
@@ -54,9 +56,11 @@ function ProfileForm({
     setBusy(true);
     setError("");
     try {
-      await api("/tutor/profile", "PUT", {
+      const result = await api<{ user: User }>("/tutor/profile", "PUT", {
         ...d,
-        profile_theme: draft.profile_theme,
+        profile_sections: draft.profile_sections,
+        timezone: draft.timezone,
+        education_history: draft.education_history,
         mode,
         subjects: selected,
         levels,
@@ -64,6 +68,7 @@ function ProfileForm({
         rate: Number(d.rate),
         experience: Number(d.experience),
       });
+      setUser(result.user);
       refresh();
       toast.success("Hồ sơ đã gửi quản trị viên duyệt.");
     } catch (e) {
@@ -93,26 +98,6 @@ function ProfileForm({
         >
           <fieldset disabled={busy} className="profile-fields">
             <FieldGroup>
-              <FieldSet>
-                <FieldLegend>Phong cách hồ sơ</FieldLegend>
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  value={draft.profile_theme}
-                  onValueChange={(value) => {
-                    if (value)
-                      setDraft((previous) => ({
-                        ...previous,
-                        profile_theme: value as Tutor["profile_theme"],
-                      }));
-                  }}
-                  aria-label="Phong cách hồ sơ"
-                >
-                  <ToggleGroupItem value="paper">Giấy ấm</ToggleGroupItem>
-                  <ToggleGroupItem value="sage">Xanh lá</ToggleGroupItem>
-                  <ToggleGroupItem value="ink">Mực đỏ</ToggleGroupItem>
-                </ToggleGroup>
-              </FieldSet>
               <Field>
                 <FieldLabel htmlFor="headline">Tiêu đề hồ sơ</FieldLabel>
                 <Input
@@ -171,6 +156,9 @@ function ProfileForm({
                   maxLength={200}
                 />
               </Field>
+              <EducationEditor value={draft.education_history} onChange={education_history => setDraft(previous => ({ ...previous, education_history }))} />
+              <ProfileSectionsEditor value={draft.profile_sections} onChange={profile_sections => setDraft(previous => ({ ...previous, profile_sections }))} />
+              <TimezoneField value={draft.timezone} onChange={timezone => setDraft(previous => ({ ...previous, timezone }))} />
               <div className="form-two">
                 <Field>
                   <FieldLabel htmlFor="location">Tỉnh / Thành phố</FieldLabel>
@@ -300,6 +288,8 @@ function ProfileForm({
           tutor={{
             ...draft,
             photo_url: t.photo_url,
+            banner_url: t.banner_url,
+            profile_theme: t.profile_theme,
             subjects: selected,
             levels,
             goals: examGoals,
@@ -313,46 +303,11 @@ function ProfileForm({
 }
 export default function TutorStudio() {
   const [params, setParams] = useSearchParams();
-  const tab = ["files", "profile", "slots"].includes(params.get("tab") || "")
-    ? params.get("tab")!
-    : "files";
+  const tab = params.get("tab") === "slots" ? "slots" : "profile";
   const [uploadPending, setUploadPending] = useState(false);
-  const { refresh } = useApp(),
-    profile = useLoad<Tutor>("/tutor/profile"),
+  const profile = useLoad<Tutor>("/tutor/profile"),
     subjects = useLoad<Subject[]>("/subjects"),
-    exams = useLoad<Resource[]>("/resources"),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  async function add(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget,
-      value = String(new FormData(form).get("starts_at"));
-    setBusy(true);
-    setError("");
-    try {
-      await api("/tutor/slots", "POST", {
-        starts_at: new Date(`${value}:00+07:00`).toISOString(),
-      });
-      refresh();
-      form.reset();
-      toast.success("Đã thêm giờ trống");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function remove(id: number) {
-    setBusy(true);
-    try {
-      await api(`/tutor/slots/${id}`, "DELETE");
-      refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+    exams = useLoad<Resource[]>("/resources");
   if (profile.loading) return <Loading />;
   if (profile.error || !profile.data)
     return <ErrorState error={profile.error} />;
@@ -382,8 +337,8 @@ export default function TutorStudio() {
         <AlertDescription>
           {!uploadPending && t.status === "approved"
             ? "Hồ sơ đang hiển thị trong tìm kiếm. Chỉnh sửa hồ sơ sẽ cần được duyệt lại."
-            : t.moderation_note ||
-              "Hoàn thiện hồ sơ và gửi duyệt để xuất hiện trong tìm kiếm."}
+            : t.status === "rejected" ? "Kiểm tra email, cập nhật hồ sơ rồi chọn Lưu & gửi duyệt."
+              : "Hoàn thiện hồ sơ và gửi duyệt để xuất hiện trong tìm kiếm."}
         </AlertDescription>
       </Alert>
       <Tabs
@@ -392,10 +347,6 @@ export default function TutorStudio() {
         className="studio-workspace"
       >
         <TabsList className="studio-tabs">
-          <TabsTrigger value="files">
-            <Camera size={16} />
-            Ảnh & CV
-          </TabsTrigger>
           <TabsTrigger value="profile">
             <UserRound size={16} />
             Hồ sơ nhận dạy
@@ -405,7 +356,7 @@ export default function TutorStudio() {
             Giờ trống
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="files" forceMount>
+        <TabsContent value="profile" forceMount>
           <section id="studio-files" className="studio-files">
             <TutorUploads
               t={t}
@@ -415,8 +366,7 @@ export default function TutorStudio() {
             />
             <TutorGalleryEditor images={t.gallery || []} onPending={() => setUploadPending(true)} />
           </section>
-        </TabsContent>
-        <TabsContent value="profile" forceMount>
+          <TutorInventory tutor={t} />
           <ProfileForm
             t={t}
             subjects={subjects.data || []}
@@ -425,53 +375,7 @@ export default function TutorStudio() {
         </TabsContent>
         <TabsContent value="slots" forceMount>
           <div className="studio-availability" id="studio-slots">
-            <Section title="Giờ trống · 60 phút / buổi">
-              <form className="slot-form" onSubmit={add}>
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="starts_at">
-                      Giờ bắt đầu (giờ Việt Nam)
-                    </FieldLabel>
-                    <Input
-                      id="starts_at"
-                      name="starts_at"
-                      type="datetime-local"
-                      step={3600}
-                      required
-                    />
-                  </Field>
-                  <Submit busy={busy}>
-                    <Plus data-icon="inline-start" />
-                    Thêm giờ trống
-                  </Submit>
-                </FieldGroup>
-              </form>
-              {error && <ErrorState error={error} />}
-              <div className="slot-list">
-                {!t.slots.length ? (
-                  <Blank title="Chưa có giờ trống" />
-                ) : (
-                  t.slots.map((s) => (
-                    <div key={s.id}>
-                      <span>{dateTime(s.starts_at)}</span>
-                      {s.reserved ? (
-                        <span className="state">Đã được đặt</span>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={busy}
-                          aria-label={`Xóa giờ ${dateTime(s.starts_at)}`}
-                          onClick={() => remove(s.id)}
-                        >
-                          <Trash2 />
-                        </Button>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </Section>
+            <WeeklyAvailability tutor={t} />
           </div>
         </TabsContent>
       </Tabs>
