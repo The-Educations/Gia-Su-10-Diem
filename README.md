@@ -32,7 +32,7 @@ Gia sư vào **Hồ sơ & giờ trống → Ảnh hồ sơ** để tải ảnh �
 
 Không còn tải lên hay tải xuống CV PDF. Tệp cũ được giữ trong dữ liệu nhưng không được phục vụ qua API. Gia sư điền học vấn theo timeline, kinh nghiệm, chứng chỉ, ngôn ngữ, kỹ năng hoặc mục tự đặt tên. Tất cả nội dung cần được quản trị duyệt trước khi công bố. Mọi tài khoản có thể sửa tên, mục tiêu học tập và múi giờ tại **Cài đặt tài khoản**; góc tài khoản hiển thị múi giờ đã lưu.
 
-Nút **Liên hệ gia sư** mở hội thoại trước khi đặt lịch. Chỉ student và tutor của hội thoại đọc / gửi được; admin không đọc các inquiry này. Tin nhắn theo booking giữ phân quyền cũ. Liên hệ trong ứng dụng, chưa gửi email/SMS hoặc công khai số điện thoại.
+Khung **Liên hệ gia sư** gửi lời nhắn, môn học và các giờ rảnh đã chọn vào hội thoại, không tạo yêu cầu học hoặc giữ chỗ. Chỉ student và tutor của hội thoại đọc / gửi được; admin không đọc các inquiry này. Tin nhắn theo booking giữ phân quyền cũ. Liên hệ trong ứng dụng, chưa gửi email/SMS hoặc công khai số điện thoại.
 
 Để xem bản build:
 
@@ -80,7 +80,7 @@ npm run test:e2e
 
 Danh mục khởi đầu có 25 nhóm môn và 8 nguồn tham khảo kỳ thi; chưa bao phủ hoặc xác minh mọi kỳ thi tại Việt Nam. Mục tiêu luyện thi do gia sư khai báo, không phải chứng nhận năng lực. Admin công bố hồ sơ không đồng nghĩa đã xác minh danh tính / bằng cấp.
 
-Mọi tài khoản mới, kể cả Google, cần nhập mã gửi từ contact@giasudiem10.online qua Mailflare trước khi được tạo. Học sinh có lịch rảnh, lọc giờ trùng và gửi yêu cầu học theo tuần; gia sư xác nhận và trao đổi qua tin nhắn. Chưa có thanh toán, khôi phục mật khẩu, thông báo lịch học gửi ra ngoài, video tích hợp, tải chứng chỉ hoặc tự tạo các buổi có ngày cụ thể từ yêu cầu tuần. Form landing mở tìm gia sư theo môn học và hình thức học.
+Mọi tài khoản mới, kể cả Google, cần nhập mã gửi từ contact@giasudiem10.online qua Mailflare trước khi được tạo. Học sinh/phụ huynh có lịch rảnh, lọc giờ trùng và liên hệ gia sư qua tin nhắn. Mọi vai trò có mục Tin nhắn; học sinh, phụ huynh và gia sư có hội thoại hỗ trợ admin được ghim sẵn. Chưa có thanh toán, khôi phục mật khẩu, thông báo lịch học gửi ra ngoài, video tích hợp, tải chứng chỉ hoặc tự tạo các buổi có ngày cụ thể từ yêu cầu tuần. Form landing mở tìm gia sư theo môn học và hình thức học.
 
 Production dùng HTTPS `APP_ORIGIN` và Durable Object SQLite; xem tài liệu Cloudflare để triển khai và khôi phục.
 

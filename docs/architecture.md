@@ -56,7 +56,7 @@ Các đường dẫn sau đều có tiền tố `/app`.
 | `/auth` | `Auth.tsx` | Đăng nhập / đăng ký |
 | `/workspace` | `Dashboard.tsx` | Đã đăng nhập |
 | `/bookings` | `Bookings.tsx` | Lịch theo vai trò / quyền sở hữu |
-| `/messages` | `Messages.tsx` | Hội thoại của các buổi học được phép xem |
+| `/messages` | `Messages.tsx` | Hỗ trợ admin được ghim, liên hệ gia sư và hội thoại buổi học |
 | `/favorites` | `Tutors.tsx` | Student |
 | `/settings` | `Settings.tsx` | Đã đăng nhập |
 | `/studio` | `TutorStudio.tsx` | Tutor |
@@ -80,6 +80,7 @@ Tên `Library`, `ResourceEditor` và API `resources` được giữ từ scaffol
 | `reviews` | Một review / booking; số sao và nội dung |
 | `resources` | Mục kỳ thi, một subject liên quan, cấp học, năm, nguồn, HTTPS URL, công bố / nháp |
 | `tutor_uploads` | Một ảnh và một CV mỗi tutor; UUID, BLOB, MIME, filename, size; replace loại bỏ bản cũ |
+| `support_threads`, `support_messages` | Hội thoại riêng giữa chủ tài khoản và đội ngũ admin |
 | `inquiries`, `inquiry_messages` | Một thread/student/tutor và tin nhắn trước booking |
 | `demo_seeds` | Dấu mốc seed, tránh ghi đè hoặc nhân đôi dữ liệu minh họa |
 | `audit` | Actor, action, target và thời điểm |
@@ -99,6 +100,8 @@ Tất cả dưới `/api`. Chi tiết payload hiện nằm trong `server/validat
 | Tutor | `GET/PUT tutor/profile`, `POST tutor/slots`, `DELETE tutor/slots/:id` |
 | Booking | `GET/POST bookings`, `PATCH bookings/:id`, `PATCH bookings/:id/lesson` |
 | Upload | `PUT/DELETE tutor/uploads/:kind`, `GET uploads/:uuid`; kind = photo hoặc cv |
+| Support | `GET support`, `GET/POST support/:id/messages` |
+| Delete account | `DELETE admin/users/:id` (admin, xác nhận email, ẩn danh lịch sử) |
 | Inquiry | `GET/POST inquiries`, `GET/POST inquiries/:id/messages` |
 | Messages / review | `GET/POST bookings/:id/messages`, `POST bookings/:id/review` |
 | Admin | `GET admin`, `PATCH admin/tutors/:id`, `PATCH admin/users/:id`, `PUT admin/subjects/:id`, `POST admin/resources`, `PUT admin/resources/:id` |

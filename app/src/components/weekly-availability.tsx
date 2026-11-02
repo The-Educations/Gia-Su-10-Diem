@@ -23,6 +23,7 @@ export function ScheduleEditor({ initial, endpoint, tutor = false }: { initial: 
   }
   return <Section title="Lịch lặp hằng tuần">
     <div className="availability-toolbar"><span>Giờ Việt Nam · 1 giờ / ô</span><span aria-live="polite">{selected.size} giờ / tuần{dirty ? " · Chưa lưu" : ""}</span></div>
+    <p className="availability-help"><span className="schedule-help-mouse">Nhấp để chọn từng ô hoặc kéo chuột để chọn nhiều giờ. Chọn lại để bỏ chọn.</span><span className="schedule-help-touch">Chạm vào ô để chọn giờ rảnh. Chạm lại để bỏ chọn.</span></p>
     <AvailabilityGrid selected={selected} setSelected={setSelected} busy={busy} />
     {tutor && <p className="availability-note">Mỗi ô mở một buổi học 1 giờ trong 8 tuần tới. Buổi đã đặt được giữ nguyên.</p>}
     {error && <ErrorState error={error} />}

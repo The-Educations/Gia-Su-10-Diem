@@ -1,4 +1,6 @@
 import { registerWeeklyRequests } from "./weekly-requests.js";
+import { registerSupport } from "./support.js";
+import { registerAccountDeletion } from "./account-deletion.js";
 import { registerSignupVerification } from "./signup-verification.js";
 import { registerCommunityImages } from "./community-images.js";
 import { registerCommunity } from "./community.js";
@@ -218,6 +220,8 @@ export function createApi(
   registerCommunity(app, db, auth, audit);
   registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
+  registerSupport(app, db, auth);
+  registerAccountDeletion(app, db, auth, audit);
   registerWeeklyRequests(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
@@ -685,11 +689,11 @@ export function createApi(
       theme_catalog: themeCatalog,
       users: all(
         db,
-        "SELECT id,name,email,role,learner_type,status,demo,created_at,community_locked,community_lock_reason FROM users ORDER BY id DESC",
+        "SELECT id,name,email,role,learner_type,status,demo,created_at,community_locked,community_lock_reason FROM users WHERE status<>'deleted' ORDER BY id DESC",
       ),
       tutors: all(
         db,
-        "SELECT t.*,u.name,u.email,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id",
+        "SELECT t.*,u.name,u.email,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id WHERE u.status<>'deleted'",
       ).map((t) => ({
         ...t,
         ...uploadMetadata(db, t.user_id),
@@ -729,7 +733,7 @@ export function createApi(
         .object({ status: z.enum(["active", "suspended"]) })
         .parse(req.body),
       u = one(db, "SELECT * FROM users WHERE id=?", req.params.id);
-    if (!u) fail(404, "Không tìm thấy tài khoản.");
+    if (!u || u.status === "deleted") fail(404, "Không tìm thấy tài khoản.");
     if (u.role === "admin")
       fail(403, "Không thể khóa quản trị viên qua giao diện này.");
     run(db, "UPDATE users SET status=? WHERE id=?", d.status, u.id);

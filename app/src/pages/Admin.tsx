@@ -60,7 +60,8 @@ export default function Admin() {
     [tutor, setTutor] = useState<Tutor | null>(null),
     [reviewOpen, setReviewOpen] = useState(false),
     [account, setAccount] = useState<(User & { status: string }) | null>(null),
-    [accountAction, setAccountAction] = useState<"status" | "admin">("status"),
+    [accountAction, setAccountAction] = useState<"status" | "admin" | "delete">("status"),
+    [deleteEmail, setDeleteEmail] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const reviewTrigger = useRef<HTMLButtonElement | null>(null);
@@ -305,6 +306,9 @@ export default function Admin() {
                       {u.status === "active" ? "Tạm khóa" : "Kích hoạt"}
                     </Button>
                   )}
+                  {u.role !== "admin" && <Button variant="destructive" onClick={() => {
+                    setError(""); setDeleteEmail(""); setAccountAction("delete"); setAccount(u);
+                  }}>Xóa tài khoản</Button>}
                 </article>
               ))}
             </div>
@@ -526,13 +530,13 @@ export default function Admin() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {accountAction === "admin"
+              {accountAction === "delete" ? "Xóa tài khoản?" : accountAction === "admin"
                 ? "Cấp quyền quản trị?"
                 : `${account?.status === "active" ? "Tạm khóa" : "Kích hoạt"} tài khoản?`}
             </DialogTitle>
             <DialogDescription>
               {account?.name} · {account?.email}.
-              {accountAction === "admin"
+              {accountAction === "delete" ? " Hồ sơ cá nhân, email và ảnh sẽ bị xóa; mọi phiên đăng nhập bị thu hồi. Lịch đang chờ hoặc đã nhận sẽ bị hủy. Lịch sử học và tin nhắn được giữ dưới tên Tài khoản đã xóa. Không thể khôi phục tài khoản này." : accountAction === "admin"
                 ? " Tài khoản sẽ chuyển sang quản trị viên, có quyền quản lý tài khoản, hồ sơ và danh mục. Người này cần đăng nhập lại."
                 : " Tạm khóa sẽ đăng xuất mọi phiên của tài khoản."}
             </DialogDescription>
@@ -544,19 +548,20 @@ export default function Admin() {
               if (account)
                 mutate(
                   `/admin/users/${account.id}${accountAction === "admin" ? "/role" : ""}`,
-                  "PATCH",
-                  accountAction === "admin"
+                  accountAction === "delete" ? "DELETE" : "PATCH",
+                  accountAction === "delete" ? { email: deleteEmail } : accountAction === "admin"
                     ? { role: "admin" }
                     : { status: account.status === "active" ? "suspended" : "active" },
                 );
             }}
           >
+            {accountAction === "delete" && <Field className="mb-4"><FieldLabel htmlFor="delete-account-email">Nhập lại email tài khoản để xác nhận</FieldLabel><Input id="delete-account-email" type="email" value={deleteEmail} onChange={e => setDeleteEmail(e.target.value)} autoComplete="off" required /></Field>}
             <DialogFooter>
               <Button type="button" variant="outline" disabled={busy} onClick={() => setAccount(null)}>
                 Hủy
               </Button>
-              <Submit busy={busy}>
-                {accountAction === "admin" ? "Xác nhận cấp quyền" : "Xác nhận"}
+              <Submit busy={busy} disabled={accountAction === "delete" && deleteEmail.trim().toLowerCase() !== account?.email.toLowerCase()}>
+                {accountAction === "delete" ? "Xác nhận xóa tài khoản" : accountAction === "admin" ? "Xác nhận cấp quyền" : "Xác nhận"}
               </Submit>
             </DialogFooter>
           </form>
