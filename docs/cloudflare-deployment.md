@@ -30,9 +30,16 @@ For local Node development, use `node --env-file=.env server/index.js`. Use `.de
 
 ## Automatic CI and deployment
 
-`.github/workflows/ci-deploy.yml` runs on pull requests and pushes to `main` in `The-Educations/Gia-Su-10-Diem`. The **Validate** job installs locked dependencies, checks types, runs API/OAuth and Chrome browser tests, audits dependencies, builds the site, exercises the local Cloudflare runtime, and checks the Worker bundle. Failed checks prevent the dependent deployment job from starting.
+`.github/workflows/ci-deploy.yml` runs on pull requests and pushes to `main` in `The-Educations/Gia-Su-10-Diem`. GitHub shows separate checks for:
 
-On `main`, **Deploy Cloudflare** downloads the static artifact from that same run and deploys the matching source commit using the encrypted repository secret `CLOUDFLARE_API_TOKEN`. Pull requests and forks cannot deploy. Production deployments are serialized. Durable Object updates are immediate to avoid serving old account APIs with new frontend assets. The final check verifies canonical routing, health, Google availability, the exact frontend entry file, and authenticated account/admin API routes. A manual workflow dispatch also runs all checks before deployment and only deploys from `main`.
+- **API, types and build**: installs locked dependencies, checks TypeScript, tests the API, authorization and Google OAuth, audits dependencies, and builds the production site once.
+- **Browser journeys**: downloads that build and runs Chrome tests for signup, resumable onboarding, student bookings, tutor approval, messages, admin promotion and responsive layouts.
+- **Cloudflare runtime**: downloads the same build, validates the Worker bundle and bindings, and exercises registration, onboarding, sessions, uploads and galleries in local workerd with an isolated test database.
+- **Validate**: preserves the required branch-protection check and succeeds only when all three jobs succeed. A failed, skipped or cancelled prerequisite fails this gate.
+
+Browser and Cloudflare runtime checks run in parallel after the build. They receive no deployment credentials. Failed browser tests retain traces and screenshots; failed Cloudflare tests retain the Worker log for seven days.
+
+On `main`, **Deploy Cloudflare** runs only after **Validate** passes. It checks the current remote `main` revision before deploying; superseded runs exit with a notice and leave production alone. It downloads the static artifact from that same run and deploys the matching source commit using the encrypted repository secret `CLOUDFLARE_API_TOKEN`. Pull requests and forks cannot deploy. Production deployments and their verification are serialized. Durable Object updates are immediate to avoid serving old account APIs with new frontend assets. The final check verifies canonical routing, health, Google availability, the exact frontend entry file, and authenticated account/admin API routes. A manual workflow dispatch also runs all checks before deployment and only deploys from `main`.
 
 The token must permit Worker script deployment and route management for the account and `giasudiem10.online` zone in `wrangler.jsonc` (Cloudflare's **Edit Cloudflare Workers** template covers these permissions). Store it only in GitHub Actions secrets; no Google application secrets are copied into CI. Existing Worker secrets and the Durable Object namespace remain in place. For emergency rollback, use `npx wrangler rollback <version-id> --durable-objects-code-update-mode immediate`, then rerun the production checks against the restored build.
 

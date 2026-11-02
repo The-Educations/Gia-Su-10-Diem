@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  checks:
-    name: Validate
+  build:
+    name: API, types and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -26,12 +26,67 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm audit --audit-level=high
-      - run: npm run build:cloudflare
+      - name: Check TypeScript
+        run: npm run typecheck
+      - name: Test API, authorization and Google OAuth
+        run: npm test
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+      - name: Build the production site
+        run: npm run build:cloudflare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-${{ github.sha }}
+          path: dist/site
+          if-no-files-found: error
+          retention-days: 7
+
+  browser:
+    name: Browser journeys
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-${{ github.sha }}
+          path: dist/site
+      - name: Serve the built app in the browser tests
+        run: cp -R dist/site/app dist/app
       - run: npx playwright install --with-deps chrome
-      - run: npx playwright test
+      - name: Test student, tutor and admin journeys
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failures-${{ github.sha }}
+          path: test-results
+          retention-days: 7
+
+  worker:
+    name: Cloudflare runtime
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-${{ github.sha }}
+          path: dist/site
+      - name: Validate the Worker bundle and bindings
+        run: npx wrangler deploy --dry-run
       - name: Check Cloudflare runtime
         shell: bash
         run: |
@@ -40,7 +95,7 @@ jobs:
           trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
           ready=false
           for _ in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:4176/api/health > /dev/null; then
+            if curl --fail --silent --max-time 2 http://127.0.0.1:4176/api/health > /dev/null; then
               ready=true
               break
             fi
@@ -51,21 +106,29 @@ jobs:
             exit 1
           fi
           npm run test:cloudflare
-      - run: npx wrangler deploy --dry-run
-      - uses: actions/upload-artifact@v4
-        with:
-          name: site-${{ github.sha }}
-          path: dist/site
-          if-no-files-found: error
-          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: test-failures-${{ github.sha }}
-          path: |
-            test-results
-            ${{ runner.temp }}/worker.log
+          name: cloudflare-failures-${{ github.sha }}
+          path: ${{ runner.temp }}/worker.log
           retention-days: 7
+
+  checks:
+    name: Validate
+    if: always()
+    needs: [build, browser, worker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every app check to pass
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          WORKER_RESULT: ${{ needs.worker.result }}
+        run: |
+          test "$BUILD_RESULT" = success
+          test "$BROWSER_RESULT" = success
+          test "$WORKER_RESULT" = success
 
   deploy:
     name: Deploy Cloudflare
@@ -81,18 +144,35 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
+      - name: Skip revisions superseded on main
+        id: revision
+        shell: bash
+        run: |
+          latest="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deployment because main has a newer revision."
+            echo "Deployment skipped: main has a newer revision." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.revision.outputs.current == 'true'
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
+        if: steps.revision.outputs.current == 'true'
       - uses: actions/download-artifact@v4
+        if: steps.revision.outputs.current == 'true'
         with:
           name: site-${{ github.sha }}
           path: dist/site
       - name: Deploy the verified build
+        if: steps.revision.outputs.current == 'true'
         run: npx wrangler deploy --durable-objects-code-update-mode immediate
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Verify production
+        if: steps.revision.outputs.current == 'true'
         run: node test/production-routing.mjs
