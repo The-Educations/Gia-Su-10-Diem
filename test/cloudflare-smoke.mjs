@@ -64,3 +64,18 @@ console.log('Cloudflare runtime: registration, resumable onboarding, session, po
 
 const { verifySeo } = await import('./seo-routing.mjs');
 await verifySeo(base);
+
+const parentResponse = await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Parent runtime', email: `parent-${Date.now()}@example.test`, password: 'RuntimeTest2026!' }) });
+assert.equal(parentResponse.status, 201);
+const parentCookie = parentResponse.headers.getSetCookie().find(c => c.startsWith('giasu_session='))?.split(';')[0];
+const parentSetup = await fetch(base + '/api/account/onboarding', { method: 'PUT', headers: { Cookie: parentCookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 0, role: 'parent' }) });
+assert.equal(parentSetup.status, 200);
+const parentUser = (await parentSetup.json()).user;
+assert.equal(parentUser.role, 'student');
+assert.equal(parentUser.learner_type, 'parent');
+assert.equal((await fetch(base + '/api/posts')).status, 200);
+assert.equal((await fetch(base + '/api/admin/posts', { headers: { Cookie: parentCookie } })).status, 403);
+const missingPost = await fetch(base + '/app/news/999999999');
+assert.equal(missingPost.status, 404);
+assert.match(missingPost.headers.get('x-robots-tag'), /noindex/);
+console.log('Cloudflare runtime: parent setup, news schema, authorization and missing article SEO passed.');

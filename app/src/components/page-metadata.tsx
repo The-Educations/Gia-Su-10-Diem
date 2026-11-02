@@ -1,12 +1,16 @@
+import { useLoad } from "@/lib/api";
+import type { Post } from "@/lib/types";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import pages from "../../../shared/seo-pages.json";
 
 export function PageMetadata() {
   const { pathname } = useLocation();
+  const match = pathname.match(/^\/news\/(\d+)$/);
+  const post = useLoad<Post>(match ? `/posts/${match[1]}` : null);
   useEffect(() => {
     const path = `/app${pathname}`;
-    const page = pages[path as keyof typeof pages];
+    const page = post.data ? { title: `${post.data.title} | Gia Sư 10 Điểm`, description: post.data.summary } : pages[path as keyof typeof pages];
     document.title = page?.title || "Tài khoản | Gia Sư 10 Điểm";
     const meta = (name: string, content: string, property = false) => {
       const attr = property ? "property" : "name";
@@ -37,6 +41,6 @@ export function PageMetadata() {
       meta("og:image", "https://giasudiem10.online/assets/social-preview.png", true);
       meta("twitter:card", "summary_large_image");
     }
-  }, [pathname]);
+  }, [pathname, post.data]);
   return null;
 }

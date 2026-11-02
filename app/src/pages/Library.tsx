@@ -43,7 +43,7 @@ export default function Library() {
   );
   return (
     <Page>
-      <Heading title="Môn học & kỳ thi" />
+      <Heading title="Tìm môn học" />
       <Tabs
         value={tab}
         onValueChange={(v) => {

@@ -96,6 +96,13 @@ export function migrateDatabase(db) {
     CREATE TABLE IF NOT EXISTS oauth_states (state TEXT PRIMARY KEY, browser_hash TEXT NOT NULL, verifier TEXT NOT NULL, nonce TEXT NOT NULL, role TEXT NOT NULL, next TEXT NOT NULL, link_user_id INTEGER REFERENCES users(id), expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS upload_chunks (upload_id TEXT NOT NULL REFERENCES tutor_uploads(id) ON DELETE CASCADE, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(upload_id,part));
 `);
+  if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "learner_type"))
+    db.exec("ALTER TABLE users ADD COLUMN learner_type TEXT NOT NULL DEFAULT 'student' CHECK(learner_type IN ('student','parent'))");
+  db.exec(`CREATE TABLE IF NOT EXISTS posts (
+    id INTEGER PRIMARY KEY, title TEXT NOT NULL, summary TEXT NOT NULL, body TEXT NOT NULL,
+    published INTEGER NOT NULL DEFAULT 0 CHECK(published IN (0,1)), author_id INTEGER NOT NULL REFERENCES users(id),
+    published_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);
@@ -108,6 +115,7 @@ export const publicUser = (u) =>
         name: u.name,
         email: u.email,
         role: u.role,
+        learner_type: u.learner_type,
         goal: u.goal,
         demo: !!u.demo,
         onboarding_step: u.onboarding_step,

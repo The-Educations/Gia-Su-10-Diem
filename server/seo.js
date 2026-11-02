@@ -6,8 +6,13 @@ export const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="h
 const escape = (value) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const privateRoutes = new Set(["/app/auth", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/messages", "/app/settings", "/app/studio", "/app/admin", "/app/favorites"]);
 
-export function pageSeo(path) {
-  const page = Object.hasOwn(pages, path) ? pages[path] : null;
+export function newsSitemap(posts) {
+  return sitemap.replace("</urlset>", posts.map(post => `<url><loc>${siteOrigin}/app/news/${Number(post.id)}</loc></url>`).join("") + "</urlset>");
+}
+export function pageSeo(path, post = null) {
+  const page = /^\/app\/news\/\d+$/.test(path) && post
+    ? { title: `${post.title} | Gia Sư 10 Điểm`, description: post.summary }
+    : Object.hasOwn(pages, path) ? pages[path] : null;
   const known = page || privateRoutes.has(path) || /^\/app\/tutors\/\d+$/.test(path);
   return {
     title: page?.title || (known ? "Tài khoản | Gia Sư 10 Điểm" : "Không tìm thấy trang | Gia Sư 10 Điểm"),
@@ -18,8 +23,8 @@ export function pageSeo(path) {
   };
 }
 
-export function renderSeo(html, path) {
-  const page = pageSeo(path);
+export function renderSeo(html, path, post = null) {
+  const page = pageSeo(path, post);
   const tags = [
     `<title>${escape(page.title)}</title>`,
     `<meta name="description" content="${escape(page.description)}">`,

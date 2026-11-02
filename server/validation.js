@@ -9,7 +9,7 @@ export const loginSchema = z.object({
 });
 export const registerSchema = loginSchema.extend({
   name: text(80),
-  role: z.enum(["student", "tutor"]),
+  role: z.enum(["student", "tutor"]).default("student"),
 });
 export const tutorSchema = z.object({
   headline: text(120),

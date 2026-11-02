@@ -175,7 +175,7 @@ export default function Dashboard() {
             )}
           </section>
           <WorkspacePanel
-            title={isTutor ? "Yêu cầu cần phản hồi" : "Mục tiêu của bạn"}
+            title={isTutor ? "Yêu cầu cần phản hồi" : user.learner_type === "parent" ? "Mục tiêu học tập của con" : "Mục tiêu của bạn"}
             action={
               <TextLink to={isTutor ? "/bookings?status=pending" : "/settings"}>
                 {isTutor ? "Xem tất cả" : "Chỉnh sửa"}

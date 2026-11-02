@@ -77,14 +77,23 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
   let response = await callback(flow);
   assert.equal(response.headers.get("location"), "/app/onboarding");
   const tutor = one(db, "SELECT * FROM users WHERE email=?", claims.email);
-  assert.equal(tutor.role, "tutor");
+  assert.equal(tutor.role, "student");
+  assert.equal(tutor.onboarding_step, 0);
   assert.equal(tutor.password, "");
-  assert.ok(one(db, "SELECT * FROM tutors WHERE user_id=?", tutor.id));
+  assert.equal(one(db, "SELECT * FROM tutors WHERE user_id=?", tutor.id), undefined);
   assert.match((await callback(flow)).headers.get("location"), /expired/);
   assert.match(
     response.headers.getSetCookie().find((c) => c.startsWith("giasu_session=")),
     /HttpOnly/,
   );
+  const accountSession = response.headers.getSetCookie().find(c => c.startsWith("giasu_session=")).split(";")[0];
+  const setup = await fetch(base + "/api/account/onboarding", {
+    method: "PUT", headers: { Cookie: accountSession, "Content-Type": "application/json" },
+    body: JSON.stringify({ step: 0, role: "tutor" }),
+  });
+  assert.equal(setup.status, 200);
+  assert.equal((await setup.json()).user.role, "tutor");
+  assert.ok(one(db, "SELECT * FROM tutors WHERE user_id=?", tutor.id));
   flow = await start("?role=student&next=/messages");
   assert.equal((await callback(flow)).headers.get("location"), "/app/onboarding?next=%2Fmessages");
   assert.equal(one(db, "SELECT count(*) AS n FROM users").n, 1);

@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { test, expect, type Page } from "@playwright/test";
 async function login(page: Page, slug: string) {
   await page.goto("/app/auth");
+  await page.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
   await page
     .getByLabel("Email", { exact: true })
     .fill(`${slug}@demo.giasu.test`);
@@ -147,10 +148,9 @@ test("new tutor onboarding, availability and admin approval", async ({
     tutor = await tc.newPage(),
     admin = await ac.newPage();
   await tutor.goto("/app/tutors");
-  await tutor.getByRole("link", { name: "Đăng ký làm gia sư" }).click();
-  await expect(
-    tutor.getByRole("combobox", { name: "Bạn tham gia với vai trò" }),
-  ).toContainText("Gia sư");
+  await tutor.getByRole("link", { name: "Tài khoản", exact: true }).click();
+  await tutor.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await tutor.getByRole("tab", { name: "Tạo tài khoản" }).click();
   await tutor.getByLabel("Họ và tên", { exact: true }).fill("Gia sư kiểm thử");
   await tutor
     .getByLabel("Email", { exact: true })
@@ -161,6 +161,7 @@ test("new tutor onboarding, availability and admin approval", async ({
     .getByRole("button", { name: "Tạo tài khoản", exact: true })
     .click();
   await expect(tutor).toHaveURL(/onboarding/);
+  await tutor.getByRole("radio", { name: "Gia sư", exact: true }).click();
   await tutor.getByRole("button", { name: "Tiếp tục", exact: true }).click();
   await tutor.getByLabel("Tiêu đề hồ sơ", { exact: true }).fill("Gia sư Toán tận tâm");
   await tutor.getByLabel("Giới thiệu cách bạn dạy", { exact: true }).fill("Luyện tập theo năng lực của từng học sinh.");
@@ -607,7 +608,7 @@ test("landing entry, education parallax, mobile navigation and real tutor search
   await page.getByRole("button", { name: "Mở menu" }).click();
   await page
     .locator("#mobile-nav")
-    .getByRole("link", { name: "Đăng nhập", exact: true })
+    .getByRole("link", { name: "Tài khoản", exact: true })
     .click();
   await expect(page).toHaveURL(/\/app\/auth$/);
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -621,7 +622,7 @@ test("landing entry, education parallax, mobile navigation and real tutor search
   expect(errors).toEqual([]);
 });
 
-test("Google sign-in role choice and callback error are accessible", async ({
+test("Google-first unified account entry defers role choice and preserves return route", async ({
   page,
 }) => {
   await page.route("**/api/auth/providers", (route) =>
@@ -629,15 +630,8 @@ test("Google sign-in role choice and callback error are accessible", async ({
   );
   await page.goto("/app/auth?mode=register&role=tutor&next=%2Fmessages");
   const google = page.getByRole("link", { name: "Tiếp tục với Google" });
-  await expect(google).toHaveAttribute(
-    "href",
-    "/api/auth/google/start?role=tutor&next=%2Fmessages",
-  );
-  await choose(page, "Bạn tham gia với vai trò", "Học sinh / Phụ huynh");
-  await expect(google).toHaveAttribute(
-    "href",
-    "/api/auth/google/start?role=student&next=%2Fmessages",
-  );
+  await expect(google).toHaveAttribute("href", "/api/auth/google/start?next=%2Fmessages");
+  await expect(page.getByRole("combobox", { name: "Bạn tham gia với vai trò" })).toHaveCount(0);
   await page.goto("/app/auth?oauth_error=email_exists");
   await expect(page.getByRole("alert")).toContainText(
     "Email này đã có tài khoản",
@@ -703,6 +697,8 @@ test("student signup validates confirmation, resumes setup, retries saving and p
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.getByRole("button", { name: "Tiếp tục", exact: true })).toBeDisabled();
+  await page.getByRole("radio", { name: "Học sinh", exact: true }).click();
   await page.getByRole("button", { name: "Tiếp tục", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Mục tiêu học tập")).toBeVisible();
@@ -763,6 +759,7 @@ test("administrator confirms or cancels promotion and the new administrator sign
   await expect(row.getByRole("button", { name: "Cấp quyền quản trị", exact: true })).toHaveCount(0);
   expect((await uc.request.get("/api/admin")).status()).toBe(401);
   await user.goto("/app/auth");
+  await user.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
   await user.getByLabel("Email", { exact: true }).fill(email);
   await user.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await user.getByRole("button", { name: "Đăng nhập", exact: true }).click();
@@ -773,4 +770,68 @@ test("administrator confirms or cancels promotion and the new administrator sign
   expect(errors).toEqual([]);
   await ac.close();
   await uc.close();
+});
+
+test("parent chooses a separate setup and reaches shared booking tools", async ({ page }) => {
+  await page.goto("/app/auth?mode=register");
+  await page.getByLabel("Họ và tên", { exact: true }).fill("Phụ huynh mới");
+  await page.getByLabel("Email", { exact: true }).fill("parent@browser.test");
+  await page.getByLabel("Mật khẩu (ít nhất 10 ký tự)", { exact: true }).fill("BrowserStudy2026!");
+  await page.getByLabel("Xác nhận mật khẩu", { exact: true }).fill("BrowserStudy2026!");
+  await page.getByRole("button", { name: "Tạo tài khoản", exact: true }).click();
+  await page.getByRole("radio", { name: "Phụ huynh", exact: true }).click();
+  await page.getByRole("button", { name: "Tiếp tục", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tìm gia sư cho con" })).toBeVisible();
+  await page.getByLabel("Mục tiêu học tập của con").fill("Con ôn thi Toán lớp 9");
+  await page.getByRole("button", { name: "Lưu và tiếp tục", exact: true }).click();
+  await page.reload();
+  await expect(page.getByText("Chọn môn học và gia sư phù hợp với mục tiêu của con.")).toBeVisible();
+  await page.getByRole("button", { name: "Hoàn tất thiết lập" }).click();
+  await expect(page).toHaveURL(/workspace/);
+  await expect(page.locator(".sidebar").getByText("Phụ huynh", { exact: true })).toBeVisible();
+  await page.goto("/app/bookings");
+  await expect(page.locator("main h1")).toBeVisible();
+  await page.goto("/app/settings");
+  await expect(page.getByLabel("Mục tiêu học tập của con")).toHaveValue("Con ôn thi Toán lớp 9");
+});
+
+test("admin creates, publishes and unpublishes a safe public news article", async ({ page, browser }) => {
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  await login(page, "admin");
+  await page.getByRole("tab", { name: "Tin tức", exact: true }).click();
+  await page.getByRole("button", { name: "Viết bài mới" }).click();
+  await page.getByLabel("Tiêu đề", { exact: true }).fill("Cách học Toán hiệu quả");
+  await page.getByLabel("Tóm tắt", { exact: true }).fill("Bắt đầu với mục tiêu học tập.");
+  await page.getByLabel("Nội dung", { exact: true }).fill('<script>alert("unsafe")</script>\nChọn một mục tiêu mỗi tuần.');
+  await page.getByRole("button", { name: "Lưu bài viết" }).click();
+  await expect(page.getByText("Bản nháp", { exact: true })).toBeVisible();
+  await guest.goto("/app/news");
+  await expect(guest.getByText("Chưa có bài viết", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Sửa bài viết" }).click();
+  await page.getByLabel("Tiêu đề", { exact: true }).fill("Không lưu thay đổi này");
+  await page.getByRole("button", { name: "Hủy", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Cách học Toán hiệu quả", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Sửa bài viết" }).click();
+  await expect(page.getByLabel("Tiêu đề", { exact: true })).toHaveValue("Cách học Toán hiệu quả");
+  await page.getByLabel("Công khai bài viết").check();
+  await page.getByRole("button", { name: "Lưu bài viết" }).click();
+  await expect(page.getByText("Đã công khai", { exact: true })).toBeVisible();
+  await guest.reload();
+  await guest.getByRole("link", { name: "Cách học Toán hiệu quả" }).click();
+  await expect(guest.locator(".news-body")).toContainText('<script>alert("unsafe")</script>');
+  await expect(guest.locator(".news-body script")).toHaveCount(0);
+  await expect(guest).toHaveTitle("Cách học Toán hiệu quả | Gia Sư 10 Điểm");
+  const url = guest.url();
+  const published = await guest.request.get(url);
+  expect(published.status()).toBe(200);
+  expect(await published.text()).toContain('name="robots" content="index, follow');
+  await page.getByRole("button", { name: "Sửa bài viết" }).click();
+  await page.getByLabel("Công khai bài viết").uncheck();
+  await page.getByRole("button", { name: "Lưu bài viết" }).click();
+  await expect(page.getByText("Bản nháp", { exact: true })).toBeVisible();
+  expect((await guest.request.get(url)).status()).toBe(404);
+  await guest.reload();
+  await expect(guest.getByRole("alert")).toContainText("Không tìm thấy bài viết");
+  await guestContext.close();
 });

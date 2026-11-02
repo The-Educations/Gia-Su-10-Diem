@@ -3,12 +3,12 @@ import { test, expect } from "@playwright/test";
 test("desktop collapse persists and mobile navigation stays expanded", async ({ page }) => {
   await page.goto("/app/tutors");
   const sidebar = page.getByRole("complementary", { name: "Thanh điều hướng" });
-  const toggle = page.getByRole("button", { name: "Thu gọn thanh điều hướng" });
+  const toggle = sidebar.getByRole("button", { name: "Thu gọn thanh điều hướng" });
   await toggle.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Mở rộng thanh điều hướng" })).toHaveAttribute("aria-expanded", "false");
   await expect.poll(() => sidebar.evaluate(e => e.getBoundingClientRect().width)).toBe(76);
-  await sidebar.getByRole("link", { name: "Môn học & kỳ thi" }).click();
+  await sidebar.getByRole("link", { name: "Tìm môn học" }).click();
   await expect(page).toHaveURL(/library$/);
   await page.reload();
   await expect(sidebar).toHaveCSS("width", "76px");
@@ -17,13 +17,13 @@ test("desktop collapse persists and mobile navigation stays expanded", async ({ 
   const menu = page.getByRole("button", { name: "Mở điều hướng" });
   await menu.click();
   const drawer = page.getByRole("dialog");
-  await expect(drawer.getByText("Môn học & kỳ thi", { exact: true })).toBeVisible();
-  expect(await drawer.getByText("Môn học & kỳ thi", { exact: true }).evaluate(e => getComputedStyle(e).opacity)).toBe("1");
+  await expect(drawer.getByText("Tìm môn học", { exact: true })).toBeVisible();
+  expect(await drawer.getByText("Tìm môn học", { exact: true }).evaluate(e => getComputedStyle(e).opacity)).toBe("1");
   await page.keyboard.press("Escape");
   await expect(drawer).not.toBeVisible();
   await expect(menu).toBeFocused();
   await menu.click();
-  await drawer.getByRole("link", { name: "Môn học & kỳ thi" }).click();
+  await drawer.getByRole("link", { name: "Tìm môn học" }).click();
   await expect(drawer).not.toBeVisible();
   await menu.click();
   await page.setViewportSize({ width: 1024, height: 900 });
@@ -36,7 +36,7 @@ test("desktop collapse persists and mobile navigation stays expanded", async ({ 
 });
 
 test("public app pages fit small phones, tablets and desktops", async ({ page }) => {
-  for (const path of ["/app/tutors", "/app/library", "/app/auth?mode=register"]) {
+  for (const path of ["/app/tutors", "/app/library", "/app/news", "/app/auth?mode=register"]) {
     await page.goto(path);
     await expect(page.locator("main h1")).toBeVisible();
     for (const width of [320, 768, 1024, 1440]) {

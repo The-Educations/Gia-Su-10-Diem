@@ -1,3 +1,4 @@
+import { registerPosts } from "./posts.js";
 import { isGoogleAdmin } from "./admin-access.js";
 import { registerGallery, galleryMetadata } from "./gallery.js";
 import { registerGoogleAuth } from "./google-auth.js";
@@ -194,6 +195,7 @@ export function createApi(
   registerGoogleAuth(app, db, { origin, production, session, google });
   registerUploads(app, db, auth, audit, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
+  registerPosts(app, db, auth, audit);
   registerInquiries(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
@@ -282,7 +284,8 @@ export function createApi(
       if (step > user.onboarding_step || (step === 0 && user.onboarding_step !== 0))
         fail(409, "Bước thiết lập đã thay đổi. Vui lòng tải lại trang.");
       if (step === 0) {
-        const { role } = z.object({ role: z.enum(["student", "tutor"]) }).parse(req.body);
+        const { role: choice } = z.object({ role: z.enum(["student", "parent", "tutor"]) }).parse(req.body);
+        const role = choice === "parent" ? "student" : choice;
         if (role !== user.role) {
           // Role changes are allowed only before the new account has any activity.
           const active = one(db, `SELECT
@@ -297,7 +300,7 @@ export function createApi(
           if (role === "student") run(db, "DELETE FROM tutors WHERE user_id=?", user.id);
           else run(db, "INSERT INTO tutors(user_id) VALUES (?)", user.id);
         }
-        run(db, "UPDATE users SET role=?,onboarding_step=1 WHERE id=?", role, user.id);
+        run(db, "UPDATE users SET role=?,learner_type=?,onboarding_step=1 WHERE id=?", role, choice === "parent" ? "parent" : "student", user.id);
       } else if (step === 1) {
         const { name } = z.object({ name: text(80) }).parse(req.body);
         if (user.role === "student") {
@@ -637,7 +640,7 @@ export function createApi(
     res.json({
       users: all(
         db,
-        "SELECT id,name,email,role,status,demo,created_at FROM users ORDER BY id DESC",
+        "SELECT id,name,email,role,learner_type,status,demo,created_at FROM users ORDER BY id DESC",
       ),
       tutors: all(
         db,

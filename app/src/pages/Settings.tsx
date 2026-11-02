@@ -68,7 +68,7 @@ export default function Settings() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="account-goal">Mục tiêu học tập</FieldLabel>
+              <FieldLabel htmlFor="account-goal">{user?.learner_type === "parent" ? "Mục tiêu học tập của con" : "Mục tiêu học tập"}</FieldLabel>
               <Textarea
                 id="account-goal"
                 name="goal"
