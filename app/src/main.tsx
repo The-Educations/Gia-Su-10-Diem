@@ -1,3 +1,4 @@
+import { CommunityUnread } from "./components/community/Notifications";
 import { timezoneLabel } from "./components/tutor-timezone";
 import { accountRole } from "@/lib/types";
 import React, { lazy, Suspense, useEffect, useState } from "react";
@@ -19,6 +20,7 @@ import {
   Users,
   CalendarDays,
   MessageCircle,
+  MessagesSquare,
   Heart,
   House,
   Settings,
@@ -46,6 +48,9 @@ import "./styles.css";
 import { PageMetadata } from "./components/page-metadata";
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
+const Community = lazy(() => import("./pages/Community"));
+const CommunityPost = lazy(() => import("./pages/CommunityPost"));
+const CommunityMine = lazy(() => import("./pages/CommunityMine"));
 const News = lazy(() => import("./pages/News"));
 const Library = lazy(() => import("./pages/Library"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -139,6 +144,7 @@ function Shell() {
       : []),
     { to: "/tutors", label: "Tìm gia sư", icon: Users },
     { to: "/library", label: "Tìm môn học", icon: BookOpen },
+    { to: "/community", label: "Cộng đồng", icon: MessagesSquare },
     { to: "/news", label: "Tin tức", icon: Newspaper },
   ];
   const navigation = (
@@ -169,6 +175,7 @@ function Shell() {
           <NavLink to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
             <Icon size={19} aria-hidden="true" />
             <span className="nav-label">{label}</span>
+            {to === "/community" && <CommunityUnread />}
           </NavLink>
           </React.Fragment>
         ))}
@@ -247,7 +254,7 @@ function Shell() {
             <Link to="/tutors">10 Điểm</Link>
           </div>
           <span className="topbar-location">
-            {nav.find((n) => n.to === loc.pathname)?.label || "Gia Sư 10 Điểm"}
+            {(loc.pathname.startsWith("/community") ? "Cộng đồng" : nav.find((n) => n.to === loc.pathname)?.label) || "Gia Sư 10 Điểm"}
           </span>
           </div>
           <div className="topbar-right">
@@ -264,7 +271,10 @@ function Shell() {
                 <Route path="/" element={<Navigate to="/tutors" replace />} />
                 <Route path="/tutors" element={<Tutors />} />
                 <Route path="/tutors/:id" element={<TutorDetail />} />
-                <Route path="/news" element={<News />} />
+                <Route path="/community" element={<Community />} />
+              <Route path="/community/mine" element={<Require><CommunityMine /></Require>} />
+              <Route path="/community/:id" element={<CommunityPost />} />
+              <Route path="/news" element={<News />} />
                 <Route path="/news/:id" element={<News />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/auth" element={<Auth />} />
