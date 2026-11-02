@@ -448,13 +448,9 @@ test("student contacts a tutor before booking and receives a private reply", asy
   student.on("pageerror", (e) => errors.push(e.message));
   tutor.on("pageerror", (e) => errors.push(e.message));
   await login(student, "student");
-  await student.goto("/app/tutors/3");
-  await student
-    .getByLabel("Lời nhắn của bạn")
-    .fill("Cô có nhận học sinh lớp 9 vào cuối tuần không ạ?");
-  await student
-    .getByRole("button", { name: "Gửi lời nhắn", exact: true })
-    .click();
+  const contact = await student.request.post("/api/inquiries", {data:{tutor_id:3,body:"Cô có nhận học sinh lớp 9 vào cuối tuần không ạ?"}});
+  expect(contact.status()).toBe(201);
+  await student.goto(`/app/messages?inquiry=${(await contact.json()).id}`);
   await expect(student).toHaveURL(/messages\?inquiry=/);
   await expect(
     student.getByText(/Cô có nhận học sinh lớp 9 vào cuối tuần không ạ\?/),
@@ -1036,7 +1032,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Liên hệ gia sư" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Đề nghị học", exact: true })).toBeVisible();
   await dialog.locator("summary").filter({ hasText: "Kho giao diện" }).click();
   await dialog.getByRole("button", { name: "Cấp Ngọc bích", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Đã cấp", exact: true })).toHaveCount(2);

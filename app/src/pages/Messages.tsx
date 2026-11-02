@@ -216,7 +216,7 @@ export default function Messages() {
       personId: user?.role === "tutor" ? i.student_id : i.tutor_id,
       endpoint: `/inquiries/${i.id}/messages`,
     })),
-    ...(bookings.data || []).map((b) => ({
+    ...(bookings.data || []).filter(b => !b.offer_id).map((b) => ({
       key: `lesson-${b.id}`,
       id: b.id,
       kind: "lesson" as const,

@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
 import { PageMetadata } from "./components/page-metadata";
+const Offers = lazy(() => import("./pages/Offers"));
 const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
@@ -124,12 +125,12 @@ function Shell() {
             icon: user.role === "admin" ? ShieldCheck : House,
           },
           {
-            to: user.role === "student" ? "/bookings" : "/calendar",
+            to: user.role === "admin" ? "/calendar" : "/bookings",
             label:
               user.role === "admin"
                 ? "Lịch dạy"
                 : user.role === "tutor"
-                  ? "Lịch dạy"
+                  ? "Lịch dạy của tôi"
                   : user.learner_type === "parent" ? "Lịch học của con" : "Lịch học của tôi",
             icon: CalendarDays,
           },
@@ -140,8 +141,9 @@ function Shell() {
           },
         ]
       : []),
+    ...(["student", "tutor"].includes(user?.role || "") ? [{to:"/offers",label:"Đề nghị học",icon:BookOpen}] : []),
     ...(user?.role === "tutor"
-      ? [{ to: "/studio", label: "Hồ sơ gia sư", icon: Settings }]
+      ? [{ to: "/calendar", label: "Giờ trống hằng tuần", icon: CalendarDays }, { to: "/studio", label: "Hồ sơ gia sư", icon: Settings }]
       : []),
     ...(user?.role === "student"
       ? [{ to: "/availability", label: "Lịch rảnh", icon: CalendarDays }, { to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
@@ -317,6 +319,7 @@ function Shell() {
                     </Require>
                   }
                 />
+                <Route path="/offers" element={<Require><Offers /></Require>} />
                 <Route path="/calendar" element={<Require><TutorCalendar /></Require>} />
                 <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route

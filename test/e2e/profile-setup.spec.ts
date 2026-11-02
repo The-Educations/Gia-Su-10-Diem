@@ -187,7 +187,7 @@ test("searchable address, crop preview and tutor steps preserve edits and save t
   expect(saved.education).toBe("Đại học Sư phạm – Toán học");
   expect(saved.location).toBe("Phường Bến Thành, Thành phố Hồ Chí Minh");
   expect(saved.weekly_schedule.blocks).toContainEqual({ weekday: 1, hour: 18 });
-  await page.getByRole("link", { name: "Lịch dạy", exact: true }).click();
+  await page.getByRole("link", { name: "Giờ trống hằng tuần", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Thứ 3, 18:00–19:00", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");

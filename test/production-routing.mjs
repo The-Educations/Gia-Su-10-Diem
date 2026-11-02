@@ -25,12 +25,15 @@ assert.equal((await health.json()).ok, true);
 const providers = await fetch(canonical + '/api/auth/providers');
 assert.equal(providers.status, 200);
 assert.equal((await providers.json()).google, true, 'Production Google sign-in must be enabled');
-for (const path of ['/api/tutor/profile', '/api/admin']) {
+for (const path of ['/api/tutor/profile', '/api/admin', '/api/offers']) {
   const response = await fetch(canonical + path);
   assert.equal(response.status, 401, `${path}: guest access must be denied`);
   assert.equal(response.headers.get('cache-control'), 'no-store');
 }
 const authPage = await fetch(canonical + '/app/auth');
+const offersPage = await fetch(canonical + '/app/offers');
+assert.equal(offersPage.status, 200, 'Direct navigation to study proposals must serve the app');
+assert.match(await offersPage.text(), /name="robots" content="noindex/, 'Private proposals must not be indexed');
 assert.equal(authPage.status, 200);
 assert.equal(authPage.headers.get('cache-control'), 'no-cache');
 const authHtml = await authPage.text();

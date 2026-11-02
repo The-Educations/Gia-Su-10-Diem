@@ -1,3 +1,4 @@
+import { registerOffers } from "./offers.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -225,6 +226,7 @@ export function createApi(
   registerSupport(app, db, auth);
   registerAccountDeletion(app, db, auth, audit);
   registerWeeklyRequests(app, db, auth);
+  registerOffers(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
     res.json({ user: publicUser(req.user) }),
@@ -545,7 +547,7 @@ export function createApi(
     res.json(
       all(
         db,
-        `SELECT b.*,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,r.rating AS reviewed FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id LEFT JOIN reviews r ON r.booking_id=b.id WHERE ${condition} ORDER BY b.starts_at DESC`,
+        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,r.rating AS reviewed FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id LEFT JOIN reviews r ON r.booking_id=b.id WHERE ${condition} ORDER BY b.starts_at DESC`,
         ...(req.user.role === "admin" ? [] : [req.user.id]),
       ),
     );
