@@ -79,7 +79,7 @@ export default function Compose({
     : post
       ? "Sửa bài viết"
       : user?.role === "admin"
-        ? "Đăng thông báo"
+        ? "Viết bài"
         : "Đăng bài";
   const blocker = useBlocker(() => page && dirtyRef.current);
   const saveDraft = async () => {

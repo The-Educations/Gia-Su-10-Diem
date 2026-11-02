@@ -149,7 +149,7 @@ export default function AdminCommunity() {
             <RotateCw />
           </Button>
           <Button onClick={() => navigate("/community/write")}>
-            Đăng thông báo
+            Viết bài
           </Button>
         </div>
       </header>
