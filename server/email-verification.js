@@ -5,23 +5,41 @@ import { z } from "./validation.js";
 export const needsEmailVerification = user => !!user?.email_verification_required && !user.email_verified_at;
 const escapeHtml = value => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
+function emailFrame(title, content, footer) {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f5f5f4;font-family:Arial,Helvetica,sans-serif;color:#252821"><tr><td style="padding:24px 12px">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="center" style="width:100%;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e6e7e2;border-radius:16px"><tr><td style="padding:28px">
+<p style="margin:0 0 28px;font-size:15px;font-weight:700;color:#852f36">Gia Sư 10 Điểm</p>
+<p style="margin:0 0 8px;color:#73766c;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Tài khoản của bạn</p>
+<h1 style="margin:0 0 24px;font-size:28px;line-height:1.25;letter-spacing:-0.5px;font-weight:700;color:#252821">${title}</h1>
+${content}
+</td></tr><tr><td style="padding:20px 28px;border-top:1px solid #e6e7e2"><p style="margin:0;font-size:12px;line-height:1.7;color:#73766c">${footer}</p></td></tr></table>
+<p style="margin:18px 0 0;text-align:center;font-size:12px;line-height:1.5;color:#73766c"><a href="https://giasudiem10.online" style="color:#73766c;text-decoration:none">giasudiem10.online</a></p>
+</td></tr></table>`;
+}
+
 export function createMailflareSender({ url = "https://mail.giasudiem10.online", key, mailboxId, from = "contact@giasudiem10.online" } = {}) {
   if (!key || !mailboxId) return null;
   return async ({ to, link, code, kind = "verification" }) => {
     const signup = kind === "signup";
     const update = kind === "profile_update";
     if (update && from !== "admin@giasudiem10.online") throw new Error("Profile review mail must use the admin mailbox in Mailflare");
-    const subject = update ? "Cập nhật hồ sơ gia sư — Gia Sư 10 Điểm" : "Xác nhận email — Gia Sư 10 Điểm";
+    const subject = signup ? "Mã xác minh tài khoản — Gia Sư 10 Điểm" : update ? "Cập nhật hồ sơ gia sư — Gia Sư 10 Điểm" : "Xác nhận email — Gia Sư 10 Điểm";
     const message = update ? "Hồ sơ gia sư của bạn cần được bổ sung trước khi công bố. Vui lòng kiểm tra thông tin cá nhân, môn dạy, học vấn, phần giới thiệu và hình ảnh; cập nhật đầy đủ rồi chọn Lưu & gửi duyệt để quản trị viên xem lại." : "Xác nhận email để hoàn tất tài khoản Gia Sư 10 Điểm.";
-    const footer = update ? "Nếu cần hỗ trợ, hãy trả lời email này." : "Liên kết có hiệu lực trong 24 giờ và chỉ dùng một lần. Nếu bạn không tạo tài khoản, hãy bỏ qua email này.";
+    const footer = update ? "Nếu cần hỗ trợ, hãy trả lời email này." : "Liên kết có hiệu lực trong 24 giờ và chỉ dùng một lần. Nếu bạn không tạo tài khoản, hãy bỏ qua email này. Đây là email tự động; vui lòng không trả lời.";
     const action = update ? "Cập nhật hồ sơ" : "Xác nhận email";
+    const content = signup
+      ? `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#55594f">Nhập mã dưới đây tại màn hình đăng ký để xác nhận địa chỉ email và tạo tài khoản của bạn.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f7f7f3;border:1px solid #e9e9e1;border-radius:10px"><tr><td align="center" style="padding:24px 12px"><p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#73766c">MÃ XÁC MINH</p><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:34px;font-weight:700;line-height:1.3;letter-spacing:6px;color:#252821">${escapeHtml(String(code))}</p><p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#73766c">Có hiệu lực trong 10 phút</p></td></tr></table>
+<p style="margin:24px 0 0;font-size:14px;line-height:1.7;color:#55594f">Không chia sẻ mã này với bất kỳ ai. Đội ngũ Gia Sư 10 Điểm sẽ không yêu cầu bạn cung cấp mã qua tin nhắn hoặc điện thoại.</p>`
+      : `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#55594f">${message}</p><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="background:#852f36;border-radius:8px"><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 22px;font-size:14px;font-weight:700;line-height:1.4;color:#ffffff;text-decoration:none">${action}</a></td></tr></table>`;
+    const html = emailFrame(signup ? "Xác minh email của bạn" : action, content, signup ? "Nếu bạn không đăng ký tài khoản, hãy bỏ qua email này.<br>Đây là email tự động từ contact@giasudiem10.online; vui lòng không trả lời." : footer);
     const response = await fetch(`${url}/api/v1/send`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(15000),
       body: JSON.stringify({ mailboxId, from, to: [to], subject, undoSend: false, trackOpens: false,
-        text: signup ? `Mã xác minh Gia Sư 10 Điểm: ${code}. Mã có hiệu lực 10 phút. Không chia sẻ mã này.` : `${message}\n${link}\n\n${footer}`,
-        html: signup ? `<div style="background:#f8f7f3;padding:32px;font-family:Arial,sans-serif;color:#292b23"><div style="max-width:520px;margin:auto;background:#fff;padding:32px;border-radius:16px"><p style="color:#852f36;font-weight:bold">GIA SƯ 10 ĐIỂM</p><h1 style="font-size:24px">Xác minh email</h1><p>Nhập mã dưới đây để tạo tài khoản của bạn.</p><p style="font-size:36px;letter-spacing:8px;font-weight:bold">${code}</p><p>Mã có hiệu lực 10 phút. Không chia sẻ mã này.</p><p style="color:#717168">Nếu bạn không đăng ký, hãy bỏ qua email này.</p></div></div>` : `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;padding:32px;color:#292b23"><h1 style="font-size:24px">${action}</h1><p>${message}</p><p style="margin:28px 0"><a href="${escapeHtml(link)}" style="background:#852f36;color:white;padding:14px 22px;border-radius:10px;text-decoration:none">${action}</a></p><p>${footer}</p></div>`,
+        text: signup ? `Mã xác minh Gia Sư 10 Điểm: ${code}. Mã có hiệu lực 10 phút. Không chia sẻ mã này. Nếu bạn không đăng ký, hãy bỏ qua email này. Đây là email tự động; vui lòng không trả lời.` : `${message}\n${link}\n\n${footer}`,
+        html,
       }),
     });
     if (!response.ok) throw new Error("Mail delivery unavailable");
