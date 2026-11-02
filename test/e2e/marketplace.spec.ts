@@ -975,9 +975,16 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-
   const weekly = profile.slots.find((s: { source: string }) => s.source === "weekly");
   const studentContext = await browser.newContext(), student = await studentContext.newPage();
   await login(student, "student"); await student.goto(`/app/tutors/${me.user.id}`);
-  const dayLabel = new Date(weekly.starts_at).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" });
-  const dayButton = student.getByRole("button", { name: `Ngày ${dayLabel}`, exact: true });
-  while (!(await dayButton.count())) await student.getByRole("button", { name: "Tuần sau", exact: true }).click();
+  const dayKey = new Date(Date.parse(weekly.starts_at) + 7 * 3600000).toISOString().slice(0, 10);
+  const dayButton = student.locator(`.lesson-date-grid button[data-date="${dayKey}"]`);
+  const firstDay = student.locator(".lesson-date-grid button").first();
+  await expect(firstDay).toBeVisible();
+  for (let week = 0; week < 8 && !(await dayButton.count()); week++) {
+    const previous = await firstDay.getAttribute("data-date");
+    await student.getByRole("button", { name: "Tuần sau", exact: true }).click();
+    await expect(firstDay).not.toHaveAttribute("data-date", previous!);
+  }
+  await expect(dayButton).toBeVisible();
   await dayButton.click();
   await student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true }).click();
   await expect(student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true })).toHaveAttribute("aria-pressed", "true");

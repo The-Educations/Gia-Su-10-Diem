@@ -26,7 +26,7 @@ export function LessonTimePicker({ slots, value, onChange }: { slots: Slot[]; va
       <div className="actions"><Button type="button" variant="ghost" size="icon" aria-label="Tuần trước" disabled={week <= monday(first)} onClick={() => move(-1)}><ChevronLeft /></Button>
         <Button type="button" variant="ghost" size="icon" aria-label="Tuần sau" disabled={week >= monday(last)} onClick={() => move(1)}><ChevronRight /></Button></div>
     </div>
-    <div className="lesson-date-grid" role="group" aria-label="Chọn ngày học">{dates.map((date, i) => <Button type="button" key={date} variant={date === day ? "default" : "outline"} aria-pressed={date === day} aria-label={`Ngày ${dateLabel(date)}`} disabled={!slots.some(s => localDay(s.starts_at) === date)} onClick={() => { setDay(date); onChange(""); }}>
+    <div className="lesson-date-grid" role="group" aria-label="Chọn ngày học">{dates.map((date, i) => <Button type="button" key={date} data-date={date} variant={date === day ? "default" : "outline"} aria-pressed={date === day} aria-label={`Ngày ${dateLabel(date)}`} disabled={!slots.some(s => localDay(s.starts_at) === date)} onClick={() => { setDay(date); onChange(""); }}>
       <span>{["T2", "T3", "T4", "T5", "T6", "T7", "CN"][i]}</span><strong>{date.slice(8)}</strong>
     </Button>)}</div>
     <div className="lesson-time-grid" role="group" aria-label="Chọn giờ học">
