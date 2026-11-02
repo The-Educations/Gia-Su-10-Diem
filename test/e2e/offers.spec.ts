@@ -73,6 +73,14 @@ test("dated study proposals become lessons only after acceptance, with conflict 
   await expect(page.getByRole("dialog")).toContainText("Ôn phương trình, làm bài 1–5.");
   await expect(page.getByRole("button",{name:"Viết ghi chú",exact:true})).toHaveCount(0);
   await page.keyboard.press("Escape");
+  const lessons = await (await page.request.get("/api/bookings")).json();
+  const nextLesson = lessons.find((b: { offer_id: number }) => String(b.offer_id) === id);
+  await page.route("**/api/bookings", route => route.fulfill({ json: [nextLesson] }));
+  await page.goto("/app/workspace");
+  await expect(page.getByRole("link", { name: "Trao đổi buổi học", exact: true })).toHaveAttribute("href", `/app/messages?inquiry=${nextLesson.inquiry_id}`);
+  await expect(page.getByRole("link", { name: "Xem lịch", exact: true })).toHaveAttribute("href", `/app/bookings?offer=${id}`);
+  await page.unroute("**/api/bookings");
+  await page.goto(`/app/bookings?offer=${id}`);
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await tutor.goto(`/app/offers?id=${other.id}`);
