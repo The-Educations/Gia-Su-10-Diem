@@ -7,7 +7,7 @@
     "build:assets": "node scripts/generate-assets.js",
     "build:page": "node scripts/build-page.js && node scripts/build-legal.js",
     "build": "npm run build:page && npm run build:app",
-    "test": "node test/verify.js && node --test test/api.test.js test/google-auth.test.js test/seo.test.js",
+    "test": "node test/verify.js && node --test test/api.test.js test/google-auth.test.js test/seo.test.js test/cloudflare-build.test.cjs",
     "dev": "npm run build:page && node server/index.js",
     "start": "NODE_ENV=production node server/index.js",
     "seed:demo": "node server/seed.js",

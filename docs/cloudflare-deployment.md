@@ -77,3 +77,25 @@ Check `/api/health`, `/api/auth/providers`, `/api/subjects`, `/app/tutors`, and 
 Use `npx wrangler deployments list` to find versions and `npx wrangler rollback <version-id>` to restore code. Code rollback does not roll back database changes. Migrations are additive; do not delete the Durable Object namespace or rename `marketplace-v1`. Use Cloudflare SQLite Durable Object Time Travel for database recovery; never restore production data from the local demo file. There is no previous app deployment to roll back to on the first release. Keep both Worker routes enabled. With the Vercel project removed, removing the routes can leave the site unavailable even though the Worker and its database still exist.
 
 Run `node test/production-routing.mjs` after deployment to check both hostnames, canonical redirects, and matching favicon bytes. This check is read-only.
+
+## Native Cloudflare status in GitHub
+
+The optional native path matches the `Workers Builds: megadaytwin` integration: after **Validate** passes, GitHub promotes the exact current `main` commit to `cloudflare-production`. Cloudflare builds that branch and publishes **Workers Builds: giasu-diem10** using its own GitHub App. GitHub waits for the matching Cloudflare check and then verifies the live app against the CI artifact. Failed, cancelled, missing or unrelated checks cannot mark deployment successful. The production branch is never force-pushed.
+
+One-time connection in **Cloudflare → Workers & Pages → giasu-diem10 → Settings → Builds → Connect**:
+
+| Setting | Value |
+| --- | --- |
+| GitHub repository | `The-Educations/Gia-Su-10-Diem` |
+| Production branch | `cloudflare-production` |
+| Root directory | `/` |
+| Build command | `npm run build:cloudflare` |
+| Deploy command | `npx wrangler deploy --durable-objects-code-update-mode immediate` |
+| Build environment variable | `NODE_VERSION=24.13.0` |
+| Non-production branch builds | Disabled |
+
+Grant the Cloudflare Workers & Pages GitHub App access to this repository if prompted. Use the dashboard's build-token setup. Keep the Worker name `giasu-diem10` and existing bindings/secrets unchanged. The production branch must already exist before connecting. Do not configure direct builds from `main`: that would bypass the existing CI gate.
+
+After the native connection has produced a successful **Workers Builds: giasu-diem10** check, set repository Actions variable `CLOUDFLARE_NATIVE_BUILDS=true`, then run the workflow on `main` to verify the complete path. Until that variable is enabled, deployment continues through the existing Wrangler Actions step. The two deployment paths are mutually exclusive. If the native connection is later removed, unset the variable before the next deployment; retain the Actions deployment secret for this fallback.
+
+Cloudflare-native builds rebuild the same checked commit with the lockfile, rather than downloading GitHub's artifact. Production verification still compares the deployed app entry to the CI artifact and checks health, authorization, routes and SEO. The `production` environment and job summary link to the live site.
