@@ -76,6 +76,8 @@ test("dated study proposals become lessons only after acceptance, with conflict 
   const lessons = await (await page.request.get("/api/bookings")).json();
   const nextLesson = lessons.find((b: { offer_id: number }) => String(b.offer_id) === id);
   await page.route("**/api/bookings", route => route.fulfill({ json: [nextLesson] }));
+  await page.goto("/app/bookings");
+  await expect(page.locator(".list-toolbar")).toContainText("1 buổi học");
   await page.goto("/app/workspace");
   await expect(page.getByRole("link", { name: "Trao đổi buổi học", exact: true })).toHaveAttribute("href", `/app/messages?inquiry=${nextLesson.inquiry_id}`);
   await expect(page.getByRole("link", { name: "Xem lịch", exact: true })).toHaveAttribute("href", `/app/bookings?offer=${id}`);

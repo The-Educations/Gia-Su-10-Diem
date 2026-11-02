@@ -126,7 +126,7 @@ export default function Bookings() {
       {offerId && <><div className="list-toolbar"><Button asChild variant="outline"><Link to="/bookings">Tất cả lịch học</Link></Button>{activeOffer && <h2>{activeOffer.subject_name} · {user?.role === "tutor" ? activeOffer.student_name : activeOffer.tutor_name}</h2>}</div><LessonCalendar lessons={rows} onOpen={setView} /></>}
 
       <div className="list-toolbar">
-        <span>{rows.length} buổi học</span>
+        <span>{offerId ? rows.length : (result.data || []).filter(b => !filter || b.status === filter).length} buổi học</span>
         <Choose
           label="Trạng thái"
           value={filter}
