@@ -1,3 +1,4 @@
+import { registerCommunity } from "./community.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
 import { registerPosts } from "./posts.js";
 import { isGoogleAdmin } from "./admin-access.js";
@@ -204,6 +205,7 @@ export function createApi(
   registerUploads(app, db, auth, audit, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
+  registerCommunity(app, db, auth, audit);
   registerInquiries(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
@@ -800,7 +802,7 @@ export function createApi(
   app.use((err, req, res, next) => {
     if (err instanceof z.ZodError)
       return res.status(400).json({
-        error: "Thông tin chưa hợp lệ. Kiểm tra các trường và thử lại.",
+        error: req.path.includes("/community/") ? err.issues.map(i => i.message).join(" ") : "Thông tin chưa hợp lệ. Kiểm tra các trường và thử lại.",
         fields: err.issues.map((i) => ({
           path: i.path.join("."),
           message: i.message,
