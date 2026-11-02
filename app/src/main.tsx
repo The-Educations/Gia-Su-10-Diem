@@ -116,7 +116,7 @@ function Shell() {
                 ? "Quản lý buổi học"
                 : user.role === "tutor"
                   ? "Lịch dạy & yêu cầu"
-                  : "Lịch học của tôi",
+                  : user.learner_type === "parent" ? "Lịch học của con" : "Lịch học của tôi",
             icon: CalendarDays,
           },
           {
@@ -139,7 +139,7 @@ function Shell() {
   const navigation = (
     <>
       <div className="sidebar-header">
-        <Link className="brand" to="/tutors" aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={() => setOpen(false)}>
+        <Link className="brand" to={user ? user.role === "admin" ? "/admin" : "/workspace" : "/tutors"} aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={() => setOpen(false)}>
           <span className="brand-mark">10<span>đ</span></span>
           <span className="nav-label">Gia Sư<br /><strong>10 Điểm</strong></span>
         </Link>
@@ -153,15 +153,19 @@ function Shell() {
           aria-controls="desktop-navigation"
           onClick={() => setCollapsed((value) => !value)}
         >
-          <PanelLeft />
+          <PanelLeft aria-hidden="true" />
+          <span className="nav-label">Thu gọn</span>
         </Button>
       </div>
       <nav aria-label="Điều hướng chính">
         {nav.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
+          <React.Fragment key={to}>
+          {user && to === "/tutors" && <div className="nav-divider" aria-hidden="true" />}
+          <NavLink to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
             <Icon size={19} aria-hidden="true" />
             <span className="nav-label">{label}</span>
           </NavLink>
+          </React.Fragment>
         ))}
       </nav>
       <div className="sidebar-bottom">

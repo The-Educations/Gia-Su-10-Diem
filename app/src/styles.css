@@ -292,10 +292,12 @@
   background: #e5e1d6;
   font-weight: 550;
 }
-.sidebar nav a:hover,
-.mobile-nav nav a:hover {
-  color: var(--foreground);
-  background: var(--muted);
+@media (hover: hover) and (pointer: fine) {
+  .sidebar nav a:hover,
+  .mobile-nav nav a:hover {
+    color: var(--foreground);
+    background: var(--muted);
+  }
 }
 .sidebar-bottom {
   display: flex;
@@ -389,9 +391,6 @@
   }
   [data-sidebar-collapsed="true"] .sidebar .brand {
     margin-inline: 0;
-  }
-  [data-sidebar-collapsed="true"] .sidebar .brand-mark {
-    font-size: 36px;
   }
 }
 .topbar-location {
@@ -1814,6 +1813,7 @@ main {
   margin-bottom: 26px;
 }
 .workspace-metric {
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
   position: relative;
   display: grid;
   grid-template-columns: 40px 1fr;
@@ -1833,7 +1833,7 @@ main {
   background: var(--muted);
   color: var(--primary);
 }
-.workspace-metric > span:not(.metric-icon) {
+.workspace-metric > .metric-label {
   font-size: 12px;
   color: var(--muted-foreground);
   padding-right: 16px;
@@ -1845,7 +1845,7 @@ main {
     serif;
   font-variant-numeric: tabular-nums;
 }
-.workspace-metric > a {
+.workspace-metric > .metric-open {
   position: absolute;
   right: 8px;
   bottom: 10px;
@@ -2245,7 +2245,7 @@ main {
   flex: none;
 }
 @media (hover: hover) and (pointer: fine) {
-  .workspace-metric > a:hover {
+  a.workspace-metric:hover {
     background: var(--muted);
     color: var(--primary);
   }
@@ -2295,7 +2295,7 @@ main {
     padding: 14px 10px;
     gap: 10px;
   }
-  .workspace-metric > span:not(.metric-icon) {
+  .workspace-metric > .metric-label {
     font-size: 10px;
     padding: 0;
     min-height: 32px;
@@ -2303,7 +2303,7 @@ main {
   .workspace-metric > strong {
     font-size: 28px;
   }
-  .workspace-metric > a {
+  .workspace-metric > .metric-open {
     width: 30px;
     height: 30px;
     right: 2px;
@@ -2317,7 +2317,7 @@ main {
     display: grid;
     grid-template-columns: 32px 1fr;
   }
-  [data-role="admin"] .workspace-metric > span:not(.metric-icon) {
+  [data-role="admin"] .workspace-metric > .metric-label {
     min-height: 0;
   }
   .workspace-overview,
@@ -2528,7 +2528,9 @@ main {
 .gallery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .gallery-tile { aspect-ratio: 1; position: relative; overflow: hidden; border-radius: 6px; background: var(--muted); cursor: pointer; }
 .gallery-tile img { width: 100%; height: 100%; object-fit: cover; transition: transform 240ms ease; }
-.gallery-tile:hover img { transform: scale(1.04); }
+@media (hover: hover) and (pointer: fine) {
+  .gallery-tile:hover img { transform: scale(1.04); }
+}
 .gallery-tile:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 .gallery-tile > span { position: absolute; inset: auto 0 0; padding: 20px 12px 10px; background: linear-gradient(transparent, #000b); color: white; font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; }
 .gallery-viewer[data-slot="dialog-content"] { width: min(960px, calc(100vw - 32px)); max-width: 960px; max-height: 95dvh; overflow-y: auto; }
@@ -2625,19 +2627,36 @@ main {
 
 .sidebar-header {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 32px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 .sidebar-header .brand {
-  flex: 1;
   min-width: 0;
+  min-height: 44px;
   margin: 0;
 }
+.sidebar .brand-mark {
+  width: 44px;
+  font-size: 36px;
+}
+.sidebar .brand-mark > span { font-size: 14px; }
+.sidebar-header .sidebar-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 12px;
+  padding-inline: 12px;
+  color: var(--muted-foreground);
+}
+.nav-divider {
+  height: 1px;
+  margin: 14px 12px;
+  background: var(--border);
+}
 @media (min-width: 951px) {
-  [data-sidebar-collapsed="true"] .sidebar-header .brand {
-    display: none;
-  }
+  [data-sidebar-collapsed="true"] .sidebar-header .brand { gap: 0; }
+  [data-sidebar-collapsed="true"] .sidebar-header .sidebar-toggle { gap: 0; }
 }
 .mobile-nav .sidebar-header {
   margin-bottom: 28px;

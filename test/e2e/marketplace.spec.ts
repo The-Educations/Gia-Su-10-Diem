@@ -789,6 +789,11 @@ test("parent chooses a separate setup and reaches shared booking tools", async (
   await page.getByRole("button", { name: "Hoàn tất thiết lập" }).click();
   await expect(page).toHaveURL(/workspace/);
   await expect(page.locator(".sidebar").getByText("Phụ huynh", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Không gian phụ huynh", exact: true })).toBeVisible();
+  await expect(page.locator(".sidebar").getByRole("link", { name: "Lịch học của con", exact: true })).toBeVisible();
+  await expect(page.locator(".sidebar .brand")).toHaveAttribute("href", "/app/workspace");
+  await page.getByRole("link", { name: "Xem buổi học sắp tới: 0", exact: true }).click();
+  await expect(page).toHaveURL(/bookings$/);
   await page.goto("/app/bookings");
   await expect(page.locator("main h1")).toBeVisible();
   await page.goto("/app/settings");
