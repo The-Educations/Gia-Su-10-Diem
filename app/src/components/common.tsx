@@ -102,7 +102,7 @@ export function Choose({
         value={value || "__all"}
         onValueChange={(s) => onChange(s === "__all" ? "" : s)}
       >
-        <SelectTrigger id={id}>
+        <SelectTrigger id={id} aria-label={label}>
           <SelectValue placeholder={label} />
         </SelectTrigger>
         <SelectContent>

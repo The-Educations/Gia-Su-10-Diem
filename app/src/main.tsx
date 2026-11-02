@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   LogOut,
   Menu,
+  PanelLeft,
+  LogIn,
   ArrowUpRight,
 } from "lucide-react";
 import { AppProvider, useApp, api, accountDestination } from "./lib/api";
@@ -37,6 +39,7 @@ import { Person, Loading, ErrorState } from "./components/common";
 import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
+import { PageMetadata } from "./components/page-metadata";
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
 const Library = lazy(() => import("./pages/Library"));
@@ -75,7 +78,21 @@ function Require({
 function Shell() {
   const { user, loading, setUser, refresh } = useApp(),
     loc = useLocation(),
-    [open, setOpen] = useState(false);
+    [open, setOpen] = useState(false),
+    [collapsed, setCollapsed] = useState(() => {
+      try { return localStorage.getItem("giasu.sidebar.collapsed") === "true"; }
+      catch { return false; }
+    });
+  useEffect(() => {
+    try { localStorage.setItem("giasu.sidebar.collapsed", String(collapsed)); }
+    catch { /* Navigation still works when storage is unavailable. */ }
+  }, [collapsed]);
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 951px)");
+    const closeMobileNavigation = () => { if (desktop.matches) setOpen(false); };
+    desktop.addEventListener("change", closeMobileNavigation);
+    return () => desktop.removeEventListener("change", closeMobileNavigation);
+  }, []);
   useEffect(() => {
     setOpen(false);
     window.scrollTo(0, 0);
@@ -117,46 +134,43 @@ function Shell() {
   ];
   const navigation = (
     <>
-      <Link className="brand" to="/tutors">
+      <Link className="brand" to="/tutors" aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={() => setOpen(false)}>
         <span className="brand-mark">
           10<span>đ</span>
         </span>
-        <span>
+        <span className="nav-label">
           Gia Sư
           <br />
           <strong>10 Điểm</strong>
         </span>
       </Link>
-      {user && (
-        <div className="workspace-role">
-          <span />
-          {roles[user.role]}
-        </div>
-      )}
       <nav aria-label="Điều hướng chính">
         {nav.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to}>
-            <Icon size={19} />
-            <span>{label}</span>
+          <NavLink key={to} to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
+            <Icon size={19} aria-hidden="true" />
+            <span className="nav-label">{label}</span>
           </NavLink>
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <a href="/" className="landing-link">
-          Về trang giới thiệu
-          <ArrowUpRight size={16} />
+        <a href="/" className="landing-link" aria-label="Về trang giới thiệu" title="Về trang giới thiệu">
+          <ArrowUpRight size={19} aria-hidden="true" />
+          <span className="nav-label">Về trang giới thiệu</span>
         </a>
         {user ? (
           <>
-            <Link to="/settings" className="account-link">
+            <Link to="/settings" className="account-link" aria-label={`Cài đặt tài khoản: ${user.name}`} title={user.name} onClick={() => setOpen(false)}>
               <Person name={user.name} id={user.id} />
-              <span>
+              <span className="nav-label">
                 <strong>{user.name}</strong>
                 <small>{roles[user.role]}</small>
               </span>
             </Link>
             <Button
               variant="ghost"
+              className="sidebar-action"
+              aria-label="Đăng xuất"
+              title="Đăng xuất"
               onClick={async () => {
                 try {
                   await api("/auth/logout", "POST");
@@ -169,25 +183,42 @@ function Shell() {
               }}
             >
               <LogOut data-icon="inline-start" />
-              Đăng xuất
+              <span className="nav-label">Đăng xuất</span>
             </Button>
           </>
         ) : (
-          <Button asChild>
-            <Link to="/auth">Đăng nhập</Link>
+          <Button asChild className="sidebar-action">
+            <Link to="/auth" aria-label="Đăng nhập" title="Đăng nhập" onClick={() => setOpen(false)}>
+              <LogIn data-icon="inline-start" />
+              <span className="nav-label">Đăng nhập</span>
+            </Link>
           </Button>
         )}
       </div>
     </>
   );
   return (
-    <div className="app-shell" data-role={user?.role || "guest"}>
+    <div className="app-shell" data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
+      <PageMetadata />
       <a href="#main" className="skip-link">
         Đến nội dung
       </a>
-      <aside className="sidebar">{navigation}</aside>
+      <aside className="sidebar" id="desktop-navigation" aria-label="Thanh điều hướng">{navigation}</aside>
       <div className="app-body">
         <header className="topbar">
+          <div className="topbar-leading">
+            <Button
+              className="sidebar-toggle"
+              variant="ghost"
+              size="icon"
+              aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+              title={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+              aria-expanded={!collapsed}
+              aria-controls="desktop-navigation"
+              onClick={() => setCollapsed((value) => !value)}
+            >
+              <PanelLeft />
+            </Button>
           <div className="mobile-brand">
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
@@ -195,7 +226,7 @@ function Shell() {
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left">
+              <SheetContent side="left" className="navigation-sheet">
                 <SheetTitle className="sr-only">Điều hướng</SheetTitle>
                 <SheetDescription className="sr-only">
                   Gia Sư 10 Điểm
@@ -208,8 +239,8 @@ function Shell() {
           <span className="topbar-location">
             {nav.find((n) => n.to === loc.pathname)?.label || "Gia Sư 10 Điểm"}
           </span>
+          </div>
           <div className="topbar-right">
-            <span className="time-zone">Giờ Việt Nam · UTC+7</span>
             {user?.demo && (
               <span className="demo-indicator">Tài khoản mẫu</span>
             )}
@@ -308,6 +339,7 @@ function Shell() {
         </main>
         <footer className="app-footer">
           <span>Gia Sư 10 Điểm</span>
+          <nav aria-label="Thông tin pháp lý"><a href="/privacy">Quyền riêng tư</a><a href="/terms">Điều khoản dịch vụ</a></nav>
         </footer>
       </div>
     </div>

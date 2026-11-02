@@ -1,0 +1,22 @@
+{
+  "/": {
+    "title": "Gia Sư 10 Điểm — Tìm gia sư, học theo cách của em",
+    "description": "Tìm gia sư Toán, Ngữ văn, Tiếng Anh và Khoa học theo môn học, cấp học và mục tiêu kỳ thi. Xem hồ sơ, trao đổi và đặt lịch học tại Gia Sư 10 Điểm."
+  },
+  "/app/tutors": {
+    "title": "Tìm gia sư theo môn học và mục tiêu | Gia Sư 10 Điểm",
+    "description": "Tìm gia sư phù hợp theo môn học, cấp học, học phí và hình thức học. Xem hồ sơ gia sư, trao đổi và chọn lịch học phù hợp."
+  },
+  "/app/library": {
+    "title": "Môn học và kỳ thi | Gia Sư 10 Điểm",
+    "description": "Khám phá môn học, cấp học và mục tiêu ôn thi vào lớp 10, thi tốt nghiệp THPT, IELTS. Kết nối với gia sư phù hợp cho từng mục tiêu."
+  },
+  "/privacy": {
+    "title": "Chính sách quyền riêng tư | Gia Sư 10 Điểm",
+    "description": "Cách Gia Sư 10 Điểm xử lý dữ liệu tài khoản, đăng nhập Google, hồ sơ, lịch học và tin nhắn; cách liên hệ để thực hiện quyền về dữ liệu."
+  },
+  "/terms": {
+    "title": "Điều khoản dịch vụ | Gia Sư 10 Điểm",
+    "description": "Điều khoản sử dụng Gia Sư 10 Điểm: tài khoản, hồ sơ gia sư, đặt lịch học, nội dung công khai, kiểm duyệt và hỗ trợ."
+  }
+}
