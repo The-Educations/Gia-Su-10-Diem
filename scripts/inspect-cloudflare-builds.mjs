@@ -1,8 +1,8 @@
 // Read-only diagnostics. Never output credentials or build environment values.
-const token = process.env.CLOUDFLARE_API_TOKEN;
-if (!token) throw new Error('CLOUDFLARE_API_TOKEN is required.');
+const token = process.env.CLOUDFLARE_BUILDS_API_TOKEN;
+if (!token) throw new Error('Add the user-scoped CLOUDFLARE_BUILDS_API_TOKEN Actions secret (Workers Builds Configuration: Edit, Workers Scripts: Read).');
 const origin = 'https://api.cloudflare.com/client/v4/accounts/1177b93da7312e51a226b6ecffb1e251';
-const clean = value => String(value).replaceAll(token, '[redacted]').replace(/cfat_[\w-]+/g, '[redacted]');
+const clean = value => String(value).replaceAll(token, '[redacted]').replace(/cfat_[\w-]+/g, '[redacted]').replace(/[A-Za-z0-9_=-]{32,}/g, '[redacted]');
 async function get(path) {
   const response = await fetch(origin + path, {
     headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30000),

@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const { resolve } = require('node:path');
 const { promote, waitForBuild } = require('../scripts/cloudflare-build.cjs');
 const context = { repo: { owner: 'example', repo: 'app' }, sha: 'current', ref: 'refs/heads/main' };
 const build = (overrides = {}) => ({
@@ -69,4 +71,37 @@ test('surfaces GitHub API and branch promotion errors', async () => {
     repos: { getBranch: async () => ({ data: { commit: { sha: 'current' } } }) },
     git: { updateRef: async () => { throw new Error('branch protected'); } },
   } }, context), /branch protected/);
+});
+
+function inspectBuilds(fail = false) {
+  const mock = `globalThis.fetch = async (url, options) => {
+    if (options.headers.Authorization !== 'Bearer fixture-builds-token') throw new Error('Missing token');
+    let result;
+    if (url.endsWith('/workers/scripts')) result = [{id:'other-worker',tag:'other'},{id:'giasu-diem10',tag:'target'}];
+    else if (url.endsWith('/builds/workers/target')) {
+      if (${fail}) return {ok:false,status:401,json:async()=>({success:false,errors:[{message:'Invalid token fixture-builds-token'}]})};
+      result = {git_repository:{branch:'cloudflare-production'},production_settings:{build_command:'npm run build:cloudflare',environment_variables:{PRIVATE:{value:'must-not-be-printed'}}}};
+    } else if (url.endsWith('/builds/workers/target/builds')) result = [{build_uuid:'failed',build_outcome:'failure'}];
+    else if (url.endsWith('/builds/builds/failed/logs')) result = {lines:['Deploy error fixture-builds-token cfat_otherprivatecredential1234567890']};
+    else throw new Error('Unexpected endpoint');
+    return {ok:true,status:200,json:async()=>({success:true,result})};
+  }`;
+  return spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(mock)}`, resolve(__dirname, '../scripts/inspect-cloudflare-builds.mjs')], {
+    encoding:'utf8', env:{...process.env,CLOUDFLARE_BUILDS_API_TOKEN:'fixture-builds-token'},
+  });
+}
+
+test('native diagnostics target this Worker and redact credentials and environment values', () => {
+  const result = inspectBuilds();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /cloudflare-production/);
+  assert.match(result.stdout, /Deploy error/);
+  assert.doesNotMatch(result.stdout + result.stderr, /fixture-builds-token|cfat_otherprivate|must-not-be-printed/);
+});
+
+test('native diagnostics fail visibly on an incompatible token without exposing it', () => {
+  const result = inspectBuilds(true);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /HTTP 401/);
+  assert.doesNotMatch(result.stdout + result.stderr, /fixture-builds-token/);
 });
