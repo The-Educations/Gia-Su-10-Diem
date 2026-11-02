@@ -1,3 +1,4 @@
+import { createMailflareSender } from "../server/email-verification.js";
 import { pageSeo, renderSeo, robots, newsSitemap } from "../server/seo.js";
 import { DurableObject } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
@@ -38,6 +39,7 @@ export class Marketplace extends DurableObject {
     const api = createApi(db, {
       production: env.APP_ORIGIN.startsWith("https://"),
       origin: env.APP_ORIGIN,
+      sendEmail: createMailflareSender({ url: env.MAILFLARE_URL, key: env.MAILFLARE_API_KEY, mailboxId: env.MAILFLARE_MAILBOX_ID }),
       clientIp: (req) => req.headers["x-giasu-client-ip"] || "unknown",
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
@@ -56,8 +58,8 @@ export class Marketplace extends DurableObject {
         const output = await env.IMAGES.input(stream())
           .transform({
             width: gallery ? 1280 : 640,
-            height: gallery ? 1280 : 640,
-            fit: gallery ? "scale-down" : "cover",
+            height: gallery === "banner" ? 320 : gallery ? 1280 : 640,
+            fit: gallery === true ? "scale-down" : "cover",
           })
           .output({ format: "image/webp", quality: 85 });
         return Buffer.from(await output.response().arrayBuffer());

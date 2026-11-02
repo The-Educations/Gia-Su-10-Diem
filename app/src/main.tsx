@@ -1,3 +1,4 @@
+import { timezoneLabel } from "./components/tutor-timezone";
 import { accountRole } from "@/lib/types";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -12,6 +13,7 @@ import {
 } from "react-router-dom";
 import { AnimateUIProvider } from "@animate-ui/react/provider";
 import {
+  Clock3,
   BookOpen,
   Newspaper,
   Users,
@@ -47,6 +49,7 @@ const TutorDetail = lazy(() => import("./pages/TutorDetail"));
 const News = lazy(() => import("./pages/News"));
 const Library = lazy(() => import("./pages/Library"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Bookings = lazy(() => import("./pages/Bookings"));
@@ -73,6 +76,8 @@ function Require({
         replace
       />
     );
+  if (user.email_verification_required)
+    return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
   if (user.role !== "admin" && user.onboarding_step < 3 && loc.pathname !== "/onboarding")
     return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
   if (role && user.role !== role) return <Navigate to="/workspace" replace />;
@@ -175,11 +180,12 @@ function Shell() {
         </a>
         {user ? (
           <>
-            <Link to="/settings" className="account-link" aria-label={`Cài đặt tài khoản: ${user.name}`} title={user.name} onClick={() => setOpen(false)}>
+            <Link to="/settings" className="account-link" aria-label={`Cài đặt tài khoản: ${user.name}`} title={`${user.name} · ${timezoneLabel(user.timezone, true)}`} onClick={() => setOpen(false)}>
               <Person name={user.name} id={user.id} />
               <span className="nav-label">
                 <strong>{user.name}</strong>
                 <small>{accountRole(user)}</small>
+                <small className="account-timezone"><Clock3 size={12} aria-hidden="true" />{timezoneLabel(user.timezone, true)}</small>
               </span>
             </Link>
             <Button
@@ -262,6 +268,7 @@ function Shell() {
                 <Route path="/news/:id" element={<News />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/onboarding" element={<Require><Onboarding /></Require>} />
                 <Route
                   path="/workspace"

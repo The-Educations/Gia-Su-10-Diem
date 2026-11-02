@@ -4,7 +4,7 @@ export const siteOrigin = "https://giasudiem10.online";
 export const robots = `User-agent: *\nAllow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`;
 export const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(pages).map(path => `<url><loc>${siteOrigin}${path}</loc></url>`).join("")}</urlset>`;
 const escape = (value) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const privateRoutes = new Set(["/app/auth", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/messages", "/app/settings", "/app/studio", "/app/admin", "/app/favorites"]);
+const privateRoutes = new Set(["/app/auth", "/app/verify-email", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/messages", "/app/settings", "/app/studio", "/app/admin", "/app/favorites"]);
 
 export function newsSitemap(posts) {
   return sitemap.replace("</urlset>", posts.map(post => `<url><loc>${siteOrigin}/app/news/${Number(post.id)}</loc></url>`).join("") + "</urlset>");

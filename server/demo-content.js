@@ -95,7 +95,7 @@ async function portrait(index) {
   return sharp(Buffer.from(svg)).webp({ quality: 88 }).toBuffer();
 }
 export async function enrichDemo(db, { activity = false } = {}) {
-  for (const [i, [slug, name, subject, bio]] of profiles.entries()) {
+  for (const [i, [slug, , , bio]] of profiles.entries()) {
     const tutor = one(
       db,
       "SELECT * FROM users WHERE email=? AND demo=1",
@@ -104,8 +104,7 @@ export async function enrichDemo(db, { activity = false } = {}) {
     if (!tutor) continue;
     const key = `profile-media-v1-${tutor.id}`;
     if (one(db, "SELECT key FROM demo_seeds WHERE key=?", key)) continue;
-    const photo = await portrait(i),
-      cv = await sampleCV(name, subject);
+    const photo = await portrait(i);
     db.exec("BEGIN IMMEDIATE");
     try {
       if (
@@ -116,21 +115,6 @@ export async function enrichDemo(db, { activity = false } = {}) {
         )
       )
         saveUpload(db, tutor.id, "photo", photo, "image/webp", "profile.webp");
-      if (
-        !one(
-          db,
-          "SELECT id FROM tutor_uploads WHERE tutor_id=? AND kind='cv'",
-          tutor.id,
-        )
-      )
-        saveUpload(
-          db,
-          tutor.id,
-          "cv",
-          cv,
-          "application/pdf",
-          `${slug}-sample-CV.pdf`,
-        );
       run(
         db,
         "UPDATE tutors SET bio=? WHERE user_id=? AND bio LIKE 'Hồ sơ minh họa để trải nghiệm%'",

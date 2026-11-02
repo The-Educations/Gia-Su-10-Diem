@@ -77,6 +77,7 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
   let response = await callback(flow);
   assert.equal(response.headers.get("location"), "/app/onboarding");
   const tutor = one(db, "SELECT * FROM users WHERE email=?", claims.email);
+  assert.ok(tutor.email_verified_at, "Google verified claim confirms matching account email");
   assert.equal(tutor.role, "student");
   assert.equal(tutor.onboarding_step, 0);
   assert.equal(tutor.password, "");

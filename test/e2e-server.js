@@ -15,4 +15,7 @@ seedCatalog(db);
 await seedDemo(db, "BrowserStudy2026!");
 db.close();
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
-await import("../server/index.js");
+const messages = new Map();
+const { startServer } = await import("../server/index.js");
+const { app } = await startServer({ sendEmail: async message => { messages.set(message.to, message); } });
+app.get("/__test/email", (req, res) => res.json(messages.get(req.query.email) || null));

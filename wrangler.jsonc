@@ -5,7 +5,7 @@
   "compatibility_date": "2026-10-30",
   "account_id": "1177b93da7312e51a226b6ecffb1e251",
   "assets": { "directory": "dist/site", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none" },
-  "vars": { "APP_ORIGIN": "https://giasudiem10.online" },
+  "vars": { "APP_ORIGIN": "https://giasudiem10.online", "MAILFLARE_URL": "https://mail.giasudiem10.online", "MAILFLARE_MAILBOX_ID": "mbx_YiArKpT9l7NnE134MH62L" },
   "durable_objects": { "bindings": [{ "name": "MARKETPLACE", "class_name": "Marketplace" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Marketplace"] }],
   "images": { "binding": "IMAGES" },

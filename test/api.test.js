@@ -15,7 +15,8 @@ async function fixture(t) {
     db = openDatabase(file);
   seedCatalog(db);
   await seedDemo(db, "TestStudy2026!");
-  const server = createApi(db, { processPhoto, limit: false }).listen(0, "127.0.0.1");
+  const emails = [];
+  const server = createApi(db, { processPhoto, limit: false, sendEmail: async message => { emails.push(message); } }).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
   t.after(async () => {
@@ -41,9 +42,16 @@ async function fixture(t) {
         });
         const c = response.headers.get("set-cookie");
         if (c) cookie = c.split(";")[0];
+        let data = await response.json();
+        // Existing business-flow tests use verified accounts; verification-specific tests use raw fetch.
+        if (path === "/auth/register" && response.status === 201) {
+          const token = new URL(emails.at(-1).link).hash.slice(7);
+          const verified = await this.request("/auth/verify-email", "POST", { token });
+          data = { ...data, user: verified.data.user };
+        }
         return {
           status: response.status,
-          data: await response.json(),
+          data,
           headers: response.headers,
         };
       },
@@ -57,7 +65,7 @@ async function fixture(t) {
       },
     };
   }
-  return { db, file, client, base };
+  return { db, file, client, base, emails };
 }
 test("registration, sessions, authorization and password revocation", async (t) => {
   const { client, db, base } = await fixture(t),
@@ -522,11 +530,15 @@ test("additive tutor migration preserves existing accounts and profile data", (t
     "INSERT INTO tutors(user_id,headline,subjects) VALUES (1,'Hồ sơ giữ nguyên','[\"toan\"]')",
   );
   original.exec(
-    "ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; PRAGMA user_version = 0",
+    "ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; ALTER TABLE users DROP COLUMN timezone; ALTER TABLE tutors DROP COLUMN education_history; ALTER TABLE tutors DROP COLUMN profile_sections; ALTER TABLE users DROP COLUMN email_verified_at; ALTER TABLE users DROP COLUMN email_verification_required; PRAGMA user_version = 0",
   );
   original.close();
   const migrated = openDatabase(file);
   assert.equal(one(migrated, "PRAGMA user_version").user_version, 6);
+  assert.equal(one(migrated, "SELECT timezone FROM users WHERE id=1").timezone, "Asia/Ho_Chi_Minh");
+  assert.equal(one(migrated, "SELECT education_history FROM tutors WHERE user_id=1").education_history, "[]");
+  assert.equal(one(migrated, "SELECT email_verification_required FROM users WHERE id=1").email_verification_required, 0);
+  assert.equal(one(migrated, "SELECT email_verified_at FROM users WHERE id=1").email_verified_at, null);
   assert.equal(one(migrated, "SELECT onboarding_step FROM users WHERE id=1").onboarding_step, 3);
   assert.equal(
     one(migrated, "SELECT headline FROM tutors WHERE user_id=1").headline,
@@ -566,136 +578,39 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   reopened.close();
 });
 
-test("CV and portrait uploads validate content, retain approval boundaries and replace files", async (t) => {
-  const { client, base, db } = await fixture(t),
-    tutor = client(),
-    student = client(),
-    admin = client();
-  const u = await tutor.login("chau");
-  await student.login("student");
-  await admin.login("admin");
-  const { sampleCV } = await import("../server/demo-content.js");
+test("tutor images validate, moderate and replace; legacy CVs are never exposed", async t => {
+  const { client, base, db } = await fixture(t), tutor = client(), student = client(), admin = client(), other = client();
+  const u = await tutor.login("chau"); await other.login("nam"); await student.login("student"); await admin.login("admin");
   const { default: sharp } = await import("sharp");
-  const pdf = await sampleCV(),
-    photo = await sharp({
-      create: { width: 32, height: 32, channels: 3, background: "#852f36" },
-    })
-      .png()
-      .toBuffer();
-  const upload = (c, kind, body, type, name = "CV.pdf", origin) =>
-    fetch(base + `/tutor/uploads/${kind}`, {
-      method: "PUT",
-      headers: {
-        Cookie: c.cookie,
-        "Content-Type": type,
-        "X-File-Name": encodeURIComponent(name),
-        ...(origin ? { Origin: origin } : {}),
-      },
-      body,
-    });
-  assert.equal(
-    (await upload(student, "cv", pdf, "application/pdf")).status,
-    403,
-  );
-  assert.equal(
-    (
-      await upload(
-        tutor,
-        "cv",
-        pdf,
-        "application/pdf",
-        "CV.pdf",
-        "https://evil.test",
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (await upload(tutor, "cv", Buffer.from("%PDF- fake"), "application/pdf"))
-      .status,
-    400,
-  );
-  assert.equal(
-    (await upload(tutor, "photo", Buffer.from("<svg/>"), "image/png")).status,
-    400,
-  );
-  assert.equal(
-    (
-      await upload(
-        tutor,
-        "cv",
-        Buffer.alloc(5 * 1024 * 1024 + 1),
-        "application/pdf",
-      )
-    ).status,
-    413,
-  );
-  const cvResponse = await upload(
-    tutor,
-    "cv",
-    pdf,
-    "application/pdf",
-    "CV mẫu.pdf",
-  );
-  assert.equal(cvResponse.status, 200);
-  const cv = (await cvResponse.json()).cv;
-  assert.equal((await fetch(base.replace("/api", "") + cv.url)).status, 404);
-  assert.equal(
-    (
-      await fetch(base.replace("/api", "") + cv.url, {
-        headers: { Cookie: student.cookie },
-      })
-    ).status,
-    404,
-  );
-  assert.equal(
-    (
-      await fetch(base.replace("/api", "") + cv.url, {
-        headers: { Cookie: admin.cookie },
-      })
-    ).status,
-    200,
-  );
-  assert.equal((await tutor.request("/tutor/profile")).data.status, "pending");
-  assert.equal((await upload(tutor, "photo", photo, "image/png")).status, 200);
-  await admin.request(`/admin/tutors/${u.id}`, "PATCH", {
-    status: "approved",
-    note: "",
-  });
-  const profile = (await student.request(`/tutors/${u.id}`)).data;
-  assert.equal(profile.cv.name, "CV mẫu.pdf");
-  const download = await fetch(base.replace("/api", "") + profile.cv.url);
-  assert.equal(download.status, 200);
-  assert.match(download.headers.get("content-disposition"), /^attachment/);
-  assert.match(download.headers.get("content-security-policy"), /sandbox/);
-  assert.equal(download.headers.get("x-content-type-options"), "nosniff");
-  const image = await fetch(base.replace("/api", "") + profile.photo_url);
-  assert.equal(image.headers.get("content-type"), "image/webp");
-  const meta = await sharp(Buffer.from(await image.arrayBuffer())).metadata();
-  assert.equal(meta.width, 640);
-  assert.equal(meta.exif, undefined);
-  await upload(tutor, "cv", pdf, "application/pdf", "Replacement.pdf");
-  assert.equal(
-    (
-      await fetch(base.replace("/api", "") + cv.url, {
-        headers: { Cookie: tutor.cookie },
-      })
-    ).status,
-    404,
-  );
-  assert.equal(
-    one(
-      db,
-      "SELECT count(*) AS n FROM tutor_uploads WHERE tutor_id=? AND kind='cv'",
-      u.id,
-    ).n,
-    1,
-  );
-  assert.equal(
-    (await tutor.request("/tutor/uploads/cv", "DELETE")).status,
-    200,
-  );
-  assert.equal((await tutor.request("/tutor/profile")).data.cv, null);
+  const { saveUpload } = await import("../server/uploads.js");
+  const oldCv = saveUpload(db, u.id, "cv", Buffer.from("legacy document"), "application/pdf", "old.pdf");
+  for (const c of [tutor, student, admin]) assert.equal((await fetch(base+`/uploads/${oldCv}`, { headers: { Cookie: c.cookie } })).status, 404);
+  assert.equal((await tutor.request("/tutor/profile")).data.cv, undefined);
+  const photo = await sharp({ create: { width: 160, height: 80, channels: 3, background: "#852f36" } }).png().toBuffer();
+  const upload = (c, kind, body, type = "image/png", origin) => fetch(base+`/tutor/uploads/${kind}`, { method:"PUT",headers:{ Cookie:c.cookie,"Content-Type":type,...(origin ? {Origin:origin} : {}) },body });
+  assert.equal((await upload(tutor,"cv",Buffer.from("pdf"),"application/pdf")).status,404);
+  assert.equal((await upload(student,"banner",photo)).status,403);
+  assert.equal((await upload(tutor,"banner",photo,"image/png","https://evil.test")).status,403);
+  assert.equal((await upload(tutor,"banner",Buffer.from("<svg/>"))).status,400);
+  assert.equal((await upload(tutor,"banner",Buffer.alloc(5*1024*1024+1))).status,413);
+  for (const kind of ["photo","banner"]) {
+    const response = await upload(tutor,kind,photo); assert.equal(response.status,200);
+    const url = (await response.json())[`${kind}_url`];
+    const fetchImage = c => fetch(base.replace("/api", "")+url,{headers:{Cookie:c?.cookie || ""}});
+    assert.equal((await fetchImage()).status,404); assert.equal((await fetchImage(other)).status,404);
+    assert.equal((await fetchImage(tutor)).status,200); assert.equal((await fetchImage(admin)).status,200);
+    assert.equal((await tutor.request("/tutor/profile")).data.status,"pending");
+    await admin.request(`/admin/tutors/${u.id}`,"PATCH",{status:"approved",note:""});
+    const image=await fetchImage(); assert.equal(image.status,200); assert.equal(image.headers.get("content-type"),"image/webp");
+    const meta=await sharp(Buffer.from(await image.arrayBuffer())).metadata();
+    assert.equal(meta.width,kind==="banner"?1280:640); assert.equal(meta.height,kind==="banner"?320:640); assert.equal(meta.exif,undefined);
+    await upload(tutor,kind,photo); assert.equal((await fetchImage(tutor)).status,404);
+    const table=kind==="banner"?"tutor_banners":"tutor_uploads";
+    assert.equal(one(db,`SELECT count(*) AS n FROM ${table} WHERE tutor_id=? AND kind=?`,u.id,kind).n,1);
+    assert.equal((await tutor.request(`/tutor/uploads/${kind}`,"DELETE")).status,200);
+    assert.equal((await tutor.request("/tutor/profile")).data[`${kind}_url`],null);
+  }
+  assert.ok(one(db,"SELECT id FROM tutor_uploads WHERE id=?",oldCv),"Legacy document remains stored, but inaccessible");
 });
 
 test("student can contact a tutor before booking; inquiry is private and survives reload", async (t) => {
@@ -794,7 +709,7 @@ test("rich demo seeding is repeatable and preserves profile edits", async (t) =>
   const before = counts();
   assert.equal(before[0], 3);
   assert.equal(before[2], 1);
-  assert.equal(before[5], 12);
+  assert.equal(before[5], 6);
   run(db, "UPDATE tutors SET bio='Tutor edited this profile' WHERE user_id=3");
   await seedDemo(db, "TestStudy2026!", { activity: true });
   assert.deepEqual(counts(), before);
@@ -1114,4 +1029,49 @@ test("news authoring is admin-only and drafts never leak publicly", async (t) =>
   assert.equal((await admin.request(`/admin/posts/${id}`, "PUT", post)).status, 200);
   assert.equal((await guest.request(`/posts/${id}`)).status, 404);
   assert.equal((await guest.request("/posts")).data.length, 0);
+});
+
+test("tutor education timeline and timezone validate, persist and remain subject to moderation", async t => {
+  const { client, file } = await fixture(t);
+  const tutor = client(), admin = client(), guest = client();
+  const user = await tutor.login("chau"); await admin.login("admin");
+  const old = (await tutor.request("/tutor/profile")).data;
+  const education_history = [
+    { level: "high_school", institution: "THPT Nguyễn Trãi", field: "", start_year: 2015, end_year: 2018 },
+    { level: "university", institution: "Đại học Sư phạm", field: "Toán", start_year: 2018, end_year: null },
+  ];
+  const custom = { ...old, timezone: "America/New_York", profile_sections: [{ title: "Chứng chỉ", body: "Chứng chỉ phương pháp giảng dạy, 2023" }], education_history };
+  for (const patch of [
+    { timezone: "Invalid/Timezone" }, { profile_sections: [{ title: "", body: "invalid" }] },
+    { education_history: [{ ...education_history[0], institution: "" }] },
+    { education_history: [{ ...education_history[0], end_year: 2014 }] },
+    { education_history: [{ ...education_history[0], start_year: 1900 }] },
+    { education_history: Array(9).fill(education_history[0]) },
+    { profile_sections: Array(11).fill({ title: "Title", body: "Body" }) },
+    { profile_sections: [{ title: "Title", body: "x".repeat(2001) }] },
+  ]) assert.equal((await tutor.request("/tutor/profile", "PUT", { ...custom, ...patch })).status, 400);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", custom)).status, 200);
+  assert.equal((await guest.request(`/tutors/${user.id}`)).status, 404);
+  const reopened = openDatabase(file);
+  assert.deepEqual(JSON.parse(one(reopened, "SELECT education_history FROM tutors WHERE user_id=?", user.id).education_history), education_history);
+  reopened.close();
+  const legacy = { ...old }; delete legacy.timezone; delete legacy.education_history; delete legacy.profile_sections;
+  assert.equal((await tutor.request("/tutor/profile", "PUT", legacy)).status, 200);
+  const saved = (await tutor.request("/tutor/profile")).data;
+  assert.equal(saved.timezone, custom.timezone); assert.deepEqual(saved.education_history, education_history); assert.deepEqual(saved.profile_sections, custom.profile_sections);
+  const moderation = (await admin.request("/admin")).data.tutors.find(t => t.user_id === user.id);
+  assert.deepEqual(moderation.education_history, education_history);
+  assert.equal((await admin.request(`/admin/tutors/${user.id}`, "PATCH", { status: "approved", note: "" })).status, 200);
+  const published = (await guest.request(`/tutors/${user.id}`)).data;
+  assert.equal(published.timezone, custom.timezone); assert.deepEqual(published.education_history, education_history);
+});
+
+test("students customize their own profile and timezone without altering other accounts", async t => {
+  const { client } = await fixture(t); const student = client(), other = client();
+  await student.login("student"); await other.login("chau");
+  assert.equal((await student.request("/account","PATCH",{name:"New name",goal:"Study Math",timezone:"Invalid/Zone"})).status,400);
+  const response=await student.request("/account","PATCH",{name:"Phúc",goal:"Học Toán lớp 10",timezone:"Asia/Tokyo",role:"admin"});
+  assert.equal(response.status,200); assert.equal(response.data.user.role,"student"); assert.equal(response.data.user.timezone,"Asia/Tokyo");
+  assert.equal((await student.request("/auth/me")).data.user.name,"Phúc");
+  assert.equal((await other.request("/auth/me")).data.user.timezone,"Asia/Ho_Chi_Minh");
 });

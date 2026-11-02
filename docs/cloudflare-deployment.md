@@ -4,7 +4,7 @@ The canonical site is `https://giasudiem10.online`. `/` serves the education lan
 
 ## Persistent data
 
-The `MARKETPLACE` binding targets one SQLite-backed Durable Object, `marketplace-v1`. Accounts, sessions, profiles, bookings, messages, reviews, OAuth state and upload metadata persist across deployments. CVs, portraits and tutor gallery images are stored as 100 KB SQLite chunks; existing local BLOB uploads remain readable. Local SQLite remains in `.data/marketplace.sqlite`; production does **not** import this local database or seed demo users. Catalogue subjects/exams are seeded idempotently. Keep the namespace and object name stable when deploying.
+The `MARKETPLACE` binding targets one SQLite-backed Durable Object, `marketplace-v1`. Accounts, sessions, profiles, bookings, messages, reviews, OAuth state and upload metadata persist across deployments. Portraits, banners and tutor gallery images are stored as 100 KB SQLite chunks; existing local BLOB uploads remain readable. Local SQLite remains in `.data/marketplace.sqlite`; production does **not** import this local database or seed demo users. Catalogue subjects/exams are seeded idempotently. Keep the namespace and object name stable when deploying.
 
 A single Durable Object keeps booking transactions atomic. This is an initial small-scale deployment, not a horizontally sharded database. The shared `transaction()` helper maps to `storage.transactionSync` on Cloudflare and native SQLite transactions locally. Portrait and gallery processing uses the Images binding in production and Sharp locally. Gallery images retain aspect ratio within 1280 × 1280; portraits remain 640 × 640 crops. Images binding usage can incur Cloudflare transformation charges.
 
@@ -99,3 +99,25 @@ Grant the Cloudflare Workers & Pages GitHub App access to this repository if pro
 After the native connection has produced a successful **Workers Builds: giasu-diem10** check, set repository Actions variable `CLOUDFLARE_NATIVE_BUILDS=true`, then run the workflow on `main` to verify the complete path. Until that variable is enabled, deployment continues through the existing Wrangler Actions step. The two deployment paths are mutually exclusive. If the native connection is later removed, unset the variable before the next deployment; retain the Actions deployment secret for this fallback.
 
 Cloudflare-native builds rebuild the same checked commit with the lockfile, rather than downloading GitHub's artifact. Production verification still compares the deployed app entry to the CI artifact and checks health, authorization, routes and SEO. The `production` environment and job summary link to the live site.
+
+## Account-confirmation email
+
+New email/password accounts must verify their inbox before onboarding or protected actions. Mailflare sends a single-use, 24-hour activation link from `contact@giasudiem10.online`. The link opens a confirmation screen; an explicit POST consumes it so mail-link scanners cannot confirm accounts. Only a SHA-256 hash is stored. Resends replace earlier links, have a 60-second cooldown and a five-per-hour account limit, alongside the authentication IP limiter. Delivery failure leaves a pending account with a retry action.
+
+Set `MAILFLARE_API_KEY` with `npx wrangler secret put MAILFLARE_API_KEY`, entering the value through the protected prompt/stdin. Use a send-only Mailflare key restricted to the contact mailbox. `MAILFLARE_URL` and `MAILFLARE_MAILBOX_ID` are non-secret Worker vars in `wrangler.jsonc`. Local Node development reads the same three environment variables. Never pass real keys as CLI arguments or commit them. No Mailflare schema changes are needed.
+
+Google's verified identity confirms the matching account email. Existing accounts remain usable and are not falsely labelled verified. Cross-browser activation verifies the address but does not create a login session. Confirmation proves inbox access, not identity or teaching qualifications. No third-party email-validation API receives addresses.
+
+CI uses injected delivery capture for Node/browser tests and a local Mailflare HTTP fixture for Worker tests. The capture endpoint exists only in `test/e2e-server.js`. These checks prove the send contract and activation flow, not delivery to Gmail's inbox. Sender reputation and the domain's mail authentication still determine spam placement.
+
+## Profile fields and tutor images
+
+Every account stores an IANA `timezone` (default `Asia/Ho_Chi_Minh`). Students and parents edit their name, learning goals and timezone in Settings. The account corner shows the saved zone and current GMT offset. Tutor profile editing updates this same account timezone. Booking and availability selectors still explicitly use Vietnam time; no booking-time conversion was introduced.
+
+Tutor `education_history` is a chronological timeline with up to eight entries: level, institution, optional field, start year and nullable end year (ongoing study). Core profile fields remain required, and new tutor onboarding asks for a school entry. Existing free-text education is retained without inventing qualifications. `profile_sections` stores up to ten tutor-defined title/body pairs. The editor offers teaching experience, certifications, languages, skills and achievements, or a custom heading. Content is rendered as text, not HTML. Older clients omitting new fields preserve stored values.
+
+The structure is informed by the [Indeed tutor résumé examples](https://www.indeed.com/career-advice/resume-samples/education-resumes/tutor) and [Prospects teaching CV guidance/examples](https://www.prospects.ac.uk/careers-advice/cvs-and-cover-letters/example-cvs), reviewed 2 November 2026. Only section structure informs the app; no personal CV data is copied or stored.
+
+Tutors upload their own banners using `PUT /api/tutor/uploads/banner`. The same 5 MB / 16-million-pixel image validation as portraits applies. Sharp locally and Cloudflare Images in the Worker strip metadata and produce a centered 1280×320 WebP. A preview shows the 4:1 crop. Banners live in additive `tutor_banners` / `banner_chunks` tables; existing uploads and their chunk foreign keys remain intact. Replacement/deletion removes obsolete chunks. New images and profile edits return the tutor to pending review. Admin moderation shows banners, timezone, education and custom sections.
+
+CV upload and download are retired. Metadata responses omit CVs, and existing `/api/uploads/:id` CV URLs return 404 for every role. Historical CV records remain stored; the migration does not delete them. New demo seeds create portraits only. The app uses inline profile sections in place of PDF résumés.

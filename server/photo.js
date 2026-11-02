@@ -9,9 +9,9 @@ export async function processPhoto(data, gallery = false) {
     throw new Error();
   return await source
     .rotate()
-    .resize(gallery ? 1280 : 640, gallery ? 1280 : 640, {
-      fit: gallery ? "inside" : "cover",
-      withoutEnlargement: gallery,
+    .resize(gallery ? 1280 : 640, gallery === "banner" ? 320 : gallery ? 1280 : 640, {
+      fit: gallery === true ? "inside" : "cover",
+      withoutEnlargement: gallery === true,
     })
     .webp({ quality: 85 })
     .toBuffer();

@@ -258,7 +258,7 @@ export default function Dashboard() {
                   />
                   <div className="readiness-links">
                     <Link to="/studio?tab=files">
-                      Ảnh & CV
+                      Ảnh hồ sơ
                       <ArrowUpRight size={16} />
                     </Link>
                     <Link to="/studio?tab=slots">
