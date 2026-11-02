@@ -1,13 +1,13 @@
 import { GoogleSignIn, googleErrors } from "@/components/google-sign-in";
 import { useState } from "react";
-import { useSearchParams, Navigate, useNavigate } from "react-router-dom";
-import { ArrowRight, Mail } from "lucide-react";
+import { Link, useSearchParams, Navigate, useNavigate } from "react-router-dom";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Mail } from "lucide-react";
 import { api, useApp, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
-import { Page, ErrorState, Submit, Loading } from "@/components/common";
+import { ErrorState, Submit, Loading } from "@/components/common";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function Auth() {
@@ -18,9 +18,7 @@ export default function Auth() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(googleErrors[params.get("oauth_error") || ""] || "");
   const { user, loading, authError, retryAuth, setUser, refresh } = useApp();
-  if (loading) return <Loading />;
-  if (authError) return <ErrorState error={authError} retry={retryAuth} />;
-  if (user) return <Navigate to={accountDestination(user, params.get("next"))} replace />;
+  if (!loading && !authError && user) return <Navigate to={accountDestination(user, params.get("next"))} replace />;
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -40,12 +38,25 @@ export default function Auth() {
     finally { setBusy(false); }
   }
 
-  return <Page>
+  return <div className="auth-layout">
+    <aside className="auth-art-panel" aria-label="Gia Sư 10 Điểm">
+      <a className="auth-brand" href="/" aria-label="Gia Sư 10 Điểm — Trang chủ">
+        <span className="brand-mark" aria-hidden="true">10<span>đ</span></span>
+        <span>Gia Sư<br /><strong>10 Điểm</strong></span>
+      </a>
+      <div className="auth-illustration" aria-hidden="true">
+        <img src="/assets/auth-study.webp" alt="" width="1200" height="1200" fetchPriority="high" />
+      </div>
+      <Link className="auth-explore" to="/tutors">Tìm gia sư <ArrowUpRight aria-hidden="true" /></Link>
+    </aside>
+    <div className="auth-content-panel">
+      <a className="auth-back" href="/"><ArrowLeft aria-hidden="true" />Về trang chủ</a>
+      <div className="auth-content">
+      {loading ? <Loading /> : authError ? <ErrorState error={authError} retry={retryAuth} /> :
     <section className="account-entry" aria-labelledby="account-title">
-      <span className="brand-mark" aria-hidden="true">10<span>đ</span></span>
-      <h1 id="account-title">Đăng nhập hoặc tạo tài khoản</h1>
+      <h1 id="account-title">{register ? "Tạo tài khoản" : "Chào mừng bạn."}</h1>
       <GoogleSignIn next={params.get("next")} />
-      <Button variant="ghost" className="account-email-toggle" aria-expanded={emailOpen} aria-controls="email-account" onClick={() => setEmailOpen(value => !value)}>
+      <Button variant="ghost" size="lg" className="account-email-toggle" aria-expanded={emailOpen} aria-controls="email-account" onClick={() => setEmailOpen(value => !value)}>
         <Mail aria-hidden="true" />Dùng email và mật khẩu
       </Button>
       {error && <ErrorState error={error} />}
@@ -87,6 +98,9 @@ export default function Auth() {
         </Tabs>
       </div>}
       <p className="auth-policy">Khi tiếp tục, bạn đồng ý với <a href="/terms">Điều khoản dịch vụ</a> và đã đọc <a href="/privacy">Chính sách quyền riêng tư</a>.</p>
-    </section>
-  </Page>;
+    </section>}
+      </div>
+      <footer className="auth-footer">© {new Date().getFullYear()} Gia Sư 10 Điểm</footer>
+    </div>
+  </div>;
 }

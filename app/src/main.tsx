@@ -231,7 +231,7 @@ function Shell() {
     </>
   );
   return (
-    <div className="app-shell" data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
+    <div className="app-shell" data-auth-page={loc.pathname === "/auth" || undefined} data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
       <PageMetadata />
       <a href="#main" className="skip-link">
         Đến nội dung

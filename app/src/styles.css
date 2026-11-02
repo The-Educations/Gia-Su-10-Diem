@@ -2639,6 +2639,62 @@ main {
   .account-entry h1 { font-size: 24px; }
 }
 
+/* The account entry has its own navigation and full-height composition. */
+.app-shell[data-auth-page] > .sidebar,
+.app-shell[data-auth-page] > .app-body > .topbar,
+.app-shell[data-auth-page] > .app-body > .app-footer { display: none; }
+.app-shell[data-auth-page] > .app-body { margin-left: 0; }
+.app-shell[data-auth-page] main { min-height: 100svh; padding: 0; }
+.auth-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100svh; }
+.auth-art-panel {
+  display: flex; flex-direction: column; justify-content: space-between;
+  position: relative; overflow: hidden; min-width: 0;
+  padding: clamp(32px, 4vw, 64px);
+  background: var(--secondary);
+}
+.auth-brand { display: inline-flex; align-items: center; gap: 16px; align-self: flex-start; position: relative; z-index: 1; line-height: 1.4; }
+.auth-brand .brand-mark { font-size: 48px; }
+.auth-brand > span:last-child { font-size: 14px; }
+.auth-brand strong { font-size: 19px; font-weight: 650; letter-spacing: -.035em; }
+.auth-illustration { width: 120%; height: min(62svh, 660px); margin: 16px -10%; }
+.auth-illustration img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 16px 24px rgb(72 53 33 / 10%)); }
+.auth-explore, .auth-back { display: inline-flex; align-items: center; gap: 10px; width: fit-content; min-height: 44px; font-size: 13px; }
+.auth-explore svg, .auth-back svg { width: 18px; height: 18px; }
+.auth-explore:hover, .auth-back:hover { color: var(--primary); }
+.auth-content-panel { display: flex; flex-direction: column; min-width: 0; padding: clamp(32px, 4vw, 64px); background: var(--card); }
+.auth-back { color: var(--muted-foreground); }
+.auth-content { display: flex; flex: 1; align-items: center; justify-content: center; padding-block: 56px; }
+.auth-layout .account-entry { width: min(100%, 420px); margin: 0; padding: 0; background: none; border: 0; border-radius: 0; }
+.auth-layout .account-entry h1 { font-size: clamp(30px, 3vw, 42px); font-weight: 600; line-height: 1.25; letter-spacing: -.045em; margin: 0 0 40px; }
+.auth-layout .account-entry .google-sign-in { margin: 0 0 12px; }
+.auth-layout .account-entry .google-sign-in [data-slot="button"],
+.account-email-toggle { width: 100%; min-height: 52px; }
+.account-email-toggle { margin-bottom: 28px; }
+.account-email-tabs { width: 100%; margin: 0 0 24px; }
+.account-email-tabs [role="tab"] { flex: 1; }
+.auth-layout .account-entry [type="submit"] { width: 100%; min-height: 48px; }
+.auth-layout .account-entry [data-slot="input"] { min-height: 48px; }
+.auth-layout .account-entry .auth-policy { margin-top: 28px; font-size: 12px; line-height: 1.8; }
+.auth-footer { font-size: 11px; color: var(--muted-foreground); }
+@media (max-width: 950px) {
+  .auth-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .auth-art-panel { flex-direction: row; align-items: center; padding: 24px 32px; background: var(--card); }
+  .auth-brand .brand-mark { font-size: 38px; }
+  .auth-brand > span:last-child { font-size: 12px; }
+  .auth-brand strong { font-size: 16px; }
+  .auth-illustration { display: none; }
+  .auth-explore { font-size: 12px; }
+  .auth-content-panel { padding: 0 32px 24px; }
+  .auth-content { align-items: flex-start; padding-block: 56px; }
+  .auth-back, .auth-footer { width: min(100%, 420px); margin-inline: auto; }
+}
+@media (max-width: 480px) {
+  .auth-art-panel { padding: 20px 24px; }
+  .auth-content-panel { padding: 0 24px 24px; }
+  .auth-content { padding-block: 40px; }
+  .auth-layout .account-entry h1 { font-size: 30px; margin-bottom: 32px; }
+}
+
 .news-list { display: grid; gap: 24px; margin-top: 24px; }
 .news-list article { border-bottom: 1px solid var(--border); padding-bottom: 24px; overflow-wrap: anywhere; }
 .news-list h2 { font-size: 20px; margin-bottom: 8px; }
