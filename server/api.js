@@ -1,3 +1,5 @@
+import { registerWeeklyRequests } from "./weekly-requests.js";
+import { registerSignupVerification } from "./signup-verification.js";
 import { registerCommunityImages } from "./community-images.js";
 import { registerCommunity } from "./community.js";
 import { registerTutorReview } from "./tutor-review.js";
@@ -110,7 +112,7 @@ export function createApi(
       }),
     );
     app.use(
-      ["/api/auth/login", "/api/auth/register", "/api/auth/google", "/api/auth/verify-email", "/api/auth/resend-verification"],
+      ["/api/auth/login", "/api/auth/register", "/api/auth/google", "/api/auth/verify-email", "/api/auth/resend-verification", "/api/auth/signup"],
       rateLimit({
         ...(clientIp
           ? {
@@ -190,24 +192,25 @@ export function createApi(
       fail(403, "Bạn không tham gia buổi học này.");
     return b;
   };
-  const tutorRows = () =>
+  const tutorRows = (preview = false) =>
     all(
       db,
-      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
+      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
     FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
-    WHERE t.status='approved' AND u.status='active' AND u.role='tutor' GROUP BY t.user_id`,
-    ).map(({ moderation_note, ...t }) => ({
+    WHERE ${preview ? '1=1' : "t.status='approved' AND u.status='active' AND u.role='tutor'"} GROUP BY t.user_id`,
+    ).map(({ moderation_note, reserved_weekly_blocks, ...t }) => ({
       ...t,
       ...uploadMetadata(db, t.user_id),
-      weekly_blocks: JSON.parse(t.weekly_blocks),
+      weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
       subjects: JSON.parse(t.subjects),
       levels: JSON.parse(t.levels),
       goals: JSON.parse(t.goals),
       education_history: JSON.parse(t.education_history),
       profile_sections: JSON.parse(t.profile_sections),
     }));
-  const verification = registerEmailVerification(app, db, { origin, sendEmail });
-  registerGoogleAuth(app, db, { origin, production, session, google });
+  registerEmailVerification(app, db, { origin, sendEmail });
+  const signup = registerSignupVerification(app, db, { sendEmail, production, session });
+  registerGoogleAuth(app, db, { origin, production, session, google, signup });
   registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
@@ -215,6 +218,7 @@ export function createApi(
   registerCommunity(app, db, auth, audit);
   registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
+  registerWeeklyRequests(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
     res.json({ user: publicUser(req.user) }),
@@ -225,24 +229,8 @@ export function createApi(
       fail(403, "Tài khoản này cần đăng nhập bằng Google.");
     if (one(db, "SELECT id FROM users WHERE email=?", data.email))
       fail(409, "Email đã được sử dụng.");
-    if (!verification.configured) fail(503, "Đăng ký tạm thời chưa khả dụng. Vui lòng thử lại sau.");
-    const hash = await passwordHash(data.password);
-    const id = Number(
-      run(
-        db,
-        "INSERT INTO users(name,email,password,role,onboarding_step,email_verification_required) VALUES (?,?,?,?,0,1)",
-        data.name,
-        data.email,
-        hash,
-        data.role,
-      ).lastInsertRowid,
-    );
-    if (data.role === "tutor")
-      run(db, "INSERT INTO tutors(user_id) VALUES (?)", id);
-    const user = one(db, "SELECT * FROM users WHERE id=?", id);
-    let verificationSent = true;
-    try { await verification.send(user); } catch { verificationSent = false; }
-    res.status(201).json({ user: session(res, user), verification_sent: verificationSent });
+    await signup.start(res, { name: data.name, email: data.email, password: await passwordHash(data.password), role: "student" });
+    res.status(202).json({ pending: true });
   });
   const dummyHashPromise = passwordHash(randomBytes(32).toString("hex"));
   app.post("/api/auth/login", async (req, res) => {
@@ -324,16 +312,8 @@ export function createApi(
         run(db, "UPDATE users SET role=?,learner_type=?,onboarding_step=1 WHERE id=?", role, choice === "parent" ? "parent" : "student", user.id);
       } else if (step === 1) {
         const { name } = z.object({ name: text(80) }).parse(req.body);
-        if (user.role === "student") {
-          const { goal } = z.object({ goal: text(1000) }).parse(req.body);
-          run(db, "UPDATE users SET name=?,goal=?,onboarding_step=2 WHERE id=?", name, goal, user.id);
-        } else {
-          const d = tutorSchema.parse(req.body);
-          ensureSubjects(d.subjects);
-          run(db, `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,education_history=COALESCE(?,education_history),status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?`,
-            d.headline, d.bio, d.location, d.mode, d.rate, d.experience, d.education, JSON.stringify(d.subjects), d.education_history ? JSON.stringify(d.education_history) : null, user.id);
-          run(db, "UPDATE users SET name=?,timezone=COALESCE(?,timezone),onboarding_step=2 WHERE id=?", name, d.timezone ?? null, user.id);
-        }
+        const d = z.object({ goal: z.string().trim().max(1000).default(""), timezone: timezoneSchema }).parse(req.body);
+        run(db, "UPDATE users SET name=?,goal=?,timezone=COALESCE(?,timezone),onboarding_step=3 WHERE id=?", name, d.goal, d.timezone ?? null, user.id);
       } else {
         run(db, "UPDATE users SET onboarding_step=3 WHERE id=?", user.id);
       }
@@ -359,8 +339,8 @@ export function createApi(
     res.json(all(db, "SELECT * FROM subjects ORDER BY rowid")),
   );
   app.get("/api/tutors", (req, res) => res.json(tutorRows()));
-  app.get("/api/tutors/:id", (req, res) => {
-    const t = tutorRows().find((t) => t.user_id === Number(req.params.id));
+  const tutorDetail = (preview = false) => (req, res) => {
+    const t = tutorRows(preview).find((t) => t.user_id === Number(req.params.id));
     if (!t) fail(404, "Hồ sơ chưa được công bố.");
     refreshAvailability(db, t.user_id);
     const slots = all(
@@ -375,7 +355,9 @@ export function createApi(
       t.user_id,
     );
     res.json({ ...t, slots, reviews, gallery: galleryMetadata(db, t.user_id) });
-  });
+  };
+  app.get("/api/tutors/:id", tutorDetail());
+  app.get("/api/admin/tutors/:id/preview", auth("admin"), tutorDetail(true));
   app.get("/api/favorites", auth("student"), (req, res) =>
     res.json(
       all(
@@ -707,7 +689,7 @@ export function createApi(
       ),
       tutors: all(
         db,
-        "SELECT t.*,u.name,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id",
+        "SELECT t.*,u.name,u.email,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id",
       ).map((t) => ({
         ...t,
         ...uploadMetadata(db, t.user_id),

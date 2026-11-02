@@ -41,14 +41,17 @@ async function fixture(t, options = {}) {
           },
           body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
         });
-        const c = response.headers.get("set-cookie");
-        if (c) cookie = c.split(";")[0];
+        const cookies = response.headers.getSetCookie();
+        if (cookies.length) cookie = cookies.map(c => c.split(";")[0]).join("; ");
         let data = await response.json();
         // Existing business-flow tests use verified accounts; verification-specific tests use raw fetch.
-        if (path === "/auth/register" && response.status === 201) {
-          const token = new URL(emails.at(-1).link).hash.slice(7);
-          const verified = await this.request("/auth/verify-email", "POST", { token });
-          data = { ...data, user: verified.data.user };
+        if (path === "/auth/register" && response.status === 202) {
+          const verified = await this.request("/auth/signup/verify", "POST", { code: emails.at(-1).code });
+          if (body.role === "tutor") {
+            const choice = await this.request("/account/onboarding", "PUT", { step: 0, role: "tutor" });
+            verified.data.user = choice.data.user;
+          }
+          return verified;
         }
         return {
           status: response.status,
@@ -931,27 +934,23 @@ test("new accounts complete resumable role-specific setup without escalating rol
     assert.equal(choice.data.user.role, role);
     assert.equal(choice.data.user.onboarding_step, 1);
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "student" })).status, 409);
-    assert.equal((await account.request("/account/onboarding", "PUT", { step: 1, name: "Incomplete" })).status, 400);
+    assert.equal((await account.request("/account/onboarding", "PUT", { step: 1, name: "" })).status, 400);
     const profile = role === "student" ? { name: "Học sinh mới", goal: "Ôn Toán lớp 9" } : { name: "Gia sư mới", headline: "Toán THCS", bio: "Dạy theo năng lực từng học sinh", education: "Đại học Sư phạm", subjects: ["toan"], rate: 180000, experience: 2, location: "Hà Nội", mode: "both" };
-    if (role === "tutor") {
-      assert.equal((await account.request("/account/onboarding", "PUT", { ...profile, step: 1, subjects: ["unknown"] })).status, 400);
-      assert.equal((await account.request("/account/onboarding", "PUT", { ...profile, step: 1, rate: 0 })).status, 400);
-    }
     const saved = await account.request("/account/onboarding", "PUT", { ...profile, step: 1 });
-    assert.equal(saved.data.user.onboarding_step, 2);
+    assert.equal(saved.data.user.onboarding_step, 3);
     await account.request("/auth/logout", "POST");
     const resumed = await account.request("/auth/login", "POST", { email: `${role}-setup@example.com`, password: "NewAccount2026!" });
-    assert.equal(resumed.data.user.onboarding_step, 2);
+    assert.equal(resumed.data.user.onboarding_step, 3);
     assert.equal(resumed.data.user.name, profile.name);
     const complete = await account.request("/account/onboarding", "PUT", { step: 2 });
-    assert.equal(complete.data.user.onboarding_step, 3);
+    assert.equal(complete.status, 409);
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "admin" })).status, 409);
     assert.equal((await account.request("/auth/me")).data.user.onboarding_step, 3);
     if (role === "tutor") {
       const tutor = one(db, "SELECT * FROM tutors WHERE user_id=?", signup.data.user.id);
       assert.equal(tutor.status, "pending");
-      assert.equal(tutor.rate, 180000);
-      assert.deepEqual(JSON.parse(tutor.subjects), ["toan"]);
+      assert.equal(tutor.rate, 150000);
+      assert.deepEqual(JSON.parse(tutor.subjects), []);
       assert.equal((await guest.request(`/tutors/${signup.data.user.id}`)).status, 404);
     }
   }
@@ -1013,7 +1012,7 @@ test("parent setup is distinct, resumable and shares student permissions", async
   assert.equal(r.data.user.learner_type, "parent");
   assert.equal((await parent.request("/auth/me")).data.user.learner_type, "parent");
   assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", goal: "Con ôn Toán lớp 9" })).status, 200);
-  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 2 })).status, 200);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 2 })).status, 409);
   assert.equal((await parent.request("/favorites")).status, 200);
   assert.equal((await parent.request("/bookings")).status, 200);
   assert.equal((await parent.request("/admin")).status, 403);
@@ -1283,4 +1282,39 @@ test("two-hour migration expands rules once and preserves reserved booking snaps
   assert.equal(one(db, "SELECT duration_minutes FROM slots WHERE id=?", slot).duration_minutes, 60);
   assert.equal(one(db, "SELECT count(*) n FROM slots WHERE tutor_id=? AND starts_at='2030-01-07T12:00:00.000Z' AND duration_minutes=60 AND available=1", user.id).n, 1);
   assert.equal(one(db, "SELECT duration_minutes FROM bookings WHERE id=?", booking).duration_minutes, 120);
+});
+
+test("weekly requests validate availability, keep participants private, prevent conflicts and start chat", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), outsider = client(), admin = client(), guest = client();
+  await student.login("student"); const teacher = await tutor.login("chau"); await admin.login("admin");
+  await outsider.request("/auth/register", "POST", { name: "Another learner", email: "weekly-other@test.vn", password: "TestStudy2026!" });
+  const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 20 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const data = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, note: "Ôn Toán" };
+  assert.equal((await guest.request("/weekly-requests", "POST", data)).status, 401);
+  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [] })).status, 400);
+  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [blocks[0], blocks[0]] })).status, 400);
+  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [{ weekday: 1, hour: 3 }] })).status, 409);
+  const created = await student.request("/weekly-requests", "POST", data);
+  assert.equal(created.status, 201);
+  assert.equal((await student.request("/weekly-requests", "POST", data)).status, 409);
+  assert.equal((await tutor.request("/weekly-requests")).data.length, 1);
+  assert.equal((await outsider.request("/weekly-requests")).data.length, 0);
+  assert.equal((await outsider.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 404);
+  assert.equal((await student.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 403);
+  assert.equal((await student.request(`/inquiries/${created.data.inquiry_id}/messages`)).data[0].body.includes("Thứ 2 19:00"), true);
+  const other = await outsider.request("/weekly-requests", "POST", data);
+  assert.equal((await tutor.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+  assert.equal((await tutor.request(`/weekly-requests/${other.data.id}`, "PATCH", { status: "accepted" })).status, 409);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).data.weekly_blocks.length, 0);
+  assert.equal((await student.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "cancelled" })).status, 200);
+  assert.equal((await tutor.request(`/weekly-requests/${other.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+  assert.equal((await guest.request(`/admin/tutors/${teacher.id}/preview`)).status, 401);
+  assert.equal((await student.request(`/admin/tutors/${teacher.id}/preview`)).status, 403);
+  run(db, "UPDATE tutors SET status='pending' WHERE user_id=?", teacher.id);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).status, 404);
+  const preview = await admin.request(`/admin/tutors/${teacher.id}/preview`);
+  assert.equal(preview.status, 200); assert.ok(Array.isArray(preview.data.reviews)); assert.ok(Array.isArray(preview.data.weekly_blocks));
+  assert.equal(preview.data.email, undefined);
 });

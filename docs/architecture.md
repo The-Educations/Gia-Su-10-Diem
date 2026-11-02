@@ -154,7 +154,7 @@ Google OAuth và adapter Cloudflare: `server/google-auth.js`, `server/local-db.j
 
 ### Account entry and news (2026-11-02)
 
-New UI registrations omit role; new Google identities start at onboarding step 0. Step 0 explicitly chooses student, parent or tutor. Parent maps to student permissions plus `learner_type=parent`; existing users default to `student` learner type without changing their role or onboarding progress. Legacy email API role input remains supported.
+New UI registrations omit role; new Google identities start at onboarding step 0. Step 0 explicitly chooses student, parent or tutor. Parent maps to student permissions plus `learner_type=parent`; existing users default to `student` learner type without changing their role or onboarding progress. New accounts remain in `pending_signups` until email code verification; the registration role input never assigns a role. Both Google and password signups use this gate. Quick setup needs only role, name, timezone and an optional goal.
 
 `server/posts.js` provides published-only `GET /api/posts` and `GET /api/posts/:id`, plus admin-only list/create/update at `/api/admin/posts`. Saving an unchecked publication box returns a post to draft. Bodies render as React text, never HTML. Published articles receive canonical metadata on both Node and Worker HTML responses and enter the sitemap; unpublished/missing articles return 404 with noindex. Lists currently return all rows, matching the existing small-marketplace API.
 

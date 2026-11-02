@@ -119,6 +119,17 @@ export function migrateDatabase(db) {
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE,
     expires INTEGER NOT NULL, sent_at INTEGER NOT NULL, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL
   )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS pending_signups (
+    email TEXT PRIMARY KEY, browser_hash TEXT NOT NULL UNIQUE, payload TEXT NOT NULL,
+    code_hash TEXT NOT NULL, expires INTEGER NOT NULL, sent_at INTEGER NOT NULL,
+    sends INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS weekly_requests (
+    id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES users(id), tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
+    inquiry_id INTEGER NOT NULL REFERENCES inquiries(id), subject_id TEXT NOT NULL REFERENCES subjects(id),
+    mode TEXT NOT NULL, blocks TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', rate INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE UNIQUE INDEX IF NOT EXISTS active_weekly_request ON weekly_requests(student_id,tutor_id) WHERE status IN ('pending','accepted')`);
   migrateCommunity(db);
   for (const table of ["slots", "bookings"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "duration_minutes"))

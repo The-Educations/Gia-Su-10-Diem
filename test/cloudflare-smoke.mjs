@@ -16,12 +16,13 @@ await new Promise(resolve => mailServer.listen(4180, '127.0.0.1', resolve));
 async function verifyEmail(email, cookie) {
  const mail = messages.get(email);
  assert.ok(mail, 'Worker must send a confirmation through Mailflare');
- const token = new URL(mail.text.match(/https?:\/\/[^\s]+/)[0]).hash.slice(7);
+ const code = mail.text.match(/: (\d{6})/)[1];
  const pending = await fetch(base+'/api/account/onboarding', {method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({step:0,role:'tutor'})});
- assert.equal(pending.status,403);
- const confirm = await fetch(base+'/api/auth/verify-email', {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({token})});
- assert.equal(confirm.status,200);
+ assert.equal(pending.status,401);
+ const confirm = await fetch(base+'/api/auth/signup/verify', {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({code})});
+ assert.equal(confirm.status,201);
  assert.equal((await confirm.json()).user.email_verified,true);
+ return confirm.headers.getSetCookie().find(c=>c.startsWith("giasu_session="))?.split(";")[0];
 }
 try {
 for (const path of ['/', '/app/tutors', '/app/auth', '/app/library']) {
@@ -38,11 +39,12 @@ for (const path of ['/favicon.ico', '/apple-touch-icon.png', '/favicon-32.png', 
 }
 const email=`cf-${Date.now()}@example.test`;
 const res=await fetch(base+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Cloudflare test',email,password:'RuntimeTest2026!',role:'tutor'})});
-assert.equal(res.status,201,await res.text());
-const cookie=res.headers.getSetCookie().find(c=>c.startsWith('giasu_session='))?.split(';')[0];
+assert.equal(res.status,202,await res.text());
+const pendingCookie=res.headers.getSetCookie().find(c=>c.startsWith('giasu_signup='))?.split(';')[0];
+const cookie = await verifyEmail(email,pendingCookie);
 const get=path=>fetch(base+path,{headers:{Cookie:cookie}});
 assert.equal((await get('/api/auth/me')).status,200);
-await verifyEmail(email,cookie);
+
 const setup = async (body) => {
  const response = await fetch(base + '/api/account/onboarding', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'}, body:JSON.stringify(body)});
  assert.equal(response.status,200,await response.clone().text());
@@ -50,8 +52,7 @@ const setup = async (body) => {
 };
 assert.equal((await (await get('/api/auth/me')).json()).user.onboarding_step,0);
 assert.equal((await setup({step:0,role:'tutor'})).onboarding_step,1);
-assert.equal((await setup({step:1,name:'Cloudflare test',headline:'Gia sư kiểm thử',bio:'Học theo mục tiêu.',education:'Sư phạm Toán',subjects:['toan'],rate:150000,experience:1,location:'Trực tuyến',mode:'online'})).onboarding_step,2);
-assert.equal((await setup({step:2})).onboarding_step,3);
+assert.equal((await setup({step:1,name:'Cloudflare test',headline:'Gia sư kiểm thử',bio:'Học theo mục tiêu.',education:'Sư phạm Toán',subjects:['toan'],rate:150000,experience:1,location:'Trực tuyến',mode:'online'})).onboarding_step,3);
 
 const photo=await sharp({create:{width:80,height:80,channels:3,background:'#852f36'}}).png().toBuffer();
 for(const [kind,body,type] of [['photo',photo,'image/png'],['banner',photo,'image/png']]){
@@ -109,15 +110,15 @@ await verifySeo(base);
 
 const parentEmail = `parent-${Date.now()}@example.test`;
 const parentResponse = await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Parent runtime', email: parentEmail, password: 'RuntimeTest2026!' }) });
-assert.equal(parentResponse.status, 201);
-const parentCookie = parentResponse.headers.getSetCookie().find(c => c.startsWith('giasu_session='))?.split(';')[0];
-await verifyEmail(parentEmail,parentCookie);
+assert.equal(parentResponse.status, 202);
+const parentPending = parentResponse.headers.getSetCookie().find(c => c.startsWith('giasu_signup='))?.split(';')[0];
+const parentCookie = await verifyEmail(parentEmail,parentPending);
 const parentSetup = await fetch(base + '/api/account/onboarding', { method: 'PUT', headers: { Cookie: parentCookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 0, role: 'parent' }) });
 assert.equal(parentSetup.status, 200);
 const parentUser = (await parentSetup.json()).user;
 assert.equal(parentUser.role, 'student');
 assert.equal(parentUser.learner_type, 'parent');
-for (const data of [{step:1,name:'Parent runtime',goal:'Help my child study Math'}, {step:2}]) {
+for (const data of [{step:1,name:'Parent runtime',goal:'Help my child study Math'}]) {
  const response = await fetch(base+'/api/account/onboarding', {method:'PUT',headers:{Cookie:parentCookie,'Content-Type':'application/json'},body:JSON.stringify(data)});
  assert.equal(response.status,200);
 }

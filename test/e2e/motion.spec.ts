@@ -39,7 +39,7 @@ test("tutor review opens without tilt or resizing, retains content on exit and r
   expect(frames.every(f => f.flat && f.filter === "none")).toBe(true);
   expect(Math.max(...frames.map(f => f.width)) - Math.min(...frames.map(f => f.width))).toBeLessThan(1);
   expect(Math.max(...frames.map(f => f.height)) - Math.min(...frames.map(f => f.height))).toBeLessThan(1);
-  await dialog.getByRole("button", { name: "Cấp Ngọc bích", exact: true }).scrollIntoViewIfNeeded();
+  await dialog.locator("summary").filter({ hasText: "Kho giao diện" }).scrollIntoViewIfNeeded();
   const leaving = recordDialog(page);
   await page.keyboard.press("Escape");
   const exitFrames = (await leaving).filter(f => f.state === "closed");
@@ -60,8 +60,11 @@ test("tutor review opens without tilt or resizing, retains content on exit and r
 
 test("review stays stable during delivery failures and focuses the list after a filtered row disappears", async ({ page }) => {
   await admin(page);
+  await page.request.patch("/api/admin/tutors/3", { data: { status: "pending" } });
+  await page.reload();
+  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill("Nguyễn Minh Châu");
   await page.getByRole("combobox", { name: "Trạng thái hồ sơ", exact: true }).click();
-  await page.getByRole("option", { name: "Đã công bố", exact: true }).click();
+  await page.getByRole("option", { name: "Chờ duyệt", exact: true }).click();
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog");
@@ -73,7 +76,7 @@ test("review stays stable during delivery failures and focuses the list after a 
     await route.fulfill({ status: 503, json: { error: "Chưa gửi được email. Vui lòng thử lại." } });
   });
   const before = await dialog.boundingBox();
-  await dialog.getByRole("button", { name: "Gửi email yêu cầu bổ sung", exact: true }).click();
+  await dialog.getByRole("button", { name: "Duyệt & công bố", exact: true }).click();
   await expect(dialog).toHaveAttribute("aria-busy", "true");
   await expect(dialog.getByRole("button", { name: "Đóng", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
@@ -84,7 +87,7 @@ test("review stays stable during delivery failures and focuses the list after a 
   await expect(dialog.getByText("Chưa gửi được email. Vui lòng thử lại.", { exact: true })).toBeVisible();
   await expect(dialog).toHaveAttribute("aria-busy", "false");
   await page.unroute("**/api/admin/tutors/*");
-  await dialog.getByRole("button", { name: "Gửi email yêu cầu bổ sung", exact: true }).click();
+  await dialog.getByRole("button", { name: "Duyệt & công bố", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Tìm trong danh sách" })).toBeFocused();
   await expect(trigger).toHaveCount(0);
