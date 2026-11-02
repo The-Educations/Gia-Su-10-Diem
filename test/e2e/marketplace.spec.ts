@@ -630,7 +630,7 @@ test("landing entry, education parallax, mobile navigation and real tutor search
     .not.toBe(before);
   await page.locator("#form-subject").selectOption("toan");
   await page.locator("#form-mode").selectOption("online");
-  await page.getByRole("button", { name: "Tìm gia sư phù hợp" }).click();
+  await page.getByRole("button", { name: "Tìm gia sư", exact: true }).click();
   await expect(page).toHaveURL(/subject=toan&mode=online/);
   await expect(
     page.getByRole("combobox", { name: "Môn học", exact: true }),
