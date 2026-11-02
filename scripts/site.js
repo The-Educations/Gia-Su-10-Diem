@@ -150,6 +150,31 @@
   schedule();
 })();
 
+(function initSessionLinks() {
+  if (location.protocol === "file:") return;
+  function relabel(link, text) {
+    const node = [...link.childNodes].find(
+      (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim(),
+    );
+    if (node) node.textContent = text + " ";
+    link.setAttribute("href", "/app/workspace");
+  }
+  fetch("/api/auth/me", {
+    credentials: "same-origin",
+    headers: { accept: "application/json" },
+  })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (!data || !data.user) return;
+      document
+        .querySelectorAll(
+          'a[href="/app/auth"], a[href="/app/auth?mode=register"]',
+        )
+        .forEach((link) => relabel(link, "Vào ứng dụng"));
+    })
+    .catch(() => {});
+})();
+
 (function initReveals() {
   const elements = document.querySelectorAll("[data-reveal]");
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
