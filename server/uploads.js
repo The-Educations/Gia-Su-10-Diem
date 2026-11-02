@@ -84,7 +84,7 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
         saveUpload(db, req.user.id, kind, data, mime, name);
         run(
           db,
-          "UPDATE tutors SET status='pending',moderation_note='' WHERE user_id=?",
+          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
           req.user.id,
         );
         audit(req.user.id, `upload.${kind}`, req.user.id);
@@ -101,6 +101,7 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
       req.user.id,
       req.params.kind,
     );
+    run(db, "UPDATE tutors SET review_revision=review_revision+1 WHERE user_id=?", req.user.id);
     audit(req.user.id, `upload.remove.${req.params.kind}`, req.user.id);
     res.json(uploadMetadata(db, req.user.id));
   });

@@ -44,6 +44,7 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
 import { PageMetadata } from "./components/page-metadata";
+const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
 const News = lazy(() => import("./pages/News"));
@@ -135,7 +136,7 @@ function Shell() {
       ? [{ to: "/studio", label: "Hồ sơ & giờ trống", icon: Settings }]
       : []),
     ...(user?.role === "student"
-      ? [{ to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
+      ? [{ to: "/availability", label: "Lịch rảnh", icon: CalendarDays }, { to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
       : []),
     { to: "/tutors", label: "Tìm gia sư", icon: Users },
     { to: "/library", label: "Tìm môn học", icon: BookOpen },
@@ -302,6 +303,7 @@ function Shell() {
                     </Require>
                   }
                 />
+                <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route
                   path="/settings"
                   element={

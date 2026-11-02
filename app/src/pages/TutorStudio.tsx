@@ -1,10 +1,10 @@
+import { TutorInventory } from "@/components/tutor-inventory";
 import { WeeklyAvailability } from "@/components/weekly-availability";
 import { ProfileSectionsEditor } from "@/components/tutor-sections";
 import { EducationEditor } from "@/components/tutor-education";
 import { TimezoneField } from "@/components/tutor-timezone";
 import { TutorGallery, TutorGalleryEditor } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TutorUploads } from "@/components/tutor-uploads";
 import { Link, useSearchParams } from "react-router-dom";
@@ -58,7 +58,6 @@ function ProfileForm({
     try {
       const result = await api<{ user: User }>("/tutor/profile", "PUT", {
         ...d,
-        profile_theme: draft.profile_theme,
         profile_sections: draft.profile_sections,
         timezone: draft.timezone,
         education_history: draft.education_history,
@@ -99,26 +98,6 @@ function ProfileForm({
         >
           <fieldset disabled={busy} className="profile-fields">
             <FieldGroup>
-              <FieldSet>
-                <FieldLegend>Phong cách hồ sơ</FieldLegend>
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  value={draft.profile_theme}
-                  onValueChange={(value) => {
-                    if (value)
-                      setDraft((previous) => ({
-                        ...previous,
-                        profile_theme: value as Tutor["profile_theme"],
-                      }));
-                  }}
-                  aria-label="Phong cách hồ sơ"
-                >
-                  <ToggleGroupItem value="paper">Giấy ấm</ToggleGroupItem>
-                  <ToggleGroupItem value="sage">Xanh lá</ToggleGroupItem>
-                  <ToggleGroupItem value="ink">Mực đỏ</ToggleGroupItem>
-                </ToggleGroup>
-              </FieldSet>
               <Field>
                 <FieldLabel htmlFor="headline">Tiêu đề hồ sơ</FieldLabel>
                 <Input
@@ -310,6 +289,7 @@ function ProfileForm({
             ...draft,
             photo_url: t.photo_url,
             banner_url: t.banner_url,
+            profile_theme: t.profile_theme,
             subjects: selected,
             levels,
             goals: examGoals,
@@ -357,8 +337,8 @@ export default function TutorStudio() {
         <AlertDescription>
           {!uploadPending && t.status === "approved"
             ? "Hồ sơ đang hiển thị trong tìm kiếm. Chỉnh sửa hồ sơ sẽ cần được duyệt lại."
-            : t.moderation_note ||
-              "Hoàn thiện hồ sơ và gửi duyệt để xuất hiện trong tìm kiếm."}
+            : t.status === "rejected" ? "Kiểm tra email, cập nhật hồ sơ rồi chọn Lưu & gửi duyệt."
+              : "Hoàn thiện hồ sơ và gửi duyệt để xuất hiện trong tìm kiếm."}
         </AlertDescription>
       </Alert>
       <Tabs
@@ -386,6 +366,7 @@ export default function TutorStudio() {
             />
             <TutorGalleryEditor images={t.gallery || []} onPending={() => setUploadPending(true)} />
           </section>
+          <TutorInventory tutor={t} />
           <ProfileForm
             t={t}
             subjects={subjects.data || []}

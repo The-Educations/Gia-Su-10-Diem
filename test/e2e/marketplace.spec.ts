@@ -105,8 +105,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
     tutor = await tutorContext.newPage();
   await login(student, "student");
   await student.goto("/app/tutors/3");
-  await student.getByRole("combobox", { name: "Giờ học (Việt Nam)" }).click();
-  await student.getByRole("option").nth(1).click();
+  await student.getByRole("group", { name: "Chọn giờ học" }).getByRole("button").first().click();
   await student.getByLabel("Bạn muốn học gì?").fill("Ôn phương trình bậc hai");
   await student.getByRole("button", { name: "Xem lại yêu cầu" }).click();
   await expect(student.getByRole("dialog")).toBeVisible();
@@ -262,7 +261,7 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor
     .getByLabel("Một buổi học cùng tôi", { exact: true })
     .fill("Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.");
-  await tutor.getByRole("radio", { name: "Xanh lá", exact: true }).click();
+  await expect(tutor.getByRole("radiogroup", { name: "Phong cách hồ sơ" })).toHaveCount(0);
   await choose(tutor, "Thêm thông tin", "Mục tùy chỉnh");
   await tutor.getByRole("button", { name: "Thêm mục", exact: true }).click();
   await tutor.getByLabel("Tiêu đề mục 1", { exact: true }).fill("Hoạt động giáo dục");
@@ -291,7 +290,7 @@ test("new tutor onboarding, availability and admin approval", async ({
   );
   await expect(preview.locator(".tutor-presentation")).toHaveAttribute(
     "data-theme",
-    "sage",
+    "paper",
   );
 
   await tutor.getByRole("checkbox", { name: "Toán", exact: true }).check();
@@ -304,7 +303,7 @@ test("new tutor onboarding, availability and admin approval", async ({
     tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt."),
   ).toBeVisible();
   await tutor.getByRole("tab", { name: "Giờ trống", exact: true }).click();
-  await tutor.getByRole("button", { name: "Thứ 2, 18:00–20:00", exact: true }).click();
+  await tutor.getByRole("button", { name: "Thứ 2, 18:00–19:00", exact: true }).click();
   await tutor.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
   await expect(tutor.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
   await login(admin, "admin");
@@ -345,7 +344,7 @@ test("new tutor onboarding, availability and admin approval", async ({
 
   await expect(tutor.locator(".tutor-presentation")).toHaveAttribute(
     "data-theme",
-    "sage",
+    "paper",
   );
   await expect(tutor.locator(".tutor-presentation")).toContainText(
     "Ôn mục tiêu, luyện theo năng lực và nhận phản hồi.",
@@ -927,7 +926,7 @@ test("verification handles delivery errors, cross-browser activation and an alre
   await first.close(); await second.close();
 });
 
-test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-hour booking export", async ({ browser, page }) => {
+test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-hour booking export", async ({ browser, page }) => {
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));
   await login(page, "chau");
@@ -937,7 +936,7 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   await expect(page.locator("#studio-files")).toBeVisible();
   await page.getByRole("tab", { name: "Giờ trống", exact: true }).click();
   const cell = (day: string, time: string) => page.getByRole("button", { name: `${day}, ${time}`, exact: true });
-  const first = cell("Thứ 2", "00:00–02:00"), end = cell("Thứ 4", "02:00–04:00");
+  const first = cell("Thứ 2", "00:00–01:00"), end = cell("Thứ 4", "01:00–02:00");
   await first.scrollIntoViewIfNeeded();
   const a = (await first.boundingBox())!, b = (await end.boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
@@ -948,14 +947,14 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   await first.focus(); await page.keyboard.press("Space");
   await expect(first).toHaveAttribute("aria-pressed", "false");
   await page.keyboard.press("ArrowRight");
-  await expect(cell("Thứ 3", "00:00–02:00")).toBeFocused();
+  await expect(cell("Thứ 3", "00:00–01:00")).toBeFocused();
   await page.getByRole("button", { name: "Hoàn tác", exact: true }).click();
   await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(0);
-  await cell("Chủ nhật", "00:00–02:00").click();
+  await cell("Chủ nhật", "00:00–01:00").click();
   await page.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
   await expect(page.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(cell("Chủ nhật", "00:00–02:00")).toHaveAttribute("aria-pressed", "true");
+  await expect(cell("Chủ nhật", "00:00–01:00")).toHaveAttribute("aria-pressed", "true");
   for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -967,7 +966,7 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const mobile = await mobileContext.newPage();
   await login(mobile, "chau"); await mobile.goto("/app/studio?tab=slots");
-  const mobileCell = mobile.getByRole("button", { name: "Thứ 2, 00:00–02:00", exact: true });
+  const mobileCell = mobile.getByRole("button", { name: "Thứ 2, 00:00–01:00", exact: true });
   await mobileCell.tap(); await expect(mobileCell).toHaveAttribute("aria-pressed", "true");
   await mobileCell.tap(); await expect(mobileCell).toHaveAttribute("aria-pressed", "false");
   await mobileContext.close();
@@ -975,14 +974,36 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   const profile = await (await page.request.get(`/api/tutors/${me.user.id}`)).json();
   const weekly = profile.slots.find((s: { source: string }) => s.source === "weekly");
   const studentContext = await browser.newContext(), student = await studentContext.newPage();
-  await login(student, "student"); await student.goto(`/app/tutors/${me.user.id}`);
-  await student.getByRole("combobox", { name: "Giờ học (Việt Nam)", exact: true }).click();
-  await student.getByRole("option").filter({ hasText: "120 phút" }).first().click();
+  await login(student, "student");
+  // Reproduce CI's slower profile response so the test cannot skip the first week while loading.
+  await student.route(`**/api/tutors/${me.user.id}`, async route => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await route.continue();
+  });
+  await student.goto(`/app/tutors/${me.user.id}`);
+  const dayKey = new Date(Date.parse(weekly.starts_at) + 7 * 3600000).toISOString().slice(0, 10);
+  const dayButton = student.locator(`.lesson-date-grid button[data-date="${dayKey}"]`);
+  const firstDay = student.locator(".lesson-date-grid button").first();
+  await expect(firstDay).toBeVisible();
+  for (let week = 0; week < 8 && !(await dayButton.count()); week++) {
+    const previous = await firstDay.getAttribute("data-date");
+    await student.getByRole("button", { name: "Tuần sau", exact: true }).click();
+    await expect(firstDay).not.toHaveAttribute("data-date", previous!);
+  }
+  await expect(dayButton).toBeVisible();
+  await dayButton.click();
+  await student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true }).click();
+  await expect(student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await student.getByRole("button", { name: "Tuần sau", exact: true }).click();
+  await expect(student.getByRole("group", { name: "Chọn giờ học" }).locator('[aria-pressed="true"]')).toHaveCount(0);
+  await student.getByRole("button", { name: "Tuần trước", exact: true }).click();
+  await dayButton.click();
+  await student.getByRole("button", { name: "00:00–01:00, 60 phút", exact: true }).click();
   await student.getByLabel("Bạn muốn học gì?").fill("Weekly browser test");
   await student.getByRole("button", { name: "Xem lại yêu cầu", exact: true }).click();
   const dialog = student.getByRole("dialog");
-  await expect(dialog).toContainText("Học phí / 120 phút");
-  await expect(dialog).toContainText(new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(profile.rate * 2));
+  await expect(dialog).toContainText("Học phí / 60 phút");
+  await expect(dialog).toContainText(new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(profile.rate));
   const bookedResponse = student.waitForResponse(r => r.url().endsWith("/api/bookings") && r.request().method() === "POST");
   await dialog.getByRole("button", { name: "Gửi yêu cầu học", exact: true }).click();
   const booked = await bookedResponse;
@@ -991,7 +1012,7 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   expect(accepted.status()).toBe(200);
   await student.goto("/app/bookings");
   const lesson = student.locator(".lesson-card").filter({ hasText: "Weekly browser test" });
-  await expect(lesson).toContainText("120 phút");
+  await expect(lesson).toContainText("60 phút");
   const downloadPromise = student.waitForEvent("download");
   await lesson.getByRole("button", { name: /Lưu lịch/ }).click();
   const download = await downloadPromise;
@@ -999,7 +1020,7 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   for await (const chunk of stream!) ics += chunk.toString();
   const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   expect(ics).toContain(`DTSTART:${stamp(new Date(weekly.starts_at))}`);
-  expect(ics).toContain(`DTEND:${stamp(new Date(Date.parse(weekly.starts_at) + 7200000))}`);
+  expect(ics).toContain(`DTEND:${stamp(new Date(Date.parse(weekly.starts_at) + 3600000))}`);
   await student.request.patch(`/api/bookings/${booking.id}`, { data: { status: "cancelled" } });
   const schedule = (await (await page.request.get("/api/tutor/profile")).json()).weekly_schedule;
   await page.request.put("/api/tutor/availability", { data: { revision: schedule.revision, blocks: [] } });
@@ -1015,4 +1036,82 @@ test("tutor card local clocks update at the next minute", async ({ page }) => {
   await expect(clock).toHaveText("15:37 (UTC +07:00)");
   await page.clock.fastForward(60000);
   await expect(clock).toHaveText("15:38 (UTC +07:00)");
+});
+
+test("student timetable persists, matches tutors and supports mobile selection", async ({ browser, page }) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  const tutorContext = await browser.newContext(), tutor = await tutorContext.newPage();
+  await login(tutor, "chau");
+  const original = await (await tutor.request.get("/api/tutor/profile")).json();
+  const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 19 }];
+  expect((await tutor.request.put("/api/tutor/availability", { data: { revision: original.weekly_schedule.revision, blocks } })).ok()).toBe(true);
+  await login(page, "student"); await page.goto("/app/availability");
+  await expect(page.getByRole("heading", { name: "Lịch rảnh của tôi" })).toBeVisible();
+  await page.getByRole("button", { name: "Tối", exact: true }).click();
+  for (const day of ["Thứ 2", "Thứ 4"])
+    await page.getByRole("button", { name: `${day}, 19:00–20:00`, exact: true }).click();
+  await page.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(page.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(2);
+  await page.getByRole("link", { name: "Tìm gia sư khớp lịch", exact: true }).click();
+  const first = page.locator(".tutor-card").first();
+  await expect(first).toContainText(original.name);
+  await expect(first).toContainText("Trùng 2 giờ / tuần");
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/app/availability");
+  await page.getByRole("button", { name: "Tối", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Thứ 2, 19:00–20:00", exact: true })).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // A second session must not silently overwrite a schedule saved in this one.
+  const stale = await (await page.request.get("/api/account/availability")).json();
+  expect((await page.request.put("/api/account/availability", { data: { revision: stale.revision, blocks: [] } })).ok()).toBe(true);
+  await page.getByRole("button", { name: "Thứ 2, 19:00–20:00", exact: true }).click();
+  await page.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(page.getByText("Lịch đã thay đổi. Tải lại trang trước khi lưu.", { exact: true })).toBeVisible();
+  await tutor.request.put("/api/tutor/availability", { data: { revision: original.weekly_schedule.revision + 1, blocks: original.weekly_schedule.blocks } });
+  await tutorContext.close(); expect(errors).toEqual([]);
+});
+
+test("admin grants frames, tutor equips and email review requires resubmission", async ({ browser, page }) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  const tutorContext = await browser.newContext(), tutor = await tutorContext.newPage();
+  await login(tutor, "linh");
+  const profile = await (await tutor.request.get("/api/tutor/profile")).json();
+  await login(page, "admin");
+  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
+  const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Cấp Ngọc bích", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Đã cấp", exact: true })).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible(); await expect(trigger).toBeFocused();
+  await tutor.goto("/app/studio?tab=profile");
+  await tutor.getByRole("button", { name: "Trang bị Ngọc bích", exact: true }).click();
+  await expect(tutor.getByText("Đã trang bị Ngọc bích", { exact: true })).toBeVisible();
+  await tutor.goto(`/app/tutors?q=${encodeURIComponent(profile.name)}`);
+  await expect(tutor.locator(".tutor-card")).toHaveAttribute("data-theme", "sage");
+  await tutor.getByRole("link", { name: "Xem hồ sơ", exact: true }).click();
+  await expect(tutor.locator('.tutor-presentation[data-theme="sage"]')).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await trigger.click();
+  expect(await dialog.evaluate(el => el.getBoundingClientRect().width <= innerWidth)).toBe(true);
+  await dialog.getByRole("button", { name: "Gửi email yêu cầu bổ sung", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const email = await (await page.request.get(`/__test/email?email=${encodeURIComponent(profile.email || "linh@demo.giasu.test")}`)).json();
+  expect(email.kind).toBe("profile_update"); expect(email.link).toContain("/app/studio?tab=profile");
+  await tutor.goto("/app/studio?tab=profile");
+  await expect(tutor.getByText(/Kiểm tra email/)).toBeVisible();
+  await tutor.getByRole("button", { name: "Lưu & gửi duyệt", exact: true }).click();
+  await expect(tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt.", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
+  await page.getByRole("button", { name: "Xem & duyệt", exact: true }).click();
+  await dialog.getByRole("button", { name: "Duyệt & công bố", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect((await (await tutor.request.get(`/api/tutors/${profile.user_id}`)).json()).profile_theme).toBe("sage");
+  await tutorContext.close(); expect(errors).toEqual([]);
 });

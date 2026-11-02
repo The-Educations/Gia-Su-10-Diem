@@ -41,7 +41,7 @@ export function TutorGallery({
   return (
     <section className="tutor-gallery" aria-label={`Thư viện ảnh của ${name}`}>
       <div className="section-heading">
-        <h2>Góc dạy & học</h2>
+        <h2>Góc flexing</h2>
         <span className="muted">{images.length} ảnh</span>
       </div>
       <div className="gallery-grid">
@@ -277,7 +277,7 @@ export function TutorGalleryEditor({
     <section className="gallery-editor" aria-label="Quản lý thư viện ảnh">
       <div className="section-heading">
         <h2>
-          <Images /> Góc dạy & học
+          <Images /> Góc flexing
         </h2>
         <span>{items.length} / 12 ảnh</span>
       </div>

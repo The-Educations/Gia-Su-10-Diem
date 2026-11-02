@@ -19,6 +19,9 @@ export function reconcileAvailability(db, tutorId, now = Date.now()) {
     AND NOT EXISTS(SELECT 1 FROM bookings WHERE slot_id=slots.id)`, tutorId, cutoff);
   run(db, "UPDATE slots SET available=0 WHERE tutor_id=? AND source='weekly' AND starts_at>?", tutorId, cutoff);
   if (!blocks.length) return;
+  // Convert future unreserved generated slots, keeping every booking snapshot intact.
+  run(db, `UPDATE slots SET duration_minutes=60 WHERE tutor_id=? AND source='weekly' AND starts_at>?
+    AND NOT EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=slots.id AND b.status IN ('pending','accepted','completed'))`, tutorId, cutoff);
   const horizon = now + 56 * 86400000;
   const slots = all(db, `SELECT s.*, EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id
     AND b.status IN ('pending','accepted','completed')) AS reserved FROM slots s
@@ -31,7 +34,7 @@ export function reconcileAvailability(db, tutorId, now = Date.now()) {
     for (const block of blocks.filter(b => b.weekday === weekday)) {
       const start = midnight + day * 86400000 + block.hour * 3600000;
       if (start <= now + 3600000 || start >= horizon) continue;
-      const candidate = { starts_at: new Date(start).toISOString(), duration_minutes: 120 };
+      const candidate = { starts_at: new Date(start).toISOString(), duration_minutes: 60 };
       const existing = slots.find(s => s.starts_at === candidate.starts_at);
       if (slots.some(s => s.id !== existing?.id && (s.available || s.reserved) && overlaps(s, candidate))) continue;
       if (existing) {
@@ -40,7 +43,7 @@ export function reconcileAvailability(db, tutorId, now = Date.now()) {
           existing.available = 1;
         }
       } else {
-        const result = run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes,source) VALUES (?,?,120,'weekly')", tutorId, candidate.starts_at);
+        const result = run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes,source) VALUES (?,?,60,'weekly')", tutorId, candidate.starts_at);
         slots.push({ ...candidate, id: Number(result.lastInsertRowid), available: 1, source: "weekly" });
       }
     }

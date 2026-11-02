@@ -35,7 +35,11 @@ export type Slot = {
   starts_at: string;
   reserved?: number;
 };
+export type ProfileTheme = { id: "paper" | "sage" | "ink"; name: string };
 export type Tutor = {
+  theme_inventory: ProfileTheme[];
+  weekly_blocks: WeeklySchedule["blocks"];
+  review_revision: number;
   weekly_schedule: WeeklySchedule;
   gallery: GalleryPhoto[];
   photo_url: string | null;
@@ -105,6 +109,7 @@ export type Message = {
   created_at: string;
 };
 export type AdminData = {
+  theme_catalog: ProfileTheme[];
   users: (User & { status: string; created_at: string })[];
   tutors: Tutor[];
   resources: Resource[];
