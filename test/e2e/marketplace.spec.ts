@@ -500,7 +500,7 @@ test("role workspaces, studio drafts and admin tab persistence", async ({
       ).toHaveAttribute("aria-selected", "true");
       await expect(page.locator(".admin-list article").first()).toBeVisible();
     }
-    for (const width of [360, 768, 1024, 1440]) {
+    for (const width of [320, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       expect(
         await page.evaluate(
