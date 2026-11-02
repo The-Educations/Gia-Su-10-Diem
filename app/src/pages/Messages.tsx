@@ -40,6 +40,7 @@ type Thread = {
   time: string;
   status?: string;
   tutorId: number;
+  personId?: number;
   endpoint: string;
   inactive?: boolean;
 };
@@ -212,6 +213,7 @@ export default function Messages() {
       detail: "Tư vấn trước buổi học",
       time: i.created_at,
       tutorId: i.tutor_id,
+      personId: user?.role === "tutor" ? i.student_id : i.tutor_id,
       endpoint: `/inquiries/${i.id}/messages`,
     })),
     ...(bookings.data || []).filter(b => !b.offer_id).map((b) => ({
@@ -223,6 +225,7 @@ export default function Messages() {
       time: b.starts_at,
       status: b.status,
       tutorId: b.tutor_id,
+      personId: user?.role === "tutor" ? b.student_id : b.tutor_id,
       endpoint: `/bookings/${b.id}/messages`,
     })),
   ];
@@ -261,7 +264,7 @@ export default function Messages() {
                 className={t.key === selected?.key ? "selected" : ""}
                 onClick={() => setParams({ [t.kind]: String(t.id) })}
               >
-                {t.kind === "support" ? <ShieldCheck size={24} aria-hidden="true" /> : <Person name={t.name} id={t.tutorId} />}
+                {t.kind === "support" ? <ShieldCheck size={24} aria-hidden="true" /> : <Person name={t.name} id={t.personId ?? t.tutorId} />}
                 <div>
                   <strong>{t.name}{t.kind === "support" && <Pin size={13} aria-label="Đã ghim" />}</strong>
                   <span>

@@ -25,7 +25,7 @@ async function verifyEmail(email, cookie) {
  return confirm.headers.getSetCookie().find(c=>c.startsWith("giasu_session="))?.split(";")[0];
 }
 try {
-for (const path of ['/', '/app/tutors', '/app/auth', '/app/library']) {
+for (const path of ['/', '/app/tutors', '/app/auth', '/app/library', '/app/calendar']) {
  const page = await fetch(base + path, {redirect: 'manual'});
  assert.equal(page.status, 200, `${path} must serve HTML without asset canonicalization redirects`);
  const html = await page.text();
@@ -84,7 +84,7 @@ assert.ok(weeklyProfile.slots.filter(s=>s.source==='weekly').every(s=>s.duration
 assert.equal(weeklyProfile.slots.find(s=>s.source==='manual').duration_minutes,60);
 const staleSchedule = await fetch(base+'/api/tutor/availability', {method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({revision:0,blocks:[]})});
 assert.equal(staleSchedule.status,409);
-const saved = await fetch(base + '/api/tutor/profile', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({...profile, headline:'Gia sư kiểm thử runtime', bio:'Hướng dẫn học sinh theo mục tiêu.', education:'Sư phạm Toán', location:'Hà Nội', subjects:['toan'], teaching_style:'Giải thích bằng hình vẽ.', lesson_plan:'Ôn bài, luyện tập và phản hồi.', profile_theme:'paper',timezone:'Asia/Tokyo',profile_sections:[{title:'Chứng chỉ',body:'Phương pháp giảng dạy'}],education_history:[{level:'university',institution:'Đại học Sư phạm',field:'Toán',start_year:2020,end_year:null}]})});
+const saved = await fetch(base + '/api/tutor/profile', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({...profile, province_code:'1',ward_code:'4',availability:{revision:1,blocks:[{weekday:1,hour:18}]}, headline:'Gia sư kiểm thử runtime', bio:'Hướng dẫn học sinh theo mục tiêu.', education:'Sư phạm Toán', location:'Hà Nội', subjects:['toan'], teaching_style:'Giải thích bằng hình vẽ.', lesson_plan:'Ôn bài, luyện tập và phản hồi.', profile_theme:'paper',timezone:'Asia/Tokyo',profile_sections:[{title:'Chứng chỉ',body:'Phương pháp giảng dạy'}],education_history:[{level:'university',institution:'Đại học Sư phạm',field:'Toán',start_year:2020,end_year:null}]})});
 assert.equal(saved.status,200,await saved.text());
 const updated = await(await get('/api/tutor/profile')).json();
 assert.equal(updated.profile_theme,'paper');
@@ -93,6 +93,8 @@ assert.equal(updated.education_history[0].institution,'Đại học Sư phạm')
 assert.equal(updated.profile_sections[0].title,'Chứng chỉ');
 assert.equal(updated.lesson_plan,'Ôn bài, luyện tập và phản hồi.');
 assert.equal(updated.status,'pending');
+assert.equal(updated.location,'Phường Ba Đình, Thành phố Hà Nội');
+assert.deepEqual(updated.weekly_schedule,{revision:2,blocks:[{weekday:1,hour:18}]});
 assert.deepEqual(updated.theme_inventory.map(t => t.id), ['paper']);
 const unowned = await fetch(base+'/api/tutor/theme', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({theme:'sage'})});
 assert.equal(unowned.status,403);
@@ -127,7 +129,7 @@ assert.equal(parentSetup.status, 200);
 const parentUser = (await parentSetup.json()).user;
 assert.equal(parentUser.role, 'student');
 assert.equal(parentUser.learner_type, 'parent');
-for (const data of [{step:1,name:'Parent runtime',goal:'Help my child study Math'}]) {
+for (const data of [{step:1,name:'Parent runtime',goal:'Help my child study Math',school:'THCS Ba Đình',province_code:'1',ward_code:'4'}]) {
  const response = await fetch(base+'/api/account/onboarding', {method:'PUT',headers:{Cookie:parentCookie,'Content-Type':'application/json'},body:JSON.stringify(data)});
  assert.equal(response.status,200);
 }

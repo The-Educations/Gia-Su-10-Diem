@@ -1,3 +1,4 @@
+import { AddressFields } from "@/components/address-fields";
 import { useRef, useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { BookOpen, Users, GraduationCap, ArrowRight } from "lucide-react";
@@ -13,6 +14,7 @@ export default function Onboarding() {
   const { user, setUser, refresh } = useApp();
   const [params] = useSearchParams();
   const [role, setRole] = useState("");
+  const [address, setAddress] = useState({ province_code: user?.province_code || "", ward_code: user?.ward_code || "" });
   const [timezone, setTimezone] = useState(user!.timezone || "Asia/Ho_Chi_Minh");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
@@ -38,9 +40,12 @@ export default function Onboarding() {
         <ToggleGroupItem value="tutor"><GraduationCap aria-hidden="true" />Gia sư</ToggleGroupItem>
       </ToggleGroup> : <>
         <Field><FieldLabel htmlFor="setup-name">Họ và tên</FieldLabel><Input id="setup-name" name="name" defaultValue={user!.name} autoComplete="name" required maxLength={80} /></Field>
+        {user!.role === "student" && <>
+          <Field><FieldLabel htmlFor="setup-school">{user!.learner_type === "parent" ? "Trường của con" : "Trường đang học"}</FieldLabel><Input id="setup-school" name="school" defaultValue={user!.school} required maxLength={160} /></Field>
+          <AddressFields value={address} onChange={setAddress} />
+        </>}
         <TimezoneField value={timezone} onChange={setTimezone} />
         {user!.role === "student" && <Field><FieldLabel htmlFor="setup-goal">{user!.learner_type === "parent" ? "Mục tiêu học tập của con (tùy chọn)" : "Mục tiêu học tập (tùy chọn)"}</FieldLabel><Input id="setup-goal" name="goal" defaultValue={user!.goal} maxLength={1000} /></Field>}
-        <p>{user!.role === "tutor" ? "Tiếp theo, thêm môn dạy, học vấn và lịch rảnh trong Hồ sơ gia sư rồi gửi duyệt." : "Tiếp theo, lưu lịch rảnh để tìm gia sư có giờ học phù hợp."}</p>
       </>}
       {error && <ErrorState error={error} />}
       <Submit busy={busy} disabled={step === 0 && !role}>{step === 0 ? "Tiếp tục" : "Bắt đầu"}<ArrowRight data-icon="inline-end" /></Submit>

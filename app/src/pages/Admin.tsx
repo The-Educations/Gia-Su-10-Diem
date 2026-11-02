@@ -59,18 +59,21 @@ export default function Admin() {
     [subject, setSubject] = useState<Subject | null | undefined>(undefined),
     [tutor, setTutor] = useState<Tutor | null>(null),
     [reviewOpen, setReviewOpen] = useState(false),
+    [withdraw, setWithdraw] = useState<Tutor | null>(null),
     [account, setAccount] = useState<(User & { status: string }) | null>(null),
     [accountAction, setAccountAction] = useState<"status" | "admin" | "delete">("status"),
     [deleteEmail, setDeleteEmail] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const reviewTrigger = useRef<HTMLButtonElement | null>(null);
+  const withdrawTrigger = useRef<HTMLButtonElement | null>(null);
   async function mutate(path: string, method: string, data: unknown) {
     setBusy(true);
     setError("");
     try {
       await api(path, method, data);
       setTutor(null);
+      setWithdraw(null);
       setSubject(undefined);
       setAccount(null);
       refresh();
@@ -193,6 +196,7 @@ export default function Admin() {
                   { value: "pending", label: "Chờ duyệt" },
                   { value: "approved", label: "Đã công bố" },
                   { value: "rejected", label: "Cần bổ sung" },
+                  { value: "withdrawn", label: "Đã gỡ hồ sơ" },
                 ]}
               />
             )}
@@ -246,6 +250,7 @@ export default function Admin() {
                   >
                     Xem & duyệt
                   </Button>
+                  {t.status !== "withdrawn" && <Button variant="destructive" onClick={e => { withdrawTrigger.current = e.currentTarget; setError(""); setWithdraw(t); }}>Gỡ hồ sơ</Button>}
                 </article>
               ))}
             </div>
@@ -515,6 +520,13 @@ export default function Admin() {
               <Submit busy={busy}>Lưu môn học</Submit>
             </FieldGroup>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!withdraw} onOpenChange={open => { if (!open && !busy) setWithdraw(null); }}>
+        <DialogContent closeDisabled={busy} onCloseAutoFocus={e => { e.preventDefault(); if (withdrawTrigger.current?.isConnected) withdrawTrigger.current.focus(); else document.getElementById("admin-search")?.focus(); }}>
+          <DialogHeader><DialogTitle>Gỡ hồ sơ gia sư?</DialogTitle><DialogDescription>Hồ sơ của {withdraw?.name} sẽ ngừng hiển thị công khai. Tài khoản, tin nhắn và lịch đã đặt được giữ lại. Có thể duyệt lại để công bố.</DialogDescription></DialogHeader>
+          {error && <ErrorState error={error} />}
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setWithdraw(null)}>Hủy</Button><Button variant="destructive" disabled={busy} onClick={() => withdraw && mutate(`/admin/tutors/${withdraw.user_id}`, "PATCH", { status: "withdrawn", revision: withdraw.review_revision })}>{busy ? "Đang gỡ…" : "Xác nhận gỡ hồ sơ"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       <TutorReviewDialog tutor={tutor} catalog={d.theme_catalog} subjects={subjects.data || []} open={reviewOpen} onOpenChange={setReviewOpen} onSaved={refresh} returnFocus={() => {

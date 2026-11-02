@@ -176,6 +176,11 @@ export function migrateDatabase(db) {
   }
   if (!db.prepare("PRAGMA table_info(tutors)").all().some(c => c.name === "review_revision"))
     db.exec("ALTER TABLE tutors ADD COLUMN review_revision INTEGER NOT NULL DEFAULT 0");
+  for (const table of ["users", "tutors"]) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+    for (const column of ["province_code", "ward_code", ...(table === "users" ? ["school"] : [])])
+      if (!columns.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+  }
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);
@@ -196,6 +201,9 @@ export const publicUser = (u) =>
         role: u.role,
         learner_type: u.learner_type,
         goal: u.goal,
+        school: u.school,
+        province_code: u.province_code,
+        ward_code: u.ward_code,
         demo: !!u.demo,
         onboarding_step: u.onboarding_step,
       }

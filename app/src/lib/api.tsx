@@ -164,6 +164,7 @@ export const statusNames: Record<string, string> = {
   completed: "Đã hoàn thành",
   approved: "Đã công bố",
   rejected: "Cần bổ sung",
+  withdrawn: "Đã gỡ hồ sơ",
   active: "Hoạt động",
   suspended: "Tạm khóa",
 };

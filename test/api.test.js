@@ -539,7 +539,7 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   run(original, "INSERT INTO bookings(id,student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (1,2,1,1,'toan','2030-01-07T11:00:00.000Z',180000,'online')");
   original.exec("ALTER TABLE slots DROP COLUMN duration_minutes; ALTER TABLE slots DROP COLUMN source; ALTER TABLE slots DROP COLUMN available; ALTER TABLE bookings DROP COLUMN duration_minutes; DROP TABLE weekly_availability");
   original.exec(
-    "ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; ALTER TABLE users DROP COLUMN timezone; ALTER TABLE tutors DROP COLUMN education_history; ALTER TABLE tutors DROP COLUMN profile_sections; ALTER TABLE users DROP COLUMN email_verified_at; ALTER TABLE users DROP COLUMN email_verification_required; PRAGMA user_version = 0",
+    "ALTER TABLE users DROP COLUMN school; ALTER TABLE users DROP COLUMN province_code; ALTER TABLE users DROP COLUMN ward_code; ALTER TABLE tutors DROP COLUMN province_code; ALTER TABLE tutors DROP COLUMN ward_code; ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; ALTER TABLE users DROP COLUMN timezone; ALTER TABLE tutors DROP COLUMN education_history; ALTER TABLE tutors DROP COLUMN profile_sections; ALTER TABLE users DROP COLUMN email_verified_at; ALTER TABLE users DROP COLUMN email_verification_required; PRAGMA user_version = 0",
   );
   original.close();
   const migrated = openDatabase(file);
@@ -553,6 +553,8 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   assert.equal(one(migrated, "SELECT email_verification_required FROM users WHERE id=1").email_verification_required, 0);
   assert.equal(one(migrated, "SELECT email_verified_at FROM users WHERE id=1").email_verified_at, null);
   assert.equal(one(migrated, "SELECT onboarding_step FROM users WHERE id=1").onboarding_step, 3);
+  assert.deepEqual({ ...one(migrated, "SELECT school,province_code,ward_code FROM users WHERE id=1") }, { school: "", province_code: "", ward_code: "" });
+  assert.equal(one(migrated, "SELECT ward_code FROM tutors WHERE user_id=1").ward_code, "");
   assert.equal(
     one(migrated, "SELECT headline FROM tutors WHERE user_id=1").headline,
     "Hồ sơ giữ nguyên",
@@ -935,7 +937,7 @@ test("new accounts complete resumable role-specific setup without escalating rol
     assert.equal(choice.data.user.onboarding_step, 1);
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "student" })).status, 409);
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 1, name: "" })).status, 400);
-    const profile = role === "student" ? { name: "Học sinh mới", goal: "Ôn Toán lớp 9" } : { name: "Gia sư mới", headline: "Toán THCS", bio: "Dạy theo năng lực từng học sinh", education: "Đại học Sư phạm", subjects: ["toan"], rate: 180000, experience: 2, location: "Hà Nội", mode: "both" };
+    const profile = role === "student" ? { name: "Học sinh mới", goal: "Ôn Toán lớp 9", school: "THCS Ba Đình", province_code: "1", ward_code: "4" } : { name: "Gia sư mới", headline: "Toán THCS", bio: "Dạy theo năng lực từng học sinh", education: "Đại học Sư phạm", subjects: ["toan"], rate: 180000, experience: 2, location: "Hà Nội", mode: "both" };
     const saved = await account.request("/account/onboarding", "PUT", { ...profile, step: 1 });
     assert.equal(saved.data.user.onboarding_step, 3);
     await account.request("/auth/logout", "POST");
@@ -1011,7 +1013,7 @@ test("parent setup is distinct, resumable and shares student permissions", async
   assert.equal(r.data.user.role, "student");
   assert.equal(r.data.user.learner_type, "parent");
   assert.equal((await parent.request("/auth/me")).data.user.learner_type, "parent");
-  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", goal: "Con ôn Toán lớp 9" })).status, 200);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", goal: "Con ôn Toán lớp 9", school: "THCS Ba Đình", province_code: "1", ward_code: "4" })).status, 200);
   assert.equal((await parent.request("/account/onboarding", "PUT", { step: 2 })).status, 409);
   assert.equal((await parent.request("/favorites")).status, 200);
   assert.equal((await parent.request("/bookings")).status, 200);
@@ -1461,4 +1463,55 @@ test("offers reject invalid dates and availability, recheck conflicts atomically
   assert.equal(changed.status,201);
   await tutor.request("/tutor/availability","PUT",{revision:1,blocks:[]});
   assert.equal((await tutor.request(`/offers/${changed.data.id}`,"PATCH",{status:"accepted"})).status,409);
+});
+
+test("profile steps save address and calendar atomically and reject invalid or stale schedules", async t => {
+  const { client, db } = await fixture(t);
+  const tutor = client(); const user = await tutor.login("chau");
+  const original = (await tutor.request("/tutor/profile")).data;
+  const payload = { ...original, headline: "Hồ sơ theo bước", province_code: "1", ward_code: "4", availability: { revision: 0, blocks: [{ weekday: 0, hour: 18 }] } };
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...payload, ward_code: "99999" })).status, 400);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...payload, availability: { ...payload.availability, blocks: [{ weekday: 0, hour: 25 }] } })).status, 400);
+  assert.equal(one(db, "SELECT headline FROM tutors WHERE user_id=?", user.id).headline, original.headline);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", payload)).status, 200);
+  const saved = (await tutor.request("/tutor/profile")).data;
+  assert.equal(saved.location, "Phường Ba Đình, Thành phố Hà Nội");
+  assert.equal(saved.ward_code, "4"); assert.equal(saved.status, "pending");
+  assert.deepEqual(saved.weekly_schedule, { revision: 1, blocks: [{ weekday: 0, hour: 18 }] });
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...payload, headline: "Stale tab must not overwrite" })).status, 409);
+  assert.equal(one(db, "SELECT headline FROM tutors WHERE user_id=?", user.id).headline, payload.headline);
+});
+
+test("admin can take down and restore a tutor without deleting accounts or history", async t => {
+  const { client, db } = await fixture(t);
+  const admin = client(), tutor = client(), student = client(), guest = client();
+  await admin.login("admin"); const teacher = await tutor.login("chau"); await student.login("student");
+  const path = `/admin/tutors/${teacher.id}`, original = (await tutor.request("/tutor/profile")).data;
+  const bookings = all(db, "SELECT * FROM bookings WHERE tutor_id=?", teacher.id);
+  assert.equal((await tutor.request(path, "PATCH", { status: "withdrawn" })).status, 403);
+  assert.equal((await guest.request(path, "PATCH", { status: "withdrawn" })).status, 401);
+  assert.equal((await admin.request(path, "PATCH", { status: "withdrawn", revision: 999 })).status, 409);
+  assert.equal((await admin.request(path, "PATCH", { status: "withdrawn", revision: original.review_revision })).status, 200);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).status, 404);
+  assert.equal((await guest.request("/tutors")).data.some(t => t.user_id === teacher.id), false);
+  assert.equal((await tutor.request("/auth/me")).data.user.id, teacher.id);
+  assert.deepEqual(all(db, "SELECT * FROM bookings WHERE tutor_id=?", teacher.id), bookings);
+  assert.equal((await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Tư vấn" })).status, 404);
+  assert.equal((await admin.request(path, "PATCH", { status: "approved", revision: original.review_revision + 1 })).status, 200);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).status, 200);
+  assert.ok(one(db, "SELECT * FROM audit WHERE action='tutor.withdrawn' AND target=?", String(teacher.id)));
+});
+
+test("student school and ward are private, validated and persist across sessions", async t => {
+  const { client } = await fixture(t);
+  const student = client(); const user = await student.login("student");
+  const fields = { name: user.name, goal: "", school: "THCS Ba Đình", province_code: "1", ward_code: "4" };
+  assert.equal((await student.request("/account", "PATCH", { ...fields, province_code: "79" })).status, 400);
+  assert.equal((await student.request("/account", "PATCH", fields)).status, 200);
+  await student.request("/auth/logout", "POST");
+  const saved = await student.login("student");
+  assert.equal(saved.school, fields.school); assert.equal(saved.province_code, "1"); assert.equal(saved.ward_code, "4");
+  // Unrelated legacy account edits preserve the new fields.
+  assert.equal((await student.request("/account", "PATCH", { name: user.name, goal: "Toán" })).status, 200);
+  assert.equal((await student.request("/auth/me")).data.user.school, fields.school);
 });

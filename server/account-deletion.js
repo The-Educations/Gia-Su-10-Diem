@@ -18,8 +18,8 @@ export function registerAccountDeletion(app, db, auth, audit) {
       run(db, "DELETE FROM favorites WHERE student_id=? OR tutor_id=?", id, id);
       run(db, "UPDATE slots SET available=0 WHERE tutor_id=?", id);
       for (const table of ["bookings", "weekly_requests", "offers"]) run(db, `UPDATE ${table} SET status='cancelled' WHERE (student_id=? OR tutor_id=?) AND status IN ('pending','accepted')`, id, id);
-      run(db, `UPDATE tutors SET headline='',bio='',location='',education='',education_history='[]',profile_sections='[]',subjects='[]',levels='[]',goals='[]',teaching_style='',lesson_plan='',moderation_note='',profile_theme='paper',status='rejected' WHERE user_id=?`, id);
-      run(db, `UPDATE users SET name='Tài khoản đã xóa',email=?,password='',status='deleted',goal='',display_name='',timezone='Asia/Ho_Chi_Minh',community_lock_reason='',email_verified_at=NULL WHERE id=?`, `deleted-${id}@account.invalid`, id);
+      run(db, `UPDATE tutors SET headline='',bio='',province_code='',ward_code='',location='',education='',education_history='[]',profile_sections='[]',subjects='[]',levels='[]',goals='[]',teaching_style='',lesson_plan='',moderation_note='',profile_theme='paper',status='rejected' WHERE user_id=?`, id);
+      run(db, `UPDATE users SET name='Tài khoản đã xóa',email=?,password='',status='deleted',school='',province_code='',ward_code='',goal='',display_name='',timezone='Asia/Ho_Chi_Minh',community_lock_reason='',email_verified_at=NULL WHERE id=?`, `deleted-${id}@account.invalid`, id);
       audit(req.user.id, "user.deleted", id);
     });
     res.json({ ok: true });

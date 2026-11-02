@@ -82,6 +82,7 @@ export default function Bookings() {
   const rows = (result.data || []).filter(
     (b) => (!filter || b.status === filter) && (offerId ? String(b.offer_id) === offerId : user?.role === "admin" || !b.offer_id),
   );
+  if (offerId) rows.sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
   const activeOffer = offers.data?.find(o=>String(o.id)===offerId);
   const courses = (offers.data || []).filter(o=>(result.data || []).some(b=>b.offer_id===o.id && (!filter || b.status===filter)));
   async function mutate(path: string, method: string, data: unknown) {
@@ -113,7 +114,7 @@ export default function Bookings() {
         }
         action={
           <Button asChild variant="outline">
-            <Link to={user?.role === "tutor" ? "/studio" : "/tutors"}>
+            <Link to={user?.role === "tutor" ? "/calendar" : "/tutors"}>
               {user?.role === "tutor" ? "Mở giờ trống" : "Tìm gia sư"}
             </Link>
           </Button>
@@ -121,7 +122,7 @@ export default function Bookings() {
       />
       {!offerId && offers.loading && <Loading />}
       {offers.error && <ErrorState error={offers.error} retry={offers.reload} />}
-      {!offerId && !!courses.length && <div className="offer-list course-list">{courses.map(o=><article className="offer-card" key={o.id}><div><h2>{o.subject_name} · {user?.role === "tutor" ? o.student_name : o.tutor_name}</h2><p>{calendarDate(o.start_date)} – {calendarDate(o.end_date)} · {(result.data || []).filter(b=>b.offer_id===o.id && b.status!=="cancelled").length} buổi</p></div><div className="actions"><Button asChild><Link to={`/bookings?offer=${o.id}`}>Xem lịch học</Link></Button><Button asChild variant="outline"><Link to={`/messages?inquiry=${o.inquiry_id}`}>Nhắn tin</Link></Button></div></article>)}</div>}
+      {!offerId && !!courses.length && <div className="offer-list course-list">{courses.map(o=><article className="offer-card" key={o.id}><div><h2>{o.subject_name} · {user?.role === "tutor" ? o.student_name : o.tutor_name}</h2><p>{calendarDate(o.start_date)} – {calendarDate(o.end_date)} · {(result.data || []).filter(b=>b.offer_id===o.id && b.status!=="cancelled").length} buổi</p></div><div className="actions"><Button asChild><Link to={`/bookings?offer=${o.id}`}>{user?.role === "tutor" ? "Xem lịch dạy" : "Xem lịch học"}</Link></Button><Button asChild variant="outline"><Link to={`/messages?inquiry=${o.inquiry_id}`}>Nhắn tin</Link></Button></div></article>)}</div>}
       {offerId && <><div className="list-toolbar"><Button asChild variant="outline"><Link to="/bookings">Tất cả lịch học</Link></Button>{activeOffer && <h2>{activeOffer.subject_name} · {user?.role === "tutor" ? activeOffer.student_name : activeOffer.tutor_name}</h2>}</div><LessonCalendar lessons={rows} onOpen={setView} /></>}
 
       <div className="list-toolbar">
@@ -253,7 +254,7 @@ export default function Bookings() {
                         Hủy buổi
                       </Button>
                     )}
-                  {user?.role === "tutor" &&
+                  {user?.role === "tutor" && !b.offer_id &&
                     ["accepted", "completed"].includes(b.status) && (
                       <Button
                         variant="outline"

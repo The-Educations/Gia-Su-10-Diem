@@ -5,7 +5,7 @@ export function registerTutorReview(app, db, auth, audit, { sendEmail, origin })
   const sending = new Set();
   app.patch("/api/admin/tutors/:id", auth("admin"), async (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
-    const d = z.object({ status: z.enum(["approved", "rejected", "pending"]), revision: z.number().int().nonnegative().optional() }).parse(req.body);
+    const d = z.object({ status: z.enum(["approved", "rejected", "pending", "withdrawn"]), revision: z.number().int().nonnegative().optional() }).parse(req.body);
     const t = one(db, "SELECT t.*,u.email FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=?", id);
     if (!t) return res.status(404).json({ error: "Không tìm thấy gia sư." });
     if ((d.revision !== undefined && d.revision !== t.review_revision) || sending.has(id))

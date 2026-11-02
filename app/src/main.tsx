@@ -64,6 +64,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Bookings = lazy(() => import("./pages/Bookings"));
 const Messages = lazy(() => import("./pages/Messages"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
+const TutorCalendar = lazy(() => import("./pages/TutorCalendar"));
 const TutorStudio = lazy(() => import("./pages/TutorStudio"));
 const Admin = lazy(() => import("./pages/Admin"));
 
@@ -124,10 +125,10 @@ function Shell() {
             icon: user.role === "admin" ? ShieldCheck : House,
           },
           {
-            to: "/bookings",
+            to: user.role === "admin" ? "/calendar" : "/bookings",
             label:
               user.role === "admin"
-                ? "Quản lý buổi học"
+                ? "Lịch dạy"
                 : user.role === "tutor"
                   ? "Lịch dạy của tôi"
                   : user.learner_type === "parent" ? "Lịch học của con" : "Lịch học của tôi",
@@ -142,7 +143,7 @@ function Shell() {
       : []),
     ...(["student", "tutor"].includes(user?.role || "") ? [{to:"/offers",label:"Đề nghị học",icon:BookOpen}] : []),
     ...(user?.role === "tutor"
-      ? [{ to: "/studio", label: "Hồ sơ & giờ trống", icon: Settings }]
+      ? [{ to: "/calendar", label: "Giờ trống hằng tuần", icon: CalendarDays }, { to: "/studio", label: "Hồ sơ gia sư", icon: Settings }]
       : []),
     ...(user?.role === "student"
       ? [{ to: "/availability", label: "Lịch rảnh", icon: CalendarDays }, { to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
@@ -319,6 +320,7 @@ function Shell() {
                   }
                 />
                 <Route path="/offers" element={<Require><Offers /></Require>} />
+                <Route path="/calendar" element={<Require><TutorCalendar /></Require>} />
                 <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route
                   path="/settings"
