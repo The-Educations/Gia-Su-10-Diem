@@ -2651,6 +2651,8 @@ main {
 .verification-entry p { overflow-wrap: anywhere; line-height: 1.7; }
 
 .timezone-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.tutor-local-time time { color: var(--foreground); font-variant-numeric: tabular-nums; }
+.tutor-local-time time span { color: var(--muted-foreground); }
 .education-editor { min-width: 0; }
 .education-entry { min-width: 0; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .education-entry legend { display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 14px; }

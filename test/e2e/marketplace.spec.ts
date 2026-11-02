@@ -39,6 +39,7 @@ test("guest filters, subject navigation and responsive layouts", async ({
     .getByRole("textbox", { name: "Tìm gia sư", exact: true })
     .fill("nguyen minh chau");
   await expect(page.locator(".tutor-card")).toHaveCount(1);
+  await expect(page.locator(".tutor-card .tutor-local-time")).toContainText("(UTC +07:00)");
   await page
     .getByRole("textbox", { name: "Tìm gia sư", exact: true })
     .fill("zzzzz");
@@ -75,7 +76,7 @@ test("guest filters, subject navigation and responsive layouts", async ({
   ).toBeVisible();
   await page.getByRole("tab", { name: "Mục tiêu kỳ thi" }).click();
   await expect(page.locator(".resource-row")).toHaveCount(8);
-  for (const width of [360, 390, 768, 1024, 1440]) {
+  for (const width of [320, 360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/app/tutors");
     await expect(page.locator(".tutor-card").first()).toBeVisible();
@@ -326,6 +327,8 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(admin.locator(".admin-list")).toContainText("Đã công bố");
   await tutor.goto("/app/tutors?q=Gia+sư+kiểm+thử");
   await expect(tutor.locator(".tutor-card")).toHaveCount(1);
+  await expect(tutor.locator(".tutor-card .tutor-local-time")).toContainText("(UTC +09:00)");
+  await expect(tutor.locator(".tutor-card .tutor-local-time time")).toHaveAttribute("title", "Asia/Tokyo");
   await tutor.getByRole("link", { name: "Xem hồ sơ", exact: true }).click();
   await expect(tutor.locator(".tutor-cover img")).toBeVisible();
   await expect(tutor.getByRole("link", { name: "Tải CV", exact: true })).toHaveCount(0);
@@ -999,4 +1002,14 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   await page.request.put("/api/tutor/availability", { data: { revision: schedule.revision, blocks: [] } });
   await studentContext.close();
   expect(errors).toEqual([]);
+});
+
+
+test("tutor card local clocks update at the next minute", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-11-02T08:37:00Z") });
+  await page.goto("/app/tutors?q=nguyen+minh+chau");
+  const clock = page.locator(".tutor-card .tutor-local-time");
+  await expect(clock).toHaveText("15:37 (UTC +07:00)");
+  await page.clock.fastForward(60000);
+  await expect(clock).toHaveText("15:38 (UTC +07:00)");
 });
