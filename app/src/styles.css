@@ -2811,3 +2811,43 @@ main {
 .community-editor-content { min-height: 240px; padding: 16px; outline: none; max-height: 420px; overflow-y: auto; }
 .community-editor-content .ProseMirror-selectednode { outline: 2px solid var(--primary); }
 .community-editor-insert { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border); }
+.availability-scroll { max-height: 560px; scroll-padding-top: 38px; }
+.availability-jumps { display: flex; gap: 4px; margin-bottom: 8px; }
+.availability-jumps button { min-height: 44px; }
+.availability-grid thead th { position: sticky; top: 0; z-index: 2; }
+.availability-grid thead th:first-child { z-index: 3; }
+.availability-actions { margin-top: 1rem; }
+.lesson-time-picker { min-width: 0; }
+.lesson-time-picker legend { font-size: 12px; font-weight: 500; margin-bottom: 8px; }
+.lesson-week-controls { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 8px; }
+.lesson-date-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.lesson-date-grid button { height: 56px; padding: 4px 0; flex-direction: column; gap: 2px; font-size: 11px; }
+.lesson-date-grid button:disabled { opacity: .35; }
+.lesson-time-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.lesson-time-grid button { min-height: 44px; padding-inline: 6px; font-size: 12px; }
+.tutor-inventory { margin: 24px 0; }
+.tutor-inventory h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+.theme-inventory-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+.theme-item { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--card); }
+.theme-item h3 { margin: 12px 0; font-size: 14px; }
+.theme-item button { min-height: 44px; width: 100%; }
+.theme-preview { display: flex; gap: 12px; align-items: center; min-height: 90px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.theme-preview-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--border); }
+.theme-preview > div:last-child { flex: 1; }
+.theme-preview i { display: block; height: 6px; background: var(--border); border-radius: 3px; margin: 6px 0; }
+.theme-preview i:last-child { width: 70%; }
+.tutor-card[data-theme="sage"], .theme-preview[data-theme="sage"], .tutor-presentation[data-theme="sage"] { border: 2px solid #60816c; background: #f2f7f0; --primary: #32614c; --ring: #32614c; }
+.tutor-card[data-theme="ink"], .theme-preview[data-theme="ink"], .tutor-presentation[data-theme="ink"] { border: 2px solid #852f36; background: #fff8f1; box-shadow: inset 0 0 0 4px #fff8f1, inset 0 0 0 5px #d5b9a2; }
+.tutor-presentation[data-theme="sage"], .tutor-presentation[data-theme="ink"] { border-radius: 12px; padding: 20px; }
+.tutor-review-dialog[data-slot="dialog-content"] { width: min(920px, calc(100vw - 24px)); max-width: 920px; max-height: calc(100dvh - 24px); padding: 0; gap: 0; display: flex; flex-direction: column; overflow: hidden; }
+.tutor-review-dialog [data-slot="dialog-header"] { padding: 24px 64px 20px 24px; border-bottom: 1px solid var(--border); flex: none; text-align: left; }
+.tutor-review-body { overflow-y: auto; min-height: 0; padding: 0 24px 24px; overscroll-behavior: contain; }
+.tutor-review-actions { padding: 16px 24px; border-top: 1px solid var(--border); background: var(--card); flex: none; }
+.tutor-review-actions .actions { flex-wrap: wrap; }
+.tutor-review-actions button { min-height: 44px; }
+@media (max-width: 500px) {
+  .availability-scroll { max-height: min(440px, 44dvh); }
+  .tutor-review-actions .actions { display: grid; grid-template-columns: 1fr; }
+  .tutor-review-actions, .tutor-review-body { padding-inline: 16px; }
+  .theme-inventory-grid { grid-template-columns: 1fr; }
+}

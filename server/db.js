@@ -130,6 +130,27 @@ export function migrateDatabase(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS weekly_availability (
     tutor_id INTEGER PRIMARY KEY REFERENCES tutors(user_id), blocks TEXT NOT NULL DEFAULT '[]', revision INTEGER NOT NULL DEFAULT 0
   )`);
+  if (!db.prepare("PRAGMA table_info(weekly_availability)").all().some(c => c.name === "interval_minutes")) {
+    db.exec("ALTER TABLE weekly_availability ADD COLUMN interval_minutes INTEGER NOT NULL DEFAULT 60");
+    for (const row of db.prepare("SELECT * FROM weekly_availability").all()) {
+      const blocks = JSON.parse(row.blocks).flatMap(b => [b, { ...b, hour: b.hour + 1 }]);
+      db.prepare("UPDATE weekly_availability SET blocks=?,revision=revision+1 WHERE tutor_id=?").run(JSON.stringify(blocks), row.tutor_id);
+    }
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS learner_availability (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id), blocks TEXT NOT NULL DEFAULT '[]', revision INTEGER NOT NULL DEFAULT 0
+  )`);
+  if (!db.prepare("PRAGMA table_info(tutor_theme_inventory)").all().length) {
+    db.exec(`CREATE TABLE tutor_theme_inventory (
+      tutor_id INTEGER NOT NULL REFERENCES tutors(user_id), theme_id TEXT NOT NULL,
+      granted_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(tutor_id,theme_id)
+    )`);
+    // Previous self-selected styles do not grant admin-controlled inventory items.
+    db.exec("UPDATE tutors SET profile_theme='paper'");
+  }
+  if (!db.prepare("PRAGMA table_info(tutors)").all().some(c => c.name === "review_revision"))
+    db.exec("ALTER TABLE tutors ADD COLUMN review_revision INTEGER NOT NULL DEFAULT 0");
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

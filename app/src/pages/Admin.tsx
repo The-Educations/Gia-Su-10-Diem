@@ -1,12 +1,9 @@
 import AdminCommunity, { CommunityLock } from "./AdminCommunity";
-import { ProfileSections } from "@/components/tutor-sections";
-import { EducationTimeline } from "@/components/tutor-education";
-import { TimezoneTag } from "@/components/tutor-timezone";
+import { TutorReviewDialog } from "@/components/tutor-review-dialog";
 import AdminPosts from "./AdminPosts";
 import { accountRole } from "@/lib/types";
-import { TutorGallery } from "@/components/tutor-gallery";
 import { WorkspaceStats } from "@/components/workspace";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Plus,
@@ -22,7 +19,6 @@ import { api, useApp, useLoad, fold, dateTime, money } from "@/lib/api";
 import type { AdminData, Resource, Subject, Tutor, User } from "@/lib/types";
 import {
   Page,
-  Section,
   Heading,
   Person,
   State,
@@ -62,10 +58,12 @@ export default function Admin() {
     [editor, setEditor] = useState<Resource | null | undefined>(undefined),
     [subject, setSubject] = useState<Subject | null | undefined>(undefined),
     [tutor, setTutor] = useState<Tutor | null>(null),
+    [reviewOpen, setReviewOpen] = useState(false),
     [account, setAccount] = useState<(User & { status: string }) | null>(null),
     [accountAction, setAccountAction] = useState<"status" | "admin">("status"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const reviewTrigger = useRef<HTMLButtonElement | null>(null);
   async function mutate(path: string, method: string, data: unknown) {
     setBusy(true);
     setError("");
@@ -239,9 +237,10 @@ export default function Admin() {
                   />
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setError("");
+                    onClick={e => {
+                      reviewTrigger.current = e.currentTarget;
                       setTutor(t);
+                      setReviewOpen(true);
                     }}
                   >
                     Xem & duyệt
@@ -514,119 +513,10 @@ export default function Admin() {
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={!!tutor}
-        onOpenChange={(o) => {
-          if (!o) setTutor(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{tutor?.name}</DialogTitle>
-            <DialogDescription>
-              {tutor?.headline || "Chưa hoàn thiện hồ sơ"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="admin-profile-preview">
-            {tutor && (
-              <Person
-                name={tutor.name}
-                src={tutor.photo_url || undefined}
-                large
-              />
-            )}
-            <p>{tutor?.bio}</p>
-          </div>
-          {tutor && <TimezoneTag zone={tutor.timezone} />}
-          {!!tutor?.education_history.length && <Section title="Quá trình học tập"><EducationTimeline entries={tutor.education_history} /></Section>}
-          {tutor?.teaching_style && (
-            <Section title="Phương pháp giảng dạy">
-              <p className="reading-text">{tutor.teaching_style}</p>
-            </Section>
-          )}
-          {tutor?.lesson_plan && (
-            <Section title="Một buổi học cùng tôi">
-              <p className="reading-text">{tutor.lesson_plan}</p>
-            </Section>
-          )}
-          {tutor && <TutorGallery images={tutor.gallery || []} name={tutor.name} />}
-          {tutor && <ProfileSections sections={tutor.profile_sections} />}
-          {tutor?.banner_url && <img className="admin-banner" src={tutor.banner_url} alt={`Ảnh bìa của ${tutor.name}`} />}
-          <dl className="summary-list">
-            <div>
-              <dt>Học vấn</dt>
-              <dd>{tutor?.education || "Chưa cung cấp"}</dd>
-            </div>
-            <div>
-              <dt>Môn dạy</dt>
-              <dd>
-                {tutor?.subjects
-                  .map((id) => subjects.data?.find((s) => s.id === id)?.name)
-                  .join(", ")}
-              </dd>
-            </div>
-            <div>
-              <dt>Cấp học</dt>
-              <dd>{tutor?.levels.join(", ") || "Chưa chọn"}</dd>
-            </div>
-            <div>
-              <dt>Mục tiêu kỳ thi</dt>
-              <dd>{tutor?.goals.join(", ") || "Chưa chọn"}</dd>
-            </div>
-            <div>
-              <dt>Kinh nghiệm</dt>
-              <dd>{tutor?.experience} năm</dd>
-            </div>
-            <div>
-              <dt>Học phí</dt>
-              <dd>{money(tutor?.rate || 0)} / giờ</dd>
-            </div>
-          </dl>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.currentTarget,
-                d = new FormData(form),
-                status = (e.nativeEvent as SubmitEvent).submitter?.getAttribute(
-                  "value",
-                );
-              if (tutor)
-                mutate(`/admin/tutors/${tutor.user_id}`, "PATCH", {
-                  status,
-                  note: d.get("note"),
-                });
-            }}
-          >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="moderation-note">
-                  Ghi chú cho gia sư
-                </FieldLabel>
-                <Textarea
-                  id="moderation-note"
-                  name="note"
-                  defaultValue={tutor?.moderation_note}
-                  maxLength={1000}
-                />
-              </Field>
-              {error && <ErrorState error={error} />}
-              <div className="actions">
-                <Button type="submit" value="approved" disabled={busy}>
-                  Duyệt & công bố
-                </Button>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  value="rejected"
-                  disabled={busy}
-                >
-                  Yêu cầu bổ sung
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <TutorReviewDialog tutor={tutor} catalog={d.theme_catalog} subjects={subjects.data || []} open={reviewOpen} onOpenChange={setReviewOpen} onSaved={refresh} returnFocus={() => {
+        if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus();
+        else document.getElementById("admin-search")?.focus();
+      }} />
       <Dialog
         open={!!account}
         onOpenChange={(o) => {

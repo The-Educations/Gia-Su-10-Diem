@@ -1,5 +1,7 @@
 import { registerCommunityImages } from "./community-images.js";
 import { registerCommunity } from "./community.js";
+import { registerTutorReview } from "./tutor-review.js";
+import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
 import { registerPosts } from "./posts.js";
@@ -30,6 +32,7 @@ import {
   tutorSchema,
   timezoneSchema,
   resourceSchema,
+  availabilitySchema,
   subjectSchema,
 } from "./validation.js";
 
@@ -190,12 +193,13 @@ export function createApi(
   const tutorRows = () =>
     all(
       db,
-      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
-    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
+      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
+    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
     WHERE t.status='approved' AND u.status='active' AND u.role='tutor' GROUP BY t.user_id`,
     ).map(({ moderation_note, ...t }) => ({
       ...t,
       ...uploadMetadata(db, t.user_id),
+      weekly_blocks: JSON.parse(t.weekly_blocks),
       subjects: JSON.parse(t.subjects),
       levels: JSON.parse(t.levels),
       goals: JSON.parse(t.goals),
@@ -204,6 +208,7 @@ export function createApi(
     }));
   const verification = registerEmailVerification(app, db, { origin, sendEmail });
   registerGoogleAuth(app, db, { origin, production, session, google });
+  registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
@@ -282,7 +287,7 @@ export function createApi(
       if (req.user.role === "tutor" && (d.name !== req.user.name || (d.timezone && d.timezone !== req.user.timezone)))
         run(
           db,
-          "UPDATE tutors SET status='pending',moderation_note='' WHERE user_id=?",
+          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
           req.user.id,
         );
     });
@@ -325,7 +330,7 @@ export function createApi(
         } else {
           const d = tutorSchema.parse(req.body);
           ensureSubjects(d.subjects);
-          run(db, `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,education_history=COALESCE(?,education_history),status='pending',moderation_note='' WHERE user_id=?`,
+          run(db, `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,education_history=COALESCE(?,education_history),status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?`,
             d.headline, d.bio, d.location, d.mode, d.rate, d.experience, d.education, JSON.stringify(d.subjects), d.education_history ? JSON.stringify(d.education_history) : null, user.id);
           run(db, "UPDATE users SET name=?,timezone=COALESCE(?,timezone),onboarding_step=2 WHERE id=?", name, d.timezone ?? null, user.id);
         }
@@ -405,6 +410,7 @@ export function createApi(
     refreshAvailability(db, req.user.id);
     res.json({
       weekly_schedule: weeklySchedule(db, req.user.id),
+      theme_inventory: themeInventory(db, req.user.id),
       ...t,
       gallery: galleryMetadata(db, t.user_id),
       name: req.user.name,
@@ -426,6 +432,7 @@ export function createApi(
   });
   app.put("/api/tutor/profile", auth("tutor"), (req, res) => {
     const d = tutorSchema.parse(req.body);
+    if (d.profile_theme && !ownsTheme(db, req.user.id, d.profile_theme)) fail(403, "Giao diện này chưa được quản trị viên cấp.");
     ensureSubjects(d.subjects);
     const knownGoals = all(
       db,
@@ -437,7 +444,7 @@ export function createApi(
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=?,education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status='pending',moderation_note='' WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status='pending',moderation_note='',review_revision=review_revision+1 WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
@@ -450,7 +457,7 @@ export function createApi(
         JSON.stringify(d.goals),
         d.teaching_style,
         d.lesson_plan,
-        d.profile_theme,
+        d.profile_theme ?? null,
         d.education_history ? JSON.stringify(d.education_history) : null,
         d.profile_sections ? JSON.stringify(d.profile_sections) : null,
         req.user.id,
@@ -459,12 +466,7 @@ export function createApi(
     res.json({ ok: true, user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)) });
   });
   app.put("/api/tutor/availability", auth("tutor"), (req, res) => {
-    const d = z.object({
-      revision: z.number().int().nonnegative(),
-      blocks: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(22).multipleOf(2) })).max(84),
-    }).parse(req.body);
-    if (new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size !== d.blocks.length)
-      fail(400, "Khung giờ bị trùng.");
+    const d = availabilitySchema.parse(req.body);
     transaction(db, () => {
       if (weeklySchedule(db, req.user.id).revision !== d.revision)
         fail(409, "Lịch đã thay đổi ở cửa sổ khác. Tải lại trang trước khi lưu.");
@@ -473,6 +475,20 @@ export function createApi(
       reconcileAvailability(db, req.user.id);
     });
     res.json(weeklySchedule(db, req.user.id));
+  });
+  app.get("/api/account/availability", auth("student"), (req, res) => {
+    const row = one(db, "SELECT * FROM learner_availability WHERE user_id=?", req.user.id);
+    res.json({ blocks: row ? JSON.parse(row.blocks) : [], revision: row?.revision ?? 0 });
+  });
+  app.put("/api/account/availability", auth("student"), (req, res) => {
+    const d = availabilitySchema.parse(req.body);
+    transaction(db, () => {
+      const current = one(db, "SELECT revision FROM learner_availability WHERE user_id=?", req.user.id);
+      if ((current?.revision ?? 0) !== d.revision) fail(409, "Lịch đã thay đổi. Tải lại trang trước khi lưu.");
+      run(db, `INSERT INTO learner_availability(user_id,blocks,revision) VALUES (?,?,1)
+        ON CONFLICT(user_id) DO UPDATE SET blocks=excluded.blocks,revision=revision+1`, req.user.id, JSON.stringify(d.blocks));
+    });
+    res.json({ blocks: d.blocks, revision: d.revision + 1 });
   });
   app.post("/api/tutor/slots", auth("tutor"), (req, res) => {
     const d = z.object({ starts_at: z.iso.datetime() }).parse(req.body),
@@ -684,6 +700,7 @@ export function createApi(
   app.get("/api/resources", (req, res) => res.json(resourceRows(false)));
   app.get("/api/admin", auth("admin"), (req, res) =>
     res.json({
+      theme_catalog: themeCatalog,
       users: all(
         db,
         "SELECT id,name,email,role,learner_type,status,demo,created_at,community_locked,community_lock_reason FROM users ORDER BY id DESC",
@@ -694,6 +711,7 @@ export function createApi(
       ).map((t) => ({
         ...t,
         ...uploadMetadata(db, t.user_id),
+        theme_inventory: themeInventory(db, t.user_id),
         gallery: galleryMetadata(db, t.user_id),
         subjects: JSON.parse(t.subjects),
         levels: JSON.parse(t.levels),
@@ -708,34 +726,7 @@ export function createApi(
       ),
     }),
   );
-  app.patch("/api/admin/tutors/:id", auth("admin"), (req, res) => {
-    const d = z
-      .object({
-        status: z.enum(["approved", "rejected", "pending"]),
-        note: z.string().trim().max(1000),
-      })
-      .parse(req.body);
-    const t = one(db, "SELECT * FROM tutors WHERE user_id=?", req.params.id);
-    if (!t) fail(404, "Không tìm thấy gia sư.");
-    if (d.status === "approved")
-      tutorSchema.parse({
-        ...t,
-        subjects: JSON.parse(t.subjects),
-        levels: JSON.parse(t.levels),
-        goals: JSON.parse(t.goals),
-        education_history: JSON.parse(t.education_history),
-        profile_sections: JSON.parse(t.profile_sections),
-      });
-    run(
-      db,
-      "UPDATE tutors SET status=?,moderation_note=? WHERE user_id=?",
-      d.status,
-      d.note,
-      req.params.id,
-    );
-    audit(req.user.id, `tutor.${d.status}`, req.params.id);
-    res.json({ ok: true });
-  });
+  registerTutorReview(app, db, auth, audit, { sendEmail, origin });
   app.patch("/api/admin/users/:id/role", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     z.object({ role: z.literal("admin") }).strict().parse(req.body);

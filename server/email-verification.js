@@ -7,14 +7,19 @@ const escapeHtml = value => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<":
 
 export function createMailflareSender({ url = "https://mail.giasudiem10.online", key, mailboxId, from = "contact@giasudiem10.online" } = {}) {
   if (!key || !mailboxId) return null;
-  return async ({ to, link }) => {
+  return async ({ to, link, kind = "verification" }) => {
+    const update = kind === "profile_update";
+    const subject = update ? "Cập nhật hồ sơ gia sư — Gia Sư 10 Điểm" : "Xác nhận email — Gia Sư 10 Điểm";
+    const message = update ? "Hồ sơ gia sư của bạn cần được bổ sung trước khi công bố. Vui lòng kiểm tra thông tin cá nhân, môn dạy, học vấn, phần giới thiệu và hình ảnh; cập nhật đầy đủ rồi chọn Lưu & gửi duyệt để quản trị viên xem lại." : "Xác nhận email để hoàn tất tài khoản Gia Sư 10 Điểm.";
+    const footer = update ? "Nếu cần hỗ trợ, hãy trả lời email này." : "Liên kết có hiệu lực trong 24 giờ và chỉ dùng một lần. Nếu bạn không tạo tài khoản, hãy bỏ qua email này.";
+    const action = update ? "Cập nhật hồ sơ" : "Xác nhận email";
     const response = await fetch(`${url}/api/v1/send`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(15000),
-      body: JSON.stringify({ mailboxId, from, to: [to], subject: "Xác nhận email — Gia Sư 10 Điểm", undoSend: false, trackOpens: false,
-        text: `Xác nhận email để hoàn tất tài khoản Gia Sư 10 Điểm:\n${link}\n\nLiên kết có hiệu lực trong 24 giờ và chỉ dùng một lần. Nếu bạn không tạo tài khoản, hãy bỏ qua email này.`,
-        html: `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;padding:32px;color:#292b23"><h1 style="font-size:24px">Xác nhận email của bạn</h1><p>Hoàn tất tài khoản Gia Sư 10 Điểm bằng nút bên dưới.</p><p style="margin:28px 0"><a href="${escapeHtml(link)}" style="background:#852f36;color:white;padding:14px 22px;border-radius:10px;text-decoration:none">Xác nhận email</a></p><p>Liên kết có hiệu lực trong 24 giờ và chỉ dùng một lần.</p><p>Nếu bạn không tạo tài khoản, hãy bỏ qua email này.</p></div>`,
+      body: JSON.stringify({ mailboxId, from, to: [to], subject, undoSend: false, trackOpens: false,
+        text: `${message}\n${link}\n\n${footer}`,
+        html: `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;padding:32px;color:#292b23"><h1 style="font-size:24px">${action}</h1><p>${message}</p><p style="margin:28px 0"><a href="${escapeHtml(link)}" style="background:#852f36;color:white;padding:14px 22px;border-radius:10px;text-decoration:none">${action}</a></p><p>${footer}</p></div>`,
       }),
     });
     if (!response.ok) throw new Error("Mail delivery unavailable");

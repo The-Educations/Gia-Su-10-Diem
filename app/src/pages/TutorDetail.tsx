@@ -1,3 +1,4 @@
+import { LessonTimePicker } from "@/components/lesson-time-picker";
 import { TutorGallery } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
 import { ContactTutor } from "@/components/contact-tutor";
@@ -133,16 +134,7 @@ export default function TutorDetail() {
                     label: subjects.data?.find((x) => x.id === s)?.name || s,
                   }))}
                 />
-                <Choose
-                  label="Giờ học (Việt Nam)"
-                  value={slot}
-                  onChange={setSlot}
-                  allLabel="Chọn khung giờ"
-                  options={t.slots.map((s) => ({
-                    value: String(s.id),
-                    label: `${dateTime(s.starts_at)} · ${s.duration_minutes} phút`,
-                  }))}
-                />
+                <LessonTimePicker slots={t.slots} value={slot} onChange={setSlot} />
                 {t.mode === "both" && (
                   <Choose
                     label="Hình thức"
