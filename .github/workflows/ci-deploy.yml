@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      inspect_cloudflare_builds:
+        description: Inspect native Cloudflare build settings and the latest failed build
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,6 +20,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  inspect-builds:
+    name: Inspect native Cloudflare build
+    if: github.event_name == 'workflow_dispatch' && inputs.inspect_cloudflare_builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/inspect-cloudflare-builds.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
   build:
     name: API, types and build
     runs-on: ubuntu-latest
