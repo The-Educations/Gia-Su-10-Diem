@@ -97,7 +97,7 @@ export default function Auth() {
         </TabsContent>
         </Tabs>
       </div>}
-      <p className="auth-policy">Khi tiếp tục, bạn đồng ý với <a href="/terms">Điều khoản dịch vụ</a> và đã đọc <a href="/privacy">Chính sách quyền riêng tư</a>.</p>
+      <p className="auth-policy">Tiếp tục là đồng ý với <a href="/terms" aria-label="Điều khoản dịch vụ">Điều khoản</a> &amp; <a href="/privacy" aria-label="Chính sách quyền riêng tư">Chính sách riêng tư</a>.</p>
     </section>}
       </div>
       <footer className="auth-footer">© {new Date().getFullYear()} Gia Sư 10 Điểm</footer>
