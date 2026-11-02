@@ -110,4 +110,23 @@ assert.equal(missingPost.status, 404);
 assert.match(missingPost.headers.get('x-robots-tag'), /noindex/);
 console.log('Cloudflare runtime: parent setup, news schema, authorization and missing article SEO passed.');
 
+const community = await fetch(base + '/api/community/posts');
+assert.equal(community.status, 200);
+assert.equal((await community.json()).rules.kind, 'rules');
+const communityWrite = (path, method, data) => fetch(base + '/api/community' + path, { method, headers: { Cookie: parentCookie, 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+assert.equal((await communityWrite('/me/display-name', 'PUT', {display_name:'Phụ huynh học tập'})).status, 200);
+assert.equal((await communityWrite('/posts', 'POST', {title:'Liên hệ abc.com',body:'Không được đăng'})).status, 400);
+const draftResponse = await communityWrite('/posts', 'POST', {title:'Tìm gia sư Anh văn',body:'Con mình cần cải thiện kỹ năng đọc.'});
+assert.equal(draftResponse.status, 201);
+const draft = await draftResponse.json();
+assert.equal(draft.status, 'pending');
+assert.equal(draft.author.label, 'Phụ huynh học tập - Phụ huynh');
+assert.ok(!JSON.stringify(draft.author).includes('Parent runtime'));
+assert.equal((await fetch(base + '/api/community/posts/' + draft.id)).status, 404);
+assert.equal((await fetch(base + '/app/community/' + draft.id)).status, 404);
+assert.ok(!(await (await fetch(base + '/sitemap.xml')).text()).includes('/app/community/' + draft.id + '</loc>'));
+assert.equal((await communityWrite('/posts/' + draft.id, 'PUT', {title:'Tìm gia sư tiếng Anh',body:'Con mình đang học lớp 8.'})).status, 200);
+assert.equal((await communityWrite('/posts/' + draft.id, 'DELETE', {})).status, 200);
+console.log('Cloudflare community: additive schema, display name, contact filter, pending privacy, edits, deletion and SEO passed.');
+
 } finally { await new Promise(resolve => mailServer.close(resolve)); }
