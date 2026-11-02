@@ -40,7 +40,7 @@ export default function Community() {
         <section className="community-toolbar" aria-label="Tìm bài viết">
           <Button onClick={() => gate.run(() => navigate("/community/write"), true)}>
             <PenLine data-icon="inline-start" />
-            {user?.role === "admin" ? "Đăng thông báo" : "Đăng bài"}
+            {user?.role === "admin" ? "Viết bài" : "Đăng bài"}
           </Button>
           <form
             className="community-search"

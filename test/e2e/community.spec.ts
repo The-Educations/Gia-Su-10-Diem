@@ -561,7 +561,7 @@ test("dedicated composer saves private drafts, reopens them and submits for each
     }
     await page
       .getByRole("button", {
-        name: slug === "admin" ? "Đăng thông báo" : "Đăng bài",
+        name: slug === "admin" ? "Viết bài" : "Đăng bài",
         exact: true,
       })
       .click();
