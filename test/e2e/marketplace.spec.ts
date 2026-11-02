@@ -959,7 +959,10 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-
   for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const box = await first.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(44); expect(box!.height).toBeGreaterThanOrEqual(44);
+    const box = await first.boundingBox();
+    // Chromium may report a 44px box as 43.999969px after a transform.
+    expect(Math.round(box!.width * 100) / 100).toBeGreaterThanOrEqual(44);
+    expect(Math.round(box!.height * 100) / 100).toBeGreaterThanOrEqual(44);
   }
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const mobile = await mobileContext.newPage();
