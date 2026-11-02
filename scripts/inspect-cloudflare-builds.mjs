@@ -27,10 +27,12 @@ console.log(clean(JSON.stringify({
 const builds = await get(`/builds/workers/${worker.tag}/builds`);
 console.log(clean(JSON.stringify(builds.slice(0, 8).map(build => ({
   build_uuid: build.build_uuid, status: build.status, build_outcome: build.build_outcome,
-  metadata: build.build_trigger_metadata, created_on: build.created_on,
+  branch: build.build_trigger_metadata?.branch, created_on: build.created_on,
 })), null, 2)));
-const failed = builds.find(build => build.build_outcome === 'fail' || build.build_outcome === 'failure');
+const requested = process.env.CLOUDFLARE_BUILD_ID;
+if (requested && !/^[a-f\d-]{36}$/i.test(requested)) throw new Error('Invalid build UUID.');
+const failed = requested || builds.find(build => build.build_outcome === 'fail' || build.build_outcome === 'failure')?.build_uuid;
 if (failed) {
-  const logs = await get(`/builds/builds/${failed.build_uuid}/logs`);
+  const logs = await get(`/builds/builds/${failed}/logs`);
   console.log(clean(JSON.stringify(logs)));
 }

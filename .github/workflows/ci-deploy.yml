@@ -11,6 +11,9 @@ on:
         description: Inspect native Cloudflare build settings and the latest failed build
         type: boolean
         default: false
+      cloudflare_build_id:
+        description: Optional failed Cloudflare build UUID to inspect
+        type: string
 
 permissions:
   contents: read
@@ -33,6 +36,7 @@ jobs:
       - run: node scripts/inspect-cloudflare-builds.mjs
         env:
           CLOUDFLARE_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_BUILDS_API_TOKEN }}
+          CLOUDFLARE_BUILD_ID: ${{ inputs.cloudflare_build_id }}
 
   build:
     name: API, types and build
