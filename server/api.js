@@ -661,7 +661,7 @@ export function createApi(
     res.json({
       users: all(
         db,
-        "SELECT id,name,email,role,learner_type,status,demo,created_at FROM users ORDER BY id DESC",
+        "SELECT id,name,email,role,learner_type,status,demo,created_at,community_locked,community_lock_reason FROM users ORDER BY id DESC",
       ),
       tutors: all(
         db,

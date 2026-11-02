@@ -1,9 +1,17 @@
 import { RULES_TITLE, RULES_BODY, fold } from "./community-policy.js";
 
 export function migrateCommunity(db) {
-  const columns = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
-  for (const [name, definition] of Object.entries({ display_name: "TEXT NOT NULL DEFAULT ''", community_locked: "INTEGER NOT NULL DEFAULT 0", community_lock_reason: "TEXT NOT NULL DEFAULT ''" })) {
-    if (!columns.includes(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
+  const columns = db
+    .prepare("PRAGMA table_info(users)")
+    .all()
+    .map((c) => c.name);
+  for (const [name, definition] of Object.entries({
+    display_name: "TEXT NOT NULL DEFAULT ''",
+    community_locked: "INTEGER NOT NULL DEFAULT 0",
+    community_lock_reason: "TEXT NOT NULL DEFAULT ''",
+  })) {
+    if (!columns.includes(name))
+      db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
   }
   db.exec(`CREATE TABLE IF NOT EXISTS community_posts (
   id INTEGER PRIMARY KEY,
@@ -84,5 +92,16 @@ CREATE TABLE IF NOT EXISTS community_notifications (
 );
 CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notifications(user_id, read_at, id);
 `);
-  db.prepare(`INSERT INTO community_posts(author_id,kind,status,title,body,search_text,published_at) SELECT id,'rules','approved',?,?,?,CURRENT_TIMESTAMP FROM users WHERE role='admin' AND status='active' AND NOT EXISTS (SELECT 1 FROM community_posts WHERE kind='rules') ORDER BY id LIMIT 1`).run(RULES_TITLE, RULES_BODY, fold(RULES_TITLE + " " + RULES_BODY));
+  if (
+    !db
+      .prepare("PRAGMA table_info(community_posts)")
+      .all()
+      .some((c) => c.name === "review_version")
+  )
+    db.exec(
+      "ALTER TABLE community_posts ADD COLUMN review_version INTEGER NOT NULL DEFAULT 0",
+    );
+  db.prepare(
+    `INSERT INTO community_posts(author_id,kind,status,title,body,search_text,published_at) SELECT id,'rules','approved',?,?,?,CURRENT_TIMESTAMP FROM users WHERE role='admin' AND status='active' AND NOT EXISTS (SELECT 1 FROM community_posts WHERE kind='rules') ORDER BY id LIMIT 1`,
+  ).run(RULES_TITLE, RULES_BODY, fold(RULES_TITLE + " " + RULES_BODY));
 }
