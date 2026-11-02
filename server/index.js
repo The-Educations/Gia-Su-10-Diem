@@ -1,4 +1,5 @@
-import { pageSeo, renderSeo, robots, sitemap } from "./seo.js";
+import { pageSeo, renderSeo, robots, newsSitemap } from "./seo.js";
+import { all, one } from "./db.js";
 import { processPhoto } from "./photo.js";
 import express from "express";
 import { readFile } from "node:fs/promises";
@@ -32,14 +33,16 @@ app.get(["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"], (req, res)
 });
 app.get(["/app", "/app/"], (req, res) => res.redirect("/"));
 app.get("/robots.txt", (req, res) => res.type("text/plain").send(robots));
-app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(sitemap));
+app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(newsSitemap(all(db, "SELECT id FROM posts WHERE published=1"))));
 app.get(["/privacy", "/terms"], (req, res) => res.sendFile(path.resolve(`dist/legal${req.path}.html`)));
 app.get("/index.html", (req, res) => res.redirect(308, "/"));
 app.get("/", (req, res) => res.sendFile(path.resolve("index.html")));
 const sendApp = (req, res, html) => {
-  const seo = pageSeo(req.path);
+  const match = req.path.match(/^\/app\/news\/(\d+)$/);
+  const post = match ? one(db, "SELECT title,summary FROM posts WHERE id=? AND published=1", match[1]) : null;
+  const seo = pageSeo(req.path, post);
   res.set("X-Robots-Tag", seo.robots).set("Cache-Control", "no-cache")
-    .status(seo.status).type("html").send(renderSeo(html, req.path));
+    .status(seo.status).type("html").send(renderSeo(html, req.path, post));
 };
 if (production || process.env.SERVE_BUILD === "1") {
   app.use("/app/assets", express.static(path.resolve("dist/app/assets")));

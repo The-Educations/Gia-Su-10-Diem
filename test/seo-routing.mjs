@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 export async function verifySeo(base) {
-  for (const [path, canonical] of [["/", "/"], ["/app/tutors?subject=toan", "/app/tutors"], ["/app/library", "/app/library"], ["/privacy", "/privacy"], ["/terms", "/terms"]]) {
+  for (const [path, canonical] of [["/", "/"], ["/app/tutors?subject=toan", "/app/tutors"], ["/app/library", "/app/library"], ["/app/news", "/app/news"], ["/privacy", "/privacy"], ["/terms", "/terms"]]) {
     const response = await fetch(base + path);
     assert.equal(response.status, 200);
     const html = await response.text();
@@ -21,7 +21,7 @@ export async function verifySeo(base) {
   const map = await fetch(base + "/sitemap.xml");
   assert.equal(map.status, 200);
   assert.match(map.headers.get("content-type"), /xml/);
-  assert.equal(((await map.text()).match(/<loc>/g) || []).length, 5);
+  assert.ok(((await map.text()).match(/<loc>/g) || []).length >= 6);
   const robots = await fetch(base + "/robots.txt");
   assert.equal(robots.status, 200);
   assert.match(await robots.text(), /Sitemap: https:\/\/giasudiem10.online\/sitemap.xml/);

@@ -1,14 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pageSeo, renderSeo, robots, sitemap } from "../server/seo.js";
+import { pageSeo, renderSeo, robots, sitemap, newsSitemap } from "../server/seo.js";
 
 test("only the public entry and policy pages are indexable and included in the sitemap", () => {
-  for (const path of ["/", "/app/tutors", "/app/library", "/privacy", "/terms"]) {
+  for (const path of ["/", "/app/tutors", "/app/library", "/privacy", "/terms", "/app/news"]) {
     assert.match(pageSeo(path).robots, /^index,/);
     assert.equal(pageSeo(path).canonical, `https://giasudiem10.online${path}`);
     assert.ok(sitemap.includes(`<loc>https://giasudiem10.online${path}</loc>`));
   }
-  assert.equal((sitemap.match(/<loc>/g) || []).length, 5);
+  assert.equal((sitemap.match(/<loc>/g) || []).length, 6);
   for (const path of ["/app/auth", "/app/onboarding", "/app/admin", "/app/workspace", "/app/messages", "/app/settings", "/app/studio", "/app/bookings", "/app/favorites", "/app/tutors/3"]) {
     assert.match(pageSeo(path).robots, /^noindex,/);
     assert.equal(pageSeo(path).canonical, null);
@@ -44,4 +44,14 @@ test("metadata is delivered in HTML once, with valid website schema and escaped 
   assert.match(privatePage, /noindex, follow/);
   assert.ok(!privatePage.includes('rel="canonical"'));
   assert.ok(!privatePage.includes('property="og:'));
+});
+
+ test("published news gets escaped metadata and drafts stay unindexable", () => {
+  const post = { id: 12, title: '<script>alert("x")</script>', summary: 'A "quote" & text' };
+  assert.equal(pageSeo("/app/news/12", post).status, 200);
+  assert.match(pageSeo("/app/news/12", post).robots, /^index,/);
+  assert.equal(pageSeo("/app/news/12").status, 404);
+  assert.match(pageSeo("/app/news/12").robots, /^noindex,/);
+  assert.ok(!renderSeo("<head></head>", "/app/news/12", post).includes('<script>alert'));
+  assert.match(newsSitemap([post]), /\/app\/news\/12<\/loc>/);
 });

@@ -14,10 +14,8 @@ export const googleErrors: Record<string, string> = {
     "Không thể liên kết. Đăng nhập lại tài khoản của bạn và thử lại.",
 };
 export function GoogleSignIn({
-  role,
   next,
 }: {
-  role: string;
   next?: string | null;
 }) {
   const providers = useLoad<{ google: boolean }>("/auth/providers");
@@ -43,12 +41,12 @@ export function GoogleSignIn({
         </Button>
       </div>
     );
-  const params = new URLSearchParams({ role });
+  const params = new URLSearchParams();
   if (next) params.set("next", next);
   return (
     <div className="google-sign-in">
       <Button asChild variant="outline" className="w-full">
-        <a href={`/api/auth/google/start?${params}`}>
+        <a href={`/api/auth/google/start${params.size ? `?${params}` : ""}`}>
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="#4285F4"
@@ -70,9 +68,6 @@ export function GoogleSignIn({
           Tiếp tục với Google
         </a>
       </Button>
-      <div className="auth-divider">
-        <span>hoặc dùng email</span>
-      </div>
     </div>
   );
 }

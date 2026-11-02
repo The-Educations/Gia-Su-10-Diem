@@ -106,16 +106,7 @@ export default function Tutors({
     <Page>
       <Heading
         title={favoritesOnly ? "Gia sư đã lưu" : "Tìm gia sư"}
-        action={
-          !user && (
-            <Button asChild variant="outline">
-              <Link to="/auth?mode=register&role=tutor">
-                Đăng ký làm gia sư
-                <ArrowUpRight data-icon="inline-end" />
-              </Link>
-            </Button>
-          )
-        }
+
       />
 
       <section className="search-panel" aria-label="Bộ lọc gia sư">

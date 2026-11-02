@@ -11,10 +11,10 @@ test("search metadata is present without JavaScript and follows app navigation",
   expect(missing.headers()["x-robots-tag"]).toContain("noindex");
   await page.goto("/app/tutors?subject=toan");
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://giasudiem10.online/app/tutors");
-  await page.locator(".sidebar").getByRole("link", { name: "Môn học & kỳ thi" }).click();
-  await expect(page).toHaveTitle("Môn học và kỳ thi | Gia Sư 10 Điểm");
+  await page.locator(".sidebar").getByRole("link", { name: "Tìm môn học" }).click();
+  await expect(page).toHaveTitle("Tìm môn học và gia sư | Gia Sư 10 Điểm");
   await expect(page.locator('meta[property="og:url"]')).toHaveAttribute("content", "https://giasudiem10.online/app/library");
-  await page.locator(".sidebar").getByRole("link", { name: "Đăng nhập", exact: true }).click();
+  await page.locator(".sidebar").getByRole("link", { name: "Tài khoản", exact: true }).click();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
   await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
   await expect(page.locator('meta[property="og:url"]')).toHaveCount(0);

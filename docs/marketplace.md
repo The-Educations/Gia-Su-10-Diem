@@ -23,7 +23,8 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng ch�
 - Sắp xếp theo giá, kinh nghiệm hoặc đánh giá có thật.
 - Xem ảnh, chuyên môn, mức phí, học vấn, mô tả phương pháp, đánh giá, lịch trống và tải CV của hồ sơ đã công bố.
 - Duyệt danh mục môn / kỳ thi và chuyển sang tìm gia sư tương ứng.
-- Đăng ký vai trò học sinh hoặc gia sư; không tự đăng ký admin.
+- Một màn hình tài khoản ưu tiên Google, vẫn có email/mật khẩu. Sau khi tạo tài khoản, chọn học sinh, phụ huynh hoặc gia sư và hoàn tất hướng dẫn thiết lập.
+- Đọc bài viết công khai tại Tin tức; bản nháp chỉ admin xem được.
 
 ### Học sinh / phụ huynh
 
@@ -38,7 +39,7 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng ch�
 - Xuất lịch `.ics` cho buổi đã xác nhận.
 - Đánh giá một lần sau khi buổi học hoàn thành.
 
-Trong bản hiện tại, phụ huynh dùng cùng vai trò `student`; chưa có tài khoản con hay quản lý nhiều học sinh.
+Phụ huynh có lựa chọn thiết lập riêng và mục tiêu học tập của con (`learner_type=parent`); quyền đặt lịch vẫn dùng `role=student`. Chưa có tài khoản con hay quản lý nhiều học sinh.
 
 ### Gia sư
 
@@ -57,6 +58,7 @@ Trong bản hiện tại, phụ huynh dùng cùng vai trò `student`; chưa có 
 
 - Duyệt hồ sơ đủ thông tin hoặc yêu cầu bổ sung kèm ghi chú.
 - Tạm khóa / kích hoạt tài khoản không phải admin; khóa thu hồi phiên đăng nhập.
+- Viết, sửa, lưu nháp, công khai và ẩn bài viết trong tab Tin tức. Nội dung là văn bản thuần.
 - Thêm / sửa môn học.
 - Thêm / sửa / ẩn mục kỳ thi và nguồn thông tin HTTPS.
 - Xem các buổi học và nhật ký thao tác.

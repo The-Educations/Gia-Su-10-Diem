@@ -75,8 +75,7 @@ export default function Dashboard() {
   return (
     <Page>
       <Heading
-        title={isTutor ? "Không gian gia sư" : "Góc học tập"}
-        description={`Chào ${user.name.split(" ").slice(-2).join(" ")}.`}
+        title={isTutor ? "Không gian gia sư" : user.learner_type === "parent" ? "Không gian phụ huynh" : "Góc học tập"}
         action={
           <Button asChild>
             <Link to={isTutor ? "/studio?tab=slots" : "/tutors"}>
@@ -116,7 +115,7 @@ export default function Dashboard() {
             <div className="next-lesson-heading">
               <span>
                 <CalendarDays size={18} />
-                {isTutor ? "Buổi dạy tiếp theo" : "Buổi học tiếp theo"}
+                {isTutor ? "Buổi dạy tiếp theo" : user.learner_type === "parent" ? "Buổi học tiếp theo của con" : "Buổi học tiếp theo"}
               </span>
               {next && <State value={next.status} />}
             </div>
@@ -175,7 +174,7 @@ export default function Dashboard() {
             )}
           </section>
           <WorkspacePanel
-            title={isTutor ? "Yêu cầu cần phản hồi" : "Mục tiêu của bạn"}
+            title={isTutor ? "Yêu cầu cần phản hồi" : user.learner_type === "parent" ? "Mục tiêu học tập của con" : "Mục tiêu của bạn"}
             action={
               <TextLink to={isTutor ? "/bookings?status=pending" : "/settings"}>
                 {isTutor ? "Xem tất cả" : "Chỉnh sửa"}
@@ -208,7 +207,7 @@ export default function Dashboard() {
                 <div className="workspace-shortcuts">
                   <Link to="/library">
                     <GraduationCap size={18} />
-                    Môn học & kỳ thi
+                    Tìm môn học
                     <ArrowUpRight size={16} />
                   </Link>
                   <Link to="/favorites">
