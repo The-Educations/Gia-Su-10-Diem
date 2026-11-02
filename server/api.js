@@ -1,3 +1,4 @@
+import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
 import { registerPosts } from "./posts.js";
 import { isGoogleAdmin } from "./admin-access.js";
@@ -352,9 +353,10 @@ export function createApi(
   app.get("/api/tutors/:id", (req, res) => {
     const t = tutorRows().find((t) => t.user_id === Number(req.params.id));
     if (!t) fail(404, "Hồ sơ chưa được công bố.");
+    refreshAvailability(db, t.user_id);
     const slots = all(
       db,
-      `SELECT s.* FROM slots s WHERE tutor_id=? AND starts_at>? AND NOT EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed')) ORDER BY starts_at`,
+      `SELECT s.* FROM slots s WHERE tutor_id=? AND available=1 AND starts_at>? AND NOT EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed')) ORDER BY starts_at`,
       t.user_id,
       new Date(Date.now() + 3600000).toISOString(),
     );
@@ -396,7 +398,9 @@ export function createApi(
   });
   app.get("/api/tutor/profile", auth("tutor"), (req, res) => {
     const t = one(db, "SELECT * FROM tutors WHERE user_id=?", req.user.id);
+    refreshAvailability(db, req.user.id);
     res.json({
+      weekly_schedule: weeklySchedule(db, req.user.id),
       ...t,
       gallery: galleryMetadata(db, t.user_id),
       name: req.user.name,
@@ -410,7 +414,7 @@ export function createApi(
       profile_sections: JSON.parse(t.profile_sections),
       slots: all(
         db,
-        `SELECT s.*, EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed')) AS reserved FROM slots s WHERE tutor_id=? AND starts_at>? ORDER BY starts_at`,
+        `SELECT s.*, EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed')) AS reserved FROM slots s WHERE tutor_id=? AND starts_at>? AND (available=1 OR EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed'))) ORDER BY starts_at`,
         req.user.id,
         new Date().toISOString(),
       ),
@@ -450,6 +454,22 @@ export function createApi(
     });
     res.json({ ok: true, user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)) });
   });
+  app.put("/api/tutor/availability", auth("tutor"), (req, res) => {
+    const d = z.object({
+      revision: z.number().int().nonnegative(),
+      blocks: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(22).multipleOf(2) })).max(84),
+    }).parse(req.body);
+    if (new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size !== d.blocks.length)
+      fail(400, "Khung giờ bị trùng.");
+    transaction(db, () => {
+      if (weeklySchedule(db, req.user.id).revision !== d.revision)
+        fail(409, "Lịch đã thay đổi ở cửa sổ khác. Tải lại trang trước khi lưu.");
+      run(db, `INSERT INTO weekly_availability(tutor_id,blocks,revision) VALUES (?,?,1)
+        ON CONFLICT(tutor_id) DO UPDATE SET blocks=excluded.blocks,revision=revision+1`, req.user.id, JSON.stringify(d.blocks));
+      reconcileAvailability(db, req.user.id);
+    });
+    res.json(weeklySchedule(db, req.user.id));
+  });
   app.post("/api/tutor/slots", auth("tutor"), (req, res) => {
     const d = z.object({ starts_at: z.iso.datetime() }).parse(req.body),
       date = new Date(d.starts_at);
@@ -461,8 +481,8 @@ export function createApi(
     )
       fail(400, "Chọn giờ tròn, trước ít nhất một giờ và trong 180 ngày tới.");
     if (
-      all(db, "SELECT starts_at FROM slots WHERE tutor_id=?", req.user.id).some(
-        (s) => Math.abs(new Date(s.starts_at) - date) < 3600000,
+      all(db, "SELECT starts_at,duration_minutes FROM slots s WHERE tutor_id=? AND (available=1 OR EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed')))", req.user.id).some(
+        (s) => overlaps(s, { starts_at: date.toISOString(), duration_minutes: 60 }),
       )
     )
       fail(409, "Khung giờ đã có trong lịch.");
@@ -475,6 +495,8 @@ export function createApi(
     res.status(201).json({ ok: true });
   });
   app.delete("/api/tutor/slots/:id", auth("tutor"), (req, res) => {
+    if (one(db, "SELECT id FROM slots WHERE id=? AND tutor_id=? AND source='weekly'", req.params.id, req.user.id))
+      fail(409, "Chỉnh sửa khung giờ này trong lịch lặp hằng tuần.");
     if (one(db, "SELECT id FROM bookings WHERE slot_id=?", req.params.id))
       fail(409, "Khung giờ có lịch sử đặt học, không thể xóa.");
     run(
@@ -511,7 +533,7 @@ export function createApi(
       .parse(req.body);
     const s = one(
       db,
-      `SELECT s.*,t.rate,t.mode,t.subjects FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'`,
+      `SELECT s.*,t.rate,t.mode,t.subjects FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND s.available=1 AND t.status='approved' AND u.status='active' AND u.role='tutor'`,
       d.slot_id,
     );
     if (!s || new Date(s.starts_at).getTime() < Date.now() + 3600000)
@@ -524,21 +546,21 @@ export function createApi(
     const result = transaction(db, () => {
       const conflicts = all(
         db,
-        `SELECT starts_at FROM bookings WHERE (student_id=? OR tutor_id=?) AND status IN ('pending','accepted','completed')`,
+        `SELECT starts_at,duration_minutes FROM bookings WHERE (student_id=? OR tutor_id=?) AND status IN ('pending','accepted','completed')`,
         req.user.id,
         s.tutor_id,
       );
       if (
         conflicts.some(
           (b) =>
-            Math.abs(new Date(b.starts_at) - new Date(s.starts_at)) < 3600000,
+            overlaps(b, s),
         )
       )
         fail(409, "Bạn hoặc gia sư đã có lịch trong khung giờ này.");
       const id = Number(
         run(
           db,
-          "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,duration_minutes) VALUES (?,?,?,?,?,?,?,?,?)",
           req.user.id,
           s.tutor_id,
           s.id,
@@ -547,6 +569,7 @@ export function createApi(
           s.rate,
           d.mode,
           d.note,
+          s.duration_minutes,
         ).lastInsertRowid,
       );
       return { id };
@@ -571,7 +594,7 @@ export function createApi(
           future) ||
           (status === "completed" &&
             b.status === "accepted" &&
-            new Date(b.starts_at).getTime() + 3600000 <= Date.now())));
+            new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= Date.now())));
     if (!allowed) fail(409, "Không thể thay đổi buổi học sang trạng thái này.");
     run(db, "UPDATE bookings SET status=? WHERE id=?", status, b.id);
     audit(req.user.id, `booking.${status}`, b.id);

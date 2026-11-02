@@ -121,3 +121,11 @@ The structure is informed by the [Indeed tutor résumé examples](https://www.in
 Tutors upload their own banners using `PUT /api/tutor/uploads/banner`. The same 5 MB / 16-million-pixel image validation as portraits applies. Sharp locally and Cloudflare Images in the Worker strip metadata and produce a centered 1280×320 WebP. A preview shows the 4:1 crop. Banners live in additive `tutor_banners` / `banner_chunks` tables; existing uploads and their chunk foreign keys remain intact. Replacement/deletion removes obsolete chunks. New images and profile edits return the tutor to pending review. Admin moderation shows banners, timezone, education and custom sections.
 
 CV upload and download are retired. Metadata responses omit CVs, and existing `/api/uploads/:id` CV URLs return 404 for every role. Historical CV records remain stored; the migration does not delete them. New demo seeds create portraits only. The app uses inline profile sections in place of PDF résumés.
+
+## Weekly tutor availability
+
+The studio combines portrait, banner, gallery and profile fields under **Hồ sơ nhận dạy**. **Giờ trống** edits a repeating Monday–Sunday template: 12 two-hour rows in Vietnam time (UTC+7), with mouse rectangle selection, touch taps and keyboard buttons/arrows. Changes remain a draft until saved. A revision check rejects edits from stale tabs.
+
+`PUT /api/tutor/availability` accepts `{revision, blocks: [{weekday, hour}]}` with Monday=0, Sunday=6 and even hours 0–22. Availability reads and saves materialize the next 56 days, at least one hour ahead. Existing manual slots take precedence over overlapping generated slots. Removing a rule retires its future generated slots; it never cancels a booked lesson or removes its history. A later cancellation cannot reopen retired availability. Re-selecting the rule can reopen it. Unbooked past generated slots are pruned.
+
+Additive `duration_minutes` columns default existing slots and bookings to 60. Weekly slots use 120; bookings snapshot that duration and the hourly rate. Displayed totals are `rate × duration_minutes / 60`. Conflict checks use full intervals, while completion and calendar exports use the saved duration. The account timezone tag does not change this grid's timezone. No new payment handling is introduced.

@@ -303,10 +303,9 @@ test("new tutor onboarding, availability and admin approval", async ({
     tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt."),
   ).toBeVisible();
   await tutor.getByRole("tab", { name: "Giờ trống", exact: true }).click();
-  const day = new Date(Date.now() + 35 * 86400000).toISOString().slice(0, 10);
-  await tutor.getByLabel("Giờ bắt đầu (giờ Việt Nam)").fill(`${day}T18:00`);
-  await tutor.getByRole("button", { name: "Thêm giờ trống" }).click();
-  await expect(tutor.locator(".slot-list>div")).toHaveCount(1);
+  await tutor.getByRole("button", { name: "Thứ 2, 18:00–20:00", exact: true }).click();
+  await tutor.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(tutor.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
   await login(admin, "admin");
   await admin
     .getByRole("textbox", { name: "Tìm trong danh sách" })
@@ -560,7 +559,7 @@ test("role workspaces, studio drafts and admin tab persistence", async ({
         "Bản nháp chưa lưu",
       );
       await page.setViewportSize({ width: 360, height: 800 });
-      for (const name of ["Ảnh hồ sơ", "Hồ sơ nhận dạy", "Giờ trống"]) {
+      for (const name of ["Hồ sơ nhận dạy", "Giờ trống"]) {
         await page.getByRole("tab", { name, exact: true }).click();
         expect(
           await page.evaluate(
@@ -923,4 +922,81 @@ test("verification handles delivery errors, cross-browser activation and an alre
   await expect(page.getByRole("alert")).toContainText("đã được sử dụng");
   expect(errors).toEqual([]);
   await first.close(); await second.close();
+});
+
+test("weekly grid supports rectangle drag, keyboard, touch, persistence and two-hour booking export", async ({ browser, page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await login(page, "chau");
+  await page.goto("/app/studio?tab=files");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.getByLabel("Tiêu đề hồ sơ")).toBeVisible();
+  await expect(page.locator("#studio-files")).toBeVisible();
+  await page.getByRole("tab", { name: "Giờ trống", exact: true }).click();
+  const cell = (day: string, time: string) => page.getByRole("button", { name: `${day}, ${time}`, exact: true });
+  const first = cell("Thứ 2", "00:00–02:00"), end = cell("Thứ 4", "02:00–04:00");
+  await first.scrollIntoViewIfNeeded();
+  const a = (await first.boundingBox())!, b = (await end.boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(6);
+  await first.focus(); await page.keyboard.press("Space");
+  await expect(first).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("ArrowRight");
+  await expect(cell("Thứ 3", "00:00–02:00")).toBeFocused();
+  await page.getByRole("button", { name: "Hoàn tác", exact: true }).click();
+  await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(0);
+  await cell("Chủ nhật", "00:00–02:00").click();
+  await page.getByRole("button", { name: "Lưu lịch hằng tuần", exact: true }).click();
+  await expect(page.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(cell("Chủ nhật", "00:00–02:00")).toHaveAttribute("aria-pressed", "true");
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const box = await first.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(44); expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const mobile = await mobileContext.newPage();
+  await login(mobile, "chau"); await mobile.goto("/app/studio?tab=slots");
+  const mobileCell = mobile.getByRole("button", { name: "Thứ 2, 00:00–02:00", exact: true });
+  await mobileCell.tap(); await expect(mobileCell).toHaveAttribute("aria-pressed", "true");
+  await mobileCell.tap(); await expect(mobileCell).toHaveAttribute("aria-pressed", "false");
+  await mobileContext.close();
+  const me = await (await page.request.get("/api/auth/me")).json();
+  const profile = await (await page.request.get(`/api/tutors/${me.user.id}`)).json();
+  const weekly = profile.slots.find((s: { source: string }) => s.source === "weekly");
+  const studentContext = await browser.newContext(), student = await studentContext.newPage();
+  await login(student, "student"); await student.goto(`/app/tutors/${me.user.id}`);
+  await student.getByRole("combobox", { name: "Giờ học (Việt Nam)", exact: true }).click();
+  await student.getByRole("option").filter({ hasText: "120 phút" }).first().click();
+  await student.getByLabel("Bạn muốn học gì?").fill("Weekly browser test");
+  await student.getByRole("button", { name: "Xem lại yêu cầu", exact: true }).click();
+  const dialog = student.getByRole("dialog");
+  await expect(dialog).toContainText("Học phí / 120 phút");
+  await expect(dialog).toContainText(new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(profile.rate * 2));
+  const bookedResponse = student.waitForResponse(r => r.url().endsWith("/api/bookings") && r.request().method() === "POST");
+  await dialog.getByRole("button", { name: "Gửi yêu cầu học", exact: true }).click();
+  const booked = await bookedResponse;
+  expect(booked.status()).toBe(201); const booking = await booked.json();
+  const accepted = await page.request.patch(`/api/bookings/${booking.id}`, { data: { status: "accepted" } });
+  expect(accepted.status()).toBe(200);
+  await student.goto("/app/bookings");
+  const lesson = student.locator(".lesson-card").filter({ hasText: "Weekly browser test" });
+  await expect(lesson).toContainText("120 phút");
+  const downloadPromise = student.waitForEvent("download");
+  await lesson.getByRole("button", { name: /Lưu lịch/ }).click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream(); let ics = "";
+  for await (const chunk of stream!) ics += chunk.toString();
+  const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  expect(ics).toContain(`DTSTART:${stamp(new Date(weekly.starts_at))}`);
+  expect(ics).toContain(`DTEND:${stamp(new Date(Date.parse(weekly.starts_at) + 7200000))}`);
+  await student.request.patch(`/api/bookings/${booking.id}`, { data: { status: "cancelled" } });
+  const schedule = (await (await page.request.get("/api/tutor/profile")).json()).weekly_schedule;
+  await page.request.put("/api/tutor/availability", { data: { revision: schedule.revision, blocks: [] } });
+  await studentContext.close();
+  expect(errors).toEqual([]);
 });
