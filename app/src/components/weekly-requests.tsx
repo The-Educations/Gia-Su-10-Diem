@@ -26,7 +26,7 @@ export function WeeklyRequests() {
     <div className="weekly-request-list">{result.data.map(r => <article className="weekly-request-card" key={r.id}>
       <div className="section-heading"><h3>{user?.role === "tutor" ? r.student_name : r.tutor_name} · {r.subject_name}</h3><span className="state">{statuses[r.status]}</span></div>
       <ul>{r.blocks.map(b => <li key={`${b.weekday}:${b.hour}`}>{["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"][b.weekday]} · {String(b.hour).padStart(2, "0")}:00–{String(b.hour + 1).padStart(2, "0")}:00</li>)}</ul>
-      <p>{money(r.rate)} / giờ · Giờ Việt Nam</p>{r.note && <p>{r.note}</p>}
+      <p>{money(r.rate)} / buổi · Giờ Việt Nam</p>{r.note && <p>{r.note}</p>}
       <div className="actions"><Button asChild variant="outline"><Link to={`/messages?inquiry=${r.inquiry_id}`}>Nhắn tin</Link></Button>
         {r.status === "pending" && user?.id === r.tutor_id && <><Button disabled={busy !== null} onClick={() => void update(r.id, "accepted")}>Nhận lịch tuần</Button><Button variant="ghost" disabled={busy !== null} onClick={() => void update(r.id, "declined")}>Từ chối</Button></>}
         {["pending", "accepted"].includes(r.status) && <Button variant="ghost" disabled={busy !== null} onClick={() => void update(r.id, "cancelled")}>Hủy yêu cầu</Button>}
