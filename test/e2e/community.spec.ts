@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import {
   test,
   expect,
@@ -418,4 +419,125 @@ test("role workspaces, public identity and persistent admin navigation", async (
     expect(errors).toEqual([]);
     await context.close();
   }
+});
+
+test("rich editor publishes formatting, links and uploaded images only after review", async ({
+  page,
+  browser,
+}) => {
+  const adminContext = await browser.newContext(),
+    admin = await adminContext.newPage();
+  const guestContext = await browser.newContext(),
+    guest = await guestContext.newPage();
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await login(page, "community-parent");
+  await page.getByRole("button", { name: "Đăng bài", exact: true }).click();
+  if (
+    await page.getByRole("dialog", { name: "Tên hiển thị của bạn" }).isVisible()
+  ) {
+    await page
+      .getByLabel("Tên hiển thị", { exact: true })
+      .fill("Phụ huynh học tập");
+    await page.getByRole("button", { name: "Lưu tên và tiếp tục" }).click();
+  }
+  const title = `Chia sẻ tài liệu học tập ${Date.now()}`;
+  await page.getByLabel("Tiêu đề", { exact: true }).fill(title);
+  const editor = page.getByRole("textbox", { name: "Nội dung", exact: true });
+  await editor.fill("Cùng học hình học");
+  await editor.press("ControlOrMeta+A");
+  await page.getByRole("button", { name: "In đậm", exact: true }).click();
+  await expect(editor.locator("strong")).toHaveText("Cùng học hình học");
+  await editor.press("ArrowRight");
+  await editor.press("Enter");
+  await page
+    .getByRole("button", { name: "Chèn liên kết", exact: true })
+    .click();
+  await page.getByLabel("Địa chỉ liên kết").fill("https://example.org/hoc-tap");
+  await page.getByLabel("Chữ hiển thị").fill("Tài liệu tham khảo");
+  await page.getByRole("button", { name: "Chèn liên kết vào bài" }).click();
+  await expect(editor.locator("a")).toHaveAttribute(
+    "href",
+    "https://example.org/hoc-tap",
+  );
+  await page.getByRole("button", { name: "Chèn ảnh", exact: true }).click();
+  await page.getByLabel("Mô tả ảnh", { exact: true }).fill("Sơ đồ hình học");
+  const buffer = await sharp({
+    create: { width: 300, height: 180, channels: 3, background: "#852f36" },
+  })
+    .png()
+    .toBuffer();
+  await page
+    .getByLabel(/Chọn ảnh/)
+    .setInputFiles({ name: "hinh-hoc.png", mimeType: "image/png", buffer });
+  await expect(
+    editor.getByRole("img", { name: "Sơ đồ hình học" }),
+  ).toBeVisible();
+  const imageUrl = await editor.locator("img").getAttribute("src");
+  expect((await guest.request.get(imageUrl!)).status()).toBe(404);
+  await page.setViewportSize({ width: 360, height: 900 });
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
+  await page
+    .getByRole("button", { name: "Gửi bài chờ duyệt", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: title, exact: true }),
+  ).toBeVisible();
+  const path = new URL(page.url()).pathname;
+  await login(admin, "admin", "/admin?tab=community");
+  const card = admin
+    .locator(".community-card")
+    .filter({ has: admin.getByRole("heading", { name: title, exact: true }) });
+  await expect(card.getByRole("img", { name: "Sơ đồ hình học" })).toBeVisible();
+  await expect(
+    card.locator("strong").filter({ hasText: "Cùng học hình học" }),
+  ).toBeVisible();
+  await card.getByRole("button", { name: "Duyệt", exact: true }).click();
+  await confirm(admin);
+  await guest.goto(path);
+  await expect(
+    guest.getByRole("img", { name: "Sơ đồ hình học" }),
+  ).toBeVisible();
+  expect((await guest.request.get(imageUrl!)).status()).toBe(200);
+  await expect(
+    guest.getByRole("link", { name: "Tài liệu tham khảo" }),
+  ).toHaveAttribute("rel", "noopener noreferrer nofollow ugc");
+  await page.reload();
+  await page.getByRole("button", { name: "Sửa bài", exact: true }).click();
+  await expect(
+    page
+      .getByRole("textbox", { name: "Nội dung", exact: true })
+      .locator("strong"),
+  ).toHaveText("Cùng học hình học");
+  await expect(
+    page.getByRole("dialog").getByRole("img", { name: "Sơ đồ hình học" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  const postId = path.split("/").at(-1);
+  const imageOnly = await page.request.put(`/api/community/posts/${postId}`, {
+    data: {
+      title,
+      body_html: `<img src="${imageUrl}" alt="Ảnh trong bản sửa">`,
+    },
+  });
+  expect(imageOnly.status()).toBe(200);
+  await page.reload();
+  await page.getByText("Xem bản sửa", { exact: true }).click();
+  await expect(
+    page.getByRole("img", { name: "Ảnh trong bản sửa" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Sửa bài", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByText("0/5000", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog").getByRole("img", { name: "Ảnh trong bản sửa" }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+  await adminContext.close();
+  await guestContext.close();
 });

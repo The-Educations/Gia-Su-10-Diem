@@ -1,3 +1,4 @@
+import { cleanPostHtml } from "./community-rich.js";
 import { z, text } from "./validation.js";
 
 export const LIMITS = {
@@ -11,7 +12,7 @@ export const LIMITS = {
 };
 export const RULES_TITLE = "Quy tắc cộng đồng";
 export const RULES_BODY = `1. Chỉ đăng nội dung về học tập: tìm gia sư, xin review, kinh nghiệm học, chia sẻ kiến thức.
-2. Không đăng số điện thoại, email, Zalo, link ngoài, địa chỉ nhà.
+2. Có thể thêm ảnh và liên kết học tập. Không đăng số điện thoại, email, Zalo hoặc địa chỉ nhà.
 3. Không quảng cáo, không chèo kéo, không tự khen mình.
 4. Góp ý tôn trọng, không lăng mạ, không bôi nhọ cá nhân.
 5. Bài được admin duyệt trước khi hiện. Bài bị từ chối sẽ có lý do để bạn sửa lại.
@@ -24,10 +25,13 @@ export const fold = (value) =>
     .toLowerCase();
 export const description = (value) =>
   value.replace(/\s+/g, " ").trim().slice(0, 160);
-export function findContactInfo(value) {
-  const s = fold(value);
+export function findContactInfo(value, allowLinks = false) {
+  const s = fold(
+    allowLinks ? value.replace(/https?:\/\/[^\s]+|www\.[^\s]+/gi, "") : value,
+  );
   if (/[^\s@]+@[^\s@]+\.[^\s@]+/u.test(s)) return "email";
   if (
+    !allowLinks &&
     /(?:https?:\/\/|www\.|\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|vn|net|org|edu|gov|io|me|co|info|biz|app|dev|xyz|online|link|site|tech|ai|uk|us)\b)/i.test(
       s,
     )
@@ -57,10 +61,39 @@ export const content = (max) =>
           message: `Vui lòng không đăng ${contact}.`,
         });
     });
-export const postSchema = z.object({
-  title: content(LIMITS.title),
-  body: content(LIMITS.body),
-});
+export const postSchema = z
+  .object({
+    title: content(LIMITS.title),
+    body: z.string().max(LIMITS.body).default(""),
+    body_html: z.string().max(50000).optional(),
+  })
+  .transform((d) => ({
+    title: d.title,
+    ...(d.body_html !== undefined
+      ? cleanPostHtml(d.body_html)
+      : { body: d.body.trim(), body_html: "", image_ids: [], image_count: 0 }),
+  }))
+  .superRefine((d, ctx) => {
+    if ((!d.body && !d.image_ids.length) || d.body.length > LIMITS.body)
+      ctx.addIssue({
+        code: "custom",
+        path: ["body"],
+        message: "Nhập nội dung hoặc ảnh, tối đa 5.000 ký tự.",
+      });
+    const contact = findContactInfo(d.body, true);
+    if (contact)
+      ctx.addIssue({
+        code: "custom",
+        path: ["body"],
+        message: `Vui lòng không đăng ${contact}.`,
+      });
+    if (d.image_count > 5)
+      ctx.addIssue({
+        code: "custom",
+        path: ["body"],
+        message: "Mỗi bài tối đa 5 ảnh.",
+      });
+  });
 export const displayNameSchema = content(30)
   .min(2)
   .refine(

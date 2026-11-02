@@ -12,6 +12,7 @@ import {
   subjectAliases,
   levelAliases,
 } from "./community-policy.js";
+import { attachPostImages } from "./community-images.js";
 import { registerCommunityAdmin } from "./community-admin.js";
 
 export const publicPosts = "p.status='approved' AND u.status='active'";
@@ -114,6 +115,7 @@ export function registerCommunity(app, db, auth, audit) {
       kind: p.kind,
       title: p.title,
       body: p.body,
+      body_html: p.body_html,
       author: author(p.author_id),
       mine: !!own,
       solved: !!p.solved,
@@ -137,6 +139,7 @@ export function registerCommunity(app, db, auth, audit) {
             review_note: p.review_note,
             revision_title: p.revision_title,
             revision_body: p.revision_body,
+            revision_body_html: p.revision_body_html,
             revision_status: p.revision_status,
             revision_note: p.revision_note,
           }
@@ -292,6 +295,13 @@ export function registerCommunity(app, db, auth, audit) {
           Number(admin),
         ).lastInsertRowid,
       );
+      run(
+        db,
+        "UPDATE community_posts SET body_html=? WHERE id=?",
+        d.body_html,
+        id,
+      );
+      attachPostImages(db, id, req.user.id, d.image_ids);
       follow(id, req.user.id);
       if (admin) audit(req.user.id, "community.announcement.create", id);
       return id;
@@ -302,15 +312,31 @@ export function registerCommunity(app, db, auth, audit) {
     const p = owned(req),
       d = postSchema.parse(req.body);
     if (p.status === "approved" && req.user.role !== "admin")
-      run(
-        db,
-        "UPDATE community_posts SET revision_title=?,revision_body=?,revision_status='pending',revision_note='',submitted_at=CURRENT_TIMESTAMP,review_version=review_version+1 WHERE id=?",
-        d.title,
-        d.body,
-        p.id,
-      );
+      transaction(db, () => {
+        attachPostImages(db, p.id, req.user.id, d.image_ids, true);
+        run(
+          db,
+          "UPDATE community_posts SET revision_body_html=? WHERE id=?",
+          d.body_html,
+          p.id,
+        );
+        run(
+          db,
+          "UPDATE community_posts SET revision_title=?,revision_body=?,revision_status='pending',revision_note='',submitted_at=CURRENT_TIMESTAMP,review_version=review_version+1 WHERE id=?",
+          d.title,
+          d.body,
+          p.id,
+        );
+      });
     else
       transaction(db, () => {
+        attachPostImages(db, p.id, req.user.id, d.image_ids);
+        run(
+          db,
+          "UPDATE community_posts SET body_html=? WHERE id=?",
+          d.body_html,
+          p.id,
+        );
         run(
           db,
           "UPDATE community_posts SET title=?,body=?,search_text=?,status=?,review_note='',submitted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,review_version=review_version+1 WHERE id=?",
@@ -344,11 +370,18 @@ export function registerCommunity(app, db, auth, audit) {
     participant,
     (req, res) => {
       const p = owned(req);
-      run(
-        db,
-        "UPDATE community_posts SET revision_title=NULL,revision_body=NULL,revision_status=NULL,revision_note='' WHERE id=?",
-        p.id,
-      );
+      transaction(db, () => {
+        run(
+          db,
+          "DELETE FROM community_post_images WHERE post_id=? AND revision=1",
+          p.id,
+        );
+        run(
+          db,
+          "UPDATE community_posts SET revision_title=NULL,revision_body=NULL,revision_body_html='',revision_status=NULL,revision_note='' WHERE id=?",
+          p.id,
+        );
+      });
       res.json({ ok: true });
     },
   );

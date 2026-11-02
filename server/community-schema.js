@@ -101,7 +101,40 @@ CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notificatio
     db.exec(
       "ALTER TABLE community_posts ADD COLUMN review_version INTEGER NOT NULL DEFAULT 0",
     );
+  for (const name of ["body_html", "revision_body_html"]) {
+    if (
+      !db
+        .prepare("PRAGMA table_info(community_posts)")
+        .all()
+        .some((c) => c.name === name)
+    )
+      db.exec(
+        `ALTER TABLE community_posts ADD COLUMN ${name} TEXT NOT NULL DEFAULT ''`,
+      );
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS community_images (
+    id TEXT PRIMARY KEY, author_id INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS community_image_chunks (
+    image_id TEXT NOT NULL REFERENCES community_images(id) ON DELETE CASCADE,
+    part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(image_id,part)
+  );
+  CREATE TABLE IF NOT EXISTS community_post_images (
+    post_id INTEGER NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+    image_id TEXT NOT NULL REFERENCES community_images(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(post_id,image_id,revision)
+  );
+  CREATE INDEX IF NOT EXISTS community_images_owner ON community_images(author_id,created_at);
+  CREATE INDEX IF NOT EXISTS community_images_visibility ON community_post_images(image_id,revision);`);
   db.prepare(
     `INSERT INTO community_posts(author_id,kind,status,title,body,search_text,published_at) SELECT id,'rules','approved',?,?,?,CURRENT_TIMESTAMP FROM users WHERE role='admin' AND status='active' AND NOT EXISTS (SELECT 1 FROM community_posts WHERE kind='rules') ORDER BY id LIMIT 1`,
   ).run(RULES_TITLE, RULES_BODY, fold(RULES_TITLE + " " + RULES_BODY));
+  const oldRules = RULES_BODY.replace(
+    "2. Có thể thêm ảnh và liên kết học tập. Không đăng số điện thoại, email, Zalo hoặc địa chỉ nhà.",
+    "2. Không đăng số điện thoại, email, Zalo, link ngoài, địa chỉ nhà.",
+  );
+  db.prepare(
+    "UPDATE community_posts SET body=?,search_text=? WHERE kind='rules' AND body=? AND body_html=''",
+  ).run(RULES_BODY, fold(RULES_TITLE + " " + RULES_BODY), oldRules);
 }

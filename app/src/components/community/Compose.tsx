@@ -4,7 +4,7 @@ import { api, useApp } from "@/lib/api";
 import type { CommunityPostData } from "@/lib/types";
 import { ErrorState, Submit } from "@/components/common";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import RichEditor, { plainToHtml } from "./RichEditor";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -30,7 +30,17 @@ export default function Compose({
   const { user, refresh } = useApp(),
     id = useId();
   const [title, setTitle] = useState(post?.revision_title || post?.title || ""),
-    [body, setBody] = useState(post?.revision_body || post?.body || "");
+    [body, setBody] = useState(
+      post?.revision_status ? post.revision_body || "" : post?.body || "",
+    );
+  const [html, setHtml] = useState(
+    post?.revision_body_html ||
+      (post?.revision_body
+        ? plainToHtml(post.revision_body)
+        : post?.body_html) ||
+      plainToHtml(post?.body || ""),
+  );
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -38,7 +48,7 @@ export default function Compose({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !busy) close();
+        if (!open && !busy && !uploading) close();
       }}
     >
       <DialogContent className="community-compose">
@@ -67,6 +77,7 @@ export default function Compose({
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            if (uploading || busy) return;
             setBusy(true);
             setError("");
             setFields({});
@@ -75,7 +86,7 @@ export default function Compose({
                 endpoint ||
                   (post ? `/community/posts/${post.id}` : "/community/posts"),
                 post || endpoint?.endsWith("rules") ? "PUT" : "POST",
-                { title, body },
+                { title, body, body_html: html },
               );
               refresh();
               toast.success(
@@ -126,15 +137,16 @@ export default function Compose({
             </Field>
             <Field data-invalid={!!fields.body}>
               <FieldLabel htmlFor={`${id}-body`}>Nội dung</FieldLabel>
-              <Textarea
-                aria-invalid={!!fields.body}
-                aria-describedby={fields.body ? `${id}-body-error` : undefined}
+              <RichEditor
                 id={`${id}-body`}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                maxLength={5000}
-                rows={8}
-                required
+                initial={html}
+                invalid={!!fields.body}
+                errorId={fields.body ? `${id}-body-error` : undefined}
+                uploading={setUploading}
+                change={(html, text) => {
+                  setHtml(html);
+                  setBody(text);
+                }}
               />
               {fields.body && (
                 <p
@@ -154,7 +166,7 @@ export default function Compose({
                   ? "Nội dung được công khai ngay."
                   : "Bài được duyệt sẽ công khai, có thể xuất hiện trên Google."}
               </span>
-              <Submit busy={busy}>
+              <Submit busy={busy || uploading}>
                 {user?.role === "admin"
                   ? "Lưu và công khai"
                   : "Gửi bài chờ duyệt"}

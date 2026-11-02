@@ -26,7 +26,7 @@ Thiết kế gốc: [community-design.md](community-design.md). Nhánh `feat/com
 
 ## Phạm vi và giới hạn
 
-Không thêm loại bài, thẻ khi soạn, nhắc gia sư, tệp, chat, email cộng đồng, realtime, điểm uy tín, thanh toán hoặc AI. Có thêm danh sách admin theo trạng thái để khôi phục bài ẩn và xem lịch sử bài tự xóa; đây là giao diện cho các thao tác được yêu cầu.
+Không thêm loại bài, thẻ khi soạn, nhắc gia sư, chat, email cộng đồng, realtime, điểm uy tín, thanh toán hoặc AI. Theo yêu cầu bổ sung, bài viết hỗ trợ ảnh tải lên và liên kết học tập; không có tệp đính kèm khác. Có thêm danh sách admin theo trạng thái để khôi phục bài ẩn và xem lịch sử bài tự xóa; đây là giao diện cho các thao tác được yêu cầu.
 
 Bộ lọc liên hệ là các mẫu thực dụng, không bắt được mọi cách viết lách luật; kiểm duyệt và báo cáo vẫn cần thiết. Tìm kiếm LIKE phù hợp quy mô nhỏ; chưa có full-text index. Google có thể xử lý JavaScript nhưng không bảo đảm lập chỉ mục. Chưa push, mở PR, merge hoặc triển khai production.
 
@@ -58,3 +58,13 @@ Worktree lưu tại `/Users/phucdang/Documents/giasu-community`, nhánh `feat/co
 - Không đổi quyền giữa học sinh và phụ huynh, không thêm chức năng mạng xã hội hoặc thay đổi quy trình duyệt.
 
 Kiểm chứng: typecheck/build đạt; **52/52 unit/API tests** đạt. Bộ browser đầy đủ có 23 ca đạt và một kiểm tra kích thước chạy quá sớm ngay sau resize; đổi kiểm tra đó sang chờ kích thước ổn định, ca vai trò chạy lại đạt. Chạy lại toàn bộ ba luồng cộng đồng trên bản cuối: **3/3 đạt**; cộng với **21/21** ca marketplace/navigation/SEO đã đạt trong lần chạy đầy đủ. Các ca mới kiểm tra đủ quản trị/gia sư đã duyệt/gia sư chưa duyệt/học sinh/phụ huynh, danh tính, tab qua reload, bàn phím, 320/768/1440 px, nhấp đúp khi API chậm và bài ẩn còn bản sửa chờ duyệt. Chrome DevTools trực tiếp kiểm tra quản trị desktop/320 px và học sinh 360 px, reduced motion, ảnh chụp và console không có lỗi/warning trên bản build ổn định. Review độc lập xác nhận hai lỗi nhấp đúp và điều hướng bài ẩn đã được sửa. Đây là kiểm chứng local, chưa triển khai production.
+
+
+## Rich text, ảnh và liên kết — yêu cầu bổ sung 02/11/2026
+
+- Tiptap cung cấp định dạng đậm/nghiêng/gạch chân, tiêu đề phụ, danh sách, trích dẫn, liên kết HTTP(S), ảnh, hoàn tác/làm lại. Có mô tả ảnh và nút xóa ảnh đang chọn. Trình soạn thảo, bài đọc, bản sửa và hàng đợi admin hiển thị cùng nội dung đã làm sạch. Bình luận giữ văn bản thuần.
+- `body_html` / `revision_body_html` là migration cộng thêm; `body` / `revision_body` vẫn là văn bản để tìm kiếm, SEO và tương thích bài cũ. Server tự suy ra văn bản từ HTML và dùng danh sách thẻ/thuộc tính cho phép; loại script, iframe, sự kiện, kiểu CSS và URL nguy hiểm. Link mở tab mới với `noopener noreferrer nofollow ugc`. Không tải ảnh từ URL ngoài.
+- Ảnh JPG/PNG/WebP tối đa 5 MB và 16 triệu pixel, được xử lý thành WebP tối đa 1280 px qua pipeline ảnh sẵn có ở Node/Worker. Tối đa 5 ảnh mỗi bài, 20 lượt tải/ngày/tài khoản. File lưu thành chunk 100 KB. Upload không gắn bài quá 24 giờ được dọn vào lần tải tiếp theo của chủ tài khoản.
+- Quan hệ ảnh phân biệt bản công khai và bản sửa. Chỉ chủ ảnh/admin xem được ảnh nháp; khách chỉ xem ảnh được tham chiếu bởi bản đã duyệt của tài khoản hoạt động. Ẩn/xóa bài hoặc đình chỉ tác giả thu hồi truy cập công khai; phản hồi ảnh dùng `no-store`. Giao dịch kiểm tra quyền ảnh trước khi ghi bài. Duyệt bản sửa cập nhật nội dung và tập ảnh công khai cùng lúc.
+- Quy tắc mặc định được cập nhật cho ảnh/link; chỉ thay nội dung mặc định cũ, không thay văn bản quy tắc đã tùy chỉnh. Email/số điện thoại/Zalo vẫn bị lọc trong nội dung chữ. Admin tiếp tục kiểm tra ảnh và đích liên kết.
+- Kiểm chứng local: typecheck/build, 54/54 unit/API tests, 4/4 luồng cộng đồng trên Chrome, Cloudflare local runtime gồm upload ảnh riêng tư và HTML đã làm sạch, dependency audit 0 lỗ hổng. Review độc lập không tìm thấy blocker XSS/quyền ảnh; đã sửa và kiểm thử trường hợp bản sửa chỉ có ảnh. DevTools kiểm tra soạn bài/chèn link ở 360 px, không tràn ngang.

@@ -1,5 +1,6 @@
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
+import { attachPostImages } from "./community-images.js";
 import { postSchema, fold } from "./community-policy.js";
 
 export function registerCommunityAdmin(
@@ -99,15 +100,25 @@ export function registerCommunityAdmin(
       )
         fail(409, "Trạng thái bài không phù hợp.");
       transaction(db, () => {
-        if (revision && action === "approve")
+        if (revision && action === "approve") {
           run(
             db,
-            "UPDATE community_posts SET title=revision_title,body=revision_body,search_text=?,revision_title=NULL,revision_body=NULL,revision_status=NULL,revision_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            "DELETE FROM community_post_images WHERE post_id=? AND revision=0",
+            p.id,
+          );
+          run(
+            db,
+            "UPDATE community_post_images SET revision=0 WHERE post_id=? AND revision=1",
+            p.id,
+          );
+          run(
+            db,
+            "UPDATE community_posts SET title=revision_title,body=revision_body,body_html=revision_body_html,revision_body_html='',search_text=?,revision_title=NULL,revision_body=NULL,revision_status=NULL,revision_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?",
             fold(p.revision_title + " " + p.revision_body),
             req.user.id,
             p.id,
           );
-        else if (revision && action === "reject")
+        } else if (revision && action === "reject")
           run(
             db,
             "UPDATE community_posts SET revision_status='rejected',revision_note=?,reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -157,6 +168,13 @@ export function registerCommunityAdmin(
           fold(d.title + " " + d.body),
         ).lastInsertRowid,
       );
+      run(
+        db,
+        "UPDATE community_posts SET body_html=? WHERE id=?",
+        d.body_html,
+        id,
+      );
+      attachPostImages(db, id, req.user.id, d.image_ids);
       follow(id, req.user.id);
       audit(req.user.id, "community.announcement.create", id);
       return id;
@@ -185,6 +203,17 @@ export function registerCommunityAdmin(
           d.body,
           fold(d.title + " " + d.body),
         );
+      const saved = one(
+        db,
+        "SELECT id FROM community_posts WHERE kind='rules'",
+      );
+      run(
+        db,
+        "UPDATE community_posts SET body_html=? WHERE id=?",
+        d.body_html,
+        saved.id,
+      );
+      attachPostImages(db, saved.id, req.user.id, d.image_ids);
       audit(req.user.id, "community.rules.update", "rules");
     });
     res.json({ ok: true });

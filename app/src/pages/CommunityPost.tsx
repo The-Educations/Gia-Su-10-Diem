@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   AuthorLabel,
+  PostBody,
   ReviewState,
   useCommunityGate,
 } from "@/components/community/shared";
@@ -91,7 +92,7 @@ export default function CommunityPost() {
               Đã giải quyết
             </Badge>
           )}
-          <div className="community-body">{p.body}</div>
+          <PostBody text={p.body} html={p.body_html} />
           <div className="community-actions">
             {live && (
               <Button
@@ -212,11 +213,14 @@ export default function CommunityPost() {
                 </Button>
               )}
           </div>
-          {p.mine && p.revision_body && (
+          {p.mine && p.revision_status && (
             <details className="community-revision">
               <summary>Xem bản sửa</summary>
               <h2>{p.revision_title}</h2>
-              <div className="community-body">{p.revision_body}</div>
+              <PostBody
+                text={p.revision_body || ""}
+                html={p.revision_body_html}
+              />
             </details>
           )}
         </article>

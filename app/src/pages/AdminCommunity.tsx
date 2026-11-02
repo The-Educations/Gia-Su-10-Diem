@@ -17,7 +17,7 @@ import Compose from "@/components/community/Compose";
 import ActionDialog, {
   type CommunityAction,
 } from "@/components/community/ActionDialog";
-import { postStates } from "@/components/community/shared";
+import { postStates, PostBody } from "@/components/community/shared";
 
 export function CommunityLock({ owner }: { owner: CommunityOwner }) {
   const [action, setAction] = useState<CommunityAction | null>(null);
@@ -212,18 +212,21 @@ export default function AdminCommunity() {
                     <section>
                       <h3>Bản đang hiển thị</h3>
                       <h4>{p.title}</h4>
-                      <div className="community-body">{p.body}</div>
+                      <PostBody text={p.body} html={p.body_html} />
                     </section>
                     <section>
                       <h3>Bản sửa chờ duyệt</h3>
                       <h4>{p.revision_title}</h4>
-                      <div className="community-body">{p.revision_body}</div>
+                      <PostBody
+                        text={p.revision_body || ""}
+                        html={p.revision_body_html}
+                      />
                     </section>
                   </div>
                 ) : (
                   <>
                     <h2>{p.title}</h2>
-                    <div className="community-body">{p.body}</div>
+                    <PostBody text={p.body} html={p.body_html} />
                   </>
                 )}
                 <div className="community-actions">
@@ -356,7 +359,7 @@ export default function AdminCommunity() {
                 <Badge variant="outline">
                   {postStates[p.status || "approved"]}
                 </Badge>
-                <div className="community-body">{p.body}</div>
+                <PostBody text={p.body} html={p.body_html} />
                 {p.review_note && <p>{p.review_note}</p>}
                 <div className="community-actions">
                   {p.status !== "deleted" && (
@@ -420,7 +423,7 @@ export default function AdminCommunity() {
             rules.data && (
               <article className="community-card">
                 <h2>{rules.data.title}</h2>
-                <div className="community-body">{rules.data.body}</div>
+                <PostBody text={rules.data.body} html={rules.data.body_html} />
               </article>
             )
           )}

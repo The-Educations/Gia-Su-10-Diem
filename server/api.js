@@ -1,3 +1,4 @@
+import { registerCommunityImages } from "./community-images.js";
 import { registerCommunity } from "./community.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
@@ -59,7 +60,7 @@ export function createApi(
       if (
         !(
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && req.path === "/tutor/gallery")
+          (req.method === "POST" && ["/tutor/gallery", "/community/images"].includes(req.path))
         ) &&
         !req.is("application/json")
       )
@@ -207,6 +208,7 @@ export function createApi(
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
   registerCommunity(app, db, auth, audit);
+  registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>

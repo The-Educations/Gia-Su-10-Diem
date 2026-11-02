@@ -1,3 +1,5 @@
+import sharp from "sharp";
+import { processPhoto } from "../server/photo.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { openDatabase } from "../server/local-db.js";
@@ -50,7 +52,10 @@ async function fixture(t) {
     );
   }
   migrateDatabase(db);
-  const server = createApi(db, { limit: false }).listen(0, "127.0.0.1");
+  const server = createApi(db, { limit: false, processPhoto }).listen(
+    0,
+    "127.0.0.1",
+  );
   await new Promise((r) => server.once("listening", r));
   t.after(async () => {
     await new Promise((r) => server.close(r));
@@ -102,7 +107,16 @@ async function fixture(t) {
     );
     assert.equal(r.status, 200, JSON.stringify(r.data));
   };
-  return { db, ids, call, create, approve };
+  const imageRequest = (user, path, data, mime = "image/png") =>
+    fetch(`http://127.0.0.1:${server.address().port}${path}`, {
+      method: data ? "POST" : "GET",
+      headers: {
+        ...(user ? { Cookie: `giasu_session=${user}` } : {}),
+        ...(data ? { "Content-Type": mime } : {}),
+      },
+      ...(data ? { body: data } : {}),
+    });
+  return { db, ids, call, create, approve, imageRequest };
 }
 
 test("contact filtering, names and live public author labels", () => {
@@ -742,4 +756,181 @@ test("role workspace identity and admin summary stay private and reflect moderat
     hidden: 1,
     reports: 1,
   });
+});
+
+test("rich posts sanitize HTML and keep uploaded images behind approval and revision boundaries", async (t) => {
+  const { db, ids, call, approve, imageRequest } = await fixture(t);
+  const bytes = await sharp({
+    create: { width: 40, height: 30, channels: 3, background: "#852f36" },
+  })
+    .png()
+    .toBuffer();
+  assert.equal(
+    (await imageRequest(null, "/api/community/images", bytes)).status,
+    401,
+  );
+  assert.equal(
+    (
+      await imageRequest(
+        "student",
+        "/api/community/images",
+        Buffer.from('<svg onload="alert(1)"/>'),
+        "image/svg+xml",
+      )
+    ).status,
+    400,
+  );
+  const upload = async (user = "student") => {
+    const r = await imageRequest(user, "/api/community/images", bytes);
+    assert.equal(r.status, 201, await r.clone().text());
+    return (await r.json()).url;
+  };
+  const first = await upload(),
+    second = await upload();
+  assert.equal((await imageRequest(null, first)).status, 404);
+  assert.equal((await imageRequest("other", first)).status, 404);
+  assert.equal((await imageRequest("admin", first)).status, 200);
+  const ownImage = await imageRequest("student", first);
+  assert.equal(ownImage.headers.get("content-type"), "image/webp");
+  assert.equal(ownImage.headers.get("cache-control"), "no-store");
+  const unsafe = `<h2 onclick="alert(1)">Bài học</h2><p><strong>Toán</strong> &amp; Văn <a href="https://example.org/bai-hoc">Tài liệu</a><a href="javascript:alert(1)">x</a></p><script>alert(1)</script><iframe src="https://example.org"></iframe><img src="${first}" onerror="alert(1)" alt="Hình học"><img src="https://tracker.test/x.png">`;
+  const submitted = await call("student", "/community/posts", "POST", {
+    title: "Tài liệu học tập",
+    body_html: unsafe,
+  });
+  assert.equal(submitted.status, 201, JSON.stringify(submitted.data));
+  const post = submitted.data.id;
+  assert.match(submitted.data.body_html, /<strong>Toán<\/strong>/);
+  assert.match(submitted.data.body_html, /noopener noreferrer nofollow ugc/);
+  assert.doesNotMatch(
+    submitted.data.body_html,
+    /script|iframe|onclick|onerror|javascript:|tracker/,
+  );
+  assert.match(submitted.data.body, /Toán & Văn/);
+  assert.equal((await call(null, `/community/posts/${post}`)).status, 404);
+  const stolen = await call("other", "/community/posts", "POST", {
+    title: "Ảnh của người khác",
+    body_html: `<p>Bài học</p><img src="${first}">`,
+  });
+  assert.equal(stolen.status, 400);
+  assert.equal(
+    one(
+      db,
+      "SELECT COUNT(*) n FROM community_posts WHERE author_id=?",
+      ids.other,
+    ).n,
+    0,
+  );
+  await approve(post);
+  assert.equal((await imageRequest(null, first)).status, 200);
+  assert.match(
+    (await call(null, `/community/posts/${post}`)).data.body_html,
+    /Hình học/,
+  );
+  const revision = await call("student", `/community/posts/${post}`, "PUT", {
+    title: "Tài liệu học tập",
+    body_html: `<p><em>Bản mới</em></p><img src="${second}" alt="Sơ đồ mới">`,
+  });
+  assert.equal(revision.status, 200);
+  assert.equal((await imageRequest(null, second)).status, 404);
+  assert.equal((await imageRequest(null, first)).status, 200);
+  const publicPost = (await call(null, `/community/posts/${post}`)).data;
+  assert.equal(publicPost.revision_body_html, undefined);
+  assert.doesNotMatch(publicPost.body_html, /Sơ đồ mới/);
+  const queue = (await call("admin", "/admin/community/queue")).data.find(
+    (p) => p.id === post,
+  );
+  assert.match(queue.revision_body_html, /Sơ đồ mới/);
+  await approve(post);
+  assert.equal((await imageRequest(null, second)).status, 200);
+  assert.equal((await imageRequest(null, first)).status, 404);
+  await call("admin", `/admin/community/posts/${post}/hide`, "POST", {
+    note: "Kiểm tra",
+  });
+  assert.equal((await imageRequest(null, second)).status, 404);
+  await call("admin", `/admin/community/posts/${post}/restore`, "POST");
+  assert.equal((await imageRequest(null, second)).status, 200);
+  run(db, "UPDATE users SET status='suspended' WHERE id=?", ids.student);
+  assert.equal((await imageRequest(null, second)).status, 404);
+  run(
+    db,
+    "UPDATE users SET status='active',community_locked=1 WHERE id=?",
+    ids.student,
+  );
+  assert.equal(
+    (await imageRequest("student", "/api/community/images", bytes)).status,
+    403,
+  );
+  run(db, "UPDATE users SET community_locked=0 WHERE id=?", ids.student);
+  await call("student", `/community/posts/${post}`, "DELETE");
+  assert.equal((await imageRequest(null, second)).status, 404);
+});
+
+test("rich content limits, links, image quota and legacy edits", async (t) => {
+  const { db, ids, call, create, approve, imageRequest } = await fixture(t);
+  for (const body_html of [
+    "<script>alert(1)</script>",
+    "<p>" + "a".repeat(5001) + "</p>",
+    '<img src="data:image/png;base64,abc">',
+    "<p>abc@example.org</p>",
+  ])
+    assert.equal(
+      (
+        await call("student", "/community/posts", "POST", {
+          title: "Học tập",
+          body_html,
+        })
+      ).status,
+      400,
+    );
+  const linked = await call("student", "/community/posts", "POST", {
+    title: "Học tập",
+    body: "Đọc https://example.org/hoc",
+  });
+  assert.equal(linked.status, 201);
+  assert.equal(linked.data.body_html, "");
+  const post = await create();
+  await approve(post);
+  const edit = await call("student", `/community/posts/${post}`, "PUT", {
+    title: "Học tập",
+    body_html: "<p><u>Kiến thức</u></p>",
+  });
+  assert.equal(edit.status, 200);
+  await call("student", `/community/posts/${post}/revision`, "DELETE");
+  assert.equal(
+    (await call("student", `/community/posts/${post}`)).data.revision_body_html,
+    "",
+  );
+  const paths = [];
+  for (let i = 0; i < 20; i++) {
+    const id = `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+    run(
+      db,
+      "INSERT INTO community_images(id,author_id) VALUES (?,?)",
+      id,
+      ids.student,
+    );
+    paths.push(`/api/community/images/${id}`);
+  }
+  assert.equal(
+    (
+      await call("student", `/community/posts/${post}`, "PUT", {
+        title: "Học tập",
+        body_html: paths
+          .slice(0, 6)
+          .map((src) => `<img src="${src}">`)
+          .join(""),
+      })
+    ).status,
+    400,
+  );
+  const bytes = await sharp({
+    create: { width: 10, height: 10, channels: 3, background: "white" },
+  })
+    .png()
+    .toBuffer();
+  assert.equal(
+    (await imageRequest("student", "/api/community/images", bytes)).status,
+    429,
+  );
 });

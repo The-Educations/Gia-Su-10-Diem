@@ -136,12 +136,12 @@ export type Post = { id: number; title: string; summary: string; body: string; p
 
 export type CommunityAuthor = { label: string; name_part: string; tier: "student" | "parent" | "tutor" | "admin"; tutor_id?: number };
 export type CommunityPostData = {
-  id: number; public: boolean; kind: "user" | "announcement" | "rules"; title: string; body: string;
+  id: number; public: boolean; kind: "user" | "announcement" | "rules"; title: string; body: string; body_html?: string;
   author: CommunityAuthor; mine: boolean; solved: boolean; best_comment_id: number | null;
   published_at: string | null; created_at: string; updated_at: string;
   comment_count: number; helpful_count: number; following: boolean;
   status?: "pending" | "approved" | "rejected" | "hidden" | "deleted";
-  review_note?: string; revision_title?: string | null; revision_body?: string | null;
+  review_note?: string; revision_title?: string | null; revision_body?: string | null; revision_body_html?: string;
   revision_status?: "pending" | "rejected" | null; revision_note?: string;
 };
 export type CommunityComment = {

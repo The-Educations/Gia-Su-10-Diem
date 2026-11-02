@@ -40,7 +40,23 @@ export function AuthorLabel({ author }: { author: CommunityAuthor }) {
     </span>
   );
 }
-export function ReadMore({ text }: { text: string }) {
+export function PostBody({
+  text,
+  html,
+}: {
+  text: string;
+  html?: string | null;
+}) {
+  return html ? (
+    <div
+      className="community-rich"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  ) : (
+    <div className="community-body">{text}</div>
+  );
+}
+export function ReadMore({ text, html }: { text: string; html?: string }) {
   const ref = useRef<HTMLDivElement>(null),
     id = useId();
   const [expanded, setExpanded] = useState(false),
@@ -55,9 +71,13 @@ export function ReadMore({ text }: { text: string }) {
       );
     const observer = new ResizeObserver(measure);
     observer.observe(node);
+    node.addEventListener("load", measure, true);
     measure();
-    return () => observer.disconnect();
-  }, [text]);
+    return () => {
+      observer.disconnect();
+      node.removeEventListener("load", measure, true);
+    };
+  }, [text, html]);
   return (
     <div>
       <div
@@ -65,7 +85,7 @@ export function ReadMore({ text }: { text: string }) {
         ref={ref}
         className={`community-body${expanded ? "" : " community-clamped"}`}
       >
-        {text}
+        <PostBody text={text} html={html} />
       </div>
       {long && (
         <Button
@@ -137,7 +157,7 @@ export function PostCard({ post }: { post: CommunityPostData }) {
         )}
       </h2>
       <ReviewState post={post} />
-      <ReadMore text={post.body} />
+      <ReadMore text={post.body} html={post.body_html} />
       {!rules && (
         <div className="community-card-footer">
           <Link to={`/community/${post.id}`}>

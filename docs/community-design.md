@@ -1,3 +1,5 @@
+> Cập nhật theo yêu cầu người dùng ngày 02/11/2026: bài viết dùng trình soạn thảo rich text, hỗ trợ ảnh tải lên và liên kết HTTP(S). Yêu cầu mới này thay thế các giới hạn văn bản thuần/không ảnh/không link trong tài liệu gốc bên dưới. Quy trình duyệt, quyền riêng tư và bình luận văn bản thuần được giữ nguyên. Chi tiết: [community-implementation.md](community-implementation.md).
+
 # Cộng đồng — Thiết kế và prompt xây dựng
 
 Tài liệu gồm hai phần:
