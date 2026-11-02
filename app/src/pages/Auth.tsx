@@ -1,6 +1,6 @@
 import { GoogleSignIn, googleErrors } from "@/components/google-sign-in";
 import { useState } from "react";
-import { useSearchParams, Link, Navigate, useNavigate } from "react-router-dom";
+import { useSearchParams, Navigate, useNavigate } from "react-router-dom";
 import { ArrowRight, Mail } from "lucide-react";
 import { api, useApp, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -87,7 +87,6 @@ export default function Auth() {
         </Tabs>
       </div>}
       <p className="auth-policy">Khi tiếp tục, bạn đồng ý với <a href="/terms">Điều khoản dịch vụ</a> và đã đọc <a href="/privacy">Chính sách quyền riêng tư</a>.</p>
-      <Link className="account-explore" to="/library">Khám phá môn học</Link>
     </section>
   </Page>;
 }

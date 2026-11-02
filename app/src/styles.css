@@ -2651,7 +2651,6 @@ main {
 }
 .account-email-tabs [role="tab"] { flex: 1; }
 .account-entry [type="submit"] { width: 100%; }
-.account-explore { display: block; text-align: center; font-size: 13px; padding: 12px 0; }
 @media (max-width: 700px) {
   .account-entry { margin: 0 auto; padding: 24px 16px; }
   .account-entry h1 { font-size: 24px; }
