@@ -25,7 +25,7 @@ async function verifyEmail(email, cookie) {
  return confirm.headers.getSetCookie().find(c=>c.startsWith("giasu_session="))?.split(";")[0];
 }
 try {
-for (const path of ['/', '/app/tutors', '/app/auth', '/app/library', '/app/calendar']) {
+for (const path of ['/', '/app/tutors', '/app/auth', '/app/library', '/app/calendar', '/app/offers']) {
  const page = await fetch(base + path, {redirect: 'manual'});
  assert.equal(page.status, 200, `${path} must serve HTML without asset canonicalization redirects`);
  const html = await page.text();
@@ -44,6 +44,8 @@ const pendingCookie=res.headers.getSetCookie().find(c=>c.startsWith('giasu_signu
 const cookie = await verifyEmail(email,pendingCookie);
 const get=path=>fetch(base+path,{headers:{Cookie:cookie}});
 assert.equal((await get('/api/auth/me')).status,200);
+assert.deepEqual(await (await get('/api/offers')).json(), []);
+assert.equal((await fetch(base+'/api/offers')).status,401);
 const supportThread = (await (await get('/api/support')).json())[0];
 assert.equal((await (await get('/api/support')).json())[0].id, supportThread.id);
 const supportMessage = await fetch(base+`/api/support/${supportThread.id}/messages`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({body:'Runtime support request'})});

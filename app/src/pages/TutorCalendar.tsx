@@ -27,10 +27,10 @@ export default function TutorCalendar() {
   return (
     <Page>
       <Heading
-        title="Lịch dạy"
+        title={user?.role === "tutor" ? "Giờ trống hằng tuần" : "Lịch dạy"}
         action={
           <Button variant="outline" asChild>
-            <Link to="/bookings">Buổi học & yêu cầu</Link>
+            <Link to="/bookings">{user?.role === "tutor" ? "Lịch dạy của tôi" : "Quản lý buổi học"}</Link>
           </Button>
         }
       />
