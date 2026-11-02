@@ -4,6 +4,8 @@ import { useLoad } from "@/lib/api";
 export const googleErrors: Record<string, string> = {
   unavailable:
     "Đăng nhập Google chưa được cấu hình. Bạn có thể dùng email và mật khẩu.",
+  rate_limited: "Vui lòng chờ một phút trước khi yêu cầu mã mới.",
+  mail_unavailable: "Chưa gửi được mã xác minh. Vui lòng thử lại sau.",
   expired: "Phiên đăng nhập đã hết hạn. Vui lòng thử lại.",
   cancelled: "Bạn đã hủy đăng nhập Google.",
   failed: "Không thể xác thực Google. Vui lòng thử lại.",

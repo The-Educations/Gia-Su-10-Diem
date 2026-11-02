@@ -65,6 +65,7 @@ export default function Tutors({
     .filter(
       (t) =>
         (!favoritesOnly || favorites.data?.includes(t.user_id)) &&
+        (params.get("match") !== "1" || (myHours.size > 0 && matchingHours(t) > 0)) &&
         (!subject || t.subjects.includes(subject)) &&
         (!level || t.levels.includes(level)) &&
         (!goal || t.goals.includes(goal)) &&
@@ -224,6 +225,7 @@ export default function Tutors({
           </div>
         )}
       </section>
+      {user?.role === "student" && <div className="schedule-filter"><Button variant={params.get("match") === "1" ? "default" : "outline"} aria-pressed={params.get("match") === "1"} disabled={schedule.loading} onClick={() => { const p = new URLSearchParams(params); if (p.get("match") === "1") p.delete("match"); else { p.set("match", "1"); p.set("sort", "schedule"); } setParams(p, { replace: true }); }}>Trùng lịch rảnh của tôi</Button><Link className="text-link" to="/availability">Sửa lịch rảnh</Link></div>}
       {sort === "schedule" && user?.role === "student" && !schedule.loading && !myHours.size && <Button asChild variant="outline"><Link to="/availability">Thêm lịch rảnh để so khớp gia sư</Link></Button>}
       {sort === "schedule" && schedule.error && <ErrorState error={schedule.error} retry={schedule.reload} />}
       <div className="results-heading" id="tutor-results">

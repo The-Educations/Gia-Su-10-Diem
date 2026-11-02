@@ -1,6 +1,6 @@
 import { GoogleSignIn, googleErrors } from "@/components/google-sign-in";
 import { useState } from "react";
-import { useSearchParams, Link, Navigate } from "react-router-dom";
+import { useSearchParams, Link, Navigate, useNavigate } from "react-router-dom";
 import { ArrowRight, Mail } from "lucide-react";
 import { api, useApp, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -11,16 +11,16 @@ import { Page, ErrorState, Submit, Loading } from "@/components/common";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function Auth() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const register = params.get("mode") === "register";
   const [emailOpen, setEmailOpen] = useState(params.has("mode"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(googleErrors[params.get("oauth_error") || ""] || "");
-  const [deliveryFailed, setDeliveryFailed] = useState(false);
   const { user, loading, authError, retryAuth, setUser, refresh } = useApp();
   if (loading) return <Loading />;
   if (authError) return <ErrorState error={authError} retry={retryAuth} />;
-  if (user) return <Navigate to={accountDestination(user, params.get("next"))} state={{ deliveryFailed }} replace />;
+  if (user) return <Navigate to={accountDestination(user, params.get("next"))} replace />;
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -32,8 +32,8 @@ export default function Auth() {
     }
     setBusy(true);
     try {
-      const result = await api<{ user: User; verification_sent?: boolean }>(`/auth/${register ? "register" : "login"}`, "POST", data);
-      setDeliveryFailed(result.verification_sent === false);
+      const result = await api<{ user: User; pending?: boolean }>(`/auth/${register ? "register" : "login"}`, "POST", data);
+      if (result.pending) { navigate(`/verify-email${params.get("next") ? `?next=${encodeURIComponent(params.get("next")!)}` : ""}`); return; }
       setUser(result.user);
       refresh();
     } catch (e) { setError((e as Error).message); }
@@ -80,7 +80,7 @@ export default function Auth() {
               <FieldLabel htmlFor="confirm-password">Xác nhận mật khẩu</FieldLabel>
               <Input id="confirm-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} required />
             </Field>}
-            <Submit busy={busy}>{register ? "Tạo tài khoản" : "Đăng nhập"}<ArrowRight data-icon="inline-end" /></Submit>
+            <Submit busy={busy}>{register ? "Gửi mã xác minh" : "Đăng nhập"}<ArrowRight data-icon="inline-end" /></Submit>
           </FieldGroup>
         </form>
         </TabsContent>

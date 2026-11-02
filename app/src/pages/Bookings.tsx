@@ -1,3 +1,4 @@
+import { WeeklyRequests } from "@/components/weekly-requests";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { MessageCircle, ExternalLink, Download } from "lucide-react";
@@ -111,6 +112,7 @@ export default function Bookings() {
           </Button>
         }
       />
+      <WeeklyRequests />
       <div className="list-toolbar">
         <span>{rows.length} buổi học</span>
         <Choose

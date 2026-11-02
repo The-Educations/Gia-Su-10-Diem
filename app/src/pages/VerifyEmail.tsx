@@ -1,3 +1,4 @@
+import { SignupCode } from "@/components/signup-code";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { MailCheck, Mail } from "lucide-react";
@@ -49,6 +50,7 @@ export default function VerifyEmail() {
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
+  if (!user && !token && !confirmed) return <SignupCode />;
   return <Page><section className="account-entry verification-entry">
     {confirmed ? <MailCheck size={32} aria-hidden="true" /> : <Mail size={32} aria-hidden="true" />}
     <h1>{confirmed ? "Email đã được xác nhận" : "Xác nhận email của bạn"}</h1>

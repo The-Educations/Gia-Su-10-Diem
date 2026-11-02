@@ -10,7 +10,8 @@ const time = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 export const scheduleKeys = (schedule: WeeklySchedule) => new Set(schedule.blocks.map(b => b.hour * 7 + b.weekday));
 
 export const scheduleBlocks = (selected: Set<number>) => [...selected].sort((a, b) => a - b).map(key => ({ weekday: key % 7, hour: Math.floor(key / 7) }));
-export function AvailabilityGrid({ selected, setSelected, busy = false }: { selected: Set<number>; setSelected: Dispatch<SetStateAction<Set<number>>>; busy?: boolean }) {
+export function AvailabilityGrid({ selected, setSelected, busy = false, available, preferred }: { selected: Set<number>; setSelected: Dispatch<SetStateAction<Set<number>>>; busy?: boolean; available?: Set<number>; preferred?: Set<number> }) {
+  const visibleHours = available ? hours.filter(hour => days.some((_, day) => available.has(hour * 7 + day))) : hours;
   const drag = useRef<{ start: number; add: boolean; original: Set<number> } | null>(null);
   const pointerType = useRef("");
   const scroll = useRef<HTMLDivElement>(null);
@@ -33,6 +34,7 @@ export function AvailabilityGrid({ selected, setSelected, busy = false }: { sele
   }, []);
   function toggle(key: number) {
     setSelected(previous => {
+      if (available && !available.has(key)) return previous;
       const next = new Set(previous);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -44,28 +46,31 @@ export function AvailabilityGrid({ selected, setSelected, busy = false }: { sele
     const next = new Set(stroke.original);
     for (let row = Math.min(Math.floor(stroke.start / 7), Math.floor(end / 7)); row <= Math.max(Math.floor(stroke.start / 7), Math.floor(end / 7)); row++) {
       for (let day = Math.min(stroke.start % 7, end % 7); day <= Math.max(stroke.start % 7, end % 7); day++) {
+        if (available && !available.has(row * 7 + day)) continue;
         if (stroke.add) next.add(row * 7 + day); else next.delete(row * 7 + day);
       }
     }
     setSelected(next);
   }
   return (<>
-      <div className="availability-jumps" role="group" aria-label="Đến khung giờ">
+      {!available && <div className="availability-jumps" role="group" aria-label="Đến khung giờ">
         <Button type="button" variant="ghost" onClick={() => jump(6)}>Sáng</Button>
         <Button type="button" variant="ghost" onClick={() => jump(12)}>Chiều</Button>
         <Button type="button" variant="ghost" onClick={() => jump(18)}>Tối</Button>
-      </div>
+      </div>}
       <div ref={scroll} className="availability-scroll" role="region" aria-label="Lịch trống từ thứ 2 đến chủ nhật" tabIndex={0}>
         <table className="availability-grid">
           <thead><tr><th scope="col">Giờ</th>{days.map(day => <th scope="col" key={day}>{day}</th>)}</tr></thead>
-          <tbody>{hours.map((hour, row) => <tr key={hour}>
+          <tbody>{visibleHours.map(hour => <tr key={hour}>
             <th scope="row">{time(hour)}<span>{time(hour + 1)}</span></th>
             {days.map((day, weekday) => {
-              const key = row * 7 + weekday;
+              const key = hour * 7 + weekday;
+              if (available && !available.has(key)) return <td key={day} aria-label={`${day}, ${time(hour)}–${time(hour + 1)}: không có lịch`} />;
               return <td key={day}><button
                 ref={element => { buttons.current[key] = element; }}
-                type="button" disabled={busy}
-                aria-label={`${day}, ${time(hour)}–${time(hour + 1)}`}
+                type="button" disabled={busy || (available !== undefined && !available.has(key))}
+                data-preferred={preferred?.has(key) || undefined}
+                aria-label={`${day}, ${time(hour)}–${time(hour + 1)}${preferred?.has(key) ? ", trùng lịch của bạn" : ""}`}
                 aria-pressed={selected.has(key)}
                 onPointerDown={e => {
                   pointerType.current = e.pointerType;
@@ -77,8 +82,15 @@ export function AvailabilityGrid({ selected, setSelected, busy = false }: { sele
                 onPointerEnter={e => { if (e.buttons === 1 && e.pointerType === "mouse") paint(key); }}
                 onClick={e => { if (e.detail === 0 || pointerType.current !== "mouse") toggle(key); }}
                 onKeyDown={e => {
-                  const target = { ArrowLeft: weekday > 0 ? key - 1 : key, ArrowRight: weekday < 6 ? key + 1 : key, ArrowUp: key - 7, ArrowDown: key + 7 }[e.key];
-                  if (target !== undefined) { e.preventDefault(); buttons.current[target]?.focus(); }
+                  const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+                  if (step !== undefined) {
+                    e.preventDefault();
+                    for (let target = key + step; target >= 0 && target < 168; target += step) {
+                      if (Math.abs(step) === 1 && Math.floor(target / 7) !== hour) break;
+                      const button = buttons.current[target];
+                      if (button && !button.disabled) { button.focus(); break; }
+                    }
+                  }
                 }}
               >{selected.has(key) && <Check size={16} aria-hidden="true" />}</button></td>;
             })}

@@ -60,7 +60,7 @@ npm test
 npm run test:e2e
 ```
 
-`npm test` gồm kiểm tra landing và 40 API/OAuth/email/SEO/build tests bằng database tạm. `test:e2e` build ứng dụng rồi chạy 19 luồng Playwright trên cổng 4175, database riêng; cần Chrome đã cài (hoặc `npx playwright install chrome`). Bao gồm booking giữa hai browser context, nhắn tin sau reload, upload ảnh / banner, admin duyệt và công bố hồ sơ, liên hệ trước khi đặt lịch, responsive 320–1440 px, focus menu, lịch tuần bằng bàn phím, giữ bản nháp studio và giữ tab admin sau khi lưu. Các lệnh này được kiểm tra local; không thay thế kiểm tra hosting thực tế.
+`npm test` gồm kiểm tra landing và 60 API/OAuth/email/SEO/build tests bằng database tạm. `test:e2e` build ứng dụng rồi chạy 31 luồng Playwright trên cổng 4175, database riêng; cần Chrome đã cài (hoặc `npx playwright install chrome`). Bao gồm booking giữa hai browser context, nhắn tin sau reload, upload ảnh / banner, admin duyệt và công bố hồ sơ, liên hệ trước khi đặt lịch, responsive 320–1440 px, focus menu, lịch tuần bằng bàn phím, giữ bản nháp studio và giữ tab admin sau khi lưu. Các lệnh này được kiểm tra local; không thay thế kiểm tra hosting thực tế.
 
 ## Mã nguồn & tài liệu
 
@@ -80,7 +80,7 @@ npm run test:e2e
 
 Danh mục khởi đầu có 25 nhóm môn và 8 nguồn tham khảo kỳ thi; chưa bao phủ hoặc xác minh mọi kỳ thi tại Việt Nam. Mục tiêu luyện thi do gia sư khai báo, không phải chứng nhận năng lực. Admin công bố hồ sơ không đồng nghĩa đã xác minh danh tính / bằng cấp.
 
-Tài khoản email/mật khẩu mới cần xác nhận email gửi từ contact@giasudiem10.online qua Mailflare. Chưa có thanh toán, khôi phục mật khẩu, thông báo lịch học gửi ra ngoài, video tích hợp, tải chứng chỉ hoặc lịch lặp. Form landing mở tìm gia sư theo môn học và hình thức học.
+Mọi tài khoản mới, kể cả Google, cần nhập mã gửi từ contact@giasudiem10.online qua Mailflare trước khi được tạo. Học sinh có lịch rảnh, lọc giờ trùng và gửi yêu cầu học theo tuần; gia sư xác nhận và trao đổi qua tin nhắn. Chưa có thanh toán, khôi phục mật khẩu, thông báo lịch học gửi ra ngoài, video tích hợp, tải chứng chỉ hoặc tự tạo các buổi có ngày cụ thể từ yêu cầu tuần. Form landing mở tìm gia sư theo môn học và hình thức học.
 
 Production dùng HTTPS `APP_ORIGIN` và Durable Object SQLite; xem tài liệu Cloudflare để triển khai và khôi phục.
 

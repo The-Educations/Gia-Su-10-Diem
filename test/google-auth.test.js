@@ -15,8 +15,10 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
     name: "Học sinh Google",
   };
   let badNonce = false;
+  const emails = [];
   const server = createApi(db, {
     limit: false,
+    sendEmail: async email => emails.push(email),
     google: {
       clientId: "client.apps.googleusercontent.com",
       clientSecret: "test-only",
@@ -75,7 +77,14 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
     /expired/,
   );
   let response = await callback(flow);
-  assert.equal(response.headers.get("location"), "/app/onboarding");
+  assert.equal(response.headers.get("location"), "/app/verify-email");
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM users").n, 0);
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM oauth_identities").n, 0);
+  response = await fetch(base + "/api/auth/signup/verify", {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: response.headers.getSetCookie().find(c => c.startsWith("giasu_signup=")).split(";")[0] },
+    body: JSON.stringify({ code: emails.at(-1).code }),
+  });
+  assert.equal(response.status, 201);
   const tutor = one(db, "SELECT * FROM users WHERE email=?", claims.email);
   assert.ok(tutor.email_verified_at, "Google verified claim confirms matching account email");
   assert.equal(tutor.role, "student");
@@ -151,7 +160,9 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
   );
   claims = { ...claims, sub: "google-owner", email: "owner@gmail.com" };
   flow = await start("?role=tutor");
-  assert.equal((await callback(flow)).headers.get("location"), "/app/admin");
+  const ownerPending = await callback(flow);
+  assert.equal(ownerPending.headers.get("location"), "/app/verify-email");
+  await fetch(base + "/api/auth/signup/verify", { method: "POST", headers: { "Content-Type": "application/json", Cookie: ownerPending.headers.getSetCookie().find(c => c.startsWith("giasu_signup=")).split(";")[0] }, body: JSON.stringify({ code: emails.at(-1).code }) });
   assert.equal(
     one(db, "SELECT role FROM users WHERE email='owner@gmail.com'").role,
     "admin",

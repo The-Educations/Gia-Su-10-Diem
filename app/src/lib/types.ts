@@ -40,6 +40,7 @@ export type Slot = {
 };
 export type ProfileTheme = { id: "paper" | "sage" | "ink"; name: string };
 export type Tutor = {
+  email?: string;
   theme_inventory: ProfileTheme[];
   weekly_blocks: WeeklySchedule["blocks"];
   review_revision: number;
