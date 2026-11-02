@@ -35,6 +35,8 @@ import {
   registerSchema,
   tutorSchema,
   timezoneSchema,
+  addressSchema,
+  addressLabel,
   resourceSchema,
   availabilitySchema,
   subjectSchema,
@@ -265,7 +267,7 @@ export function createApi(
   });
   app.patch("/api/account", auth(), (req, res) => {
     const d = z
-      .object({ name: text(80), goal: z.string().trim().max(1000), timezone: timezoneSchema })
+      .object({ name: text(80), goal: z.string().trim().max(1000), timezone: timezoneSchema, school: z.string().trim().max(160).optional(), province_code: z.string().max(5).optional(), ward_code: z.string().max(5).optional() })
       .parse(req.body);
     transaction(db, () => {
       run(
@@ -276,6 +278,10 @@ export function createApi(
         d.timezone ?? null,
         req.user.id,
       );
+      if (req.user.role === "student") {
+        const address = addressSchema.parse({ province_code: d.province_code ?? req.user.province_code, ward_code: d.ward_code ?? req.user.ward_code });
+        run(db, "UPDATE users SET school=COALESCE(?,school),province_code=?,ward_code=? WHERE id=?", d.school ?? null, address.province_code, address.ward_code, req.user.id);
+      }
       if (req.user.role === "tutor" && (d.name !== req.user.name || (d.timezone && d.timezone !== req.user.timezone)))
         run(
           db,
@@ -317,6 +323,12 @@ export function createApi(
       } else if (step === 1) {
         const { name } = z.object({ name: text(80) }).parse(req.body);
         const d = z.object({ goal: z.string().trim().max(1000).default(""), timezone: timezoneSchema }).parse(req.body);
+        if (user.role === "student") {
+          const { school } = z.object({ school: text(160) }).parse(req.body);
+          const address = addressSchema.parse(req.body);
+          if (!address.ward_code) fail(400, "Chọn nơi sinh sống.");
+          run(db, "UPDATE users SET school=?,province_code=?,ward_code=? WHERE id=?", school, address.province_code, address.ward_code, user.id);
+        }
         run(db, "UPDATE users SET name=?,goal=?,timezone=COALESCE(?,timezone),onboarding_step=3 WHERE id=?", name, d.goal, d.timezone ?? null, user.id);
       } else {
         run(db, "UPDATE users SET onboarding_step=3 WHERE id=?", user.id);
@@ -418,6 +430,9 @@ export function createApi(
   });
   app.put("/api/tutor/profile", auth("tutor"), (req, res) => {
     const d = tutorSchema.parse(req.body);
+    const address = d.province_code !== undefined || d.ward_code !== undefined ? addressSchema.parse(d) : null;
+    if (address?.ward_code) d.location = addressLabel(address);
+    const schedule = d.availability;
     if (d.profile_theme && !ownsTheme(db, req.user.id, d.profile_theme)) fail(403, "Giao diện này chưa được quản trị viên cấp.");
     ensureSubjects(d.subjects);
     const knownGoals = all(
@@ -427,6 +442,13 @@ export function createApi(
     if (d.goals.some((g) => !knownGoals.includes(g)))
       fail(400, "Mục tiêu kỳ thi không có trong danh mục.");
     transaction(db, () => {
+      if (schedule) {
+        if (weeklySchedule(db, req.user.id).revision !== schedule.revision) fail(409, "Lịch đã thay đổi ở cửa sổ khác. Tải lại trang trước khi lưu.");
+        run(db, `INSERT INTO weekly_availability(tutor_id,blocks,revision) VALUES (?,?,1)
+          ON CONFLICT(tutor_id) DO UPDATE SET blocks=excluded.blocks,revision=revision+1`, req.user.id, JSON.stringify(schedule.blocks));
+        reconcileAvailability(db, req.user.id);
+      }
+      if (address) run(db, "UPDATE tutors SET province_code=?,ward_code=? WHERE user_id=?", address.province_code, address.ward_code, req.user.id);
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
@@ -698,6 +720,7 @@ export function createApi(
         ...t,
         ...uploadMetadata(db, t.user_id),
         theme_inventory: themeInventory(db, t.user_id),
+        weekly_blocks: weeklySchedule(db, t.user_id).blocks,
         gallery: galleryMetadata(db, t.user_id),
         subjects: JSON.parse(t.subjects),
         levels: JSON.parse(t.levels),

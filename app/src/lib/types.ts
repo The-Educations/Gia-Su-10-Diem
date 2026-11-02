@@ -20,6 +20,9 @@ export type User = {
   role: "student" | "tutor" | "admin";
   learner_type: "student" | "parent";
   goal: string;
+  school: string;
+  province_code: string;
+  ward_code: string;
   demo: boolean;
   onboarding_step: number;
 };
@@ -60,6 +63,8 @@ export type Tutor = {
   profile_sections: ProfileSection[];
   bio: string;
   location: string;
+  province_code: string;
+  ward_code: string;
   mode: string;
   rate: number;
   experience: number;

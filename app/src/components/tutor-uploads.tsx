@@ -1,3 +1,4 @@
+import { ImageCropDialog } from "./image-crop-dialog";
 import { useEffect, useState } from "react";
 import { Camera, Image, Upload, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import { Field, FieldLabel, FieldDescription } from "./ui/field";
 
 type Assets = Pick<Tutor, "photo_url" | "banner_url">;
 function UploadField({ kind, assets, name, onChange }: { kind: "photo" | "banner"; assets: Assets; name: string; onChange: (a: Assets, pending: boolean) => void }) {
+  const [crop, setCrop] = useState<File | null>(null);
   const [file, setFile] = useState<File | null>(null), [preview, setPreview] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [inputKey, setInputKey] = useState(0);
   const photo = kind === "photo", existing = photo ? assets.photo_url : assets.banner_url;
@@ -39,6 +41,7 @@ function UploadField({ kind, assets, name, onChange }: { kind: "photo" | "banner
     finally { setBusy(false); }
   }
   return <section className="upload-card">
+    {crop && <ImageCropDialog file={crop} aspect={photo ? 1 : 4} onCancel={() => setCrop(null)} onApply={f => { setFile(f); setCrop(null); }} />}
     <div className="upload-card-heading">{photo ? <Camera /> : <Image />}<h3>{photo ? "Ảnh đại diện" : "Ảnh bìa"}</h3>{existing && <Check className="upload-check" aria-label="Đã tải lên" />}</div>
     {photo ? <div className="upload-preview"><Person name={name} src={preview || existing || undefined} large /></div> :
       <div className="banner-preview">{preview || existing ? <img src={preview || existing!} alt={preview ? "Ảnh bìa đã chọn" : "Ảnh bìa của bạn"} /> : <Image aria-hidden="true" />}</div>}
@@ -50,10 +53,11 @@ function UploadField({ kind, assets, name, onChange }: { kind: "photo" | "banner
           <Input className="file-picker-input" key={inputKey} id={`upload-${kind}`} type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} aria-invalid={!!error} aria-describedby={`upload-${kind}-help`} onChange={e => {
             setError(""); const f = e.target.files?.[0] || null;
             if (f && f.size > 5 * 1024 * 1024) { setFile(null); setError("Ảnh quá lớn. Chọn ảnh tối đa 5 MB."); return; }
-            setFile(f);
+            if (f && !["image/jpeg", "image/png", "image/webp"].includes(f.type)) { setError("Chọn ảnh JPG, PNG hoặc WebP."); e.target.value = ""; return; }
+            setCrop(f); e.target.value = "";
           }} />
         </div>
-        <FieldDescription id={`upload-${kind}-help`}>{photo ? "JPG, PNG hoặc WebP · tối đa 5 MB" : "Ảnh ngang 4:1 · cắt ở giữa · JPG, PNG, WebP · tối đa 5 MB"}</FieldDescription>
+        <FieldDescription id={`upload-${kind}-help`}>{photo ? "JPG, PNG hoặc WebP · tối đa 5 MB" : "Ảnh ngang 4:1 · JPG, PNG, WebP · tối đa 5 MB"}</FieldDescription>
       </Field>
       {error && <ErrorState error={error} />}
       <div className="actions">

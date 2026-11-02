@@ -1,3 +1,4 @@
+import { AddressFields } from "@/components/address-fields";
 import { TimezoneField } from "@/components/tutor-timezone";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -17,6 +18,7 @@ export default function Settings() {
   const { user, setUser, refresh } = useApp(),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
+  const [address, setAddress] = useState({ province_code: user?.province_code || "", ward_code: user?.ward_code || "" });
   const [timezone, setTimezone] = useState(user?.timezone || "Asia/Ho_Chi_Minh");
   async function save(e: React.SubmitEvent<HTMLFormElement>, password = false) {
     e.preventDefault();
@@ -78,6 +80,10 @@ export default function Settings() {
                 maxLength={1000}
               />
             </Field>
+            {user?.role === "student" && <>
+              <Field><FieldLabel htmlFor="account-school">{user.learner_type === "parent" ? "Trường của con" : "Trường đang học"}</FieldLabel><Input id="account-school" name="school" defaultValue={user.school} required maxLength={160} /></Field>
+              <AddressFields value={address} onChange={setAddress} />
+            </>}
             <TimezoneField value={timezone} onChange={setTimezone} />
             <Submit busy={busy === "profile"}>Lưu thông tin</Submit>
           </FieldGroup>

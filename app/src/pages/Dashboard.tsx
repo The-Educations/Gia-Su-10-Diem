@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link, Navigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -85,6 +86,7 @@ export default function Dashboard() {
           </Button>
         }
       />
+      {!isTutor && (!user.school || !user.ward_code) && <Alert><AlertDescription><Link to="/settings">Hoàn thiện hồ sơ: trường học & nơi sinh sống</Link></AlertDescription></Alert>}
       <WorkspaceStats
         items={[
           {
