@@ -307,7 +307,7 @@ export default function Dashboard() {
                       <Person name={t.name} src={t.photo_url || undefined} />
                       <div>
                         <strong>{t.name}</strong>
-                        <span>{money(t.rate)} / giờ</span>
+                        <span>{money(t.rate)} / buổi</span>
                       </div>
                       <ArrowUpRight size={16} />
                     </Link>

@@ -73,7 +73,7 @@ test("guest filters, subject navigation and responsive layouts", async ({
   await expect(filterToggle).toHaveAttribute("aria-expanded", "false");
   await choose(page, "Môn học", "Toán");
   await expect(page.locator(".tutor-card")).toHaveCount(3);
-  await choose(page, "Học phí / giờ", "Đến 150.000 ₫");
+  await choose(page, "Học phí / buổi", "Đến 150.000 ₫");
   await expect(page.locator(".tutor-card")).toHaveCount(1);
   await page.goto("/app/library");
   await expect(

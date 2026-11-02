@@ -37,7 +37,7 @@ export default function Offers() {
       <DialogContent className="offer-detail">
         <DialogHeader><DialogTitle>Chi tiết đề nghị học{offer ? ` #${offer.id}` : ""}</DialogTitle><DialogDescription>{offer ? `${offer.subject_name} · ${user?.role === "tutor" ? offer.student_name : offer.tutor_name}` : "Lịch học theo ngày đã chọn"}</DialogDescription></DialogHeader>
         {detail.loading ? <Loading /> : detail.error ? <ErrorState error={detail.error} retry={detail.reload} /> : offer && <>
-          <div className="offer-summary"><span className={`state state-${offer.status}`}>{offerStatuses[offer.status]}</span><span>{calendarDate(offer.start_date)} – {calendarDate(offer.end_date)}</span><span>{offer.mode === "online" ? "Trực tuyến" : "Trực tiếp"} · {money(offer.rate)} / giờ</span></div>
+          <div className="offer-summary"><span className={`state state-${offer.status}`}>{offerStatuses[offer.status]}</span><span>{calendarDate(offer.start_date)} – {calendarDate(offer.end_date)}</span><span>{offer.mode === "online" ? "Trực tuyến" : "Trực tiếp"} · {money(offer.rate)} / buổi</span></div>
           <ul className="offer-week">{offer.blocks.map(b=><li key={`${b.weekday}:${b.hour}`}><strong>{["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6","Thứ 7","Chủ nhật"][b.weekday]}</strong>{String(b.hour).padStart(2,"0")}:00–{String(b.hour+1).padStart(2,"0")}:00</li>)}</ul>
           {offer.note && <p className="offer-note">{offer.note}</p>}
           <div className="section-heading"><h3>{offer.sessions.length} {offer.status === "pending" ? "buổi dự kiến" : "buổi học"} · Giờ Việt Nam</h3>{offer.status === "pending" && <span role="status">{offer.conflict_count ? `${offer.conflict_count} buổi cần điều chỉnh` : "Không trùng lịch"}</span>}</div>

@@ -19,7 +19,7 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng ch�
 
 - Xem gia sư đã được công bố và tài khoản còn hoạt động.
 - Tìm không dấu / có dấu theo tên, giới thiệu, học vấn và địa điểm.
-- Lọc theo môn, cấp học, mục tiêu kỳ thi, hình thức online / trực tiếp, địa điểm và học phí VND/giờ.
+- Lọc theo môn, cấp học, mục tiêu kỳ thi, hình thức online / trực tiếp, địa điểm và học phí VND/buổi.
 - Sắp xếp theo giá, kinh nghiệm hoặc đánh giá có thật.
 - Xem ảnh, chuyên môn, mức phí, học vấn, mô tả phương pháp, đánh giá, lịch trống và tải CV của hồ sơ đã công bố.
 - Duyệt danh mục môn / kỳ thi và chuyển sang tìm gia sư tương ứng.
@@ -70,7 +70,7 @@ Phụ huynh có lựa chọn thiết lập riêng và mục tiêu học tập c�
 | --- | --- |
 | Múi giờ | Hiển thị giờ Việt Nam (`Asia/Ho_Chi_Minh`); lưu giờ UTC ISO |
 | Thời lượng | Một khung giờ = 60 phút; chưa có thời lượng tùy chọn / lịch lặp |
-| Học phí | VND/giờ; lưu mức phí tại thời điểm đặt để không đổi theo hồ sơ sau đó |
+| Học phí | VND/buổi; lưu mức phí tại thời điểm đặt để không đổi theo hồ sơ sau đó |
 | Giờ trống | Giờ tròn, trước ít nhất một giờ, tối đa 180 ngày tới |
 | Chống trùng | Kiểm tra cả lịch học sinh và gia sư; khung đã giữ không được đặt lần nữa |
 | Xác nhận | Gia sư nhận / từ chối yêu cầu đang chờ và còn ở tương lai |
