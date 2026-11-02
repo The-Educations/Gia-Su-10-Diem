@@ -40,6 +40,7 @@ export function createApi(
 ) {
   const app = express();
   app.disable("x-powered-by");
+  app.use("/api", (req, res, next) => { res.set("X-Robots-Tag", "noindex, nofollow"); next(); });
   app.use("/api", helmet({ contentSecurityPolicy: false }));
   app.use("/api", express.json({ limit: "300kb" }));
   app.use("/api", (req, res, next) => {

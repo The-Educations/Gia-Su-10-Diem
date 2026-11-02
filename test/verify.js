@@ -86,7 +86,7 @@ for (const kw of vietnameseKeywords) {
 console.log("✓ Vietnamese marketplace copy verified.");
 
 // Compile the generated scripts: template escaping must not break browser JavaScript.
-for (const [, source] of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+for (const [, source] of html.matchAll(/<script(?![^>]*type=["']application\/ld\+json["'])(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
   new vm.Script(source);
 }
 const ids = [...html.split('<body>')[1].split('<script>')[0].matchAll(/\sid=['"]([^'"]+)['"]/g)].map(match => match[1]);

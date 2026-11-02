@@ -95,6 +95,7 @@ export default function Auth() {
               ]}
             />
           )}
+          <p className="auth-policy">Khi tiếp tục, bạn đồng ý với <a href="/terms">Điều khoản dịch vụ</a> và đã đọc <a href="/privacy">Chính sách quyền riêng tư</a>.</p>
           <GoogleSignIn role={role} next={params.get("next")} />
           <form key={register ? "register" : "login"} onSubmit={submit}>
             <FieldGroup>

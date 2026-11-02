@@ -1,3 +1,4 @@
+import { pageSeo, renderSeo, robots, sitemap } from "./seo.js";
 import { processPhoto } from "./photo.js";
 import express from "express";
 import { readFile } from "node:fs/promises";
@@ -30,11 +31,20 @@ app.get(["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"], (req, res)
   res.sendFile(path.resolve("assets", req.path.slice(1)));
 });
 app.get(["/app", "/app/"], (req, res) => res.redirect("/"));
+app.get("/robots.txt", (req, res) => res.type("text/plain").send(robots));
+app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(sitemap));
+app.get(["/privacy", "/terms"], (req, res) => res.sendFile(path.resolve(`dist/legal${req.path}.html`)));
+app.get("/index.html", (req, res) => res.redirect(308, "/"));
 app.get("/", (req, res) => res.sendFile(path.resolve("index.html")));
+const sendApp = (req, res, html) => {
+  const seo = pageSeo(req.path);
+  res.set("X-Robots-Tag", seo.robots).set("Cache-Control", "no-cache")
+    .status(seo.status).type("html").send(renderSeo(html, req.path));
+};
 if (production || process.env.SERVE_BUILD === "1") {
-  app.use("/app", express.static(path.resolve("dist/app"), { index: false }));
-  app.get("/app{/*path}", (req, res) =>
-    res.sendFile(path.resolve("dist/app/index.html")),
+  app.use("/app/assets", express.static(path.resolve("dist/app/assets")));
+  app.get("/app{/*path}", async (req, res) =>
+    sendApp(req, res, await readFile("dist/app/index.html", "utf8")),
   );
 } else {
   const { createServer } = await import("vite");
@@ -50,7 +60,7 @@ if (production || process.env.SERVE_BUILD === "1") {
         req.originalUrl,
         await readFile("app/index.html", "utf8"),
       );
-      res.type("html").send(html);
+      sendApp(req, res, html);
     } catch (e) {
       vite.ssrFixStacktrace(e);
       next(e);

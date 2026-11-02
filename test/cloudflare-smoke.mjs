@@ -61,3 +61,6 @@ assert.equal((await social.json()).comment_count,0);
 assert.equal((await fetch(base+'/api/gallery/'+galleryPhoto.id+'/social')).status,404);
 const app=await fetch(base+'/app/',{redirect:'manual'});assert.equal(app.headers.get('location'),base+'/');
 console.log('Cloudflare runtime: registration, resumable onboarding, session, portrait/CV upload, private download, availability, custom profile, private gallery and landing routing passed.');
+
+const { verifySeo } = await import('./seo-routing.mjs');
+await verifySeo(base);

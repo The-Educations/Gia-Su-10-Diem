@@ -1,3 +1,4 @@
+import { pageSeo, renderSeo, robots, sitemap } from "../server/seo.js";
 import { DurableObject } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import { createServer } from "node:http";
@@ -90,8 +91,15 @@ export default {
     }
     if (["/app", "/app/"].includes(url.pathname))
       return Response.redirect(url.origin + "/", 302);
+    if (url.pathname === "/index.html") return Response.redirect(url.origin + "/", 308);
+    if (["/robots.txt", "/sitemap.xml"].includes(url.pathname)) {
+      return new Response(url.pathname === "/robots.txt" ? robots : sitemap, {
+        headers: { "Content-Type": url.pathname === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8", "Cache-Control": "public, max-age=300" },
+      });
+    }
     const assetUrl = new URL(request.url);
     if (url.pathname === "/") assetUrl.pathname = "/index.html";
+    if (["/privacy", "/terms"].includes(url.pathname)) assetUrl.pathname = `/legal${url.pathname}.html`;
     if (
       ["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"].includes(
         url.pathname,
@@ -123,6 +131,15 @@ export default {
       /(?:favicon|icon-v2|apple-touch-icon|brand-icon-|brand-touch-)/.test(url.pathname)
     )
       headers.set("Cache-Control", "no-cache");
+    if (headers.get("content-type")?.includes("text/html")) {
+      const seo = pageSeo(url.pathname);
+      headers.set("X-Robots-Tag", seo.robots);
+      headers.delete("Content-Length");
+      headers.delete("ETag");
+      return new Response(renderSeo(await response.text(), url.pathname), {
+        status: response.ok ? seo.status : response.status, headers,
+      });
+    }
     return new Response(response.body, { status: response.status, headers });
   },
 };

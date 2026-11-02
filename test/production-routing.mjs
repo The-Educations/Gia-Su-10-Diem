@@ -50,3 +50,6 @@ for (const [path, method] of [['/api/account/onboarding', 'PUT'], ['/api/admin/u
   assert.equal(response.status, 401, `${path}: current API must be deployed and require authentication`);
 }
 console.log('Production serves the verified build and current account/admin endpoints.');
+
+const { verifySeo } = await import('./seo-routing.mjs');
+await verifySeo(canonical);

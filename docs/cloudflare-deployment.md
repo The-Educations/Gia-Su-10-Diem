@@ -10,6 +10,8 @@ A single Durable Object keeps booking transactions atomic. This is an initial sm
 
 ## Google sign-in
 
+See [Search indexing and OAuth branding](search-and-oauth.md) for the public privacy/terms URLs and consent-screen fields.
+
 Create an OAuth **Web application** client and register:
 
 - Authorized origin: `https://giasudiem10.online`
@@ -30,9 +32,16 @@ For local Node development, use `node --env-file=.env server/index.js`. Use `.de
 
 ## Automatic CI and deployment
 
-`.github/workflows/ci-deploy.yml` runs on pull requests and pushes to `main` in `The-Educations/Gia-Su-10-Diem`. The **Validate** job installs locked dependencies, checks types, runs API/OAuth and Chrome browser tests, audits dependencies, builds the site, exercises the local Cloudflare runtime, and checks the Worker bundle. Failed checks prevent the dependent deployment job from starting.
+`.github/workflows/ci-deploy.yml` runs on pull requests and pushes to `main` in `The-Educations/Gia-Su-10-Diem`. GitHub shows separate checks for:
 
-On `main`, **Deploy Cloudflare** downloads the static artifact from that same run and deploys the matching source commit using the encrypted repository secret `CLOUDFLARE_API_TOKEN`. Pull requests and forks cannot deploy. Production deployments are serialized. Durable Object updates are immediate to avoid serving old account APIs with new frontend assets. The final check verifies canonical routing, health, Google availability, the exact frontend entry file, and authenticated account/admin API routes. A manual workflow dispatch also runs all checks before deployment and only deploys from `main`.
+- **API, types and build**: installs locked dependencies, checks TypeScript, tests the API, authorization and Google OAuth, audits dependencies, and builds the production site once.
+- **Browser journeys**: downloads that build and runs Chrome tests for signup, resumable onboarding, student bookings, tutor approval, messages, admin promotion and responsive layouts.
+- **Cloudflare runtime**: downloads the same build, validates the Worker bundle and bindings, and exercises registration, onboarding, sessions, uploads and galleries in local workerd with an isolated test database.
+- **Validate**: preserves the required branch-protection check and succeeds only when all three jobs succeed. A failed, skipped or cancelled prerequisite fails this gate.
+
+Browser and Cloudflare runtime checks run in parallel after the build. They receive no deployment credentials. Failed browser tests retain traces and screenshots; failed Cloudflare tests retain the Worker log for seven days.
+
+On `main`, **Deploy Cloudflare** runs only after **Validate** passes. It checks the current remote `main` revision before deploying; superseded runs exit with a notice and leave production alone. It downloads the static artifact from that same run and deploys the matching source commit using the encrypted repository secret `CLOUDFLARE_API_TOKEN`. Pull requests and forks cannot deploy. Production deployments and their verification are serialized. Durable Object updates are immediate to avoid serving old account APIs with new frontend assets. The final check verifies canonical routing, health, Google availability, the exact frontend entry file, and authenticated account/admin API routes. A manual workflow dispatch also runs all checks before deployment and only deploys from `main`.
 
 The token must permit Worker script deployment and route management for the account and `giasudiem10.online` zone in `wrangler.jsonc` (Cloudflare's **Edit Cloudflare Workers** template covers these permissions). Store it only in GitHub Actions secrets; no Google application secrets are copied into CI. Existing Worker secrets and the Durable Object namespace remain in place. For emergency rollback, use `npx wrangler rollback <version-id> --durable-objects-code-update-mode immediate`, then rerun the production checks against the restored build.
 
@@ -68,3 +77,25 @@ Check `/api/health`, `/api/auth/providers`, `/api/subjects`, `/app/tutors`, and 
 Use `npx wrangler deployments list` to find versions and `npx wrangler rollback <version-id>` to restore code. Code rollback does not roll back database changes. Migrations are additive; do not delete the Durable Object namespace or rename `marketplace-v1`. Use Cloudflare SQLite Durable Object Time Travel for database recovery; never restore production data from the local demo file. There is no previous app deployment to roll back to on the first release. Keep both Worker routes enabled. With the Vercel project removed, removing the routes can leave the site unavailable even though the Worker and its database still exist.
 
 Run `node test/production-routing.mjs` after deployment to check both hostnames, canonical redirects, and matching favicon bytes. This check is read-only.
+
+## Native Cloudflare status in GitHub
+
+The optional native path matches the `Workers Builds: megadaytwin` integration: after **Validate** passes, GitHub promotes the exact current `main` commit to `cloudflare-production`. Cloudflare builds that branch and publishes **Workers Builds: giasu-diem10** using its own GitHub App. GitHub waits for the matching Cloudflare check and then verifies the live app against the CI artifact. Failed, cancelled, missing or unrelated checks cannot mark deployment successful. The production branch is never force-pushed.
+
+One-time connection in **Cloudflare → Workers & Pages → giasu-diem10 → Settings → Builds → Connect**:
+
+| Setting | Value |
+| --- | --- |
+| GitHub repository | `The-Educations/Gia-Su-10-Diem` |
+| Production branch | `cloudflare-production` |
+| Root directory | `/` |
+| Build command | `npm run build:cloudflare` |
+| Deploy command | `npx wrangler deploy --durable-objects-code-update-mode immediate` |
+| Build environment variable | `NODE_VERSION=24.13.0` |
+| Non-production branch builds | Disabled |
+
+Grant the Cloudflare Workers & Pages GitHub App access to this repository if prompted. Use the dashboard's build-token setup. Keep the Worker name `giasu-diem10` and existing bindings/secrets unchanged. The production branch must already exist before connecting. Do not configure direct builds from `main`: that would bypass the existing CI gate.
+
+After the native connection has produced a successful **Workers Builds: giasu-diem10** check, set repository Actions variable `CLOUDFLARE_NATIVE_BUILDS=true`, then run the workflow on `main` to verify the complete path. Until that variable is enabled, deployment continues through the existing Wrangler Actions step. The two deployment paths are mutually exclusive. If the native connection is later removed, unset the variable before the next deployment; retain the Actions deployment secret for this fallback.
+
+Cloudflare-native builds rebuild the same checked commit with the lockfile, rather than downloading GitHub's artifact. Production verification still compares the deployed app entry to the CI artifact and checks health, authorization, routes and SEO. The `production` environment and job summary link to the live site.
