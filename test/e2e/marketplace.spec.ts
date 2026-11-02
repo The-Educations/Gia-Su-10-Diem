@@ -974,7 +974,13 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-
   const profile = await (await page.request.get(`/api/tutors/${me.user.id}`)).json();
   const weekly = profile.slots.find((s: { source: string }) => s.source === "weekly");
   const studentContext = await browser.newContext(), student = await studentContext.newPage();
-  await login(student, "student"); await student.goto(`/app/tutors/${me.user.id}`);
+  await login(student, "student");
+  // Reproduce CI's slower profile response so the test cannot skip the first week while loading.
+  await student.route(`**/api/tutors/${me.user.id}`, async route => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await route.continue();
+  });
+  await student.goto(`/app/tutors/${me.user.id}`);
   const dayKey = new Date(Date.parse(weekly.starts_at) + 7 * 3600000).toISOString().slice(0, 10);
   const dayButton = student.locator(`.lesson-date-grid button[data-date="${dayKey}"]`);
   const firstDay = student.locator(".lesson-date-grid button").first();
