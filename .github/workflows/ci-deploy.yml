@@ -14,6 +14,10 @@ on:
       cloudflare_build_id:
         description: Optional failed Cloudflare build UUID to inspect
         type: string
+      repair_cloudflare_builds:
+        description: Apply CI-gated production settings (requires inspection mode)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,13 +37,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Verify the production branch matches validated main before reconfiguration
+        if: inputs.repair_cloudflare_builds
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const main = await github.rest.repos.getBranch({...context.repo, branch: 'main'});
+            const production = await github.rest.repos.getBranch({...context.repo, branch: 'cloudflare-production'});
+            if (main.data.commit.sha !== production.data.commit.sha) throw new Error('Promote validated main before changing the production branch.');
+            const runs = await github.paginate(github.rest.checks.listForRef, {...context.repo, ref: main.data.commit.sha, check_name: 'Validate'});
+            if (!runs.some(run => run.app?.slug === 'github-actions' && run.conclusion === 'success')) throw new Error('Main must pass Validate before reconfiguration.');
       - run: node scripts/inspect-cloudflare-builds.mjs
         env:
           CLOUDFLARE_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_BUILDS_API_TOKEN }}
           CLOUDFLARE_BUILD_ID: ${{ inputs.cloudflare_build_id }}
+          REPAIR_CLOUDFLARE_BUILDS: ${{ inputs.repair_cloudflare_builds }}
 
   build:
     name: API, types and build
+    if: github.event_name != 'workflow_dispatch' || !inputs.inspect_cloudflare_builds
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -140,7 +156,7 @@ jobs:
 
   checks:
     name: Validate
-    if: always()
+    if: always() && (github.event_name != 'workflow_dispatch' || !inputs.inspect_cloudflare_builds)
     needs: [build, browser, worker, inspect-builds]
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -209,8 +225,8 @@ jobs:
         with:
           script: |
             const { promote, waitForBuild } = require('./scripts/cloudflare-build.cjs');
-            await promote(github, context);
-            const buildUrl = await waitForBuild(github, context);
+            const afterCheckId = await promote(github, context);
+            const buildUrl = await waitForBuild(github, context, {afterCheckId});
             await core.summary.addLink('Workers Builds: giasu-diem10', buildUrl).write();
       - name: Verify production
         if: steps.revision.outputs.current == 'true'
