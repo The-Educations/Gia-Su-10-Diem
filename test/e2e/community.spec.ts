@@ -452,6 +452,7 @@ test("rich editor publishes formatting, links and uploaded images only after rev
   await editor.press("ControlOrMeta+A");
   await page.getByRole("button", { name: "In đậm", exact: true }).click();
   await expect(editor.locator("strong")).toHaveText("Cùng học hình học");
+  await expect(editor).toBeFocused();
   await editor.press("ArrowRight");
   await editor.press("Enter");
   await page
