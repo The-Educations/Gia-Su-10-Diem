@@ -1,3 +1,4 @@
+import AdminCommunity, { CommunityLock } from "./AdminCommunity";
 import { ProfileSections } from "@/components/tutor-sections";
 import { EducationTimeline } from "@/components/tutor-education";
 import { TimezoneTag } from "@/components/tutor-timezone";
@@ -47,12 +48,13 @@ import {
 import ResourceEditor from "./ResourceEditor";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts"].includes(
+  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts", "community"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
       : "tutors",
     status = params.get("status") || "";
+  const communityQueue = useLoad<unknown[]>("/admin/community/queue");
   const { refresh } = useApp(),
     result = useLoad<AdminData>("/admin"),
     subjects = useLoad<Subject[]>("/subjects"),
@@ -121,6 +123,7 @@ export default function Admin() {
       />
       <WorkspaceStats
         items={[
+          { label: "Bài cộng đồng chờ duyệt", value: communityQueue.data?.length || 0, icon: Clock, to: "/admin?tab=community" },
           {
             label: "Hồ sơ chờ duyệt",
             value: pending.length,
@@ -161,9 +164,10 @@ export default function Admin() {
             <TabsTrigger value="resources">Kỳ thi</TabsTrigger>
             <TabsTrigger value="subjects">Môn học</TabsTrigger>
             <TabsTrigger value="posts">Tin tức</TabsTrigger>
+            <TabsTrigger value="community">Cộng đồng ({communityQueue.data?.length || 0})</TabsTrigger>
             <TabsTrigger value="audit">Nhật ký</TabsTrigger>
           </TabsList>
-          {tab !== "posts" && <div className="admin-toolbar">
+          {tab !== "posts" && tab !== "community" && <div className="admin-toolbar">
             <div className="admin-search">
               <Field>
                 <FieldLabel htmlFor="admin-search" className="sr-only">
@@ -194,6 +198,7 @@ export default function Admin() {
               />
             )}
           </div>}
+          <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="tutors">
             {!matchingTutors.length && (
@@ -275,6 +280,7 @@ export default function Admin() {
                     </span>
                   </div>
                   <State value={u.status} />
+                  <CommunityLock owner={{...u,community_locked:Number(u.community_locked)}} />
                   {u.role !== "admin" && u.status === "active" && (
                     <Button
                       variant="outline"
