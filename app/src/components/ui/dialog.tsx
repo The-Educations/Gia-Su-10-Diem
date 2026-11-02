@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cn } from "cn"
 import { XIcon } from "lucide-react"
-import { Dialog as DialogPrimitive } from "@animate-ui/react/primitives/radix-ui"
+import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
 
@@ -37,7 +37,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50",
+        "fixed inset-0 z-50 bg-black/35",
         className
       )}
       {...props}
@@ -49,15 +49,31 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeDisabled = false,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  closeDisabled?: boolean
 }) {
+  const previousFocus = React.useRef<HTMLElement | null>(null)
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onOpenAutoFocus={(event) => {
+          previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (!event.defaultPrevented && previousFocus.current?.isConnected) {
+            event.preventDefault()
+            previousFocus.current.focus({ preventScroll: true })
+          }
+        }}
         className={cn(
           "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-none sm:max-w-lg",
           className
@@ -68,10 +84,11 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            disabled={closeDisabled}
+            className="absolute top-4 right-4 rounded-lg opacity-70 ring-offset-background transition-[background-color,opacity] hover:bg-accent hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">Đóng</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -109,7 +126,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="outline">Đóng</Button>
         </DialogPrimitive.Close>
       )}
     </div>
