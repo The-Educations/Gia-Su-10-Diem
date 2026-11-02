@@ -157,7 +157,7 @@ jobs:
   checks:
     name: Validate
     if: always() && (github.event_name != 'workflow_dispatch' || !inputs.inspect_cloudflare_builds)
-    needs: [build, browser, worker, inspect-builds]
+    needs: [build, browser, worker]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -166,17 +166,15 @@ jobs:
           BUILD_RESULT: ${{ needs.build.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
           WORKER_RESULT: ${{ needs.worker.result }}
-          INSPECT_RESULT: ${{ needs.inspect-builds.result }}
         run: |
           test "$BUILD_RESULT" = success
           test "$BROWSER_RESULT" = success
           test "$WORKER_RESULT" = success
-          test "$INSPECT_RESULT" = success || test "$INSPECT_RESULT" = skipped
 
   deploy:
     name: Deploy Cloudflare
     needs: checks
-    if: github.repository == 'The-Educations/Gia-Su-10-Diem' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: always() && needs.checks.result == 'success' && github.repository == 'The-Educations/Gia-Su-10-Diem' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
