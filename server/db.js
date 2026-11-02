@@ -1,3 +1,4 @@
+import { migrateCommunity } from "./community-schema.js";
 import {
   randomBytes,
   scrypt as scryptCallback,
@@ -118,6 +119,7 @@ export function migrateDatabase(db) {
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE,
     expires INTEGER NOT NULL, sent_at INTEGER NOT NULL, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL
   )`);
+  migrateCommunity(db);
   for (const table of ["slots", "bookings"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "duration_minutes"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60`);
@@ -161,6 +163,9 @@ export const publicUser = (u) =>
         name: u.name,
         email: u.email,
         timezone: u.timezone,
+        display_name: u.display_name,
+        community_locked: !!u.community_locked,
+        community_lock_reason: u.community_lock_reason,
         email_verified: !!u.email_verified_at,
         email_verification_required: !!u.email_verification_required && !u.email_verified_at,
         role: u.role,

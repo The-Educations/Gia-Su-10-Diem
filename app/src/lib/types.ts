@@ -8,6 +8,9 @@ export type EducationEntry = {
 };
 export type GalleryPhoto = { id: string; url: string; caption: string; created_at: string };
 export type User = {
+  display_name: string;
+  community_locked: boolean;
+  community_lock_reason: string;
   id: number;
   name: string;
   email: string;
@@ -135,3 +138,25 @@ export type Inquiry = {
 export const accountRole = (user: User) => user.role === "admin" ? "Quản trị viên" : user.role === "tutor" ? "Gia sư" : user.learner_type === "parent" ? "Phụ huynh" : "Học sinh";
 
 export type Post = { id: number; title: string; summary: string; body: string; published: number; published_at: string | null };
+
+export type CommunityAuthor = { label: string; name_part: string; tier: "student" | "parent" | "tutor" | "admin"; tutor_id?: number };
+export type CommunityPostData = {
+  id: number; public: boolean; kind: "user" | "announcement" | "rules"; title: string; body: string; body_html?: string;
+  author: CommunityAuthor; mine: boolean; solved: boolean; best_comment_id: number | null;
+  published_at: string | null; created_at: string; updated_at: string;
+  comment_count: number; helpful_count: number; following: boolean;
+  status?: "pending" | "approved" | "rejected" | "hidden" | "deleted";
+  review_note?: string; revision_title?: string | null; revision_body?: string | null; revision_body_html?: string;
+  revision_status?: "pending" | "rejected" | null; revision_note?: string;
+};
+export type CommunityComment = {
+  id: number; post_id: number; parent_id: number | null; body: string; author: CommunityAuthor | null;
+  removed: boolean; removed_by_admin: boolean; mine: boolean; edited: boolean; created_at: string;
+  helpful_count: number; helpful_by_me: boolean; replies?: CommunityComment[];
+};
+export type CommunityIdentity = { author: CommunityAuthor; needs_name: boolean };
+export type CommunitySummary = { pending: number; approved: number; hidden: number; reports: number };
+export type CommunityFeed = { rules: CommunityPostData | null; items: CommunityPostData[]; more: boolean };
+export type CommunityNotice = { id: number; kind: string; post_id: number; title: string; created_at: string; read_at: string | null };
+export type CommunityOwner = { id: number; name: string; email: string; community_locked: number; community_lock_reason: string };
+export type CommunityReview = CommunityPostData & { owner: CommunityOwner; review_version: number };

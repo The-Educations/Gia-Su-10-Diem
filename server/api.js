@@ -1,3 +1,5 @@
+import { registerCommunityImages } from "./community-images.js";
+import { registerCommunity } from "./community.js";
 import { registerTutorReview } from "./tutor-review.js";
 import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
@@ -61,7 +63,7 @@ export function createApi(
       if (
         !(
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && req.path === "/tutor/gallery")
+          (req.method === "POST" && ["/tutor/gallery", "/community/images"].includes(req.path))
         ) &&
         !req.is("application/json")
       )
@@ -210,6 +212,8 @@ export function createApi(
   registerUploads(app, db, auth, audit, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
+  registerCommunity(app, db, auth, audit);
+  registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
@@ -699,7 +703,7 @@ export function createApi(
       theme_catalog: themeCatalog,
       users: all(
         db,
-        "SELECT id,name,email,role,learner_type,status,demo,created_at FROM users ORDER BY id DESC",
+        "SELECT id,name,email,role,learner_type,status,demo,created_at,community_locked,community_lock_reason FROM users ORDER BY id DESC",
       ),
       tutors: all(
         db,
@@ -814,7 +818,7 @@ export function createApi(
   app.use((err, req, res, next) => {
     if (err instanceof z.ZodError)
       return res.status(400).json({
-        error: "Thông tin chưa hợp lệ. Kiểm tra các trường và thử lại.",
+        error: req.path.includes("/community/") ? err.issues.map(i => i.message).join(" ") : "Thông tin chưa hợp lệ. Kiểm tra các trường và thử lại.",
         fields: err.issues.map((i) => ({
           path: i.path.join("."),
           message: i.message,
