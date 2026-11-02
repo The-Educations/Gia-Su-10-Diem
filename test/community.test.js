@@ -789,7 +789,7 @@ test("rich posts sanitize HTML and keep uploaded images behind approval and revi
     second = await upload();
   assert.equal((await imageRequest(null, first)).status, 404);
   assert.equal((await imageRequest("other", first)).status, 404);
-  assert.equal((await imageRequest("admin", first)).status, 200);
+  assert.equal((await imageRequest("admin", first)).status, 404);
   const ownImage = await imageRequest("student", first);
   assert.equal(ownImage.headers.get("content-type"), "image/webp");
   assert.equal(ownImage.headers.get("cache-control"), "no-store");
@@ -933,4 +933,208 @@ test("rich content limits, links, image quota and legacy edits", async (t) => {
     (await imageRequest("student", "/api/community/images", bytes)).status,
     429,
   );
+});
+
+test("private drafts allow incomplete content, enforce ownership and versions, and publish once", async (t) => {
+  const { call, db, ids } = await fixture(t);
+  const create = await call("student", "/community/drafts", "POST", {
+    body_html:
+      "<p><strong>Ý tưởng học tập</strong></p><script>alert(1)</script>",
+  });
+  assert.equal(create.status, 201);
+  const draft = create.data;
+  assert.equal(draft.title, "");
+  assert.equal(draft.body_html, "<p><strong>Ý tưởng học tập</strong></p>");
+  for (const role of [null, "other", "admin"]) {
+    assert.equal(
+      (await call(role, `/community/drafts/${draft.id}`)).status,
+      role ? 404 : 401,
+    );
+    if (role) {
+      assert.equal(
+        (
+          await call(role, `/community/drafts/${draft.id}`, "PUT", {
+            version: 1,
+          })
+        ).status,
+        404,
+      );
+      assert.equal(
+        (
+          await call(role, `/community/drafts/${draft.id}`, "DELETE", {
+            version: 1,
+          })
+        ).status,
+        404,
+      );
+      assert.equal(
+        (await call(role, "/community/drafts")).data.items.length,
+        0,
+      );
+    }
+  }
+  assert.equal((await call("student", "/community/mine")).data.items.length, 0);
+  assert.equal((await call("admin", "/admin/community/queue")).data.length, 0);
+  assert.equal(
+    (await call(null, "/community/sitemap")).data.some(
+      (p) => p.title === draft.title,
+    ),
+    false,
+  );
+  const changed = await call(
+    "student",
+    `/community/drafts/${draft.id}`,
+    "PUT",
+    { title: "Học tập mỗi ngày", body_html: draft.body_html, version: 1 },
+  );
+  assert.equal(changed.status, 200);
+  assert.equal(changed.data.version, 2);
+  assert.equal(
+    (
+      await call("student", `/community/drafts/${draft.id}`, "PUT", {
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await call("student", `/community/drafts/${draft.id}`, "DELETE", {
+        version: 1,
+      })
+    ).status,
+    409,
+  );
+  const publish = {
+    title: changed.data.title,
+    body_html: changed.data.body_html,
+    draft_id: draft.id,
+    draft_version: 2,
+  };
+  assert.equal(
+    (
+      await call("student", "/community/posts", "POST", {
+        ...publish,
+        title: "",
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await call("student", `/community/drafts/${draft.id}`)).status,
+    200,
+  );
+  assert.equal(
+    (
+      await call("student", "/community/posts", "POST", {
+        ...publish,
+        draft_version: 1,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await call("other", "/community/posts", "POST", publish)).status,
+    404,
+  );
+  const posted = await call("student", "/community/posts", "POST", publish);
+  assert.equal(posted.status, 201);
+  assert.equal(posted.data.status, "pending");
+  assert.equal(
+    (await call("student", `/community/drafts/${draft.id}`)).status,
+    404,
+  );
+  assert.equal(
+    (await call("student", "/community/posts", "POST", publish)).status,
+    404,
+  );
+  assert.equal(
+    one(
+      db,
+      "SELECT COUNT(*) n FROM community_posts WHERE author_id=?",
+      ids.student,
+    ).n,
+    1,
+  );
+  for (const role of ["parent", "tutor", "pending", "admin"]) {
+    const d = await call(role, "/community/drafts", "POST", {
+      title: `Chia sẻ ${role}`,
+      body_html: "<p>Chia sẻ kiến thức.</p>",
+    });
+    assert.equal(d.status, 201);
+    const p = await call(role, "/community/posts", "POST", {
+      ...d.data,
+      draft_id: d.data.id,
+      draft_version: d.data.version,
+    });
+    assert.equal(p.status, 201);
+    assert.equal(p.data.status, role === "admin" ? "approved" : "pending");
+  }
+  const removable = await call("student", "/community/drafts", "POST", {});
+  run(db, "UPDATE users SET community_locked=1 WHERE id=?", ids.student);
+  assert.equal(
+    (await call("student", "/community/drafts", "POST", {})).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(
+        "student",
+        `/community/drafts/${removable.data.id}`,
+        "DELETE",
+        { version: 1 },
+      )
+    ).status,
+    200,
+  );
+});
+
+test("draft images stay private and survive upload cleanup until publication", async (t) => {
+  const { call, db, imageRequest } = await fixture(t);
+  const png = await sharp({
+    create: { width: 4, height: 4, channels: 3, background: "red" },
+  })
+    .png()
+    .toBuffer();
+  const upload = await imageRequest("student", "/api/community/images", png);
+  const { url } = await upload.json();
+  const imageId = url.split("/").at(-1);
+  const html = `<p>Học hình học</p><img src="${url}" alt="Hình học">`;
+  const draft = (
+    await call("student", "/community/drafts", "POST", {
+      title: "Học hình học",
+      body_html: html,
+    })
+  ).data;
+  assert.equal(
+    (await call("other", "/community/drafts", "POST", { body_html: html }))
+      .status,
+    400,
+  );
+  for (const who of [null, "other", "admin"])
+    assert.equal((await imageRequest(who, url)).status, 404);
+  run(
+    db,
+    "UPDATE community_images SET created_at=datetime('now','-2 days') WHERE id=?",
+    imageId,
+  );
+  assert.equal(
+    (await imageRequest("student", "/api/community/images", png)).status,
+    201,
+  );
+  assert.equal((await imageRequest("student", url)).status, 200);
+  const posted = await call("student", "/community/posts", "POST", {
+    ...draft,
+    draft_id: draft.id,
+    draft_version: 1,
+  });
+  assert.equal(posted.status, 201);
+  assert.equal((await imageRequest("admin", url)).status, 200);
+  assert.equal((await imageRequest(null, url)).status, 404);
+  await call(
+    "admin",
+    `/admin/community/posts/${posted.data.id}/approve`,
+    "POST",
+  );
+  assert.equal((await imageRequest(null, url)).status, 200);
 });

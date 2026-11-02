@@ -70,3 +70,12 @@ Kiểm chứng: typecheck/build đạt; **52/52 unit/API tests** đạt. Bộ br
 - Kiểm chứng local: typecheck/build, 54/54 unit/API tests, 4/4 luồng cộng đồng trên Chrome, Cloudflare local runtime gồm upload ảnh riêng tư và HTML đã làm sạch, dependency audit 0 lỗ hổng. Review độc lập không tìm thấy blocker XSS/quyền ảnh; đã sửa và kiểm thử trường hợp bản sửa chỉ có ảnh. DevTools kiểm tra soạn bài/chèn link ở 360 px, không tràn ngang.
 
 Tích hợp thêm `65d915b` từ main (lịch theo giờ, lịch học viên và duyệt/kho giao diện gia sư) trước khi phát hành. Giữ cả module cộng đồng và module duyệt mới, hợp nhất CSS và danh sách route riêng tư. Typecheck, build Cloudflare và **59/59 unit/API tests** đạt trên bản kết hợp.
+
+## Trang viết bài và bản nháp — 02/11/2026
+
+- Nút Đăng bài / Đăng thông báo ở bảng tin và trang quản trị mở `/app/community/write`. Trang có rich editor, Lưu nháp và gửi duyệt/công khai; quy tắc được thu gọn. Sửa bài đã gửi và sửa quy tắc giữ luồng hiện có.
+- Bản nháp lưu theo tài khoản trong bảng riêng, cho phép thiếu tiêu đề/nội dung và mở lại/xóa tại Bài của tôi. Giới hạn 100 nháp/tài khoản, phân trang 20 mục. Không đưa nháp vào bảng tin, hàng chờ duyệt hay sitemap; trang viết có `noindex`.
+- Phiên bản nháp ngăn ghi đè/xóa từ tab cũ. Gửi bài kiểm tra phiên bản, tạo bài và xóa nháp trong cùng giao dịch; lỗi kiểm tra nội dung không làm mất nháp. Bài thành viên vẫn chờ duyệt, thông báo admin công khai ngay.
+- Ảnh được bản nháp tham chiếu không bị dọn sau 24 giờ. Chỉ chủ ảnh xem được ảnh chưa gửi; admin chỉ xem thêm ảnh đã gắn với bài/bản sửa để kiểm duyệt. Đây là cập nhật quyền ảnh so với phiên bản trước.
+- Router dùng `createBrowserRouter` với cùng basename và các route hiện có để hỗ trợ `useBlocker`: điều hướng nội bộ và nút Back/Forward hỏi trước khi bỏ phần chưa lưu; tải lại/đóng tab dùng cảnh báo của trình duyệt. Lưu nháp là thao tác chủ động, không tự động lưu.
+- Kiểm chứng: 61 unit/API tests; kiểm thử trình duyệt cho lưu nháp chưa có tiêu đề, rich text qua reload, Back giữ nội dung, mở lại và gửi ở cả bốn vai trò; Cloudflare local runtime kiểm tra tạo/sửa/đọc nháp, phiên bản cũ và gửi nháp. DevTools mobile 360 px không tràn ngang, không lỗi/warning console.

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Clock, Flag, FileText, EyeOff, RotateCw } from "lucide-react";
 import { WorkspaceStats } from "@/components/workspace";
 import { useLoad } from "@/lib/api";
@@ -20,6 +20,7 @@ import ActionDialog, {
 import { postStates, PostBody } from "@/components/community/shared";
 
 export function CommunityLock({ owner }: { owner: CommunityOwner }) {
+  const navigate = useNavigate();
   const [action, setAction] = useState<CommunityAction | null>(null);
   return (
     <>
@@ -94,8 +95,9 @@ export default function AdminCommunity() {
     for (const [key, value] of Object.entries(values)) next.set(key, value);
     setParams(next);
   };
+  const navigate = useNavigate();
   const [action, setAction] = useState<CommunityAction | null>(null),
-    [editor, setEditor] = useState<"announcement" | "rules" | null>(null);
+    [editor, setEditor] = useState<"rules" | null>(null);
   const summary = useLoad<CommunitySummary>("/admin/community/summary");
   const queue = useLoad<CommunityReview[]>(
       tab === "queue" ? "/admin/community/queue" : null,
@@ -146,7 +148,7 @@ export default function AdminCommunity() {
           >
             <RotateCw />
           </Button>
-          <Button onClick={() => setEditor("announcement")}>
+          <Button onClick={() => navigate("/community/write")}>
             Đăng thông báo
           </Button>
         </div>
@@ -431,12 +433,8 @@ export default function AdminCommunity() {
       </Tabs>
       {editor && (
         <Compose
-          post={editor === "rules" ? rules.data! : undefined}
-          endpoint={
-            editor === "rules"
-              ? "/admin/community/rules"
-              : "/admin/community/posts"
-          }
+          post={rules.data!}
+          endpoint="/admin/community/rules"
           close={() => setEditor(null)}
           saved={() => {}}
         />

@@ -56,12 +56,9 @@ export function registerCommunityImages(app, db, auth, processPhoto) {
         data = await processPhoto(req.body, true);
         if (data.length > UPLOAD_LIMIT) throw new Error();
       } catch {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Dùng ảnh JPG, PNG hoặc WebP, tối đa 5 MB và 16 triệu pixel.",
-          });
+        return res.status(400).json({
+          error: "Dùng ảnh JPG, PNG hoặc WebP, tối đa 5 MB và 16 triệu pixel.",
+        });
       }
       const id = transaction(db, () => {
         if (
@@ -74,10 +71,10 @@ export function registerCommunityImages(app, db, auth, processPhoto) {
           throw Object.assign(new Error("Quyền đăng bài đang bị khóa."), {
             status: 403,
           });
-        // Abandoned draft uploads expire; images referenced by posts or revisions remain.
+        // Unsaved uploads expire; saved drafts, posts and revisions retain their images.
         run(
           db,
-          "DELETE FROM community_images WHERE author_id=? AND created_at<datetime('now','-1 day') AND id NOT IN (SELECT image_id FROM community_post_images)",
+          "DELETE FROM community_images WHERE author_id=? AND created_at<datetime('now','-1 day') AND id NOT IN (SELECT image_id FROM community_post_images) AND id NOT IN (SELECT image_id FROM community_draft_images)",
           req.user.id,
         );
         if (
@@ -135,7 +132,12 @@ export function registerCommunityImages(app, db, auth, processPhoto) {
       !(
         publicImage ||
         req.user?.id === file.author_id ||
-        req.user?.role === "admin"
+        (req.user?.role === "admin" &&
+          one(
+            db,
+            "SELECT 1 FROM community_post_images WHERE image_id=?",
+            req.params.id,
+          ))
       )
     )
       return res.status(404).json({ error: "Ảnh không có sẵn." });

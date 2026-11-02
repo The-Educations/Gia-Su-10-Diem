@@ -2876,3 +2876,19 @@ main {
   .tutor-review-actions, .tutor-review-body { padding-inline: 16px; }
   .theme-inventory-grid { grid-template-columns: 1fr; }
 }
+
+.community-write { display: grid; gap: 24px; }
+.community-write h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 650; letter-spacing: -.025em; }
+.community-write-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.community-write-header > span, .community-draft-card time, .community-drafts-empty { color: var(--muted-foreground); font-size: .8125rem; }
+.community-write .community-editor-content { min-height: 360px; max-height: none; }
+.community-draft-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.community-draft-card > div { min-width: 0; overflow-wrap: anywhere; }
+.community-draft-card h3 { font-weight: 600; }
+.community-draft-card h3 a:hover { text-decoration: underline; }
+.community-draft-card time { display: block; margin-top: 6px; }
+.community-drafts-empty { padding-block: 8px; }
+@media (max-width: 480px) {
+  .community-write .community-editor-content { min-height: 300px; }
+  .community-write .community-compose-footer > button { flex: 1; }
+}
