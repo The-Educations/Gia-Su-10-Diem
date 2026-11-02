@@ -49,6 +49,54 @@ const SettingsPage = lazy(() => import("./pages/Settings"));
 const TutorStudio = lazy(() => import("./pages/TutorStudio"));
 const Admin = lazy(() => import("./pages/Admin"));
 const roles = { student: "Học sinh", tutor: "Gia sư", admin: "Quản trị viên" };
+const VN_ZONE = "Asia/Ho_Chi_Minh";
+function zoneClock(zone: string, now: Date) {
+  const offset =
+    new Intl.DateTimeFormat("en", { timeZone: zone, timeZoneName: "shortOffset" })
+      .formatToParts(now)
+      .find((p) => p.type === "timeZoneName")
+      ?.value.replace("GMT", "UTC") || "";
+  return {
+    offset: offset === "UTC" ? "UTC+0" : offset,
+    time: new Intl.DateTimeFormat("vi-VN", {
+      timeZone: zone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(now),
+  };
+}
+function TimeZones() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  const vn = zoneClock(VN_ZONE, now);
+  let local: ReturnType<typeof zoneClock> | null = null,
+    place = "";
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (zone && zone !== VN_ZONE) {
+      local = zoneClock(zone, now);
+      place = zone.split("/").pop()!.replace(/_/g, " ");
+    }
+  } catch {
+    local = null;
+  }
+  return (
+    <>
+      <span className="time-zone">
+        {vn.time} · Giờ Việt Nam · {vn.offset}
+      </span>
+      {local && local.offset !== vn.offset && (
+        <span className="time-zone">
+          {local.time} · {place} · {local.offset}
+        </span>
+      )}
+    </>
+  );
+}
 function Require({
   role,
   children,
@@ -209,7 +257,7 @@ function Shell() {
             {nav.find((n) => n.to === loc.pathname)?.label || "Gia Sư 10 Điểm"}
           </span>
           <div className="topbar-right">
-            <span className="time-zone">Giờ Việt Nam · UTC+7</span>
+            <TimeZones />
             {user?.demo && (
               <span className="demo-indicator">Tài khoản mẫu</span>
             )}

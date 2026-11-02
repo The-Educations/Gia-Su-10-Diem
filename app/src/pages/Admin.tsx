@@ -233,7 +233,7 @@ export default function Admin() {
                       setTutor(t);
                     }}
                   >
-                    Xem & duyệt
+                    {t.status === "approved" ? "Đã duyệt / Sửa quyền" : "Xem & duyệt"}
                   </Button>
                 </article>
               ))}
@@ -605,7 +605,7 @@ export default function Admin() {
               {error && <ErrorState error={error} />}
               <div className="actions">
                 <Button type="submit" value="approved" disabled={busy}>
-                  Duyệt & công bố
+                  {tutor?.status === "approved" ? "Lưu ghi chú, giữ công bố" : "Duyệt & công bố"}
                 </Button>
                 <Button
                   type="submit"
@@ -613,7 +613,7 @@ export default function Admin() {
                   value="rejected"
                   disabled={busy}
                 >
-                  Yêu cầu bổ sung
+                  {tutor?.status === "approved" ? "Thu hồi, yêu cầu bổ sung" : "Yêu cầu bổ sung"}
                 </Button>
               </div>
             </FieldGroup>
