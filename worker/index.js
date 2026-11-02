@@ -99,7 +99,9 @@ export default {
       if (url.pathname === "/sitemap.xml") {
         const posts = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL("/api/posts", request.url)));
         if (!posts.ok) return new Response("Temporarily unavailable", { status: 503 });
-        content = newsSitemap(await posts.json());
+        const community = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL("/api/community/sitemap", request.url)));
+        if (!community.ok) return new Response("Temporarily unavailable", { status: 503 });
+        content = newsSitemap(await posts.json(), await community.json());
       }
       return new Response(content, {
         headers: { "Content-Type": url.pathname === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8", "Cache-Control": "public, max-age=300" },
@@ -147,11 +149,18 @@ export default {
         if (result.ok) post = await result.json();
         else if (result.status !== 404) return new Response("Temporarily unavailable", { status: 503 });
       }
-      const seo = pageSeo(url.pathname, post);
+      const communityMatch = url.pathname.match(/^\/app\/community\/(\d+)$/);
+      let community = null;
+      if (communityMatch) {
+        const result = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL(`/api/community/posts/${communityMatch[1]}`, request.url)));
+        if (result.ok) community = await result.json();
+        else if (result.status !== 404) return new Response("Temporarily unavailable", { status: 503 });
+      }
+      const seo = pageSeo(url.pathname, post, community);
       headers.set("X-Robots-Tag", seo.robots);
       headers.delete("Content-Length");
       headers.delete("ETag");
-      return new Response(renderSeo(await response.text(), url.pathname, post), {
+      return new Response(renderSeo(await response.text(), url.pathname, post, community), {
         status: response.ok ? seo.status : response.status, headers,
       });
     }

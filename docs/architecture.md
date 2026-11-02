@@ -157,3 +157,9 @@ Google OAuth và adapter Cloudflare: `server/google-auth.js`, `server/local-db.j
 New UI registrations omit role; new Google identities start at onboarding step 0. Step 0 explicitly chooses student, parent or tutor. Parent maps to student permissions plus `learner_type=parent`; existing users default to `student` learner type without changing their role or onboarding progress. Legacy email API role input remains supported.
 
 `server/posts.js` provides published-only `GET /api/posts` and `GET /api/posts/:id`, plus admin-only list/create/update at `/api/admin/posts`. Saving an unchecked publication box returns a post to draft. Bodies render as React text, never HTML. Published articles receive canonical metadata on both Node and Worker HTML responses and enter the sitemap; unpublished/missing articles return 404 with noindex. Lists currently return all rows, matching the existing small-marketplace API.
+
+### Cộng đồng (2026-11-02)
+
+`server/community-schema.js` được gọi từ migration chung, bổ sung `users.display_name`, khóa quyền cộng đồng và sáu bảng `community_*`; độc lập với Tin tức. `community.js` quản lý public/member routes; `community-admin.js` quản lý kiểm duyệt/audit; `community-policy.js` giữ kiểm tra liên hệ, nhãn tác giả và giới hạn. API công khai chỉ phát danh tính công khai, không trả ID/email/họ tên thật của học sinh, phụ huynh hoặc gia sư chưa duyệt. Bản sửa chờ duyệt nằm riêng trên bài, không thay bản công khai.
+
+Routes SPA `/community`, `/community/:id`, `/community/mine`; admin có tab Cộng đồng. Chỉ số thông báo được tải theo điều hướng/visibilitychange, không polling. Node/Worker cùng trả metadata, JSON-LD, sitemap theo trạng thái công khai. Xem [bàn giao và mặc định đề xuất](community-implementation.md).

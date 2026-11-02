@@ -53,3 +53,7 @@ console.log('Production serves the verified build and current account/admin endp
 
 const { verifySeo } = await import('./seo-routing.mjs');
 await verifySeo(canonical);
+
+const communityFeed = await fetch(canonical + "/api/community/posts");
+assert.equal(communityFeed.status, 200);
+assert.equal((await communityFeed.json()).rules.kind, "rules");

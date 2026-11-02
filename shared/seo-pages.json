@@ -22,5 +22,9 @@
   "/app/news": {
     "title": "Tin tức học tập | Gia Sư 10 Điểm",
     "description": "Bài viết, kinh nghiệm học tập và tin tức từ Gia Sư 10 Điểm dành cho học sinh, phụ huynh và gia sư."
+  },
+  "/app/community": {
+    "title": "Cộng đồng | Gia Sư 10 Điểm",
+    "description": "Hỏi ý kiến chọn gia sư, chia sẻ kinh nghiệm học tập và cùng trao đổi với học sinh, phụ huynh, gia sư."
   }
 }
