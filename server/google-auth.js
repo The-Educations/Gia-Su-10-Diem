@@ -101,7 +101,7 @@ export function registerGoogleAuth(
       tokenHash(browser),
       verifier,
       nonce,
-      req.query.role === "tutor" ? "tutor" : "student",
+      "student",
       safeNext(req.query.next),
       linking ? req.user.id : null,
       Date.now() + 10 * 60000,
@@ -222,7 +222,7 @@ export function registerGoogleAuth(
         const role =
           isGoogleAdmin(email, adminEmail)
             ? "admin"
-            : state.role;
+            : "student";
         const id = Number(
           run(
             db,
@@ -233,8 +233,6 @@ export function registerGoogleAuth(
             role === "admin" ? 3 : 0,
           ).lastInsertRowid,
         );
-        if (role === "tutor")
-          run(db, "INSERT INTO tutors(user_id) VALUES (?)", id);
         run(
           db,
           "INSERT INTO oauth_identities VALUES ('google',?,?)",

@@ -26,7 +26,7 @@ import { Badge } from "./ui/badge";
 import { statusNames } from "@/lib/api";
 export function Page({ children }: { children: ReactNode }) {
   return (
-    <Slide className="page" direction="up" offset={16}>
+    <Slide className="page" direction="up" offset={8}>
       {children}
     </Slide>
   );

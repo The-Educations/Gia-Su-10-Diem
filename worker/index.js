@@ -1,4 +1,4 @@
-import { pageSeo, renderSeo, robots, sitemap } from "../server/seo.js";
+import { pageSeo, renderSeo, robots, newsSitemap } from "../server/seo.js";
 import { DurableObject } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import { createServer } from "node:http";
@@ -93,7 +93,13 @@ export default {
       return Response.redirect(url.origin + "/", 302);
     if (url.pathname === "/index.html") return Response.redirect(url.origin + "/", 308);
     if (["/robots.txt", "/sitemap.xml"].includes(url.pathname)) {
-      return new Response(url.pathname === "/robots.txt" ? robots : sitemap, {
+      let content = robots;
+      if (url.pathname === "/sitemap.xml") {
+        const posts = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL("/api/posts", request.url)));
+        if (!posts.ok) return new Response("Temporarily unavailable", { status: 503 });
+        content = newsSitemap(await posts.json());
+      }
+      return new Response(content, {
         headers: { "Content-Type": url.pathname === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8", "Cache-Control": "public, max-age=300" },
       });
     }
@@ -132,11 +138,18 @@ export default {
     )
       headers.set("Cache-Control", "no-cache");
     if (headers.get("content-type")?.includes("text/html")) {
-      const seo = pageSeo(url.pathname);
+      const match = url.pathname.match(/^\/app\/news\/(\d+)$/);
+      let post = null;
+      if (match) {
+        const result = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL(`/api/posts/${match[1]}`, request.url)));
+        if (result.ok) post = await result.json();
+        else if (result.status !== 404) return new Response("Temporarily unavailable", { status: 503 });
+      }
+      const seo = pageSeo(url.pathname, post);
       headers.set("X-Robots-Tag", seo.robots);
       headers.delete("Content-Length");
       headers.delete("ETag");
-      return new Response(renderSeo(await response.text(), url.pathname), {
+      return new Response(renderSeo(await response.text(), url.pathname, post), {
         status: response.ok ? seo.status : response.status, headers,
       });
     }

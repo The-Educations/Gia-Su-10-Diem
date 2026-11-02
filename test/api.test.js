@@ -1073,3 +1073,45 @@ test("only administrators can promote active accounts, with session revocation a
   assert.equal((await learner.request("/bookings", "POST", { slot_id: slot.id, subject_id: "toan", mode: "online", note: "" })).status, 400);
   assert.equal((await learner.request("/inquiries", "POST", { tutor_id: tutorUser.id, body: "Xin hỏi lịch học" })).status, 404);
 });
+
+test("parent setup is distinct, resumable and shares student permissions", async (t) => {
+  const { client } = await fixture(t), parent = client();
+  let r = await parent.request("/auth/register", "POST", { name: "Phụ huynh", email: "parent@test.vn", password: "TestStudy2026!" });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.user.onboarding_step, 0);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 0, role: "admin" })).status, 400);
+  r = await parent.request("/account/onboarding", "PUT", { step: 0, role: "parent" });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.user.role, "student");
+  assert.equal(r.data.user.learner_type, "parent");
+  assert.equal((await parent.request("/auth/me")).data.user.learner_type, "parent");
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", goal: "Con ôn Toán lớp 9" })).status, 200);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 2 })).status, 200);
+  assert.equal((await parent.request("/favorites")).status, 200);
+  assert.equal((await parent.request("/bookings")).status, 200);
+  assert.equal((await parent.request("/admin")).status, 403);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 0, role: "tutor" })).status, 409);
+});
+
+test("news authoring is admin-only and drafts never leak publicly", async (t) => {
+  const { client } = await fixture(t), admin = client(), student = client(), guest = client();
+  await admin.login("admin"); await student.login("student");
+  const post = { title: "Học Toán", summary: "Kinh nghiệm học", body: '<script>alert("test")</script>\nNội dung', published: false };
+  assert.equal((await guest.request("/admin/posts", "POST", post)).status, 401);
+  assert.equal((await student.request("/admin/posts", "POST", post)).status, 403);
+  assert.equal((await guest.request("/admin/posts")).status, 401);
+  assert.equal((await student.request("/admin/posts")).status, 403);
+  assert.equal((await admin.request("/admin/posts", "POST", { ...post, title: " " })).status, 400);
+  const created = await admin.request("/admin/posts", "POST", post);
+  assert.equal(created.status, 201);
+  const id = created.data.id;
+  assert.equal((await guest.request(`/posts/${id}`)).status, 404);
+  assert.equal((await guest.request("/posts")).data.length, 0);
+  assert.equal((await student.request(`/admin/posts/${id}`, "PUT", { ...post, published: true })).status, 403);
+  assert.equal((await admin.request(`/admin/posts/${id}`, "PUT", { ...post, published: true })).status, 200);
+  assert.equal((await guest.request(`/posts/${id}`)).data.body, post.body);
+  assert.equal((await guest.request("/posts")).data.length, 1);
+  assert.equal((await admin.request(`/admin/posts/${id}`, "PUT", post)).status, 200);
+  assert.equal((await guest.request(`/posts/${id}`)).status, 404);
+  assert.equal((await guest.request("/posts")).data.length, 0);
+});

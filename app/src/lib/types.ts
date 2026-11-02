@@ -4,6 +4,7 @@ export type User = {
   name: string;
   email: string;
   role: "student" | "tutor" | "admin";
+  learner_type: "student" | "parent";
   goal: string;
   demo: boolean;
   onboarding_step: number;
@@ -106,3 +107,7 @@ export type Inquiry = {
   created_at: string;
   last_message: string;
 };
+
+export const accountRole = (user: User) => user.role === "admin" ? "Quản trị viên" : user.role === "tutor" ? "Gia sư" : user.learner_type === "parent" ? "Phụ huynh" : "Học sinh";
+
+export type Post = { id: number; title: string; summary: string; body: string; published: number; published_at: string | null };

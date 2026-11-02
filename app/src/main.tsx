@@ -1,3 +1,4 @@
+import { accountRole } from "@/lib/types";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -12,6 +13,7 @@ import {
 import { AnimateUIProvider } from "@animate-ui/react/provider";
 import {
   BookOpen,
+  Newspaper,
   Users,
   CalendarDays,
   MessageCircle,
@@ -42,6 +44,7 @@ import "./styles.css";
 import { PageMetadata } from "./components/page-metadata";
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
+const News = lazy(() => import("./pages/News"));
 const Library = lazy(() => import("./pages/Library"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -51,7 +54,7 @@ const Messages = lazy(() => import("./pages/Messages"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
 const TutorStudio = lazy(() => import("./pages/TutorStudio"));
 const Admin = lazy(() => import("./pages/Admin"));
-const roles = { student: "Học sinh", tutor: "Gia sư", admin: "Quản trị viên" };
+
 function Require({
   role,
   children,
@@ -76,7 +79,7 @@ function Require({
   return children;
 }
 function Shell() {
-  const { user, loading, setUser, refresh } = useApp(),
+  const { user, setUser, refresh } = useApp(),
     loc = useLocation(),
     [open, setOpen] = useState(false),
     [collapsed, setCollapsed] = useState(() => {
@@ -113,7 +116,7 @@ function Shell() {
                 ? "Quản lý buổi học"
                 : user.role === "tutor"
                   ? "Lịch dạy & yêu cầu"
-                  : "Lịch học của tôi",
+                  : user.learner_type === "parent" ? "Lịch học của con" : "Lịch học của tôi",
             icon: CalendarDays,
           },
           {
@@ -130,26 +133,39 @@ function Shell() {
       ? [{ to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
       : []),
     { to: "/tutors", label: "Tìm gia sư", icon: Users },
-    { to: "/library", label: "Môn học & kỳ thi", icon: BookOpen },
+    { to: "/library", label: "Tìm môn học", icon: BookOpen },
+    { to: "/news", label: "Tin tức", icon: Newspaper },
   ];
   const navigation = (
     <>
-      <Link className="brand" to="/tutors" aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={() => setOpen(false)}>
-        <span className="brand-mark">
-          10<span>đ</span>
-        </span>
-        <span className="nav-label">
-          Gia Sư
-          <br />
-          <strong>10 Điểm</strong>
-        </span>
-      </Link>
+      <div className="sidebar-header">
+        <Link className="brand" to={user ? user.role === "admin" ? "/admin" : "/workspace" : "/tutors"} aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={() => setOpen(false)}>
+          <span className="brand-mark">10<span>đ</span></span>
+          <span className="nav-label">Gia Sư<br /><strong>10 Điểm</strong></span>
+        </Link>
+        <Button
+          className="sidebar-toggle"
+          variant="ghost"
+          size="icon"
+          aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+          title={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+          aria-expanded={!collapsed}
+          aria-controls="desktop-navigation"
+          onClick={() => setCollapsed((value) => !value)}
+        >
+          <PanelLeft aria-hidden="true" />
+          <span className="nav-label">Thu gọn</span>
+        </Button>
+      </div>
       <nav aria-label="Điều hướng chính">
         {nav.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
+          <React.Fragment key={to}>
+          {user && to === "/tutors" && <div className="nav-divider" aria-hidden="true" />}
+          <NavLink to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
             <Icon size={19} aria-hidden="true" />
             <span className="nav-label">{label}</span>
           </NavLink>
+          </React.Fragment>
         ))}
       </nav>
       <div className="sidebar-bottom">
@@ -163,7 +179,7 @@ function Shell() {
               <Person name={user.name} id={user.id} />
               <span className="nav-label">
                 <strong>{user.name}</strong>
-                <small>{roles[user.role]}</small>
+                <small>{accountRole(user)}</small>
               </span>
             </Link>
             <Button
@@ -188,9 +204,9 @@ function Shell() {
           </>
         ) : (
           <Button asChild className="sidebar-action">
-            <Link to="/auth" aria-label="Đăng nhập" title="Đăng nhập" onClick={() => setOpen(false)}>
+            <Link to="/auth" aria-label="Tài khoản" title="Tài khoản" onClick={() => setOpen(false)}>
               <LogIn data-icon="inline-start" />
-              <span className="nav-label">Đăng nhập</span>
+              <span className="nav-label">Tài khoản</span>
             </Link>
           </Button>
         )}
@@ -207,18 +223,6 @@ function Shell() {
       <div className="app-body">
         <header className="topbar">
           <div className="topbar-leading">
-            <Button
-              className="sidebar-toggle"
-              variant="ghost"
-              size="icon"
-              aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
-              title={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
-              aria-expanded={!collapsed}
-              aria-controls="desktop-navigation"
-              onClick={() => setCollapsed((value) => !value)}
-            >
-              <PanelLeft />
-            </Button>
           <div className="mobile-brand">
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
@@ -244,18 +248,7 @@ function Shell() {
             {user?.demo && (
               <span className="demo-indicator">Tài khoản mẫu</span>
             )}
-            {user ? (
-              <Person name={user.name} id={user.id} />
-            ) : (
-              !loading && (
-                <Button asChild variant="outline">
-                  <Link to="/auth?mode=register">
-                    Tạo tài khoản
-                    <ArrowUpRight data-icon="inline-end" />
-                  </Link>
-                </Button>
-              )
-            )}
+            {user && <Person name={user.name} id={user.id} />}
           </div>
         </header>
         <main id="main" tabIndex={-1}>
@@ -265,6 +258,8 @@ function Shell() {
                 <Route path="/" element={<Navigate to="/tutors" replace />} />
                 <Route path="/tutors" element={<Tutors />} />
                 <Route path="/tutors/:id" element={<TutorDetail />} />
+                <Route path="/news" element={<News />} />
+                <Route path="/news/:id" element={<News />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/onboarding" element={<Require><Onboarding /></Require>} />

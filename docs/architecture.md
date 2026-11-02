@@ -68,7 +68,8 @@ Tên `Library`, `ResourceEditor` và API `resources` được giữ từ scaffol
 
 | Bảng | Dữ liệu chính / quan hệ |
 | --- | --- |
-| `users` | Tên, email duy nhất, password hash, role, active/suspended, mục tiêu, nhãn demo |
+| `users` | Tên, email duy nhất, password hash, role, learner_type (student/parent), onboarding_step, active/suspended, mục tiêu, nhãn demo |
+| `posts` | Tiêu đề, tóm tắt, nội dung văn bản, trạng thái công khai, tác giả và thời gian |
 | `sessions` | Hash token, user, thời hạn phiên |
 | `subjects` | Mã môn, tên, cấp học, mô tả |
 | `tutors` | 1:1 với user tutor; profile, giá, mode, subject IDs, levels và goals dạng JSON, trạng thái duyệt |
@@ -150,3 +151,9 @@ Studio lưu tab trong `?tab=files|profile|slots`; panel `forceMount` giữ draft
 Calendar highlight và studio panel motion được clip tại container với khoảng dư cho focus outline, tránh tràn ngang khi resize hoặc chuyển tab. Primitive Animate UI tôn trọng reduced motion.
 
 Google OAuth và adapter Cloudflare: `server/google-auth.js`, `server/local-db.js`, `worker/index.js`. Schema bổ sung `oauth_identities`, `oauth_states`, `upload_chunks`; local schema version 3.
+
+### Account entry and news (2026-11-02)
+
+New UI registrations omit role; new Google identities start at onboarding step 0. Step 0 explicitly chooses student, parent or tutor. Parent maps to student permissions plus `learner_type=parent`; existing users default to `student` learner type without changing their role or onboarding progress. Legacy email API role input remains supported.
+
+`server/posts.js` provides published-only `GET /api/posts` and `GET /api/posts/:id`, plus admin-only list/create/update at `/api/admin/posts`. Saving an unchecked publication box returns a post to draft. Bodies render as React text, never HTML. Published articles receive canonical metadata on both Node and Worker HTML responses and enter the sitemap; unpublished/missing articles return 404 with noindex. Lists currently return all rows, matching the existing small-marketplace API.

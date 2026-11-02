@@ -1,3 +1,5 @@
+import AdminPosts from "./AdminPosts";
+import { accountRole } from "@/lib/types";
 import { TutorGallery } from "@/components/tutor-gallery";
 import { WorkspaceStats } from "@/components/workspace";
 import { useState } from "react";
@@ -42,7 +44,7 @@ import {
 import ResourceEditor from "./ResourceEditor";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["tutors", "users", "resources", "subjects", "audit"].includes(
+  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
@@ -155,9 +157,10 @@ export default function Admin() {
             <TabsTrigger value="users">Tài khoản</TabsTrigger>
             <TabsTrigger value="resources">Kỳ thi</TabsTrigger>
             <TabsTrigger value="subjects">Môn học</TabsTrigger>
+            <TabsTrigger value="posts">Tin tức</TabsTrigger>
             <TabsTrigger value="audit">Nhật ký</TabsTrigger>
           </TabsList>
-          <div className="admin-toolbar">
+          {tab !== "posts" && <div className="admin-toolbar">
             <div className="admin-search">
               <Field>
                 <FieldLabel htmlFor="admin-search" className="sr-only">
@@ -187,7 +190,8 @@ export default function Admin() {
                 ]}
               />
             )}
-          </div>
+          </div>}
+          <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="tutors">
             {!matchingTutors.length && (
               <Blank
@@ -264,11 +268,7 @@ export default function Admin() {
                     <h2>{u.name}</h2>
                     <p>{u.email}</p>
                     <span>
-                      {u.role === "student"
-                        ? "Học sinh"
-                        : u.role === "tutor"
-                          ? "Gia sư"
-                          : "Quản trị viên"}
+                      {accountRole(u)}
                       {u.demo ? " · Tài khoản mẫu" : ""}
                     </span>
                   </div>

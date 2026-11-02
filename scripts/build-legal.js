@@ -8,7 +8,7 @@ const pages = {
     content: `
 <p>Chính sách này giải thích cách Gia Sư 10 Điểm xử lý thông tin khi bạn sử dụng giasudiem10.online. Liên hệ về dữ liệu cá nhân: ${contact}.</p>
 <h2>Thông tin được thu thập</h2>
-<p>Chúng tôi lưu thông tin bạn cung cấp khi tạo và sử dụng tài khoản: tên, email, vai trò học sinh hoặc gia sư, mục tiêu học tập, hồ sơ gia sư, môn học, học phí, địa điểm, giờ trống, ảnh và CV bạn tải lên. Mật khẩu đăng ký trực tiếp được lưu dưới dạng băm, không ở dạng văn bản đọc được.</p>
+<p>Chúng tôi lưu thông tin bạn cung cấp khi tạo và sử dụng tài khoản: tên, email, lựa chọn học sinh, phụ huynh hoặc gia sư, mục tiêu học tập của bạn hoặc của con, hồ sơ gia sư, môn học, học phí, địa điểm, giờ trống, ảnh và CV bạn tải lên. Mật khẩu đăng ký trực tiếp được lưu dưới dạng băm, không ở dạng văn bản đọc được.</p>
 <p>Hoạt động trên nền tảng gồm lịch đặt học, trạng thái buổi học, tin nhắn, gia sư đã lưu, đánh giá, lượt thích và bình luận. Hệ thống cũng xử lý cookie phiên đăng nhập, địa chỉ IP để giới hạn yêu cầu và nhật ký quản trị phục vụ bảo mật.</p>
 <h2>Đăng nhập bằng Google</h2>
 <p>Khi bạn chọn đăng nhập bằng Google, ứng dụng yêu cầu thông tin nhận dạng cơ bản với các phạm vi openid, email và profile. Chúng tôi dùng mã định danh Google, tên và email đã xác minh để tạo, đăng nhập hoặc liên kết tài khoản theo lựa chọn của bạn. Ứng dụng không yêu cầu quyền đọc Gmail, Google Drive, danh bạ hay lịch của bạn và không lưu access token hoặc refresh token của Google sau bước đăng nhập.</p>
@@ -16,7 +16,7 @@ const pages = {
 <h2>Mục đích sử dụng</h2>
 <p>Thông tin được dùng để xác thực tài khoản, tìm và kết nối gia sư, xử lý lịch học, trao đổi tin nhắn, hiển thị hồ sơ và nội dung bạn công bố, hỗ trợ người dùng, kiểm duyệt và ngăn chặn lạm dụng. Dữ liệu nhận từ Google được dùng cho việc nhận dạng và quản lý tài khoản, không phục vụ quảng cáo cá nhân hóa.</p>
 <h2>Ai có thể xem thông tin</h2>
-<p>Hồ sơ gia sư đã được duyệt, ảnh và CV công khai, đánh giá và bình luận công khai có thể được người khác xem. Không tải thông tin nhạy cảm hoặc thông tin của người khác vào các nội dung công khai nếu chưa có quyền chia sẻ.</p>
+<p>Bài viết do quản trị viên công bố, hồ sơ gia sư đã được duyệt, ảnh và CV công khai, đánh giá và bình luận công khai có thể được người khác xem. Không tải thông tin nhạy cảm hoặc thông tin của người khác vào các nội dung công khai nếu chưa có quyền chia sẻ.</p>
 <p>Tin nhắn và thông tin lịch học được cung cấp cho các bên liên quan. Quản trị viên có thể xem dữ liệu cần thiết để quản lý nền tảng, giải quyết yêu cầu hỗ trợ và kiểm duyệt. Cloudflare cung cấp hạ tầng lưu trữ, xử lý và bảo vệ website; Google xử lý bước đăng nhập khi bạn lựa chọn sử dụng. Hạ tầng của các nhà cung cấp có thể xử lý dữ liệu ngoài quốc gia bạn đang ở.</p>
 <h2>Cookie và bộ nhớ trình duyệt</h2>
 <p>Cookie cần thiết duy trì phiên đăng nhập và bảo vệ quá trình đăng nhập Google. Bộ nhớ trình duyệt lưu lựa chọn giao diện như trạng thái thu gọn thanh điều hướng. Bạn có thể xóa chúng trong trình duyệt; xóa cookie đăng nhập sẽ yêu cầu bạn đăng nhập lại. Nhà cung cấp hạ tầng có thể xử lý thông tin kỹ thuật và lưu lượng để bảo vệ và vận hành dịch vụ.</p>
