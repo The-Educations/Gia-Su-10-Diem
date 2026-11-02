@@ -9,7 +9,7 @@ test("only the public entry and policy pages are indexable and included in the s
     assert.ok(sitemap.includes(`<loc>https://giasudiem10.online${path}</loc>`));
   }
   assert.equal((sitemap.match(/<loc>/g) || []).length, 7);
-  for (const path of ["/app/auth", "/app/onboarding", "/app/admin", "/app/workspace", "/app/messages", "/app/settings", "/app/studio", "/app/bookings", "/app/favorites", "/app/tutors/3"]) {
+  for (const path of ["/app/auth", "/app/onboarding", "/app/admin", "/app/workspace", "/app/messages", "/app/settings", "/app/studio", "/app/bookings", "/app/calendar", "/app/favorites", "/app/tutors/3"]) {
     assert.match(pageSeo(path).robots, /^noindex,/);
     assert.equal(pageSeo(path).canonical, null);
     assert.equal(pageSeo(path).status, 200);

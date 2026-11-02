@@ -1,3 +1,4 @@
+import provinces from "../shared/vietnam-addresses.json" with { type: "json" };
 import { z } from "zod";
 const text = (max = 200) => z.string().trim().min(1).max(max);
 export const loginSchema = z.object({
@@ -21,7 +22,15 @@ const educationEntry = z.object({
 export const timezoneSchema = z.string().max(80).refine(value => {
     try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; } catch { return false; }
   }, "Múi giờ không hợp lệ.").optional();
+export const availabilitySchema = z.object({
+  revision: z.number().int().nonnegative(),
+  blocks: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(23) })).max(168),
+}).refine(d => new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size === d.blocks.length, "Khung giờ bị trùng.");
+
 export const tutorSchema = z.object({
+  province_code: z.string().max(5).optional(),
+  ward_code: z.string().max(5).optional(),
+  availability: availabilitySchema.optional(),
   headline: text(120),
   timezone: timezoneSchema,
   education_history: z.array(educationEntry).max(8).optional(),
@@ -61,7 +70,11 @@ export const subjectSchema = z.object({
 });
 export { z, text };
 
-export const availabilitySchema = z.object({
-  revision: z.number().int().nonnegative(),
-  blocks: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(23) })).max(168),
-}).refine(d => new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size === d.blocks.length, "Khung giờ bị trùng.");
+export const addressSchema = z.object({
+  province_code: z.string().max(5), ward_code: z.string().max(5),
+}).refine(d => (!d.province_code && !d.ward_code) || provinces.some(p => p.code === d.province_code && p.wards.some(w => w.code === d.ward_code)), "Chọn phường / xã thuộc tỉnh / thành phố.");
+export function addressLabel(address) {
+  const province = provinces.find(p => p.code === address.province_code);
+  const ward = province?.wards.find(w => w.code === address.ward_code);
+  return ward ? `${ward.name}, ${province.name}` : "";
+}
