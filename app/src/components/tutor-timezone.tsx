@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -26,4 +26,30 @@ export function timezoneLabel(zone: string, compact = false) {
 export function TimezoneTag({ zone }: { zone: string }) {
   const label = timezoneLabel(zone);
   return label ? <Badge variant="outline" className="timezone-tag"><Clock3 aria-hidden="true" />{label}</Badge> : null;
+}
+
+
+export function TutorLocalTime({ zone }: { zone: string }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    let timer: number;
+    const update = () => {
+      window.clearTimeout(timer);
+      setNow(new Date());
+      timer = window.setTimeout(update, 60000 - Date.now() % 60000);
+    };
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, []);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "longOffset",
+  }).formatToParts(now);
+  const hour = parts.find(p => p.type === "hour")!.value;
+  const minute = parts.find(p => p.type === "minute")!.value;
+  const offset = parts.find(p => p.type === "timeZoneName")!.value.replace("GMT", "") || "+00:00";
+  return <span className="tutor-local-time"><Clock3 size={16} aria-hidden="true" /><time dateTime={now.toISOString()} title={zone}>{hour}:{minute} <span>(UTC {offset})</span></time></span>;
 }

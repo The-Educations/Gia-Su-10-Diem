@@ -42,3 +42,9 @@ Bản preview chỉ dùng SQLite và tài khoản demo riêng, không phải d�
 - Browser: 360, 390, 768, 1024, 1440 px không tràn ngang; reduced motion giữ nội dung hiển thị và không dịch chuyển; Xem thêm dùng Enter được; có ảnh `test-results/community-mobile.png` và `community-desktop.png` (không commit artifacts).
 - Chrome DevTools: đã đọc DOM/network/console bản build; không lỗi/warning trên trang danh sách được kiểm tra. Ban đầu tool screenshot/resize/evaluate bị cơ chế approval của phiên từ chối; phần viewport và ảnh dùng Playwright đã được cho phép. Vite dev shell cũ có 404 favicon; bản build không gặp lỗi này.
 - Review độc lập đã tìm ra và xác nhận bản sửa lỗi duyệt nội dung đã đổi: `review_version` tăng khi người đăng sửa; admin gửi `expected_version`, quyết định cũ nhận 409. Regression kiểm tra cả bài mới và bản sửa. Mutation test trên bản sao tạm bỏ guard đã thất bại đúng như mong đợi; source chính không bị đổi bởi thử nghiệm này.
+
+## Bản cuối sau đồng bộ main
+
+Đã tích hợp `d735dac` (lịch học hai giờ, lịch tuần và đồng hồ địa phương) vào nhánh cộng đồng, giữ cả hai nhóm migration/API/CSS. Kiểm tra lại trên bản kết hợp: **typecheck đạt, 51/51 unit/API tests, build đạt, 23/23 browser tests và Cloudflare local smoke đạt**. Chrome DevTools sau khi quyền phiên được mở đã chụp và kiểm tra desktop, trực tiếp kiểm tra 360 px/reduced motion, mở Quy tắc bằng nút Xem thêm; không tràn ngang, không lỗi/warning console trên trang được kiểm tra.
+
+Worktree lưu tại `/Users/phucdang/Documents/giasu-community`, nhánh `feat/community`. Preview bản build: `http://127.0.0.1:4185/app/community` với dữ liệu demo riêng. Khởi động lại: `DB_PATH=.data/community-preview.sqlite PORT=4185 NODE_ENV=test SERVE_BUILD=1 node server/index.js`.

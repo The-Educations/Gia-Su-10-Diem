@@ -1,3 +1,4 @@
+import { TutorLocalTime } from "@/components/tutor-timezone";
 import { Collapsible } from "@animate-ui/react/primitives/radix-ui/collapsible";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -320,6 +321,7 @@ export default function Tutors({
                       ? "Online & trực tiếp"
                       : "Trực tiếp"}
                 </span>
+                <TutorLocalTime zone={t.timezone} />
                 <span>
                   <Star size={16} />
                   {t.review_count

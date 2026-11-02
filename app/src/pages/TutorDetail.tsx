@@ -140,7 +140,7 @@ export default function TutorDetail() {
                   allLabel="Chọn khung giờ"
                   options={t.slots.map((s) => ({
                     value: String(s.id),
-                    label: dateTime(s.starts_at),
+                    label: `${dateTime(s.starts_at)} · ${s.duration_minutes} phút`,
                   }))}
                 />
                 {t.mode === "both" && (
@@ -200,8 +200,8 @@ export default function TutorDetail() {
               <dd>{chosen && dateTime(chosen.starts_at)}</dd>
             </div>
             <div>
-              <dt>Học phí / 60 phút</dt>
-              <dd>{money(t.rate)}</dd>
+              <dt>Học phí / {chosen?.duration_minutes} phút</dt>
+              <dd>{chosen && money(t.rate * chosen.duration_minutes / 60)}</dd>
             </div>
             <div>
               <dt>Hình thức</dt>
