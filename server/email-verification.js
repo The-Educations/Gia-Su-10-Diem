@@ -8,6 +8,7 @@ const escapeHtml = value => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<":
 function emailFrame(title, content, footer) {
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f5f5f4;font-family:Arial,Helvetica,sans-serif;color:#252821"><tr><td style="padding:24px 12px">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" align="center" style="width:100%;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e6e7e2;border-radius:16px"><tr><td style="padding:28px">
+<p style="margin:0 0 16px"><img src="https://giasudiem10.online/assets/brand-icon-20261031.png" width="48" height="48" alt="Logo Gia Sư 10 Điểm" style="display:block;width:48px;height:48px;border:0" /></p>
 <p style="margin:0 0 28px;font-size:15px;font-weight:700;color:#852f36">Gia Sư 10 Điểm</p>
 <p style="margin:0 0 8px;color:#73766c;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Tài khoản của bạn</p>
 <h1 style="margin:0 0 24px;font-size:28px;line-height:1.25;letter-spacing:-0.5px;font-weight:700;color:#252821">${title}</h1>
