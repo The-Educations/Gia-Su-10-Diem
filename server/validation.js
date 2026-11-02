@@ -28,7 +28,7 @@ export const tutorSchema = z.object({
   profile_sections: z.array(z.object({ title: text(80), body: text(2000) })).max(10).optional(),
   teaching_style: z.string().trim().max(1500).default(""),
   lesson_plan: z.string().trim().max(1500).default(""),
-  profile_theme: z.enum(["paper", "sage", "ink"]).default("paper"),
+  profile_theme: z.enum(["paper", "sage", "ink"]).optional(),
   bio: text(2000),
   location: text(100),
   mode: z.enum(["online", "offline", "both"]),
@@ -60,3 +60,8 @@ export const subjectSchema = z.object({
   description: text(500),
 });
 export { z, text };
+
+export const availabilitySchema = z.object({
+  revision: z.number().int().nonnegative(),
+  blocks: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(23) })).max(168),
+}).refine(d => new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size === d.blocks.length, "Khung giờ bị trùng.");

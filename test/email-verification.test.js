@@ -75,6 +75,12 @@ test("Mailflare sender uses scoped authentication, no tracking and contact sende
   assert.equal(headers.Authorization, "Bearer test-only");
   assert.equal(payload.trackOpens, false); assert.equal(payload.undoSend, false);
   assert.match(payload.html, /Xác nhận email/);
+  await createMailflareSender({ key: "test-only", mailboxId: "contact-mailbox" })({ to: signup.email, link: "https://giasudiem10.online/app/studio?tab=profile", kind: "profile_update" });
+  assert.equal(payload.from, "contact@giasudiem10.online");
+  assert.match(payload.subject, /Cập nhật hồ sơ gia sư/);
+  assert.match(payload.text, /Lưu & gửi duyệt/);
+  assert.match(payload.html, /app\/studio\?tab=profile/);
+  assert.equal(payload.trackOpens, false);
   globalThis.fetch = async () => new Response("failure", { status: 503 });
   await assert.rejects(createMailflareSender({ key: "test-only", mailboxId: "contact-mailbox" })({ to: signup.email, link: "https://example.test" }), /unavailable/);
 });
