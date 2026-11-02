@@ -12,6 +12,7 @@ import {
   subjectAliases,
   levelAliases,
 } from "./community-policy.js";
+import { registerCommunityDrafts, consumeDraft } from "./community-drafts.js";
 import { attachPostImages } from "./community-images.js";
 import { registerCommunityAdmin } from "./community-admin.js";
 
@@ -60,6 +61,7 @@ export function registerCommunity(app, db, auth, audit) {
       );
     next();
   };
+  registerCommunityDrafts(app, db, auth, participant);
   const named = (req) => {
     if (
       !["admin", "tutor"].includes(author(req.user.id).tier) &&
@@ -272,15 +274,17 @@ export function registerCommunity(app, db, auth, audit) {
   app.post("/api/community/posts", auth(), participant, (req, res) => {
     named(req);
     const d = postSchema.parse(req.body);
-    rate(
-      "community_posts",
-      "author_id",
-      req.user.id,
-      "-24 hours",
-      LIMITS.postsPerDay,
-      "Bạn chỉ được gửi 3 bài trong 24 giờ.",
-    );
+    if (req.user.role !== "admin")
+      rate(
+        "community_posts",
+        "author_id",
+        req.user.id,
+        "-24 hours",
+        LIMITS.postsPerDay,
+        "Bạn chỉ được gửi 3 bài trong 24 giờ.",
+      );
     const id = transaction(db, () => {
+      consumeDraft(db, req.user.id, req.body);
       const admin = req.user.role === "admin";
       const id = Number(
         run(

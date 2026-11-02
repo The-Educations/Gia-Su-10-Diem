@@ -4,6 +4,7 @@ import type { CommunityFeed } from "@/lib/types";
 import { Page, Heading, Loading, ErrorState, Blank } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { PostCard } from "@/components/community/shared";
+import Drafts from "@/components/community/Drafts";
 import CommunityWorkspace from "@/components/community/Workspace";
 export default function CommunityMine() {
   const [params, setParams] = useSearchParams(),
@@ -14,6 +15,7 @@ export default function CommunityMine() {
       <div className="community-page">
         <Heading title="Bài của tôi" />
         <CommunityWorkspace />
+        <Drafts />
         {result.loading ? (
           <Loading />
         ) : result.error ? (

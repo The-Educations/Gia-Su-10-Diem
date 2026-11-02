@@ -376,9 +376,11 @@ test("role workspaces, public identity and persistent admin navigation", async (
           .getByRole("button", { name: "Đăng bài", exact: true })
           .click();
         await expect(
-          page.getByRole("dialog", { name: "Đăng bài", exact: true }),
+          page.getByRole("heading", { name: "Đăng bài", exact: true }),
         ).toBeVisible();
-        await page.keyboard.press("Escape");
+        await page
+          .getByRole("button", { name: "← Bài của tôi", exact: true })
+          .click();
       } else if (slug !== "student") {
         await page
           .getByRole("button", { name: "Đăng bài", exact: true })
@@ -391,9 +393,11 @@ test("role workspaces, public identity and persistent admin navigation", async (
           .fill("Tên cộng đồng");
         await page.getByRole("button", { name: "Lưu tên và tiếp tục" }).click();
         await expect(
-          page.getByRole("dialog", { name: "Đăng bài", exact: true }),
+          page.getByRole("heading", { name: "Đăng bài", exact: true }),
         ).toBeVisible();
-        await page.keyboard.press("Escape");
+        await page
+          .getByRole("button", { name: "← Bài của tôi", exact: true })
+          .click();
         await expect(workspace.locator(".community-author")).toContainText(
           `Tên cộng đồng - ${tier}`,
         );
@@ -540,4 +544,100 @@ test("rich editor publishes formatting, links and uploaded images only after rev
   expect(errors).toEqual([]);
   await adminContext.close();
   await guestContext.close();
+});
+
+test("dedicated composer saves private drafts, reopens them and submits for each role", async ({
+  browser,
+}) => {
+  for (const slug of ["student", "community-parent", "chau", "admin"]) {
+    const context = await browser.newContext({ reducedMotion: "reduce" });
+    const page = await context.newPage();
+    await login(page, slug);
+    if (slug === "admin") {
+      await page
+        .getByRole("link", { name: "Quản lý cộng đồng", exact: true })
+        .click();
+    }
+    await page
+      .getByRole("button", {
+        name: slug === "admin" ? "Đăng thông báo" : "Đăng bài",
+        exact: true,
+      })
+      .click();
+    await expect(page).toHaveURL(/\/app\/community\/write$/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const editor = page.getByRole("textbox", { name: "Nội dung", exact: true });
+    await editor.fill("Ý tưởng học tập còn đang viết");
+    await editor.press("ControlOrMeta+A");
+    await page.getByRole("button", { name: "In đậm", exact: true }).click();
+    await page.getByRole("button", { name: "Lưu nháp", exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/community\/write\?draft=/);
+    await expect(page.getByText("Đã lưu nháp", { exact: true })).toBeVisible();
+    const draftPath = new URL(page.url()).pathname + new URL(page.url()).search;
+    await page.reload();
+    await expect(editor.locator("strong")).toHaveText(
+      "Ý tưởng học tập còn đang viết",
+    );
+    const title = `Nháp học tập ${slug} ${Date.now()}`;
+    await page.getByLabel("Tiêu đề", { exact: true }).fill(title);
+    await page.goBack();
+    await expect(
+      page.getByRole("dialog", { name: "Bản nháp chưa được lưu" }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Tiếp tục viết", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp("draft="));
+    await expect(page.getByLabel("Tiêu đề", { exact: true })).toHaveValue(
+      title,
+    );
+    await page.getByRole("button", { name: "Lưu nháp", exact: true }).click();
+    await expect(page.getByText("Đã lưu nháp", { exact: true })).toBeVisible();
+    await page
+      .getByRole("button", { name: "← Bài của tôi", exact: true })
+      .click();
+    const drafts = page.getByRole("region", { name: "Bản nháp", exact: true });
+    await expect(
+      drafts.getByRole("link", { name: title, exact: true }),
+    ).toBeVisible();
+    await drafts.getByRole("link", { name: title, exact: true }).click();
+    await expect(page).toHaveURL(
+      (url) => url.pathname + url.search === draftPath,
+    );
+    await expect(page.getByLabel("Tiêu đề", { exact: true })).toHaveValue(
+      title,
+    );
+    const seo = await page.request.get(draftPath);
+    expect(seo.status()).toBe(200);
+    expect(await seo.text()).toContain("noindex");
+    for (const width of [360, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+    }
+    await page
+      .getByRole("button", {
+        name: slug === "admin" ? "Lưu và công khai" : "Gửi bài chờ duyệt",
+        exact: true,
+      })
+      .click();
+    await expect(page).toHaveURL(/\/app\/community\/\d+$/);
+    await expect(
+      page.getByRole("heading", { name: title, exact: true }),
+    ).toBeVisible();
+    if (slug !== "admin")
+      await expect(
+        page.getByText("Đang chờ duyệt", { exact: true }),
+      ).toBeVisible();
+    const remaining = await page.request.get("/api/community/drafts");
+    expect(
+      (await remaining.json()).items.some(
+        (d: { title: string }) => d.title === title,
+      ),
+    ).toBe(false);
+    await context.close();
+  }
 });

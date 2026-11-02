@@ -4,7 +4,8 @@ import { accountRole } from "@/lib/types";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  BrowserRouter,
+  createBrowserRouter,
+  RouterProvider,
   Routes,
   Route,
   NavLink,
@@ -51,6 +52,7 @@ const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
 const Community = lazy(() => import("./pages/Community"));
 const CommunityPost = lazy(() => import("./pages/CommunityPost"));
+const CommunityWrite = lazy(() => import("./pages/CommunityWrite"));
 const CommunityMine = lazy(() => import("./pages/CommunityMine"));
 const News = lazy(() => import("./pages/News"));
 const Library = lazy(() => import("./pages/Library"));
@@ -273,6 +275,7 @@ function Shell() {
                 <Route path="/tutors" element={<Tutors />} />
                 <Route path="/tutors/:id" element={<TutorDetail />} />
                 <Route path="/community" element={<Community />} />
+              <Route path="/community/write" element={<Require><CommunityWrite /></Require>} />
               <Route path="/community/mine" element={<Require><CommunityMine /></Require>} />
               <Route path="/community/:id" element={<CommunityPost />} />
               <Route path="/news" element={<News />} />
@@ -359,15 +362,14 @@ function Shell() {
     </div>
   );
 }
+const router = createBrowserRouter([{ path: "*", element:
+  <AnimateUIProvider>
+    <AppProvider>
+      <Shell />
+      <Toaster richColors position="top-right" />
+    </AppProvider>
+  </AnimateUIProvider>,
+}], { basename: "/app" });
 createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter basename="/app">
-      <AnimateUIProvider>
-        <AppProvider>
-          <Shell />
-          <Toaster richColors position="top-right" />
-        </AppProvider>
-      </AnimateUIProvider>
-    </BrowserRouter>
-  </React.StrictMode>,
+  <React.StrictMode><RouterProvider router={router} /></React.StrictMode>,
 );

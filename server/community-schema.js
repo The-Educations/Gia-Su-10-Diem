@@ -125,6 +125,19 @@ CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notificatio
     image_id TEXT NOT NULL REFERENCES community_images(id) ON DELETE CASCADE,
     revision INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(post_id,image_id,revision)
   );
+  CREATE TABLE IF NOT EXISTS community_drafts (
+    id TEXT PRIMARY KEY, author_id INTEGER NOT NULL REFERENCES users(id),
+    title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '',
+    body_html TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS community_drafts_owner ON community_drafts(author_id,updated_at);
+  CREATE TABLE IF NOT EXISTS community_draft_images (
+    draft_id TEXT NOT NULL REFERENCES community_drafts(id) ON DELETE CASCADE,
+    image_id TEXT NOT NULL REFERENCES community_images(id) ON DELETE CASCADE,
+    PRIMARY KEY(draft_id,image_id)
+  );
+  CREATE INDEX IF NOT EXISTS community_draft_images_image ON community_draft_images(image_id);
   CREATE INDEX IF NOT EXISTS community_images_owner ON community_images(author_id,created_at);
   CREATE INDEX IF NOT EXISTS community_images_visibility ON community_post_images(image_id,revision);`);
   db.prepare(

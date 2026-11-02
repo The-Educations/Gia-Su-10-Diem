@@ -14,14 +14,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostCard, useCommunityGate } from "@/components/community/shared";
-import Compose from "@/components/community/Compose";
 import CommunityWorkspace from "@/components/community/Workspace";
 export default function Community() {
   const { user } = useApp(),
     [params, setParams] = useSearchParams(),
     navigate = useNavigate();
-  const [compose, setCompose] = useState(false),
-    [query, setQuery] = useState(params.get("q") || "");
+  const [query, setQuery] = useState(params.get("q") || "");
   const gate = useCommunityGate(),
     subjects = useLoad<Subject[]>("/subjects"),
     result = useLoad<CommunityFeed>(`/community/posts?${params}`);
@@ -40,7 +38,7 @@ export default function Community() {
         <CommunityWorkspace />
         {result.data?.rules && <PostCard post={result.data.rules} />}
         <section className="community-toolbar" aria-label="Tìm bài viết">
-          <Button onClick={() => gate.run(() => setCompose(true), true)}>
+          <Button onClick={() => gate.run(() => navigate("/community/write"), true)}>
             <PenLine data-icon="inline-start" />
             {user?.role === "admin" ? "Đăng thông báo" : "Đăng bài"}
           </Button>
@@ -160,12 +158,6 @@ export default function Community() {
               <ArrowRight data-icon="inline-end" />
             </Button>
           </nav>
-        )}
-        {compose && (
-          <Compose
-            close={() => setCompose(false)}
-            saved={(p) => navigate(`/community/${p.id}`)}
-          />
         )}
         {gate.dialog}
       </div>

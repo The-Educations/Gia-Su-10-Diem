@@ -140,6 +140,14 @@ export const accountRole = (user: User) => user.role === "admin" ? "Quản trị
 export type Post = { id: number; title: string; summary: string; body: string; published: number; published_at: string | null };
 
 export type CommunityAuthor = { label: string; name_part: string; tier: "student" | "parent" | "tutor" | "admin"; tutor_id?: number };
+export interface CommunityDraft {
+  id: string;
+  title: string;
+  body: string;
+  body_html: string;
+  version: number;
+  updated_at: string;
+}
 export type CommunityPostData = {
   id: number; public: boolean; kind: "user" | "announcement" | "rules"; title: string; body: string; body_html?: string;
   author: CommunityAuthor; mine: boolean; solved: boolean; best_comment_id: number | null;
