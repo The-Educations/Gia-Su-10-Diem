@@ -1,3 +1,4 @@
+import { reconcileAvailability, overlaps } from "../server/availability.js";
 import { processPhoto } from "../server/photo.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -5,7 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../server/local-db.js";
-import {  one, run } from "../server/db.js";
+import { all, one, run } from "../server/db.js";
 import { seedCatalog, seedDemo } from "../server/seed.js";
 import { createApi } from "../server/api.js";
 
@@ -529,11 +530,20 @@ test("additive tutor migration preserves existing accounts and profile data", (t
     original,
     "INSERT INTO tutors(user_id,headline,subjects) VALUES (1,'Hồ sơ giữ nguyên','[\"toan\"]')",
   );
+  seedCatalog(original);
+  run(original, "INSERT INTO users(id,name,email,password,role) VALUES (2,'Học sinh cũ','legacy-student@test.vn','existing-hash','student')");
+  run(original, "INSERT INTO slots(id,tutor_id,starts_at) VALUES (1,1,'2030-01-07T11:00:00.000Z')");
+  run(original, "INSERT INTO bookings(id,student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (1,2,1,1,'toan','2030-01-07T11:00:00.000Z',180000,'online')");
+  original.exec("ALTER TABLE slots DROP COLUMN duration_minutes; ALTER TABLE slots DROP COLUMN source; ALTER TABLE slots DROP COLUMN available; ALTER TABLE bookings DROP COLUMN duration_minutes; DROP TABLE weekly_availability");
   original.exec(
     "ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; ALTER TABLE users DROP COLUMN timezone; ALTER TABLE tutors DROP COLUMN education_history; ALTER TABLE tutors DROP COLUMN profile_sections; ALTER TABLE users DROP COLUMN email_verified_at; ALTER TABLE users DROP COLUMN email_verification_required; PRAGMA user_version = 0",
   );
   original.close();
   const migrated = openDatabase(file);
+  assert.equal(one(migrated, "SELECT duration_minutes FROM slots WHERE id=1").duration_minutes, 60);
+  assert.equal(one(migrated, "SELECT duration_minutes FROM bookings WHERE id=1").duration_minutes, 60);
+  assert.equal(one(migrated, "SELECT rate FROM bookings WHERE id=1").rate, 180000);
+  assert.equal(one(migrated, "SELECT source FROM slots WHERE id=1").source, "manual");
   assert.equal(one(migrated, "PRAGMA user_version").user_version, 6);
   assert.equal(one(migrated, "SELECT timezone FROM users WHERE id=1").timezone, "Asia/Ho_Chi_Minh");
   assert.equal(one(migrated, "SELECT education_history FROM tutors WHERE user_id=1").education_history, "[]");
@@ -1074,4 +1084,86 @@ test("students customize their own profile and timezone without altering other a
   assert.equal(response.status,200); assert.equal(response.data.user.role,"student"); assert.equal(response.data.user.timezone,"Asia/Tokyo");
   assert.equal((await student.request("/auth/me")).data.user.name,"Phúc");
   assert.equal((await other.request("/auth/me")).data.user.timezone,"Asia/Ho_Chi_Minh");
+});
+
+test("weekly availability validates ownership, revisions and preserves cancelled booking history", async (t) => {
+  const { client, db } = await fixture(t);
+  const tutor = client(), student = client(), guest = client();
+  const u = await tutor.login("chau"); await student.login("student");
+  const path = "/tutor/availability";
+  const blocks = [{ weekday: 0, hour: 0 }, { weekday: 0, hour: 2 }];
+  const save = (revision, value = blocks) => tutor.request(path, "PUT", { revision, blocks: value });
+  assert.equal((await guest.request(path, "PUT", { revision: 0, blocks })).status, 401);
+  assert.equal((await student.request(path, "PUT", { revision: 0, blocks })).status, 403);
+  for (const bad of [[{ weekday: 7, hour: 0 }], [{ weekday: 0, hour: 1 }], [{ weekday: 0, hour: 24 }], [...blocks, blocks[0]]])
+    assert.equal((await save(0, bad)).status, 400);
+  const oldSlots = all(db, "SELECT * FROM slots WHERE tutor_id=?", u.id);
+  assert.ok(oldSlots.every(s => s.duration_minutes === 60 && s.source === "manual"));
+  assert.equal((await save(0)).status, 200);
+  assert.equal((await save(0, [])).status, 409);
+  const profile = (await tutor.request("/tutor/profile")).data;
+  assert.deepEqual(profile.weekly_schedule, { blocks, revision: 1 });
+  const weekly = profile.slots.filter(s => s.source === "weekly");
+  assert.ok(weekly.length >= 14 && weekly.length <= 16);
+  assert.ok(weekly.every(s => s.duration_minutes === 120));
+  const first = weekly[0];
+  const local = new Date(Date.parse(first.starts_at) + 7 * 3600000);
+  assert.equal(local.getUTCDay(), 1); assert.ok([0, 2].includes(local.getUTCHours()));
+  await tutor.request("/tutor/profile");
+  assert.equal(one(db, "SELECT count(*) n FROM slots WHERE tutor_id=? AND source='weekly'", u.id).n, weekly.length);
+  const body = { slot_id: first.id, subject_id: "toan", mode: "online", note: "" };
+  const booking = await student.request("/bookings", "POST", body);
+  assert.equal(booking.status, 201);
+  const snapshot = one(db, "SELECT * FROM bookings WHERE id=?", booking.data.id);
+  assert.equal(snapshot.duration_minutes, 120);
+  assert.equal(snapshot.rate, profile.rate);
+  assert.equal((await tutor.request(`/tutor/slots/${first.id}`, "DELETE")).status, 409);
+  assert.equal((await save(1, [])).status, 200);
+  assert.equal(one(db, "SELECT available FROM slots WHERE id=?", first.id).available, 0);
+  assert.equal((await tutor.request("/tutor/profile")).data.slots.find(s => s.id === first.id).reserved, 1);
+  assert.equal((await tutor.request(`/bookings/${booking.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+  assert.equal((await student.request(`/bookings/${booking.data.id}`, "PATCH", { status: "cancelled" })).status, 200);
+  assert.equal((await student.request("/bookings", "POST", body)).status, 400);
+  assert.ok(!(await student.request(`/tutors/${u.id}`)).data.slots.some(s => s.id === first.id));
+  assert.deepEqual(all(db, "SELECT * FROM slots WHERE tutor_id=? AND source='manual'", u.id), oldSlots);
+  assert.equal((await save(2)).status, 200);
+  assert.equal((await student.request("/bookings", "POST", body)).status, 201);
+  assert.equal(one(db, "SELECT status FROM bookings WHERE id=?", booking.data.id).status, "cancelled");
+});
+
+test("two-hour intervals block overlaps, allow adjacent lessons and delay completion until the end", async (t) => {
+  const { client, db } = await fixture(t);
+  const tutor = client(), student = client();
+  const u = await tutor.login("chau"); await student.login("student");
+  const start = new Date(Date.now() + 40 * 86400000); start.setUTCMinutes(0, 0, 0);
+  const make = (offset, duration) => Number(run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes) VALUES (?,?,?)", u.id, new Date(+start + offset * 3600000).toISOString(), duration).lastInsertRowid);
+  const first = make(0, 120), overlapBefore = make(-1, 120), overlapAfter = make(1, 60), adjacent = make(2, 120);
+  const book = slot_id => student.request("/bookings", "POST", { slot_id, subject_id: "toan", mode: "online", note: "" });
+  const result = await book(first); assert.equal(result.status, 201);
+  assert.equal((await book(overlapBefore)).status, 409);
+  assert.equal((await book(overlapAfter)).status, 409);
+  assert.equal((await book(adjacent)).status, 201);
+  assert.equal((await tutor.request(`/bookings/${result.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+  run(db, "UPDATE bookings SET starts_at=? WHERE id=?", new Date(Date.now() - 90 * 60000).toISOString(), result.data.id);
+  assert.equal((await tutor.request(`/bookings/${result.data.id}`, "PATCH", { status: "completed" })).status, 409);
+  run(db, "UPDATE bookings SET starts_at=? WHERE id=?", new Date(Date.now() - 121 * 60000).toISOString(), result.data.id);
+  assert.equal((await tutor.request(`/bookings/${result.data.id}`, "PATCH", { status: "completed" })).status, 200);
+  assert.equal(overlaps({ starts_at: start.toISOString(), duration_minutes: 120 }, { starts_at: new Date(+start + 7200000).toISOString(), duration_minutes: 60 }), false);
+});
+
+test("weekly horizon rolls forward and skips legacy slots without changing their duration", async (t) => {
+  const { client, db } = await fixture(t);
+  const tutor = client(); const u = await tutor.login("chau");
+  const now = Date.parse("2030-01-06T00:00:00Z");
+  run(db, "INSERT INTO weekly_availability(tutor_id,blocks,revision) VALUES (?,?,1)", u.id, JSON.stringify([{ weekday: 0, hour: 18 }]));
+  const legacy = Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", u.id, "2030-01-07T12:00:00.000Z").lastInsertRowid);
+  reconcileAvailability(db, u.id, now);
+  let slots = all(db, "SELECT * FROM slots WHERE tutor_id=? AND source='weekly' AND available=1", u.id);
+  assert.equal(slots.length, 7);
+  assert.ok(!slots.some(s => s.starts_at === "2030-01-07T11:00:00.000Z"));
+  assert.equal(one(db, "SELECT duration_minutes FROM slots WHERE id=?", legacy).duration_minutes, 60);
+  reconcileAvailability(db, u.id, now + 7 * 86400000);
+  slots = all(db, "SELECT * FROM slots WHERE tutor_id=? AND source='weekly' AND available=1", u.id);
+  assert.equal(slots.length, 8);
+  assert.ok(slots.some(s => s.starts_at === "2030-03-04T11:00:00.000Z"));
 });

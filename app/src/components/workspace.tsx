@@ -187,7 +187,7 @@ export function WeekAgenda({
               </time>
               <div>
                 <strong>{b.subject_name}</strong>
-                <span>{tutor ? b.student_name : b.tutor_name}</span>
+                <span>{tutor ? b.student_name : b.tutor_name} · {b.duration_minutes} phút</span>
               </div>
               <State value={b.status} />
             </Link>

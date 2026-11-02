@@ -26,13 +26,17 @@ export type Subject = {
   stage: string;
   description: string;
 };
+export type WeeklySchedule = { blocks: { weekday: number; hour: number }[]; revision: number };
 export type Slot = {
+  duration_minutes: number;
+  source: "manual" | "weekly";
   id: number;
   tutor_id: number;
   starts_at: string;
   reserved?: number;
 };
 export type Tutor = {
+  weekly_schedule: WeeklySchedule;
   gallery: GalleryPhoto[];
   photo_url: string | null;
   banner_url: string | null;
@@ -63,6 +67,7 @@ export type Tutor = {
   reviews: { name: string; rating: number; body: string }[];
 };
 export type Booking = {
+  duration_minutes: number;
   id: number;
   student_id: number;
   tutor_id: number;

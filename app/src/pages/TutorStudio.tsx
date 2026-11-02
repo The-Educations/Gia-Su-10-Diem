@@ -1,3 +1,4 @@
+import { WeeklyAvailability } from "@/components/weekly-availability";
 import { ProfileSectionsEditor } from "@/components/tutor-sections";
 import { EducationEditor } from "@/components/tutor-education";
 import { TimezoneField } from "@/components/tutor-timezone";
@@ -8,9 +9,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TutorUploads } from "@/components/tutor-uploads";
 import { Link, useSearchParams } from "react-router-dom";
 import { useState } from "react";
-import { Plus, Trash2, Camera, UserRound, CalendarDays } from "lucide-react";
+import { UserRound, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
-import { api, useApp, useLoad, dateTime, money } from "@/lib/api";
+import { api, useApp, useLoad, money } from "@/lib/api";
 import type { Tutor, Subject, Resource, User } from "@/lib/types";
 import {
   Page,
@@ -20,8 +21,6 @@ import {
   State,
   Loading,
   ErrorState,
-  Section,
-  Blank,
 } from "@/components/common";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -310,6 +309,7 @@ function ProfileForm({
           tutor={{
             ...draft,
             photo_url: t.photo_url,
+            banner_url: t.banner_url,
             subjects: selected,
             levels,
             goals: examGoals,
@@ -323,46 +323,11 @@ function ProfileForm({
 }
 export default function TutorStudio() {
   const [params, setParams] = useSearchParams();
-  const tab = ["files", "profile", "slots"].includes(params.get("tab") || "")
-    ? params.get("tab")!
-    : "files";
+  const tab = params.get("tab") === "slots" ? "slots" : "profile";
   const [uploadPending, setUploadPending] = useState(false);
-  const { refresh } = useApp(),
-    profile = useLoad<Tutor>("/tutor/profile"),
+  const profile = useLoad<Tutor>("/tutor/profile"),
     subjects = useLoad<Subject[]>("/subjects"),
-    exams = useLoad<Resource[]>("/resources"),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  async function add(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget,
-      value = String(new FormData(form).get("starts_at"));
-    setBusy(true);
-    setError("");
-    try {
-      await api("/tutor/slots", "POST", {
-        starts_at: new Date(`${value}:00+07:00`).toISOString(),
-      });
-      refresh();
-      form.reset();
-      toast.success("Đã thêm giờ trống");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function remove(id: number) {
-    setBusy(true);
-    try {
-      await api(`/tutor/slots/${id}`, "DELETE");
-      refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+    exams = useLoad<Resource[]>("/resources");
   if (profile.loading) return <Loading />;
   if (profile.error || !profile.data)
     return <ErrorState error={profile.error} />;
@@ -402,10 +367,6 @@ export default function TutorStudio() {
         className="studio-workspace"
       >
         <TabsList className="studio-tabs">
-          <TabsTrigger value="files">
-            <Camera size={16} />
-            Ảnh hồ sơ
-          </TabsTrigger>
           <TabsTrigger value="profile">
             <UserRound size={16} />
             Hồ sơ nhận dạy
@@ -415,7 +376,7 @@ export default function TutorStudio() {
             Giờ trống
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="files" forceMount>
+        <TabsContent value="profile" forceMount>
           <section id="studio-files" className="studio-files">
             <TutorUploads
               t={t}
@@ -425,8 +386,6 @@ export default function TutorStudio() {
             />
             <TutorGalleryEditor images={t.gallery || []} onPending={() => setUploadPending(true)} />
           </section>
-        </TabsContent>
-        <TabsContent value="profile" forceMount>
           <ProfileForm
             t={t}
             subjects={subjects.data || []}
@@ -435,53 +394,7 @@ export default function TutorStudio() {
         </TabsContent>
         <TabsContent value="slots" forceMount>
           <div className="studio-availability" id="studio-slots">
-            <Section title="Giờ trống · 60 phút / buổi">
-              <form className="slot-form" onSubmit={add}>
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="starts_at">
-                      Giờ bắt đầu (giờ Việt Nam)
-                    </FieldLabel>
-                    <Input
-                      id="starts_at"
-                      name="starts_at"
-                      type="datetime-local"
-                      step={3600}
-                      required
-                    />
-                  </Field>
-                  <Submit busy={busy}>
-                    <Plus data-icon="inline-start" />
-                    Thêm giờ trống
-                  </Submit>
-                </FieldGroup>
-              </form>
-              {error && <ErrorState error={error} />}
-              <div className="slot-list">
-                {!t.slots.length ? (
-                  <Blank title="Chưa có giờ trống" />
-                ) : (
-                  t.slots.map((s) => (
-                    <div key={s.id}>
-                      <span>{dateTime(s.starts_at)}</span>
-                      {s.reserved ? (
-                        <span className="state">Đã được đặt</span>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={busy}
-                          aria-label={`Xóa giờ ${dateTime(s.starts_at)}`}
-                          onClick={() => remove(s.id)}
-                        >
-                          <Trash2 />
-                        </Button>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </Section>
+            <WeeklyAvailability tutor={t} />
           </div>
         </TabsContent>
       </Tabs>

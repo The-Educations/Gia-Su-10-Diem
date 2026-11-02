@@ -118,6 +118,16 @@ export function migrateDatabase(db) {
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE,
     expires INTEGER NOT NULL, sent_at INTEGER NOT NULL, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL
   )`);
+  for (const table of ["slots", "bookings"]) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "duration_minutes"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60`);
+  }
+  const slotColumns = db.prepare("PRAGMA table_info(slots)").all();
+  if (!slotColumns.some(c => c.name === "source")) db.exec("ALTER TABLE slots ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
+  if (!slotColumns.some(c => c.name === "available")) db.exec("ALTER TABLE slots ADD COLUMN available INTEGER NOT NULL DEFAULT 1");
+  db.exec(`CREATE TABLE IF NOT EXISTS weekly_availability (
+    tutor_id INTEGER PRIMARY KEY REFERENCES tutors(user_id), blocks TEXT NOT NULL DEFAULT '[]', revision INTEGER NOT NULL DEFAULT 0
+  )`);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);
