@@ -429,9 +429,6 @@ test("student contacts a tutor before booking and receives a private reply", asy
   await login(student, "student");
   await student.goto("/app/tutors/3");
   await student
-    .getByRole("button", { name: "Liên hệ gia sư", exact: true })
-    .click();
-  await student
     .getByLabel("Lời nhắn của bạn")
     .fill("Cô có nhận học sinh lớp 9 vào cuối tuần không ạ?");
   await student
@@ -439,9 +436,7 @@ test("student contacts a tutor before booking and receives a private reply", asy
     .click();
   await expect(student).toHaveURL(/messages\?inquiry=/);
   await expect(
-    student.getByText("Cô có nhận học sinh lớp 9 vào cuối tuần không ạ?", {
-      exact: true,
-    }),
+    student.getByText(/Cô có nhận học sinh lớp 9 vào cuối tuần không ạ\?/),
   ).toBeVisible();
   await login(tutor, "chau");
   await tutor.goto("/app/messages");
@@ -449,6 +444,8 @@ test("student contacts a tutor before booking and receives a private reply", asy
     .locator(".conversation-list button")
     .filter({ hasText: "Tư vấn trước buổi học" })
     .click();
+  await expect(tutor).toHaveURL(/messages\?inquiry=/);
+  await expect(tutor.locator(".conversation-heading strong")).toHaveText("Minh Anh");
   await tutor
     .getByRole("textbox", { name: "Tin nhắn", exact: true })
     .fill("Cô còn lịch sáng thứ bảy nhé.");
@@ -1025,7 +1022,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Lịch học hằng tuần" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Liên hệ gia sư" })).toBeVisible();
   await dialog.locator("summary").filter({ hasText: "Kho giao diện" }).click();
   await dialog.getByRole("button", { name: "Cấp Ngọc bích", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Đã cấp", exact: true })).toHaveCount(2);

@@ -131,6 +131,12 @@ export function migrateDatabase(db) {
     status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   ); CREATE UNIQUE INDEX IF NOT EXISTS active_weekly_request ON weekly_requests(student_id,tutor_id) WHERE status IN ('pending','accepted')`);
   migrateCommunity(db);
+  db.exec(`CREATE TABLE IF NOT EXISTS support_threads (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE TABLE IF NOT EXISTS support_messages (
+    id INTEGER PRIMARY KEY, thread_id INTEGER NOT NULL REFERENCES support_threads(id), sender_id INTEGER NOT NULL REFERENCES users(id),
+    body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE INDEX IF NOT EXISTS support_message_thread ON support_messages(thread_id,id)`);
   for (const table of ["slots", "bookings"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "duration_minutes"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60`);

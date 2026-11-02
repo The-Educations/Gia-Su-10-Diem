@@ -1544,24 +1544,10 @@ main {
 .profile-hero .person.large [data-slot="avatar-fallback"] {
   border-radius: inherit;
 }
-.profile-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 24px 0 12px;
-}
 .demo-note {
   font-size: 12px;
   color: var(--muted-foreground);
   margin-top: 16px;
-}
-.contact-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.contact-form textarea {
-  min-height: 130px;
 }
 .studio-nav {
   display: flex;
@@ -1683,9 +1669,6 @@ main {
   .profile-hero .person.large {
     width: 88px;
     height: 104px;
-  }
-  .profile-actions [data-slot="button"] {
-    flex: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2223,7 +2206,7 @@ main {
   margin-top: 0;
 }
 .studio-availability {
-  max-width: 760px;
+  width: 100%;
 }
 @media (hover: hover) and (pointer: fine) {
   a.workspace-metric:hover {
@@ -2783,6 +2766,17 @@ main {
 .availability-grid button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; border-radius: 4px; background: var(--muted); color: var(--foreground); cursor: pointer; }
 .availability-grid button[aria-pressed="true"] { background: var(--positive); color: white; }
 .availability-grid button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.availability-help { margin: 0 0 16px; font-size: 14px; line-height: 1.6; color: var(--muted-foreground); }
+.schedule-help-touch { display: none; }
+.studio-availability .availability-scroll { max-height: min(720px, 68dvh); }
+.studio-availability .availability-grid { min-width: 560px; }
+.studio-availability .availability-grid th { padding: 12px 8px; font-size: 14px; }
+.studio-availability .availability-grid th:first-child { width: 80px; }
+.studio-availability .availability-grid button { min-height: 56px; border-radius: 6px; }
+@media (pointer: coarse) {
+  .schedule-help-mouse { display: none; }
+  .schedule-help-touch { display: inline; }
+}
 .availability-grid button:disabled { cursor: wait; opacity: .65; }
 .availability-note { color: var(--muted-foreground); font-size: .8125rem; margin: 1rem 0; }
 .availability-actions { flex-wrap: wrap; }
@@ -2906,3 +2900,10 @@ main {
   .weekly-profile-layout { grid-template-columns: minmax(0, 1fr); }
   .weekly-booking-panel { position: static; }
 }
+
+.support-welcome { display: flex; gap: 12px; margin: 16px 20px 0; padding: 16px; background: var(--muted); border-radius: 10px; font-size: 13px; line-height: 1.6; }
+.support-welcome > svg { flex: none; margin-top: 3px; }
+.support-welcome p { margin: 4px 0; }
+.support-welcome a { color: var(--primary); overflow-wrap: anywhere; }
+.conversation-list strong { display: flex; align-items: center; gap: 8px; }
+.conversation-list strong svg { flex: none; }

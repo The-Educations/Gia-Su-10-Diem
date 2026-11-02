@@ -44,6 +44,12 @@ const pendingCookie=res.headers.getSetCookie().find(c=>c.startsWith('giasu_signu
 const cookie = await verifyEmail(email,pendingCookie);
 const get=path=>fetch(base+path,{headers:{Cookie:cookie}});
 assert.equal((await get('/api/auth/me')).status,200);
+const supportThread = (await (await get('/api/support')).json())[0];
+assert.equal((await (await get('/api/support')).json())[0].id, supportThread.id);
+const supportMessage = await fetch(base+`/api/support/${supportThread.id}/messages`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({body:'Runtime support request'})});
+assert.equal(supportMessage.status,201);
+assert.equal((await (await get(`/api/support/${supportThread.id}/messages`)).json())[0].body,'Runtime support request');
+assert.equal((await fetch(base+'/api/admin/users/1',{method:'DELETE',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({email:'admin@example.test'})})).status,403);
 
 const setup = async (body) => {
  const response = await fetch(base + '/api/account/onboarding', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'}, body:JSON.stringify(body)});
@@ -113,6 +119,7 @@ const parentResponse = await fetch(base + '/api/auth/register', { method: 'POST'
 assert.equal(parentResponse.status, 202);
 const parentPending = parentResponse.headers.getSetCookie().find(c => c.startsWith('giasu_signup='))?.split(';')[0];
 const parentCookie = await verifyEmail(parentEmail,parentPending);
+assert.equal((await fetch(base+`/api/support/${supportThread.id}/messages`,{headers:{Cookie:parentCookie}})).status,404);
 const parentSetup = await fetch(base + '/api/account/onboarding', { method: 'PUT', headers: { Cookie: parentCookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 0, role: 'parent' }) });
 assert.equal(parentSetup.status, 200);
 const parentUser = (await parentSetup.json()).user;

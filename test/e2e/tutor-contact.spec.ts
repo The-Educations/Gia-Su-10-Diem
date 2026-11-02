@@ -8,7 +8,7 @@ async function login(page: Page, slug: string) {
   await expect(page).not.toHaveURL(/\/auth/);
 }
 
-test("student matches weekly hours, sends a request and the tutor accepts and chats", async ({ browser, page }) => {
+test("student matches free hours and contacts a tutor without creating a booking", async ({ browser, page }) => {
   const tc = await browser.newContext(), tutor = await tc.newPage();
   await login(tutor, "chau");
   const original = await (await tutor.request.get("/api/tutor/profile")).json();
@@ -23,7 +23,7 @@ test("student matches weekly hours, sends a request and the tutor accepts and ch
   await expect(page.locator(".tutor-card")).toContainText("Trùng 2 giờ / tuần");
   await page.getByRole("link", { name: "Xem hồ sơ", exact: true }).click();
   const calendar = page.locator(".weekly-booking-panel");
-  await expect(calendar.getByRole("heading", { name: "Lịch học hằng tuần" })).toBeVisible();
+  await expect(calendar.getByRole("heading", { name: "Liên hệ gia sư" })).toBeVisible();
   for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -39,23 +39,17 @@ test("student matches weekly hours, sends a request and the tutor accepts and ch
     await cell.focus(); await page.keyboard.press("Space");
     await expect(cell).toHaveAttribute("aria-pressed", "true");
   }
-  await calendar.getByLabel("Bạn muốn học gì?").fill("Ôn Toán theo lịch tuần");
-  await calendar.getByRole("button", { name: "Gửi yêu cầu học hằng tuần", exact: true }).click();
+  await calendar.getByLabel("Lời nhắn của bạn").fill("Ôn Toán theo lịch tuần");
+  await calendar.getByRole("button", { name: "Gửi lời nhắn", exact: true }).click();
   await expect(page).toHaveURL(/messages\?inquiry=/);
-  await expect(page.getByText(/Yêu cầu học hằng tuần #/).last()).toBeVisible();
-  await tutor.goto("/app/bookings");
-  const card = tutor.locator(".weekly-request-card").filter({ hasText: "Ôn Toán theo lịch tuần" });
-  await expect(card).toContainText("Thứ 2 · 19:00–20:00");
-  await expect(card).toContainText("Thứ 4 · 19:00–20:00");
-  await card.getByRole("button", { name: "Nhận lịch tuần", exact: true }).click();
-  await expect(card).toContainText("Đã xác nhận");
-  await card.getByRole("link", { name: "Nhắn tin", exact: true }).click();
+  await expect(page.getByText(/Giờ muốn trao đổi.*Thứ 2 19:00/)).toBeVisible();
+  expect(await (await page.request.get("/api/weekly-requests")).json()).toEqual([]);
+  const inquiry = new URL(page.url()).searchParams.get("inquiry");
+  await tutor.goto(`/app/messages?inquiry=${inquiry}`);
   await tutor.getByRole("textbox", { name: "Tin nhắn", exact: true }).fill("Mình bắt đầu tuần tới nhé.");
   await tutor.getByRole("button", { name: "Gửi", exact: true }).click();
   await page.reload();
   await expect(page.getByText("Mình bắt đầu tuần tới nhé.", { exact: true })).toBeVisible();
-  await page.goto("/app/bookings");
-  await page.locator(".weekly-request-card").filter({ hasText: "Ôn Toán theo lịch tuần" }).getByRole("button", { name: "Hủy yêu cầu", exact: true }).click();
   const current = await (await tutor.request.get("/api/tutor/profile")).json();
   await tutor.request.put("/api/tutor/availability", { data: { revision: current.weekly_schedule.revision, blocks: original.weekly_schedule.blocks } });
   await page.request.put("/api/account/availability", { data: { revision: saved.revision + 1, blocks: saved.blocks } });

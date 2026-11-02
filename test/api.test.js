@@ -1318,3 +1318,78 @@ test("weekly requests validate availability, keep participants private, prevent 
   assert.equal(preview.status, 200); assert.ok(Array.isArray(preview.data.reviews)); assert.ok(Array.isArray(preview.data.weekly_blocks));
   assert.equal(preview.data.email, undefined);
 });
+
+test("support is pinned per user, private between owners, and shared with administrators", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), admin = client(), guest = client();
+  await student.login("student"); await tutor.login("chau"); await admin.login("admin");
+  assert.equal((await guest.request("/support")).status, 401);
+  const a = (await student.request("/support")).data[0];
+  assert.equal((await student.request("/support")).data[0].id, a.id);
+  const b = (await tutor.request("/support")).data[0];
+  assert.notEqual(a.id, b.id);
+  assert.equal((await tutor.request(`/support/${a.id}/messages`)).status, 404);
+  assert.equal((await tutor.request(`/support/${a.id}/messages`, "POST", { body: "Unauthorized" })).status, 404);
+  assert.equal((await student.request(`/support/${a.id}/messages`, "POST", { body: "Cần hỗ trợ lịch học" })).status, 201);
+  assert.equal((await admin.request("/support")).data.length, 2);
+  assert.equal((await admin.request(`/support/${a.id}/messages`, "POST", { body: "Admin đã nhận yêu cầu" })).status, 201);
+  assert.equal((await student.request(`/support/${a.id}/messages`)).data.at(-1).body, "Admin đã nhận yêu cầu");
+  run(db, "UPDATE users SET status='suspended' WHERE id=?", a.user_id);
+  assert.equal((await admin.request(`/support/${a.id}/messages`, "POST", { body: "Không gửi" })).status, 409);
+});
+
+test("contact includes validated free hours without reserving weekly or dated lessons", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(); await student.login("student"); const teacher = await tutor.login("chau");
+  const blocks = [{ weekday: 0, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const before = one(db, "SELECT COUNT(*) AS n FROM bookings").n;
+  const data = { tutor_id: teacher.id, body: "Em muốn trao đổi", subject_id: "toan", mode: "online", blocks };
+  assert.equal((await student.request("/inquiries", "POST", { ...data, blocks: [{weekday:1,hour:3}] })).status, 409);
+  assert.equal((await student.request("/inquiries", "POST", { ...data, subject_id: "not-offered" })).status, 400);
+  const r = await student.request("/inquiries", "POST", data);
+  assert.equal(r.status, 201);
+  const message = (await tutor.request(`/inquiries/${r.data.id}/messages`)).data.at(-1).body;
+  assert.match(message, /Môn học: Toán/); assert.match(message, /Thứ 2 19:00–20:00/);
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM weekly_requests").n, 0);
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM bookings").n, before);
+  assert.equal((await student.request("/inquiries", "POST", { tutor_id:teacher.id,body:"Trao đổi khi chưa chọn giờ" })).status, 201);
+});
+
+test("admin deletion erases profile data, revokes access and preserves anonymous message history", async t => {
+  const { client, db } = await fixture(t);
+  const admin = client(), student = client(), tutor = client();
+  const administrator = await admin.login("admin"), learner = await student.login("student"), teacher = await tutor.login("chau");
+  const thread = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Trao đổi được giữ lại" })).data;
+  const support = (await tutor.request("/support")).data[0];
+  const slot = one(db,"SELECT * FROM slots WHERE tutor_id=? ORDER BY id LIMIT 1",teacher.id);
+  const booking = Number(run(db,"INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (?,?,?,'toan',?,150000,'online')",learner.id,teacher.id,slot.id,slot.starts_at).lastInsertRowid);
+  await tutor.request(`/support/${support.id}/messages`, "POST", { body: "Lịch sử hỗ trợ" });
+  const { saveUpload } = await import("../server/uploads.js");
+  const upload = saveUpload(db, teacher.id, "photo", Buffer.from("test-image"), "image/webp", "personal.webp");
+  run(db, "INSERT INTO oauth_identities VALUES ('google','deleted-subject',?)", teacher.id);
+  await tutor.request("/tutor/availability", "PUT", { revision:0,blocks:[{weekday:0,hour:19}] });
+  const weekly = await student.request("/weekly-requests", "POST", { tutor_id:teacher.id,subject_id:"toan",mode:"online",blocks:[{weekday:0,hour:19}] });
+  assert.equal(weekly.status,201);
+  await tutor.request(`/weekly-requests/${weekly.data.id}`, "PATCH", { status:"accepted" });
+  assert.equal((await student.request(`/admin/users/${teacher.id}`, "DELETE", { email:teacher.email })).status,403);
+  assert.equal((await admin.request(`/admin/users/${administrator.id}`, "DELETE", { email:administrator.email })).status,403);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", { email:learner.email })).status,400);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", { email:teacher.email }, { Origin:"https://evil.test" })).status,403);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", { email:teacher.email })).status,200);
+  const deleted = one(db,"SELECT * FROM users WHERE id=?",teacher.id);
+  assert.equal(deleted.status,"deleted"); assert.equal(deleted.name,"Tài khoản đã xóa"); assert.notEqual(deleted.email,teacher.email); assert.equal(deleted.password,"");
+  assert.equal((await tutor.request("/auth/me")).data.user,null);
+  assert.equal(one(db,"SELECT * FROM oauth_identities WHERE user_id=?",teacher.id),undefined);
+  assert.equal(one(db,"SELECT * FROM tutor_uploads WHERE id=?",upload),undefined);
+  assert.equal(one(db,"SELECT * FROM upload_chunks WHERE upload_id=?",upload),undefined);
+  assert.equal(one(db,"SELECT status FROM weekly_requests WHERE id=?",weekly.data.id).status,"cancelled");
+  assert.equal(one(db,"SELECT status FROM bookings WHERE id=?",booking).status,"cancelled");
+  assert.equal((await student.request(`/tutors/${teacher.id}`)).status,404);
+  assert.equal((await student.request(`/inquiries/${thread.id}/messages`)).data[0].body,"Trao đổi được giữ lại");
+  assert.equal((await admin.request(`/support/${support.id}/messages`)).data[0].name,"Tài khoản đã xóa");
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "PATCH", {status:"active"})).status,404);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", {email:teacher.email})).status,404);
+  assert.equal((await admin.request("/admin")).data.users.some(u=>u.id===teacher.id),false);
+  assert.ok(one(db,"SELECT id FROM audit WHERE action='user.deleted' AND target=?",String(teacher.id)));
+});

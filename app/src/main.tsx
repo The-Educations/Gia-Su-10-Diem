@@ -134,7 +134,7 @@ function Shell() {
           },
           {
             to: "/messages",
-            label: user.role === "admin" ? "Hội thoại buổi học" : "Tin nhắn",
+            label: "Tin nhắn",
             icon: MessageCircle,
           },
         ]

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, Send, Pin, ShieldCheck } from "lucide-react";
 import { api, useApp, useLoad, dateTime } from "@/lib/api";
 import type { Booking, Inquiry, Message as MessageData } from "@/lib/types";
 import {
@@ -34,13 +34,14 @@ import {
 type Thread = {
   key: string;
   id: number;
-  kind: "lesson" | "inquiry";
+  kind: "lesson" | "inquiry" | "support";
   name: string;
   detail: string;
   time: string;
   status?: string;
   tutorId: number;
   endpoint: string;
+  inactive?: boolean;
 };
 function Conversation({ thread }: { thread: Thread }) {
   const { user } = useApp(),
@@ -53,7 +54,6 @@ function Conversation({ thread }: { thread: Thread }) {
   useEffect(() => {
     let active = true;
     setMessages([]);
-    setBody("");
     setLoading(true);
     setError("");
     async function load() {
@@ -100,7 +100,7 @@ function Conversation({ thread }: { thread: Thread }) {
           <strong>{thread.name}</strong>
           <span>{thread.detail}</span>
         </div>
-        {thread.status ? (
+        {thread.kind === "support" ? <ShieldCheck aria-label="Hỗ trợ quản trị" /> : thread.status ? (
           <State value={thread.status} />
         ) : (
           <Button variant="outline" size="sm" asChild>
@@ -108,6 +108,7 @@ function Conversation({ thread }: { thread: Thread }) {
           </Button>
         )}
       </header>
+      {thread.kind === "support" && <aside className="support-welcome" aria-label="Tin nhắn được ghim"><Pin size={16} aria-hidden="true" /><div><strong>Hỗ trợ Gia Sư 10 Điểm</strong><p>Chào bạn! Gửi tin nhắn tại đây để được quản trị viên hỗ trợ.</p><a href="mailto:admin@giasudiem10.online">admin@giasudiem10.online</a></div></aside>}
       {error && (
         <ErrorState error={error} retry={() => setRetry((r) => r + 1)} />
       )}
@@ -119,10 +120,10 @@ function Conversation({ thread }: { thread: Thread }) {
             <MessageScroller>
               <MessageScrollerViewport aria-label="Nội dung trò chuyện">
                 <MessageScrollerContent className="p-5">
-                  {!messages.length && (
+                  {!messages.length && thread.kind !== "support" && (
                     <Blank
                       title="Bắt đầu cuộc trò chuyện"
-                      description="Trao đổi mục tiêu học tập hoặc nội dung buổi học."
+                      description="Gửi lời nhắn để bắt đầu trao đổi."
                     />
                   )}
                   {messages.map((m) => (
@@ -158,7 +159,7 @@ function Conversation({ thread }: { thread: Thread }) {
           </MessageScrollerProvider>
         )}
       </div>
-      {user?.role !== "admin" && (
+      {!thread.inactive && (user?.role !== "admin" || thread.kind === "support") && (
         <form className="message-composer" onSubmit={send}>
           <Field>
             <FieldLabel htmlFor="message" className="sr-only">
@@ -166,7 +167,7 @@ function Conversation({ thread }: { thread: Thread }) {
             </FieldLabel>
             <Textarea
               id="message"
-              placeholder="Nhắn về buổi học…"
+              placeholder="Nhập tin nhắn…"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               maxLength={3000}
@@ -188,8 +189,21 @@ export default function Messages() {
     inquiries = useLoad<Inquiry[]>(
       user?.role === "admin" ? null : "/inquiries",
     ),
+    support = useLoad<{ id: number; user_id: number; name: string; role: string; learner_type: string; status: string; created_at: string }[]>("/support"),
     [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!document.hidden) { support.reload(); inquiries.reload(); bookings.reload(); }
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [user?.id]);
   const threads: Thread[] = [
+    ...(support.data || []).map(s => ({
+      key: `support-${s.id}`, id: s.id, kind: "support" as const,
+      name: user?.role === "admin" ? s.name : "Hỗ trợ Gia Sư 10 Điểm",
+      detail: user?.role === "admin" ? `Hỗ trợ · ${s.role === "tutor" ? "Gia sư" : s.learner_type === "parent" ? "Phụ huynh" : "Học sinh"}` : "admin@giasudiem10.online",
+      time: s.created_at, tutorId: s.user_id, endpoint: `/support/${s.id}/messages`, inactive: s.status !== "active",
+    })),
     ...(inquiries.data || []).map((i) => ({
       key: `inquiry-${i.id}`,
       id: i.id,
@@ -212,12 +226,12 @@ export default function Messages() {
       endpoint: `/bookings/${b.id}/messages`,
     })),
   ];
-  const selected = threads.find((t) => params.get(t.kind) === String(t.id)),
-    error = bookings.error || inquiries.error;
+  const selected = threads.find((t) => params.get(t.kind) === String(t.id)) || (!params.size && user?.role !== "admin" ? threads.find(t => t.kind === "support") : undefined),
+    error = bookings.error || inquiries.error || support.error;
   return (
     <Page>
       <Heading title="Tin nhắn" />
-      {bookings.loading || inquiries.loading ? (
+      {bookings.loading || inquiries.loading || support.loading ? (
         <Loading />
       ) : error ? (
         <ErrorState
@@ -225,12 +239,13 @@ export default function Messages() {
           retry={() => {
             bookings.reload();
             inquiries.reload();
+            support.reload();
           }}
         />
       ) : !threads.length ? (
         <Blank
           title="Chưa có cuộc trò chuyện"
-          description="Liên hệ gia sư từ hồ sơ để trao đổi trước khi đặt lịch."
+          description="Liên hệ gia sư từ hồ sơ để bắt đầu trao đổi."
           action={
             <Button variant="outline" asChild>
               <Link to="/tutors">Tìm gia sư</Link>
@@ -246,9 +261,9 @@ export default function Messages() {
                 className={t.key === selected?.key ? "selected" : ""}
                 onClick={() => setParams({ [t.kind]: String(t.id) })}
               >
-                <Person name={t.name} id={t.tutorId} />
+                {t.kind === "support" ? <ShieldCheck size={24} aria-hidden="true" /> : <Person name={t.name} id={t.tutorId} />}
                 <div>
-                  <strong>{t.name}</strong>
+                  <strong>{t.name}{t.kind === "support" && <Pin size={13} aria-label="Đã ghim" />}</strong>
                   <span>
                     {t.kind === "inquiry" ? "Tư vấn trước buổi học" : t.detail}
                   </span>
@@ -261,7 +276,7 @@ export default function Messages() {
             <Button
               className="conversation-back"
               variant="ghost"
-              onClick={() => setParams({})}
+              onClick={() => setParams({ view: "inbox" })}
             >
               <ArrowLeft data-icon="inline-start" />
               Cuộc trò chuyện
