@@ -1,3 +1,6 @@
+import { EducationTimeline } from "./tutor-education";
+import { TimezoneTag } from "./tutor-timezone";
+import { ProfileSections } from "./tutor-sections";
 import type { ReactNode } from "react";
 import { GraduationCap, MapPin, Star } from "lucide-react";
 import type { Tutor, Subject } from "@/lib/types";
@@ -21,9 +24,7 @@ export function TutorPresentation({
       className="tutor-presentation"
       data-theme={t.profile_theme || "paper"}
     >
-      <div className="tutor-cover" aria-hidden="true">
-        <span>10</span>
-      </div>
+      {t.banner_url && <div className="tutor-cover"><img src={t.banner_url} alt={`Ảnh bìa của ${t.name}`} /></div>}
       <div className="profile-hero">
         <Person
           name={t.name}
@@ -35,6 +36,7 @@ export function TutorPresentation({
           <Title>{t.name}</Title>
           <p className="tutor-headline">{t.headline}</p>
           <div className="subject-tags">
+            <TimezoneTag zone={t.timezone || "Asia/Ho_Chi_Minh"} />
             {t.subjects.map((id) => (
               <Badge variant="secondary" key={id}>
                 {subjects.find((s) => s.id === id)?.name || id}
@@ -76,9 +78,10 @@ export function TutorPresentation({
           {t.goals.length > 0 && <p className="muted">{t.goals.join(" · ")}</p>}
         </Section>
       )}
-      {t.education && (
+      {(t.education || t.education_history?.length > 0) && (
         <Section title="Học vấn">
-          <p className="reading-text">{t.education}</p>
+          {t.education && <p className="reading-text">{t.education}</p>}
+          {!!t.education_history?.length && <EducationTimeline entries={t.education_history} />}
         </Section>
       )}
       {t.teaching_style && (
@@ -91,9 +94,10 @@ export function TutorPresentation({
           <p className="reading-text">{t.lesson_plan}</p>
         </Section>
       )}
+      <ProfileSections sections={t.profile_sections} />
       {!!t.demo && (
         <p className="demo-note">
-          Hồ sơ, ảnh và CV minh họa cho trải nghiệm sản phẩm.
+          Hồ sơ và ảnh minh họa cho trải nghiệm sản phẩm.
         </p>
       )}
     </article>

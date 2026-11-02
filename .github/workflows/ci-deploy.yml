@@ -92,7 +92,7 @@ jobs:
       - name: Check Cloudflare runtime
         shell: bash
         run: |
-          npx wrangler dev --port 4176 --var APP_ORIGIN:http://127.0.0.1:4176 > "$RUNNER_TEMP/worker.log" 2>&1 &
+          npx wrangler dev --port 4176 --var APP_ORIGIN:http://127.0.0.1:4176 --var MAILFLARE_URL:http://127.0.0.1:4180 --var MAILFLARE_API_KEY:runtime-test-only --var MAILFLARE_MAILBOX_ID:mailbox-test > "$RUNNER_TEMP/worker.log" 2>&1 &
           worker_pid=$!
           trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
           ready=false

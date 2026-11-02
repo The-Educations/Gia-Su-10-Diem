@@ -59,7 +59,7 @@ export function migrateDatabase(db) {
     .prepare("PRAGMA table_info(tutors)")
     .all()
     .map((c) => c.name);
-  for (const name of ["levels", "goals"]) {
+  for (const name of ["levels", "goals", "education_history", "profile_sections"]) {
     if (!tutorColumns.includes(name))
       db.exec(
         `ALTER TABLE tutors ADD COLUMN ${name} TEXT NOT NULL DEFAULT '[]'`,
@@ -75,6 +75,13 @@ export function migrateDatabase(db) {
         `ALTER TABLE tutors ADD COLUMN ${name} TEXT NOT NULL DEFAULT '${fallback}'`,
       );
   }
+  db.exec(`CREATE TABLE IF NOT EXISTS tutor_banners (
+    id TEXT PRIMARY KEY, tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
+    kind TEXT NOT NULL DEFAULT 'banner', data BLOB NOT NULL, mime TEXT NOT NULL,
+    name TEXT NOT NULL, size INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tutor_id,kind));
+    CREATE TABLE IF NOT EXISTS banner_chunks (
+    upload_id TEXT NOT NULL REFERENCES tutor_banners(id) ON DELETE CASCADE, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(upload_id,part));`);
   db.exec(`CREATE TABLE IF NOT EXISTS tutor_uploads (
     id TEXT PRIMARY KEY, tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
     kind TEXT NOT NULL CHECK(kind IN ('photo','cv')), data BLOB NOT NULL, mime TEXT NOT NULL,
@@ -103,6 +110,14 @@ export function migrateDatabase(db) {
     published INTEGER NOT NULL DEFAULT 0 CHECK(published IN (0,1)), author_id INTEGER NOT NULL REFERENCES users(id),
     published_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
+  if (!db.prepare("PRAGMA table_info(users)").all().some(c => c.name === "timezone")) db.exec("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'Asia/Ho_Chi_Minh'");
+  const userColumns = db.prepare("PRAGMA table_info(users)").all();
+  if (!userColumns.some(c => c.name === "email_verified_at")) db.exec("ALTER TABLE users ADD COLUMN email_verified_at TEXT");
+  if (!userColumns.some(c => c.name === "email_verification_required")) db.exec("ALTER TABLE users ADD COLUMN email_verification_required INTEGER NOT NULL DEFAULT 0");
+  db.exec(`CREATE TABLE IF NOT EXISTS email_verifications (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE,
+    expires INTEGER NOT NULL, sent_at INTEGER NOT NULL, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL
+  )`);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);
@@ -114,6 +129,9 @@ export const publicUser = (u) =>
         id: u.id,
         name: u.name,
         email: u.email,
+        timezone: u.timezone,
+        email_verified: !!u.email_verified_at,
+        email_verification_required: !!u.email_verification_required && !u.email_verified_at,
         role: u.role,
         learner_type: u.learner_type,
         goal: u.goal,

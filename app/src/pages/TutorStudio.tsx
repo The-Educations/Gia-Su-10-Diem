@@ -1,3 +1,6 @@
+import { ProfileSectionsEditor } from "@/components/tutor-sections";
+import { EducationEditor } from "@/components/tutor-education";
+import { TimezoneField } from "@/components/tutor-timezone";
 import { TutorGallery, TutorGalleryEditor } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -8,7 +11,7 @@ import { useState } from "react";
 import { Plus, Trash2, Camera, UserRound, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, dateTime, money } from "@/lib/api";
-import type { Tutor, Subject, Resource } from "@/lib/types";
+import type { Tutor, Subject, Resource, User } from "@/lib/types";
 import {
   Page,
   Heading,
@@ -40,7 +43,7 @@ function ProfileForm({
   subjects: Subject[];
   goals: string[];
 }) {
-  const { refresh } = useApp(),
+  const { refresh, setUser } = useApp(),
     [draft, setDraft] = useState(t),
     [mode, setMode] = useState(t.mode),
     [selected, setSelected] = useState(t.subjects),
@@ -54,9 +57,12 @@ function ProfileForm({
     setBusy(true);
     setError("");
     try {
-      await api("/tutor/profile", "PUT", {
+      const result = await api<{ user: User }>("/tutor/profile", "PUT", {
         ...d,
         profile_theme: draft.profile_theme,
+        profile_sections: draft.profile_sections,
+        timezone: draft.timezone,
+        education_history: draft.education_history,
         mode,
         subjects: selected,
         levels,
@@ -64,6 +70,7 @@ function ProfileForm({
         rate: Number(d.rate),
         experience: Number(d.experience),
       });
+      setUser(result.user);
       refresh();
       toast.success("Hồ sơ đã gửi quản trị viên duyệt.");
     } catch (e) {
@@ -171,6 +178,9 @@ function ProfileForm({
                   maxLength={200}
                 />
               </Field>
+              <EducationEditor value={draft.education_history} onChange={education_history => setDraft(previous => ({ ...previous, education_history }))} />
+              <ProfileSectionsEditor value={draft.profile_sections} onChange={profile_sections => setDraft(previous => ({ ...previous, profile_sections }))} />
+              <TimezoneField value={draft.timezone} onChange={timezone => setDraft(previous => ({ ...previous, timezone }))} />
               <div className="form-two">
                 <Field>
                   <FieldLabel htmlFor="location">Tỉnh / Thành phố</FieldLabel>
@@ -394,7 +404,7 @@ export default function TutorStudio() {
         <TabsList className="studio-tabs">
           <TabsTrigger value="files">
             <Camera size={16} />
-            Ảnh & CV
+            Ảnh hồ sơ
           </TabsTrigger>
           <TabsTrigger value="profile">
             <UserRound size={16} />

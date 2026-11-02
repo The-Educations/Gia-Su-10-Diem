@@ -1,3 +1,4 @@
+import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
 import { registerPosts } from "./posts.js";
 import { isGoogleAdmin } from "./admin-access.js";
 import { registerGallery, galleryMetadata } from "./gallery.js";
@@ -24,6 +25,7 @@ import {
   loginSchema,
   registerSchema,
   tutorSchema,
+  timezoneSchema,
   resourceSchema,
   subjectSchema,
 } from "./validation.js";
@@ -37,6 +39,7 @@ export function createApi(
     google = {},
     processPhoto,
     clientIp,
+    sendEmail,
   } = {},
 ) {
   const app = express();
@@ -53,7 +56,7 @@ export function createApi(
         return res.status(403).json({ error: "Nguồn yêu cầu không hợp lệ." });
       if (
         !(
-          (req.method === "PUT" && /^\/tutor\/uploads\/(photo|cv)$/.test(req.path)) ||
+          (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
           (req.method === "POST" && req.path === "/tutor/gallery")
         ) &&
         !req.is("application/json")
@@ -101,7 +104,7 @@ export function createApi(
       }),
     );
     app.use(
-      ["/api/auth/login", "/api/auth/register", "/api/auth/google"],
+      ["/api/auth/login", "/api/auth/register", "/api/auth/google", "/api/auth/verify-email", "/api/auth/resend-verification"],
       rateLimit({
         ...(clientIp
           ? {
@@ -132,6 +135,8 @@ export function createApi(
         return res
           .status(401)
           .json({ error: "Vui lòng đăng nhập để tiếp tục." });
+      if (needsEmailVerification(req.user))
+        return res.status(403).json({ error: "Vui lòng xác nhận email để tiếp tục.", code: "EMAIL_UNVERIFIED" });
       if (roles.length && !roles.includes(req.user.role))
         return res
           .status(403)
@@ -182,7 +187,7 @@ export function createApi(
   const tutorRows = () =>
     all(
       db,
-      `SELECT t.*,u.name,u.demo,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
+      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
     FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
     WHERE t.status='approved' AND u.status='active' AND u.role='tutor' GROUP BY t.user_id`,
     ).map(({ moderation_note, ...t }) => ({
@@ -191,7 +196,10 @@ export function createApi(
       subjects: JSON.parse(t.subjects),
       levels: JSON.parse(t.levels),
       goals: JSON.parse(t.goals),
+      education_history: JSON.parse(t.education_history),
+      profile_sections: JSON.parse(t.profile_sections),
     }));
+  const verification = registerEmailVerification(app, db, { origin, sendEmail });
   registerGoogleAuth(app, db, { origin, production, session, google });
   registerUploads(app, db, auth, audit, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
@@ -207,11 +215,12 @@ export function createApi(
       fail(403, "Tài khoản này cần đăng nhập bằng Google.");
     if (one(db, "SELECT id FROM users WHERE email=?", data.email))
       fail(409, "Email đã được sử dụng.");
+    if (!verification.configured) fail(503, "Đăng ký tạm thời chưa khả dụng. Vui lòng thử lại sau.");
     const hash = await passwordHash(data.password);
     const id = Number(
       run(
         db,
-        "INSERT INTO users(name,email,password,role,onboarding_step) VALUES (?,?,?,?,0)",
+        "INSERT INTO users(name,email,password,role,onboarding_step,email_verification_required) VALUES (?,?,?,?,0,1)",
         data.name,
         data.email,
         hash,
@@ -220,9 +229,10 @@ export function createApi(
     );
     if (data.role === "tutor")
       run(db, "INSERT INTO tutors(user_id) VALUES (?)", id);
-    res.status(201).json({
-      user: session(res, one(db, "SELECT * FROM users WHERE id=?", id)),
-    });
+    const user = one(db, "SELECT * FROM users WHERE id=?", id);
+    let verificationSent = true;
+    try { await verification.send(user); } catch { verificationSent = false; }
+    res.status(201).json({ user: session(res, user), verification_sent: verificationSent });
   });
   const dummyHashPromise = passwordHash(randomBytes(32).toString("hex"));
   app.post("/api/auth/login", async (req, res) => {
@@ -253,17 +263,18 @@ export function createApi(
   });
   app.patch("/api/account", auth(), (req, res) => {
     const d = z
-      .object({ name: text(80), goal: z.string().trim().max(1000) })
+      .object({ name: text(80), goal: z.string().trim().max(1000), timezone: timezoneSchema })
       .parse(req.body);
     transaction(db, () => {
       run(
         db,
-        "UPDATE users SET name=?,goal=? WHERE id=?",
+        "UPDATE users SET name=?,goal=?,timezone=COALESCE(?,timezone) WHERE id=?",
         d.name,
         d.goal,
+        d.timezone ?? null,
         req.user.id,
       );
-      if (req.user.role === "tutor" && d.name !== req.user.name)
+      if (req.user.role === "tutor" && (d.name !== req.user.name || (d.timezone && d.timezone !== req.user.timezone)))
         run(
           db,
           "UPDATE tutors SET status='pending',moderation_note='' WHERE user_id=?",
@@ -309,9 +320,9 @@ export function createApi(
         } else {
           const d = tutorSchema.parse(req.body);
           ensureSubjects(d.subjects);
-          run(db, `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,status='pending',moderation_note='' WHERE user_id=?`,
-            d.headline, d.bio, d.location, d.mode, d.rate, d.experience, d.education, JSON.stringify(d.subjects), user.id);
-          run(db, "UPDATE users SET name=?,onboarding_step=2 WHERE id=?", name, user.id);
+          run(db, `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,education_history=COALESCE(?,education_history),status='pending',moderation_note='' WHERE user_id=?`,
+            d.headline, d.bio, d.location, d.mode, d.rate, d.experience, d.education, JSON.stringify(d.subjects), d.education_history ? JSON.stringify(d.education_history) : null, user.id);
+          run(db, "UPDATE users SET name=?,timezone=COALESCE(?,timezone),onboarding_step=2 WHERE id=?", name, d.timezone ?? null, user.id);
         }
       } else {
         run(db, "UPDATE users SET onboarding_step=3 WHERE id=?", user.id);
@@ -389,11 +400,14 @@ export function createApi(
       ...t,
       gallery: galleryMetadata(db, t.user_id),
       name: req.user.name,
+      timezone: req.user.timezone,
       demo: req.user.demo,
       ...uploadMetadata(db, t.user_id),
       subjects: JSON.parse(t.subjects),
       levels: JSON.parse(t.levels),
       goals: JSON.parse(t.goals),
+      education_history: JSON.parse(t.education_history),
+      profile_sections: JSON.parse(t.profile_sections),
       slots: all(
         db,
         `SELECT s.*, EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed')) AS reserved FROM slots s WHERE tutor_id=? AND starts_at>? ORDER BY starts_at`,
@@ -411,25 +425,30 @@ export function createApi(
     ).map((r) => r.category);
     if (d.goals.some((g) => !knownGoals.includes(g)))
       fail(400, "Mục tiêu kỳ thi không có trong danh mục.");
-    run(
-      db,
-      `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=?,status='pending',moderation_note='' WHERE user_id=?`,
-      d.headline,
-      d.bio,
-      d.location,
-      d.mode,
-      d.rate,
-      d.experience,
-      d.education,
-      JSON.stringify(d.subjects),
-      JSON.stringify(d.levels),
-      JSON.stringify(d.goals),
-      d.teaching_style,
-      d.lesson_plan,
-      d.profile_theme,
-      req.user.id,
-    );
-    res.json({ ok: true });
+    transaction(db, () => {
+      if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
+      run(
+        db,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=?,education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status='pending',moderation_note='' WHERE user_id=?`,
+        d.headline,
+        d.bio,
+        d.location,
+        d.mode,
+        d.rate,
+        d.experience,
+        d.education,
+        JSON.stringify(d.subjects),
+        JSON.stringify(d.levels),
+        JSON.stringify(d.goals),
+        d.teaching_style,
+        d.lesson_plan,
+        d.profile_theme,
+        d.education_history ? JSON.stringify(d.education_history) : null,
+        d.profile_sections ? JSON.stringify(d.profile_sections) : null,
+        req.user.id,
+      );
+    });
+    res.json({ ok: true, user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)) });
   });
   app.post("/api/tutor/slots", auth("tutor"), (req, res) => {
     const d = z.object({ starts_at: z.iso.datetime() }).parse(req.body),
@@ -644,7 +663,7 @@ export function createApi(
       ),
       tutors: all(
         db,
-        "SELECT t.*,u.name,u.demo FROM tutors t JOIN users u ON u.id=t.user_id",
+        "SELECT t.*,u.name,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id",
       ).map((t) => ({
         ...t,
         ...uploadMetadata(db, t.user_id),
@@ -652,6 +671,8 @@ export function createApi(
         subjects: JSON.parse(t.subjects),
         levels: JSON.parse(t.levels),
         goals: JSON.parse(t.goals),
+        education_history: JSON.parse(t.education_history),
+        profile_sections: JSON.parse(t.profile_sections),
       })),
       resources: resourceRows(true),
       audit: all(
@@ -675,6 +696,8 @@ export function createApi(
         subjects: JSON.parse(t.subjects),
         levels: JSON.parse(t.levels),
         goals: JSON.parse(t.goals),
+        education_history: JSON.parse(t.education_history),
+        profile_sections: JSON.parse(t.profile_sections),
       });
     run(
       db,
