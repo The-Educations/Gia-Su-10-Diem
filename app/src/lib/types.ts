@@ -75,6 +75,8 @@ export type Tutor = {
   reviews: { name: string; rating: number; body: string }[];
 };
 export type Booking = {
+  offer_id?: number | null;
+  inquiry_id?: number | null;
   duration_minutes: number;
   id: number;
   student_id: number;

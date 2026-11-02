@@ -2907,3 +2907,36 @@ main {
 .support-welcome a { color: var(--primary); overflow-wrap: anywhere; }
 .conversation-list strong { display: flex; align-items: center; gap: 8px; }
 .conversation-list strong svg { flex: none; }
+
+
+.offer-list { display: grid; gap: 16px; margin-bottom: 28px; }
+.offer-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
+.offer-card h2 { margin: 8px 0; font-size: 18px; }
+.offer-card p { margin: 0; color: var(--muted-foreground); font-size: 14px; }
+.offer-detail { width: calc(100% - 32px); max-width: 880px; max-height: 90dvh; overflow-y: auto; }
+.offer-summary, .offer-week { display: flex; flex-wrap: wrap; gap: 12px 20px; font-size: 14px; }
+.offer-week { padding: 0; list-style: none; }
+.offer-week li { display: grid; gap: 6px; padding: 12px 16px; border-radius: 10px; background: var(--muted); }
+.offer-note, .lesson-notes p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.offer-sessions { max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+.offer-sessions > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.offer-sessions > div:last-child { border-bottom: 0; }
+.offer-sessions [data-conflict="true"] { color: var(--destructive); background: color-mix(in srgb,var(--destructive) 6%,var(--card)); }
+.offer-date-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.offer-date-fields input { min-width: 0; width: 100%; }
+.offer-forecast { display: grid; gap: 12px; font-size: 14px; }
+.offer-cancel { display: grid; gap: 12px; }
+.lesson-calendar { margin: 24px 0; }
+.lesson-calendar-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 14px; }
+.lesson-calendar-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+.lesson-calendar-week { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); min-width: 700px; min-height: 220px; background: var(--card); }
+.lesson-calendar-week > section { border-right: 1px solid var(--border); min-width: 0; }
+.lesson-calendar-week > section:last-child { border-right: 0; }
+.lesson-calendar-week h3 { display: grid; gap: 4px; margin: 0; padding: 14px 8px; text-align: center; border-bottom: 1px solid var(--border); font-size: 13px; }
+.lesson-calendar-week h3 span { color: var(--muted-foreground); font-weight: 400; }
+.lesson-calendar-week .is-today h3 { background: var(--muted); color: var(--primary); }
+.dated-lesson { display: grid; gap: 5px; width: calc(100% - 12px); margin: 6px; padding: 10px 8px; text-align: left; border-radius: 8px; font-size: 13px; background: var(--muted); cursor: pointer; overflow-wrap: anywhere; }
+.dated-lesson:hover { background: var(--accent); }
+.dated-lesson:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.dated-lesson-cancelled { opacity: .6; }
+@media (max-width: 640px) { .offer-card { flex-direction: column; align-items: stretch; padding: 18px; gap: 16px; } .offer-card .actions { flex-wrap: wrap; } .offer-date-fields { grid-template-columns: minmax(0,1fr); } }

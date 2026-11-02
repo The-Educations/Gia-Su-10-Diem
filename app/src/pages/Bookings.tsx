@@ -1,4 +1,5 @@
-import { WeeklyRequests } from "@/components/weekly-requests";
+import { LessonCalendar } from "@/components/lesson-calendar";
+import { calendarDate, type StudyOffer } from "@/lib/offers";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { MessageCircle, ExternalLink, Download } from "lucide-react";
@@ -64,9 +65,12 @@ export function downloadCalendar(b: Booking) {
 export default function Bookings() {
   const [params, setParams] = useSearchParams();
   const filter = params.get("status") || "",
-    setFilter = (v: string) => setParams(v ? { status: v } : {});
+    setFilter = (v: string) => setParams(previous => { const next = new URLSearchParams(previous); if(v) next.set("status",v); else next.delete("status"); return next; });
+  const offerId = params.get("offer");
   const { user, refresh } = useApp(),
     result = useLoad<Booking[]>("/bookings"),
+    offers = useLoad<StudyOffer[]>(user?.role === "admin" ? null : "/offers"),
+    [view, setView] = useState<Booking | null>(null),
     [edit, setEdit] = useState<Booking | null>(null),
     [review, setReview] = useState<Booking | null>(null),
     [rating, setRating] = useState("5"),
@@ -76,8 +80,10 @@ export default function Bookings() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const rows = (result.data || []).filter(
-    (b) => !filter || b.status === filter,
+    (b) => (!filter || b.status === filter) && (offerId ? String(b.offer_id) === offerId : user?.role === "admin" || !b.offer_id),
   );
+  const activeOffer = offers.data?.find(o=>String(o.id)===offerId);
+  const courses = (offers.data || []).filter(o=>(result.data || []).some(b=>b.offer_id===o.id && (!filter || b.status===filter)));
   async function mutate(path: string, method: string, data: unknown) {
     setBusy(true);
     setError("");
@@ -85,6 +91,7 @@ export default function Bookings() {
       await api(path, method, data);
       setAction(null);
       setEdit(null);
+      setView(null);
       setReview(null);
       refresh();
       toast.success("Đã cập nhật buổi học");
@@ -101,7 +108,7 @@ export default function Bookings() {
           user?.role === "admin"
             ? "Quản lý buổi học"
             : user?.role === "tutor"
-              ? "Lịch dạy & yêu cầu"
+              ? "Lịch dạy của tôi"
               : "Lịch học của tôi"
         }
         action={
@@ -112,7 +119,11 @@ export default function Bookings() {
           </Button>
         }
       />
-      <WeeklyRequests />
+      {!offerId && offers.loading && <Loading />}
+      {offers.error && <ErrorState error={offers.error} retry={offers.reload} />}
+      {!offerId && !!courses.length && <div className="offer-list course-list">{courses.map(o=><article className="offer-card" key={o.id}><div><h2>{o.subject_name} · {user?.role === "tutor" ? o.student_name : o.tutor_name}</h2><p>{calendarDate(o.start_date)} – {calendarDate(o.end_date)} · {(result.data || []).filter(b=>b.offer_id===o.id && b.status!=="cancelled").length} buổi</p></div><div className="actions"><Button asChild><Link to={`/bookings?offer=${o.id}`}>Xem lịch học</Link></Button><Button asChild variant="outline"><Link to={`/messages?inquiry=${o.inquiry_id}`}>Nhắn tin</Link></Button></div></article>)}</div>}
+      {offerId && <><div className="list-toolbar"><Button asChild variant="outline"><Link to="/bookings">Tất cả lịch học</Link></Button>{activeOffer && <h2>{activeOffer.subject_name} · {user?.role === "tutor" ? activeOffer.student_name : activeOffer.tutor_name}</h2>}</div><LessonCalendar lessons={rows} onOpen={setView} /></>}
+
       <div className="list-toolbar">
         <span>{rows.length} buổi học</span>
         <Choose
@@ -133,7 +144,7 @@ export default function Bookings() {
         <Loading />
       ) : result.error ? (
         <ErrorState error={result.error} retry={result.reload} />
-      ) : !rows.length ? (
+      ) : !rows.length && (offerId || !courses.length) ? (
         <Blank
           title="Chưa có buổi học trong mục này"
           description="Các yêu cầu và buổi học đã xác nhận sẽ xuất hiện ở đây."
@@ -175,14 +186,14 @@ export default function Bookings() {
                   {money(b.rate * b.duration_minutes / 60)}
                 </p>
                 <p className="muted">{dateTime(b.starts_at)} · {b.duration_minutes} phút</p>
-                {b.note && <p className="lesson-note">{b.note}</p>}
-                {b.lesson_note && (
+                {!b.offer_id && b.note && <p className="lesson-note">{b.note}</p>}
+                {!b.offer_id && b.lesson_note && (
                   <div className="lesson-notes">
                     <strong>Nội dung & bài tập</strong>
                     <p>{b.lesson_note}</p>
                   </div>
                 )}
-                {b.meeting_url && (
+                {!b.offer_id && b.meeting_url && (
                   <a
                     className="text-link"
                     href={b.meeting_url}
@@ -194,8 +205,9 @@ export default function Bookings() {
                   </a>
                 )}
                 <div className="actions">
+                  <Button variant="outline" onClick={()=>setView(b)}>Xem buổi học</Button>
                   <Button asChild variant="outline">
-                    <Link to={`/messages?lesson=${b.id}`}>
+                    <Link to={b.inquiry_id ? `/messages?inquiry=${b.inquiry_id}` : `/messages?lesson=${b.id}`}>
                       <MessageCircle data-icon="inline-start" />
                       Trao đổi
                     </Link>
@@ -286,6 +298,7 @@ export default function Bookings() {
           ))}
         </div>
       )}
+      <Dialog open={!!view} onOpenChange={open=>{if(!open)setView(null);}}><DialogContent><DialogHeader><DialogTitle>{view?.subject_name} · {view && dateTime(view.starts_at)}</DialogTitle><DialogDescription>{view && `${user?.role === "tutor" ? view.student_name : view.tutor_name} · ${view.duration_minutes} phút · Giờ Việt Nam`}</DialogDescription></DialogHeader>{view && <><State value={view.status} /><div className="lesson-notes"><h3>Ghi chú & bài tập</h3><p>{view.lesson_note || "Chưa có ghi chú cho buổi học này."}</p></div>{view.meeting_url && <a className="text-link" href={view.meeting_url} target="_blank" rel="noreferrer">Vào phòng học <ExternalLink size={15} /></a>}<div className="actions">{user?.role === "tutor" && ["accepted","completed"].includes(view.status) && <Button onClick={()=>{setEdit(view);setView(null);setError("");}}>Viết ghi chú</Button>}<Button asChild variant="outline"><Link to={view.inquiry_id ? `/messages?inquiry=${view.inquiry_id}` : `/messages?lesson=${view.id}`}>Nhắn tin</Link></Button></div></>}</DialogContent></Dialog>
       <Dialog
         open={!!action}
         onOpenChange={(o) => {
