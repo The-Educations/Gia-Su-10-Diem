@@ -86,7 +86,7 @@ export function Notifications() {
         aria-label="Thông báo cộng đồng"
       >
         <Bell data-icon="inline-start" />
-        Thông báo
+        <span className="hidden sm:inline">Thông báo</span>
         <CommunityUnread />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>

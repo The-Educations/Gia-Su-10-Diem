@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { one, run } from "../server/db.js";
 import { openDatabase } from "../server/local-db.js";
 
 import { seedCatalog, seedDemo } from "../server/seed.js";
@@ -13,6 +14,27 @@ process.env.APP_ORIGIN = `http://127.0.0.1:${process.env.PORT}`;
 const db = openDatabase();
 seedCatalog(db);
 await seedDemo(db, "BrowserStudy2026!");
+for (const [slug, role, learner] of [
+  ["community-parent", "student", "parent"],
+  ["community-pending", "tutor", "student"],
+]) {
+  const id = Number(
+    run(
+      db,
+      "INSERT INTO users(name,email,password,role,learner_type,demo) VALUES (?,?,?,?,?,1)",
+      `Private ${slug}`,
+      `${slug}@demo.giasu.test`,
+      one(
+        db,
+        "SELECT password FROM users WHERE email='student@demo.giasu.test'",
+      ).password,
+      role,
+      learner,
+    ).lastInsertRowid,
+  );
+  if (role === "tutor")
+    run(db, "INSERT INTO tutors(user_id,status) VALUES (?,'pending')", id);
+}
 db.close();
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
 const messages = new Map();

@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { Clock, Flag, FileText, EyeOff, RotateCw } from "lucide-react";
+import { WorkspaceStats } from "@/components/workspace";
 import { useLoad } from "@/lib/api";
 import type {
   CommunityOwner,
   CommunityPostData,
   CommunityReview,
+  CommunitySummary,
 } from "@/lib/types";
 import { Loading, ErrorState, Blank, Choose } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -71,11 +74,29 @@ type Report = {
   owner: CommunityOwner | null;
 };
 export default function AdminCommunity() {
-  const [tab, setTab] = useState("queue"),
-    [status, setStatus] = useState("approved"),
-    [page, setPage] = useState(1),
-    [action, setAction] = useState<CommunityAction | null>(null),
+  const [params, setParams] = useSearchParams();
+  const tab = ["queue", "reports", "posts", "publish"].includes(
+    params.get("section") || "",
+  )
+    ? params.get("section")!
+    : "queue";
+  const status = ["approved", "hidden", "deleted"].includes(
+    params.get("postStatus") || "",
+  )
+    ? params.get("postStatus")!
+    : "approved";
+  const page = Math.min(
+    100000,
+    Math.max(1, Math.trunc(Number(params.get("postPage"))) || 1),
+  );
+  const update = (values: Record<string, string>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(values)) next.set(key, value);
+    setParams(next);
+  };
+  const [action, setAction] = useState<CommunityAction | null>(null),
     [editor, setEditor] = useState<"announcement" | "rules" | null>(null);
+  const summary = useLoad<CommunitySummary>("/admin/community/summary");
   const queue = useLoad<CommunityReview[]>(
       tab === "queue" ? "/admin/community/queue" : null,
     ),
@@ -105,21 +126,70 @@ export default function AdminCommunity() {
     });
   return (
     <section className="community-admin">
-      <Button
-        variant="outline"
-        onClick={() => {
-          queue.reload();
-          reports.reload();
-          posts.reload();
-        }}
-      >
-        Tải lại danh sách
-      </Button>
-      <Tabs value={tab} onValueChange={setTab}>
+      <header className="community-admin-heading">
+        <h2>Quản lý cộng đồng</h2>
+        <div className="community-actions">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/community">Xem cộng đồng</Link>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Tải lại danh sách"
+            onClick={() => {
+              summary.reload();
+              queue.reload();
+              reports.reload();
+              posts.reload();
+              rules.reload();
+            }}
+          >
+            <RotateCw />
+          </Button>
+          <Button onClick={() => setEditor("announcement")}>
+            Đăng thông báo
+          </Button>
+        </div>
+      </header>
+      {summary.error ? (
+        <ErrorState error={summary.error} retry={summary.reload} />
+      ) : summary.data ? (
+        <WorkspaceStats
+          items={[
+            {
+              label: "Chờ duyệt",
+              value: summary.data.pending,
+              icon: Clock,
+              to: "/admin?tab=community&section=queue",
+            },
+            {
+              label: "Báo cáo chưa xử lý",
+              value: summary.data.reports,
+              icon: Flag,
+              to: "/admin?tab=community&section=reports",
+            },
+            {
+              label: "Đã đăng",
+              value: summary.data.approved,
+              icon: FileText,
+              to: "/admin?tab=community&section=posts&postStatus=approved",
+            },
+            {
+              label: "Đã ẩn",
+              value: summary.data.hidden,
+              icon: EyeOff,
+              to: "/admin?tab=community&section=posts&postStatus=hidden",
+            },
+          ]}
+        />
+      ) : (
+        <Loading />
+      )}
+      <Tabs value={tab} onValueChange={(section) => update({ section })}>
         <TabsList className="community-admin-tabs">
           <TabsTrigger value="queue">Chờ duyệt</TabsTrigger>
           <TabsTrigger value="reports">Báo cáo</TabsTrigger>
-          <TabsTrigger value="posts">Bài đã đăng</TabsTrigger>
+          <TabsTrigger value="posts">Bài viết</TabsTrigger>
           <TabsTrigger value="publish">Thông báo & Quy tắc</TabsTrigger>
         </TabsList>
         {tab !== "publish" &&
@@ -267,8 +337,7 @@ export default function AdminCommunity() {
             label="Trạng thái bài"
             value={status}
             onChange={(v) => {
-              setStatus(v);
-              setPage(1);
+              update({ postStatus: v, postPage: "1" });
             }}
             options={[
               { value: "approved", label: "Đã đăng" },
@@ -318,7 +387,7 @@ export default function AdminCommunity() {
               <Button
                 variant="outline"
                 disabled={page === 1}
-                onClick={() => setPage(page - 1)}
+                onClick={() => update({ postPage: String(page - 1) })}
               >
                 Trang trước
               </Button>
@@ -326,7 +395,7 @@ export default function AdminCommunity() {
               <Button
                 variant="outline"
                 disabled={!posts.data?.more}
-                onClick={() => setPage(page + 1)}
+                onClick={() => update({ postPage: String(page + 1) })}
               >
                 Trang sau
               </Button>
@@ -335,9 +404,6 @@ export default function AdminCommunity() {
         </TabsContent>
         <TabsContent value="publish">
           <div className="community-actions">
-            <Button onClick={() => setEditor("announcement")}>
-              Đăng thông báo
-            </Button>
             <Button
               variant="outline"
               disabled={!rules.data}

@@ -2770,3 +2770,24 @@ main {
 .availability-existing { margin-top: 1.5rem; }
 .availability-existing summary { cursor: pointer; font-weight: 550; }
 @media (hover: hover) { .availability-grid button:hover { box-shadow: inset 0 0 0 2px var(--foreground); } }
+
+/* Community role workspace and moderation overview. */
+.community-workspace { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.community-workspace-identity { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.community-workspace-identity > div { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.community-identity-label { font-size: .75rem; color: var(--muted-foreground); }
+.community-workspace-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }
+.community-workspace-nav > a:not([data-slot="button"]) { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius); font-size: .875rem; }
+.community-workspace-nav > a[aria-current="page"] { background: var(--muted); color: var(--primary); font-weight: 650; }
+.community-workspace-nav > a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.community-admin { display: flex; flex-direction: column; gap: 24px; }
+.community-admin-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.community-admin-heading h2 { font-size: 1.25rem; font-weight: 650; }
+.community-admin .workspace-metrics { margin: 0; }
+.community-admin-tabs { max-width: 100%; }
+.community-admin-tabs [data-slot="tabs-trigger"] { min-height: 40px; white-space: normal; }
+@media (max-width: 600px) {
+  .community-workspace { padding: 16px; }
+  .community-workspace-nav > a { min-height: 40px; }
+  .community-admin-tabs { width: 100%; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+}

@@ -60,7 +60,11 @@ test("community submission, rejection, revisions, tutor comments and moderation"
   await expect(page.getByText("Đang chờ duyệt", { exact: true })).toBeVisible();
   const path = new URL(page.url()).pathname,
     postId = path.split("/").at(-1)!;
-  await login(admin, "admin", "/admin?tab=community");
+  await login(admin, "admin", `/community/${postId}`);
+  await expect(
+    admin.getByRole("button", { name: "Ẩn bài", exact: true }),
+  ).toHaveCount(0);
+  await admin.getByRole("link", { name: "Xét duyệt bài viết" }).click();
   let card = admin
     .locator(".community-card")
     .filter({ has: admin.getByRole("heading", { name: title, exact: true }) });
@@ -118,22 +122,28 @@ test("community submission, rejection, revisions, tutor comments and moderation"
   await tutor
     .getByLabel("Bình luận", { exact: true })
     .fill("Bạn có thể bắt đầu với một bài đọc ngắn mỗi ngày.");
+  let identityRequests = 0;
+  await tutor.route("**/api/community/me", async (route) => {
+    identityRequests++;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.continue();
+  });
   await tutor
     .getByRole("button", { name: "Gửi bình luận", exact: true })
-    .click();
-  if (
-    await tutor
-      .getByRole("dialog", { name: "Tên hiển thị của bạn" })
-      .isVisible()
-  ) {
-    await tutor.getByLabel("Tên hiển thị", { exact: true }).fill("Châu");
-    await tutor.getByRole("button", { name: "Lưu tên và tiếp tục" }).click();
-  }
+    .dblclick();
+  await expect(
+    tutor.getByRole("dialog", { name: "Tên hiển thị của bạn" }),
+  ).toHaveCount(0);
   await expect(
     tutor.getByText("Bạn có thể bắt đầu với một bài đọc ngắn mỗi ngày.", {
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    tutor.getByRole("heading", { name: "Bình luận (1)", exact: true }),
+  ).toBeVisible();
+  expect(identityRequests).toBe(1);
+  await tutor.unroute("**/api/community/me");
   await page.reload();
   await expect(
     page.locator(".community-comment").getByRole("link", { name: /Gia sư/ }),
@@ -156,10 +166,30 @@ test("community submission, rejection, revisions, tutor comments and moderation"
     .click();
   await admin.getByLabel("Lý do", { exact: true }).fill("Kiểm thử quản trị");
   await confirm(admin);
+  const anotherRevision = await page.request.put(
+    `/api/community/posts/${postId}`,
+    {
+      data: { title, body: "Bản sửa cần xem lại trước khi khôi phục." },
+    },
+  );
+  expect(anotherRevision.status()).toBe(200);
+  await admin.reload();
   await admin.getByRole("button", { name: "Ẩn bài", exact: true }).click();
   await admin.getByLabel("Lý do", { exact: true }).fill("Nội dung cần xem lại");
   await confirm(admin);
   await expect(admin.getByText("Đã bị ẩn", { exact: true })).toBeVisible();
+  await expect(
+    admin.getByRole("link", { name: "Xét duyệt bài viết" }),
+  ).toHaveCount(0);
+  await admin
+    .getByRole("link", { name: "Quản lý cộng đồng", exact: true })
+    .click();
+  await expect(
+    admin.getByRole("combobox", { name: "Trạng thái bài" }),
+  ).toContainText("Đã ẩn");
+  await expect(
+    admin.getByRole("heading", { name: title, exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(
     page.getByText("Nội dung cần xem lại", { exact: true }),
@@ -285,4 +315,107 @@ test("community guest, SEO, pinned rules, keyboard expansion and responsive widt
     expect(await hidden.text()).toContain("noindex");
   }
   await admin.close();
+});
+
+test("role workspaces, public identity and persistent admin navigation", async ({
+  browser,
+}) => {
+  for (const [slug, tier] of [
+    ["student", "Học sinh"],
+    ["community-parent", "Phụ huynh"],
+    ["community-pending", "Học sinh"],
+    ["chau", "Gia sư"],
+    ["admin", "Quản trị viên"],
+  ]) {
+    const context = await browser.newContext({ reducedMotion: "reduce" });
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await login(page, slug);
+    const workspace = page.getByRole("region", {
+      name: "Không gian cộng đồng của bạn",
+    });
+    await expect(workspace.locator(".community-author")).toContainText(tier);
+    await expect(workspace).not.toContainText("Private");
+    await expect(
+      workspace.getByRole("link", { name: "Thảo luận", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    if (slug === "admin") {
+      await workspace.getByRole("link", { name: "Quản lý cộng đồng" }).click();
+      await expect(
+        page.getByRole("heading", { name: "Quản lý cộng đồng" }),
+      ).toBeVisible();
+      await page.getByRole("tab", { name: "Báo cáo", exact: true }).click();
+      await page.reload();
+      await expect(
+        page.getByRole("tab", { name: "Báo cáo", exact: true }),
+      ).toHaveAttribute("aria-selected", "true");
+      await page.getByRole("link", { name: /^Xem đã ẩn:/ }).click();
+      await expect(
+        page.getByRole("combobox", { name: "Trạng thái bài" }),
+      ).toContainText("Đã ẩn");
+      await page.reload();
+      await expect(
+        page.getByRole("combobox", { name: "Trạng thái bài" }),
+      ).toContainText("Đã ẩn");
+      await page.getByRole("tab", { name: "Thông báo & Quy tắc" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(
+        page.getByRole("button", { name: "Sửa Quy tắc cộng đồng" }),
+      ).toBeVisible();
+    } else {
+      await expect(
+        workspace.getByRole("link", { name: "Quản lý cộng đồng" }),
+      ).toHaveCount(0);
+      if (slug === "chau") {
+        await expect(
+          workspace.getByRole("link", { name: /Gia sư/ }),
+        ).toHaveAttribute("href", /\/app\/tutors\/\d+/);
+        await page
+          .getByRole("button", { name: "Đăng bài", exact: true })
+          .click();
+        await expect(
+          page.getByRole("dialog", { name: "Đăng bài", exact: true }),
+        ).toBeVisible();
+        await page.keyboard.press("Escape");
+      } else if (slug !== "student") {
+        await page
+          .getByRole("button", { name: "Đăng bài", exact: true })
+          .click();
+        await expect(
+          page.getByRole("dialog", { name: "Tên hiển thị của bạn" }),
+        ).toBeVisible();
+        await page
+          .getByLabel("Tên hiển thị", { exact: true })
+          .fill("Tên cộng đồng");
+        await page.getByRole("button", { name: "Lưu tên và tiếp tục" }).click();
+        await expect(
+          page.getByRole("dialog", { name: "Đăng bài", exact: true }),
+        ).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(workspace.locator(".community-author")).toContainText(
+          `Tên cộng đồng - ${tier}`,
+        );
+      }
+      await workspace.getByRole("link", { name: /Bài của tôi/ }).click();
+      await expect(
+        page.getByRole("heading", { name: "Bài của tôi", exact: true }),
+      ).toBeVisible();
+      await expect(
+        workspace.getByRole("link", { name: /Bài của tôi/ }),
+      ).toHaveAttribute("aria-current", "page");
+    }
+    for (const width of [320, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        )
+        .toBe(true);
+    }
+    expect(errors).toEqual([]);
+    await context.close();
+  }
 });

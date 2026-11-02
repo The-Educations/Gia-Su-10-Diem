@@ -3,7 +3,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Pin, MessageCircle, ThumbsUp, Check, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, dateTime, accountDestination } from "@/lib/api";
-import type { CommunityAuthor, CommunityPostData } from "@/lib/types";
+import type {
+  CommunityAuthor,
+  CommunityIdentity,
+  CommunityPostData,
+} from "@/lib/types";
 import { Person, ErrorState, Submit } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -156,7 +160,7 @@ export function PostCard({ post }: { post: CommunityPostData }) {
   );
 }
 export function useCommunityGate() {
-  const { user, setUser } = useApp(),
+  const { user, setUser, refresh } = useApp(),
     loc = useLocation(),
     navigate = useNavigate();
   const [guest, setGuest] = useState(false),
@@ -164,7 +168,12 @@ export function useCommunityGate() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const pending = useRef<(() => void) | null>(null);
-  const run = (action: () => void, needsName = false, allowLocked = false) => {
+  const checkingIdentity = useRef(false);
+  const run = async (
+    action: () => void,
+    needsName = false,
+    allowLocked = false,
+  ) => {
     if (!user) {
       setGuest(true);
       return;
@@ -180,6 +189,22 @@ export function useCommunityGate() {
       return;
     }
     if (needsName && user.role !== "admin" && !user.display_name) {
+      if (user.role === "tutor") {
+        if (checkingIdentity.current) return;
+        checkingIdentity.current = true;
+        try {
+          const identity = await api<CommunityIdentity>("/community/me");
+          if (!identity.needs_name) {
+            action();
+            return;
+          }
+        } catch (e) {
+          toast.error((e as Error).message);
+          return;
+        } finally {
+          checkingIdentity.current = false;
+        }
+      }
       pending.current = action;
       setError("");
       setNaming(true);
@@ -234,6 +259,7 @@ export function useCommunityGate() {
                   { display_name: name },
                 );
                 if (user) setUser({ ...user, display_name: d.display_name });
+                refresh();
                 setNaming(false);
                 pending.current?.();
               } catch (e) {

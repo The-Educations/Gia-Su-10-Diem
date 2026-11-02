@@ -671,3 +671,75 @@ test("stale moderation cannot publish or reject unseen submissions or revisions"
     "Nội dung B",
   );
 });
+
+test("role workspace identity and admin summary stay private and reflect moderation", async (t) => {
+  const { db, ids, call, create, approve } = await fixture(t);
+  assert.equal((await call(null, "/community/me")).status, 401);
+  for (const role of ["student", "parent", "pending", "tutor", "admin"]) {
+    run(db, "UPDATE users SET display_name='' WHERE id=?", ids[role]);
+    const identity = await call(role, "/community/me");
+    assert.equal(identity.status, 200);
+    assert.equal(
+      identity.data.needs_name,
+      ["student", "parent", "pending"].includes(role),
+    );
+    assert.equal(
+      identity.data.author.tier,
+      role === "pending" ? "student" : role,
+    );
+    assert.equal(
+      JSON.stringify(identity.data).includes("Private"),
+      ["tutor", "admin"].includes(role),
+    );
+    assert.equal(
+      JSON.stringify(identity.data).includes("@private.test"),
+      false,
+    );
+    if (role !== "admin")
+      assert.equal((await call(role, "/admin/community/summary")).status, 403);
+  }
+  assert.equal((await call(null, "/admin/community/summary")).status, 401);
+  assert.deepEqual((await call("admin", "/admin/community/summary")).data, {
+    pending: 0,
+    approved: 0,
+    hidden: 0,
+    reports: 0,
+  });
+  run(db, "UPDATE users SET display_name='Minh' WHERE id=?", ids.student);
+  const first = await create();
+  const unnamed = await call("parent", "/community/posts", "POST", {
+    title: "Học Toán",
+    body: "Cần cách học hiệu quả.",
+  });
+  assert.equal(unnamed.status, 409);
+  assert.equal(
+    (await call("admin", "/admin/community/summary")).data.pending,
+    1,
+  );
+  await approve(first);
+  await call("student", `/community/posts/${first}`, "PUT", {
+    title: "Bản sửa Toán lớp 8",
+    body: "Mình muốn luyện thêm bài tập.",
+  });
+  await call("other", "/community/reports", "POST", {
+    target_type: "post",
+    target_id: first,
+    reason: "Khác",
+    detail: "Cần xem lại nội dung",
+  });
+  assert.deepEqual((await call("admin", "/admin/community/summary")).data, {
+    pending: 1,
+    approved: 1,
+    hidden: 0,
+    reports: 1,
+  });
+  await call("admin", `/admin/community/posts/${first}/hide`, "POST", {
+    note: "Cần kiểm tra",
+  });
+  assert.deepEqual((await call("admin", "/admin/community/summary")).data, {
+    pending: 0,
+    approved: 0,
+    hidden: 1,
+    reports: 1,
+  });
+});

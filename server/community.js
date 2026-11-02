@@ -253,6 +253,14 @@ export function registerCommunity(app, db, auth, audit) {
   app.get("/api/community/posts/:id", (req, res) =>
     res.json(serialize(getPost(req.params.id, req.user), req.user)),
   );
+  app.get("/api/community/me", auth(), (req, res) => {
+    const identity = author(req.user.id);
+    res.json({
+      author: identity,
+      needs_name:
+        !["admin", "tutor"].includes(identity.tier) && !req.user.display_name,
+    });
+  });
   app.put("/api/community/me/display-name", auth(), participant, (req, res) => {
     const name = displayNameSchema.parse(req.body.display_name);
     run(db, "UPDATE users SET display_name=? WHERE id=?", name, req.user.id);

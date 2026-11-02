@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PenLine, Search, ArrowLeft, ArrowRight } from "lucide-react";
 import { useApp, useLoad } from "@/lib/api";
 import type { CommunityFeed, Subject } from "@/lib/types";
@@ -15,10 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostCard, useCommunityGate } from "@/components/community/shared";
 import Compose from "@/components/community/Compose";
-import {
-  Notifications,
-  CommunityUnread,
-} from "@/components/community/Notifications";
+import CommunityWorkspace from "@/components/community/Workspace";
 export default function Community() {
   const { user } = useApp(),
     [params, setParams] = useSearchParams(),
@@ -39,22 +36,8 @@ export default function Community() {
   return (
     <Page>
       <div className="community-page">
-        <Heading
-          title="Cộng đồng"
-          action={
-            user && (
-              <div className="community-actions">
-                <Button asChild variant="outline">
-                  <Link to="/community/mine">
-                    Bài của tôi
-                    <CommunityUnread />
-                  </Link>
-                </Button>
-                <Notifications />
-              </div>
-            )
-          }
-        />
+        <Heading title="Cộng đồng" />
+        <CommunityWorkspace />
         {result.data?.rules && <PostCard post={result.data.rules} />}
         <section className="community-toolbar" aria-label="Tìm bài viết">
           <Button onClick={() => gate.run(() => setCompose(true), true)}>

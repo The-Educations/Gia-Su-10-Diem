@@ -19,6 +19,22 @@ export function registerCommunityAdmin(
       p.author_id,
     ),
   });
+  app.get(`${base}/summary`, admin, (_req, res) =>
+    res.json({
+      ...one(
+        db,
+        `SELECT
+        COUNT(CASE WHEN status='pending' OR (status='approved' AND revision_status='pending') THEN 1 END) pending,
+        COUNT(CASE WHEN status='approved' THEN 1 END) approved,
+        COUNT(CASE WHEN status='hidden' THEN 1 END) hidden
+        FROM community_posts WHERE kind!='rules'`,
+      ),
+      reports: one(
+        db,
+        "SELECT COUNT(*) total FROM community_reports WHERE status='open'",
+      ).total,
+    }),
+  );
   app.get(`${base}/queue`, admin, (_req, res) =>
     res.json(
       all(

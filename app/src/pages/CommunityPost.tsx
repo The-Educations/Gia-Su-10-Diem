@@ -53,6 +53,9 @@ export default function CommunityPost() {
     );
   const p = result.data,
     live = p.public,
+    reviewable =
+      p.status === "pending" ||
+      (p.status === "approved" && p.revision_status === "pending"),
     editable = p.mine && p.kind !== "rules" && p.status !== "hidden";
   return (
     <Page>
@@ -60,6 +63,21 @@ export default function CommunityPost() {
         <Link className="text-link" to="/community">
           ← Cộng đồng
         </Link>
+        {user?.role === "admin" && (
+          <nav className="community-actions" aria-label="Quản lý cộng đồng">
+            <Button asChild variant="outline">
+              <Link
+                to={`/admin?tab=community&section=${p.kind === "rules" ? "publish" : reviewable ? "queue" : `posts&postStatus=${p.status === "hidden" ? "hidden" : "approved"}`}`}
+              >
+                {p.kind === "rules"
+                  ? "Sửa Quy tắc cộng đồng"
+                  : reviewable
+                    ? "Xét duyệt bài viết"
+                    : "Quản lý cộng đồng"}
+              </Link>
+            </Button>
+          </nav>
+        )}
         <article className="community-card community-detail">
           <div className="community-card-meta">
             <AuthorLabel author={p.author} />
@@ -174,23 +192,25 @@ export default function CommunityPost() {
                 )}
               </>
             )}
-            {user?.role === "admin" && p.kind !== "rules" && (
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setAction({
-                    title: p.status === "hidden" ? "Khôi phục bài" : "Ẩn bài",
-                    path: `/admin/community/posts/${id}/${p.status === "hidden" ? "restore" : "hide"}`,
-                    method: "POST",
-                    ...(p.status === "hidden"
-                      ? {}
-                      : { reasonField: "note" as const }),
-                  })
-                }
-              >
-                {p.status === "hidden" ? "Khôi phục bài" : "Ẩn bài"}
-              </Button>
-            )}
+            {user?.role === "admin" &&
+              p.kind !== "rules" &&
+              ["approved", "hidden"].includes(p.status || "") && (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setAction({
+                      title: p.status === "hidden" ? "Khôi phục bài" : "Ẩn bài",
+                      path: `/admin/community/posts/${id}/${p.status === "hidden" ? "restore" : "hide"}`,
+                      method: "POST",
+                      ...(p.status === "hidden"
+                        ? {}
+                        : { reasonField: "note" as const }),
+                    })
+                  }
+                >
+                  {p.status === "hidden" ? "Khôi phục bài" : "Ẩn bài"}
+                </Button>
+              )}
           </div>
           {p.mine && p.revision_body && (
             <details className="community-revision">
