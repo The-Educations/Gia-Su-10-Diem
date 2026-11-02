@@ -1,3 +1,4 @@
+import { TutorLocalTime } from "@/components/tutor-timezone";
 import { Collapsible } from "@animate-ui/react/primitives/radix-ui/collapsible";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -9,7 +10,6 @@ import {
   SlidersHorizontal,
   GraduationCap,
   Star,
-  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, money } from "@/lib/api";
@@ -302,12 +302,7 @@ export default function Tutors({
                   </Badge>
                 ))}
                 {!!t.demo && <Badge variant="outline">Hồ sơ mẫu</Badge>}
-                {t.cv && (
-                  <Badge variant="outline">
-                    <FileText size={12} />
-                    Có CV
-                  </Badge>
-                )}
+
               </div>
               <div className="tutor-facts">
                 <span>
@@ -326,6 +321,7 @@ export default function Tutors({
                       ? "Online & trực tiếp"
                       : "Trực tiếp"}
                 </span>
+                <TutorLocalTime zone={t.timezone} />
                 <span>
                   <Star size={16} />
                   {t.review_count

@@ -1,3 +1,5 @@
+import { EducationEditor, newEducation } from "@/components/tutor-education";
+import { TimezoneField } from "@/components/tutor-timezone";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { BookOpen, Users, GraduationCap, Check, ArrowRight } from "lucide-react";
@@ -73,7 +75,7 @@ export default function Onboarding() {
           <h2>{isTutor ? "Tiếp theo: chuẩn bị buổi dạy đầu tiên" : "Tiếp theo: tìm buổi học đầu tiên"}</h2>
           <ol className="setup-guide">{(isTutor ? [
             "Hồ sơ đang chờ duyệt. Gia sư chỉ xuất hiện trong tìm kiếm sau khi được duyệt.",
-            "Trong Hồ sơ gia sư, thêm ảnh, CV và mở khung giờ bạn có thể dạy.",
+            "Trong Hồ sơ gia sư, thêm ảnh, thông tin chuyên môn và mở khung giờ bạn có thể dạy.",
             "Vào Lịch dạy & yêu cầu để xác nhận buổi học và trao đổi với học sinh.",
           ] : user!.learner_type === "parent" ? [
             "Chọn môn học và gia sư phù hợp với mục tiêu của con.",
@@ -97,11 +99,13 @@ export default function Onboarding() {
 function ProfileForm({ user, tutor, subjects, busy, save }: { user: User; tutor: Tutor | null; subjects: Subject[]; busy: boolean; save: (values: Record<string, unknown>) => Promise<void> }) {
   const [mode, setMode] = useState(tutor?.mode || "online");
   const [selected, setSelected] = useState(tutor?.subjects || []);
+  const [education, setEducation] = useState(tutor?.education_history?.length ? tutor.education_history : [newEducation()]);
+  const [timezone, setTimezone] = useState(tutor?.timezone || "Asia/Ho_Chi_Minh");
   const isTutor = user.role === "tutor";
   function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.currentTarget));
-    void save(isTutor ? { ...d, mode, subjects: selected, rate: Number(d.rate), experience: Number(d.experience) } : d);
+    void save(isTutor ? { ...d, mode, timezone, education_history: education, subjects: selected, rate: Number(d.rate), experience: Number(d.experience) } : d);
   }
   return <form onSubmit={submit}>
     <FieldGroup>
@@ -110,6 +114,8 @@ function ProfileForm({ user, tutor, subjects, busy, save }: { user: User; tutor:
         <Field><FieldLabel htmlFor="setup-headline">Tiêu đề hồ sơ</FieldLabel><Input id="setup-headline" name="headline" defaultValue={tutor?.headline} placeholder="Gia sư Toán THCS — học chắc kiến thức nền" required maxLength={120} /></Field>
         <Field><FieldLabel htmlFor="setup-bio">Giới thiệu cách bạn dạy</FieldLabel><Textarea id="setup-bio" name="bio" defaultValue={tutor?.bio} required maxLength={2000} /></Field>
         <Field><FieldLabel htmlFor="setup-education">Học vấn / Chuyên môn</FieldLabel><Input id="setup-education" name="education" defaultValue={tutor?.education} required maxLength={200} /></Field>
+        <EducationEditor value={education} onChange={setEducation} required />
+        <TimezoneField value={timezone} onChange={setTimezone} />
         <fieldset className="setup-subjects"><legend>Môn dạy</legend><div>{subjects.map((s) => <label key={s.id}><input type="checkbox" checked={selected.includes(s.id)} onChange={(e) => setSelected(e.target.checked ? [...selected, s.id] : selected.filter((id) => id !== s.id))} />{s.name}</label>)}</div></fieldset>
         <div className="setup-pair">
           <Field><FieldLabel htmlFor="setup-rate">Học phí / giờ (VNĐ)</FieldLabel><Input id="setup-rate" name="rate" type="number" min={50000} max={3000000} step={1} defaultValue={tutor?.rate || 150000} required /></Field>

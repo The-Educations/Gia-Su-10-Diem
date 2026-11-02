@@ -1,7 +1,6 @@
 import { TutorGallery } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
 import { ContactTutor } from "@/components/contact-tutor";
-import { FileText, Download } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, CalendarDays, Check } from "lucide-react";
@@ -77,15 +76,7 @@ export default function TutorDetail() {
           <TutorPresentation tutor={t} subjects={subjects.data || []}>
             <div className="profile-actions">
               <ContactTutor tutor={t} />
-              {t.cv && (
-                <Button variant="outline" asChild>
-                  <a href={t.cv.url}>
-                    <FileText data-icon="inline-start" />
-                    Tải CV
-                    <Download data-icon="inline-end" />
-                  </a>
-                </Button>
-              )}
+
             </div>
             <a className="mobile-book-link text-link" href="#booking-panel">
               Chọn giờ học · {money(t.rate)} / giờ
@@ -149,7 +140,7 @@ export default function TutorDetail() {
                   allLabel="Chọn khung giờ"
                   options={t.slots.map((s) => ({
                     value: String(s.id),
-                    label: dateTime(s.starts_at),
+                    label: `${dateTime(s.starts_at)} · ${s.duration_minutes} phút`,
                   }))}
                 />
                 {t.mode === "both" && (
@@ -209,8 +200,8 @@ export default function TutorDetail() {
               <dd>{chosen && dateTime(chosen.starts_at)}</dd>
             </div>
             <div>
-              <dt>Học phí / 60 phút</dt>
-              <dd>{money(t.rate)}</dd>
+              <dt>Học phí / {chosen?.duration_minutes} phút</dt>
+              <dd>{chosen && money(t.rate * chosen.duration_minutes / 60)}</dd>
             </div>
             <div>
               <dt>Hình thức</dt>

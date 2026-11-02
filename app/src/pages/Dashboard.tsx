@@ -140,7 +140,7 @@ export default function Dashboard() {
                   <div>
                     <h2>{next.subject_name}</h2>
                     <p>{isTutor ? next.student_name : next.tutor_name}</p>
-                    <span>{dateTime(next.starts_at)} · 60 phút</span>
+                    <span>{dateTime(next.starts_at)} · {next.duration_minutes} phút</span>
                   </div>
                 </div>
                 <div className="next-lesson-actions">
@@ -257,8 +257,8 @@ export default function Dashboard() {
                     aria-label="Mức hoàn thiện thông tin hồ sơ"
                   />
                   <div className="readiness-links">
-                    <Link to="/studio?tab=files">
-                      Ảnh & CV
+                    <Link to="/studio?tab=profile">
+                      Ảnh hồ sơ
                       <ArrowUpRight size={16} />
                     </Link>
                     <Link to="/studio?tab=slots">

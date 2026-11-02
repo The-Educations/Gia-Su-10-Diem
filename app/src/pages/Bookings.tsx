@@ -45,7 +45,7 @@ export function downloadCalendar(b: Booking) {
     `UID:lesson-${b.id}@giasu10diem.local`,
     `DTSTAMP:${stamp(new Date())}`,
     `DTSTART:${stamp(new Date(b.starts_at))}`,
-    `DTEND:${stamp(new Date(new Date(b.starts_at).getTime() + 3600000))}`,
+    `DTEND:${stamp(new Date(new Date(b.starts_at).getTime() + b.duration_minutes * 60000))}`,
     `SUMMARY:${escape(`${b.subject_name} · ${b.tutor_name}`)}`,
     `DESCRIPTION:${escape(b.note)}`,
     "END:VEVENT",
@@ -112,7 +112,7 @@ export default function Bookings() {
         }
       />
       <div className="list-toolbar">
-        <span>{rows.length} buổi học · mỗi buổi 60 phút</span>
+        <span>{rows.length} buổi học</span>
         <Choose
           label="Trạng thái"
           value={filter}
@@ -170,9 +170,9 @@ export default function Bookings() {
                 <p>
                   {user?.role === "tutor" ? b.student_name : b.tutor_name} ·{" "}
                   {b.mode === "online" ? "Trực tuyến" : "Trực tiếp"} ·{" "}
-                  {money(b.rate)}
+                  {money(b.rate * b.duration_minutes / 60)}
                 </p>
-                <p className="muted">{dateTime(b.starts_at)}</p>
+                <p className="muted">{dateTime(b.starts_at)} · {b.duration_minutes} phút</p>
                 {b.note && <p className="lesson-note">{b.note}</p>}
                 {b.lesson_note && (
                   <div className="lesson-notes">
@@ -253,7 +253,7 @@ export default function Bookings() {
                     )}
                   {user?.role === "tutor" &&
                     b.status === "accepted" &&
-                    new Date(b.starts_at).getTime() + 3600000 <= Date.now() && (
+                    new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= Date.now() && (
                       <Button
                         onClick={() => {
                           setError("");

@@ -170,7 +170,8 @@ export const statusNames: Record<string, string> = {
 
 export function accountDestination(user: User, next?: string | null) {
   const safe = next && /^\/(?!\/)/.test(next) && !/[\\\x00-\x20]/.test(next)
-    && !/^\/(auth|onboarding)([/?#]|$)/.test(next) ? next : "";
+    && !/^\/(auth|onboarding|verify-email)([/?#]|$)/.test(next) ? next : "";
+  if (user.email_verification_required) return `/verify-email${safe ? `?next=${encodeURIComponent(safe)}` : ""}`;
   if (user.role !== "admin" && user.onboarding_step < 3)
     return `/onboarding${safe ? `?next=${encodeURIComponent(safe)}` : ""}`;
   return safe || (user.role === "tutor" ? "/studio" : user.role === "admin" ? "/admin" : "/workspace");

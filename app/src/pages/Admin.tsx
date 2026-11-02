@@ -1,3 +1,6 @@
+import { ProfileSections } from "@/components/tutor-sections";
+import { EducationTimeline } from "@/components/tutor-education";
+import { TimezoneTag } from "@/components/tutor-timezone";
 import AdminPosts from "./AdminPosts";
 import { accountRole } from "@/lib/types";
 import { TutorGallery } from "@/components/tutor-gallery";
@@ -222,7 +225,6 @@ export default function Admin() {
                     <p>{t.headline || "Chưa hoàn thiện hồ sơ"}</p>
                     <span>
                       {money(t.rate)} / giờ{t.demo ? " · Hồ sơ mẫu" : ""}
-                      {t.cv ? " · Có CV" : " · Chưa có CV"}
                     </span>
                   </div>
                   <State
@@ -529,6 +531,8 @@ export default function Admin() {
             )}
             <p>{tutor?.bio}</p>
           </div>
+          {tutor && <TimezoneTag zone={tutor.timezone} />}
+          {!!tutor?.education_history.length && <Section title="Quá trình học tập"><EducationTimeline entries={tutor.education_history} /></Section>}
           {tutor?.teaching_style && (
             <Section title="Phương pháp giảng dạy">
               <p className="reading-text">{tutor.teaching_style}</p>
@@ -540,11 +544,8 @@ export default function Admin() {
             </Section>
           )}
           {tutor && <TutorGallery images={tutor.gallery || []} name={tutor.name} />}
-          {tutor?.cv && (
-            <Button variant="outline" asChild>
-              <a href={tutor.cv.url}>Tải CV · {tutor.cv.name}</a>
-            </Button>
-          )}
+          {tutor && <ProfileSections sections={tutor.profile_sections} />}
+          {tutor?.banner_url && <img className="admin-banner" src={tutor.banner_url} alt={`Ảnh bìa của ${tutor.name}`} />}
           <dl className="summary-list">
             <div>
               <dt>Học vấn</dt>
