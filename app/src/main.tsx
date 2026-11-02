@@ -63,6 +63,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Bookings = lazy(() => import("./pages/Bookings"));
 const Messages = lazy(() => import("./pages/Messages"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
+const TutorCalendar = lazy(() => import("./pages/TutorCalendar"));
 const TutorStudio = lazy(() => import("./pages/TutorStudio"));
 const Admin = lazy(() => import("./pages/Admin"));
 
@@ -123,12 +124,12 @@ function Shell() {
             icon: user.role === "admin" ? ShieldCheck : House,
           },
           {
-            to: "/bookings",
+            to: user.role === "student" ? "/bookings" : "/calendar",
             label:
               user.role === "admin"
-                ? "Quản lý buổi học"
+                ? "Lịch dạy"
                 : user.role === "tutor"
-                  ? "Lịch dạy & yêu cầu"
+                  ? "Lịch dạy"
                   : user.learner_type === "parent" ? "Lịch học của con" : "Lịch học của tôi",
             icon: CalendarDays,
           },
@@ -140,7 +141,7 @@ function Shell() {
         ]
       : []),
     ...(user?.role === "tutor"
-      ? [{ to: "/studio", label: "Hồ sơ & giờ trống", icon: Settings }]
+      ? [{ to: "/studio", label: "Hồ sơ gia sư", icon: Settings }]
       : []),
     ...(user?.role === "student"
       ? [{ to: "/availability", label: "Lịch rảnh", icon: CalendarDays }, { to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
@@ -316,6 +317,7 @@ function Shell() {
                     </Require>
                   }
                 />
+                <Route path="/calendar" element={<Require><TutorCalendar /></Require>} />
                 <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route
                   path="/settings"
