@@ -100,6 +100,14 @@ After the native connection has produced a successful **Workers Builds: giasu-di
 
 Cloudflare-native builds rebuild the same checked commit with the lockfile, rather than downloading GitHub's artifact. Production verification still compares the deployed app entry to the CI artifact and checks health, authorization, routes and SEO. The `production` environment and job summary link to the live site.
 
+### Inspect a failed native build
+
+Run **CI and Cloudflare deploy** manually with **Inspect native Cloudflare build** enabled. This runs diagnostics only, without deploying the app. It reads the connected repository, production/preview build commands and the latest failed build's logs; supply a build UUID to inspect a particular preview failure. Environment values and credentials are omitted or redacted.
+
+This job needs a separate `CLOUDFLARE_BUILDS_API_TOKEN` Actions secret containing a **user-scoped** token created under Cloudflare **My Profile → API Tokens**, with **Workers Builds Configuration: Edit** and **Workers Scripts: Read** for this account. Cloudflare's [Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/) rejects account-scoped tokens with `401 Invalid token`, even when they can deploy Workers. Wrangler OAuth can also return `403` for Builds. Keep the working `CLOUDFLARE_API_TOKEN` deployment secret unchanged.
+
+The optional **Repair Cloudflare Builds** input changes settings only after checking that `cloudflare-production` matches a `main` commit with a successful Validate check. It selects that branch, disables unconfigured previews, pins Node 24 and applies the build/deploy commands above while preserving the Cloudflare build token. Production promotion records existing check IDs so an earlier preview result for the same commit cannot satisfy the new deployment wait. An already promoted commit can reuse its existing build result.
+
 ## Account-confirmation email
 
 All new accounts, including Google signups, require a six-digit code sent from `contact@giasudiem10.online` before a user, OAuth identity or login session is created. `pending_signups` holds the hashed password/verified Google claims for up to one hour; a browser-bound HttpOnly cookie identifies the challenge. Codes expire after ten minutes, are stored as hashes, allow five guesses, and are replaced on resend. Resends have a sixty-second cooldown and a five-per-hour email limit. Abandoned records are pruned on subsequent signup starts. No tutorial/protected action is available before successful verification. Setup then asks for role, name, timezone and an optional learning goal; tutor qualifications are completed separately in the studio.
