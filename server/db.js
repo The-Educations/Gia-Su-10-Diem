@@ -130,6 +130,14 @@ export function migrateDatabase(db) {
     mode TEXT NOT NULL, blocks TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', rate INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   ); CREATE UNIQUE INDEX IF NOT EXISTS active_weekly_request ON weekly_requests(student_id,tutor_id) WHERE status IN ('pending','accepted')`);
+  db.exec(`CREATE TABLE IF NOT EXISTS offers (
+    id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES users(id), tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
+    inquiry_id INTEGER NOT NULL REFERENCES inquiries(id), subject_id TEXT NOT NULL REFERENCES subjects(id),
+    mode TEXT NOT NULL, blocks TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', rate INTEGER NOT NULL,
+    start_date TEXT NOT NULL, end_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE UNIQUE INDEX IF NOT EXISTS pending_offer ON offers(student_id,tutor_id) WHERE status='pending'`);
+  if (!db.prepare("PRAGMA table_info(bookings)").all().some(c => c.name === "offer_id")) db.exec("ALTER TABLE bookings ADD COLUMN offer_id INTEGER REFERENCES offers(id)");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS offer_session ON bookings(offer_id,starts_at) WHERE offer_id IS NOT NULL");
   migrateCommunity(db);
   db.exec(`CREATE TABLE IF NOT EXISTS support_threads (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
