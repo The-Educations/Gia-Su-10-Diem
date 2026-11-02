@@ -18,7 +18,7 @@ test("search metadata is present without JavaScript and follows app navigation",
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
   await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
   await expect(page.locator('meta[property="og:url"]')).toHaveCount(0);
-  await page.locator(".sidebar").getByRole("link", { name: "Tìm gia sư", exact: true }).click();
+  await page.locator(".auth-layout").getByRole("link", { name: "Tìm gia sư", exact: true }).click();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow, max-image-preview:large");
 });
 

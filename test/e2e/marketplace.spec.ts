@@ -713,7 +713,7 @@ test("Google provider failures stay visible and can be retried", async ({
   );
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "Google chưa được cấu hình" }),
+    page.getByRole("button", { name: "Google tạm thời không khả dụng" }),
   ).toBeDisabled();
 });
 
