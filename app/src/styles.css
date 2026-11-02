@@ -2685,3 +2685,25 @@ main {
   .setup-subjects > div, .setup-pair { grid-template-columns: 1fr; }
   .setup-actions { flex-direction: column; }
 }
+
+.app-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.app-footer nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.auth-policy {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+  margin: 16px 0;
+}
+.auth-policy a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

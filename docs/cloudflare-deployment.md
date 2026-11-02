@@ -10,6 +10,8 @@ A single Durable Object keeps booking transactions atomic. This is an initial sm
 
 ## Google sign-in
 
+See [Search indexing and OAuth branding](search-and-oauth.md) for the public privacy/terms URLs and consent-screen fields.
+
 Create an OAuth **Web application** client and register:
 
 - Authorized origin: `https://giasudiem10.online`

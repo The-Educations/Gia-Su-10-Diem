@@ -39,6 +39,7 @@ import { Person, Loading, ErrorState } from "./components/common";
 import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
+import { PageMetadata } from "./components/page-metadata";
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
 const Library = lazy(() => import("./pages/Library"));
@@ -198,6 +199,7 @@ function Shell() {
   );
   return (
     <div className="app-shell" data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
+      <PageMetadata />
       <a href="#main" className="skip-link">
         Đến nội dung
       </a>
@@ -337,6 +339,7 @@ function Shell() {
         </main>
         <footer className="app-footer">
           <span>Gia Sư 10 Điểm</span>
+          <nav aria-label="Thông tin pháp lý"><a href="/privacy">Quyền riêng tư</a><a href="/terms">Điều khoản dịch vụ</a></nav>
         </footer>
       </div>
     </div>

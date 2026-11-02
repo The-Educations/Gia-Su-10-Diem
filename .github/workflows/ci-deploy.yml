@@ -58,7 +58,9 @@ jobs:
           name: site-${{ github.sha }}
           path: dist/site
       - name: Serve the built app in the browser tests
-        run: cp -R dist/site/app dist/app
+        run: |
+          cp -R dist/site/app dist/app
+          cp -R dist/site/legal dist/legal
       - run: npx playwright install --with-deps chrome
       - name: Test student, tutor and admin journeys
         run: npx playwright test

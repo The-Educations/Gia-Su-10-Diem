@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { renderSeo } from "../server/seo.js";
 const i = JSON.parse(fs.readFileSync("inputs.json", "utf8"));
 const css = fs.readFileSync("styles.css", "utf8");
 const script = fs.readFileSync("scripts/site.js", "utf8");
@@ -147,11 +148,11 @@ const html = `<!DOCTYPE html>
   <div class='contact-orbit' aria-hidden='true'>${art("orbit", "", "-0.08")}</div>
 </section>
 </main>
-<footer><div class='container'><div class='footer-top'><a class='brand' href='/'>${brand}</a><nav aria-label='Điều hướng cuối trang'><a href='/app/tutors'>Tìm gia sư</a><a href='/app/library'>Môn học & kỳ thi</a><a href='/app/auth'>Đăng nhập</a></nav></div><div class='footer-word' aria-hidden='true' data-parallax='0.05'>Học. <em>Hiểu.</em> Lớn lên.</div><div class='footer-bottom'><span>© ${i.brand.year} Gia Sư 10 Điểm</span><a href='#top'>Về đầu trang ↑</a></div></div></footer>
+<footer><div class='container'><div class='footer-top'><a class='brand' href='/'>${brand}</a><nav aria-label='Điều hướng cuối trang'><a href='/app/tutors'>Tìm gia sư</a><a href='/app/library'>Môn học & kỳ thi</a><a href='/app/auth'>Đăng nhập</a><a href='/privacy'>Quyền riêng tư</a><a href='/terms'>Điều khoản dịch vụ</a></nav></div><div class='footer-word' aria-hidden='true' data-parallax='0.05'>Học. <em>Hiểu.</em> Lớn lên.</div><div class='footer-bottom'><span>© ${i.brand.year} Gia Sư 10 Điểm</span><a href='#top'>Về đầu trang ↑</a></div></div></footer>
 </div>
 <script>${script}</script>
 </body></html>`;
-fs.writeFileSync("index.html", html);
+fs.writeFileSync("index.html", renderSeo(html, "/"));
 console.log(
   `Built Vietnamese editorial landing (${(html.length / 1024).toFixed(1)} KB).`,
 );
