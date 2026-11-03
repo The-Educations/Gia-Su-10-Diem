@@ -1,3 +1,4 @@
+import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
@@ -51,6 +52,7 @@ export function createApi(
     origin = "http://127.0.0.1:4174",
     limit = true,
     google = {},
+    wakeCalendar,
     processPhoto,
     clientIp,
     sendEmail,
@@ -216,6 +218,7 @@ export function createApi(
     }));
   registerEmailVerification(app, db, { origin, sendEmail });
   const signup = registerSignupVerification(app, db, { sendEmail, production, session });
+  app.locals.calendarSync = registerGoogleCalendar(app, db, auth, { origin, production, google, wakeCalendar });
   registerGoogleAuth(app, db, { origin, production, session, google, signup });
   registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);

@@ -3160,3 +3160,13 @@ main {
 @media (max-width: 640px) { .offer-detail .section-heading { flex-direction: column; align-items: flex-start; gap: 8px; } }
 
 .conversation-heading-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+
+.google-calendar-control { max-width: 420px; min-width: 0; }
+.google-calendar-buttons { display: flex; align-items: center; gap: 8px; }
+.google-calendar-control [role="alert"] { margin-top: 12px; font-size: 12px; }
+@media (max-width: 420px) {
+  .google-calendar-buttons { flex-wrap: wrap; }
+  .google-calendar-buttons button { white-space: normal; height: auto; }
+  .google-calendar-buttons button[aria-label] { width: 44px; flex: none; }
+  .google-calendar-buttons button[aria-label] svg { display: block; }
+}

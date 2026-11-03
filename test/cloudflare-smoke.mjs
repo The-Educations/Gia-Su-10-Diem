@@ -44,6 +44,10 @@ const pendingCookie=res.headers.getSetCookie().find(c=>c.startsWith('giasu_signu
 const cookie = await verifyEmail(email,pendingCookie);
 const get=path=>fetch(base+path,{headers:{Cookie:cookie}});
 assert.equal((await get('/api/auth/me')).status,200);
+const calendarStatus = await get('/api/account/google-calendar');
+assert.equal(calendarStatus.status,200);
+assert.deepEqual(await calendarStatus.json(), {available:false,connected:false,email:'',lastSynced:null,error:'',calendarUrl:''});
+assert.equal((await fetch(base+'/api/account/google-calendar')).status,401);
 assert.deepEqual(await (await get('/api/offers')).json(), []);
 assert.equal((await fetch(base+'/api/offers')).status,401);
 const supportThread = (await (await get('/api/support')).json())[0];
