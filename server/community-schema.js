@@ -1,3 +1,4 @@
+import { assignProfileCode } from "./profile-code.js";
 import { RULES_TITLE, RULES_BODY, fold } from "./community-policy.js";
 
 export function migrateCommunity(db) {
@@ -6,6 +7,8 @@ export function migrateCommunity(db) {
     .all()
     .map((c) => c.name);
   for (const [name, definition] of Object.entries({
+    profile_code: "TEXT",
+    bio: "TEXT NOT NULL DEFAULT ''",
     display_name: "TEXT NOT NULL DEFAULT ''",
     community_locked: "INTEGER NOT NULL DEFAULT 0",
     community_lock_reason: "TEXT NOT NULL DEFAULT ''",
@@ -13,6 +16,24 @@ export function migrateCommunity(db) {
     if (!columns.includes(name))
       db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
   }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_profile_code ON users(profile_code)");
+  for (const user of db.prepare("SELECT id FROM users WHERE profile_code IS NULL").all())
+    assignProfileCode(db, user.id);
+  db.exec(`CREATE TABLE IF NOT EXISTS user_images (
+    id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL CHECK(kind IN ('avatar','cover')), content_type TEXT NOT NULL,
+    size INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id,kind)
+  );
+  CREATE TABLE IF NOT EXISTS user_image_chunks (
+    image_id TEXT NOT NULL REFERENCES user_images(id) ON DELETE CASCADE,
+    idx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(image_id,idx)
+  );
+  CREATE TABLE IF NOT EXISTS community_profile_changes (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS profile_changes_quota ON community_profile_changes(user_id,kind,created_at);`);
   db.exec(`CREATE TABLE IF NOT EXISTS community_posts (
   id INTEGER PRIMARY KEY,
   author_id INTEGER NOT NULL REFERENCES users(id),
@@ -92,6 +113,25 @@ CREATE TABLE IF NOT EXISTS community_notifications (
 );
 CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notifications(user_id, read_at, id);
 `);
+  // No tables reference reports. Copy every row before replacing its old CHECK/UNIQUE constraints.
+  if (!db.prepare("PRAGMA table_info(community_reports)").all().some(c => c.name === "part")) {
+    db.exec(`CREATE TABLE community_reports_with_profiles (
+        id INTEGER PRIMARY KEY, reporter_id INTEGER NOT NULL REFERENCES users(id),
+        target_type TEXT NOT NULL CHECK(target_type IN ('post','comment','profile')),
+        target_id INTEGER NOT NULL, part TEXT NOT NULL DEFAULT '' CHECK(part IN ('','avatar','cover','bio')),
+        reason TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved')),
+        resolved_by INTEGER REFERENCES users(id), resolution TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(reporter_id,target_type,target_id,part)
+      );
+      INSERT INTO community_reports_with_profiles(id,reporter_id,target_type,target_id,reason,detail,status,resolved_by,resolution,created_at)
+        SELECT id,reporter_id,target_type,target_id,reason,detail,status,resolved_by,resolution,created_at FROM community_reports;
+      DROP TABLE community_reports;
+      ALTER TABLE community_reports_with_profiles RENAME TO community_reports;`);
+  }
+  if (!db.prepare("PRAGMA table_info(community_notifications)").all().some(c => c.name === "detail"))
+    db.exec("ALTER TABLE community_notifications ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   if (
     !db
       .prepare("PRAGMA table_info(community_posts)")

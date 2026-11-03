@@ -1,6 +1,5 @@
 import { CommunityUnread } from "./components/community/Notifications";
-import { timezoneLabel } from "./components/tutor-timezone";
-import { accountRole } from "@/lib/types";
+import AccountMenu from "./components/community/AccountMenu";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -15,7 +14,6 @@ import {
 } from "react-router-dom";
 import { AnimateUIProvider } from "@animate-ui/react/provider";
 import {
-  Clock3,
   BookOpen,
   Newspaper,
   Users,
@@ -51,6 +49,7 @@ const Offers = lazy(() => import("./pages/Offers"));
 const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
+const CommunityProfile = lazy(() => import("./pages/CommunityProfile"));
 const Community = lazy(() => import("./pages/Community"));
 const CommunityPost = lazy(() => import("./pages/CommunityPost"));
 const CommunityWrite = lazy(() => import("./pages/CommunityWrite"));
@@ -198,14 +197,7 @@ function Shell() {
         </a>
         {user ? (
           <>
-            <Link to="/settings" className="account-link" aria-label={`Cài đặt tài khoản: ${user.name}`} title={`${user.name} · ${timezoneLabel(user.timezone, true)}`} onClick={() => setOpen(false)}>
-              <Person name={user.name} id={user.id} />
-              <span className="nav-label">
-                <strong>{user.name}</strong>
-                <small>{accountRole(user)}</small>
-                <small className="account-timezone"><Clock3 size={12} aria-hidden="true" />{timezoneLabel(user.timezone, true)}</small>
-              </span>
-            </Link>
+            <AccountMenu onNavigate={() => setOpen(false)} />
             <Button
               variant="ghost"
               className="sidebar-action"
@@ -294,6 +286,7 @@ function Shell() {
                 <Route path="/community" element={<Community />} />
               <Route path="/community/write" element={<Require><CommunityWrite /></Require>} />
               <Route path="/community/mine" element={<Require><CommunityMine /></Require>} />
+              <Route path="/community/members/:code" element={<Require><CommunityProfile /></Require>} />
               <Route path="/community/:id" element={<CommunityPost />} />
               <Route path="/news" element={<News />} />
                 <Route path="/news/:id" element={<News />} />

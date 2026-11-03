@@ -124,9 +124,9 @@ test("community submission, rejection, revisions, tutor comments and moderation"
   await tutor
     .getByLabel("Bình luận", { exact: true })
     .fill("Bạn có thể bắt đầu với một bài đọc ngắn mỗi ngày.");
-  let identityRequests = 0;
+  let commentRequests = 0;
+  tutor.on("request", request => { if (request.method() === "POST" && request.url().endsWith(`/api/community/posts/${postId}/comments`)) commentRequests++; });
   await tutor.route("**/api/community/me", async (route) => {
-    identityRequests++;
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.continue();
   });
@@ -144,7 +144,7 @@ test("community submission, rejection, revisions, tutor comments and moderation"
   await expect(
     tutor.getByRole("heading", { name: "Bình luận (1)", exact: true }),
   ).toBeVisible();
-  expect(identityRequests).toBe(1);
+  expect(commentRequests).toBe(1);
   await tutor.unroute("**/api/community/me");
   await page.reload();
   await expect(
@@ -372,7 +372,7 @@ test("role workspaces, public identity and persistent admin navigation", async (
       if (slug === "chau") {
         await expect(
           workspace.getByRole("link", { name: /Gia sư/ }),
-        ).toHaveAttribute("href", /\/app\/tutors\/\d+/);
+        ).toHaveAttribute("href", /\/app\/community\/members\/[a-z2-9]{8}$/);
         await page
           .getByRole("button", { name: "Đăng bài", exact: true })
           .click();

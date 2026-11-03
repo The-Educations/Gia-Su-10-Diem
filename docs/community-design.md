@@ -116,7 +116,7 @@ Một người "tham gia được" khi: đã đăng nhập, `users.status = acti
 | Lọc, tìm kiếm, sắp xếp | Có | Có | Có | Có |
 | Đăng bài | Không | Có (qua duyệt) | Có (qua duyệt) | Đăng "Thông báo" (không qua duyệt) |
 | Bình luận / trả lời | Không | Có (hiện ngay) | Có (hiện ngay) | Có |
-| "Hữu ích" cho bình luận | Không | Có | Có | Không |
+| "Hữu ích" cho bình luận | Không | Có | Có | Có |
 | Báo cáo bài / bình luận | Không | Có | Có | – (xử lý trực tiếp) |
 | Sửa / xóa bài của mình | – | Có | Có | Có (bài của mình) |
 | Sửa / xóa bình luận của mình | – | Có | Có | Có |
@@ -128,7 +128,7 @@ Ghi chú:
 
 - **Khách [CHỐT]:** chỉ xem. Bấm vào bất kỳ nút nào cần quyền (Đăng bài, Bình luận, Hữu ích, Báo cáo) thì được mời đăng nhập hoặc tạo tài khoản, **rồi quay lại đúng bài đang xem** (dùng cơ chế `/auth?next=` đã có trong `Require`).
 - **Gia sư [CHỐT]:** quyền đầy đủ như học sinh, không bị hạn chế riêng. Được bình luận ở mọi bài, kể cả bài nhắc hoặc chê mình. Việc canh quảng cáo trá hình là việc của admin khi duyệt.
-- **Tự bấm "Hữu ích" [ĐỀ XUẤT]:** không ai được bấm "Hữu ích" cho bình luận của chính mình (luật chung, không riêng gia sư).
+- **"Hữu ích" [CHỐT]:** mọi tài khoản đã đăng nhập và tham gia được (kể cả admin, và kể cả bình luận của chính mình) đều bấm được.
 - Quyền của admin không được phụ thuộc vào `display_name`.
 
 ---
@@ -243,7 +243,7 @@ Một bài có một trạng thái duy nhất `status`:
 
 ### 5.3 "Hữu ích"
 
-- Mỗi người bấm một lần cho mỗi bình luận, bấm lại thì bỏ. Không tự bấm cho bình luận của mình. Khách không bấm được.
+- Mỗi người bấm một lần cho mỗi bình luận, bấm lại thì bỏ. Mọi tài khoản đã đăng nhập đều bấm được, kể cả admin và bình luận của chính mình. Khách không bấm được.
 - Số "Hữu ích" hiện cạnh bình luận.
 
 ### 5.4 Đã giải quyết và câu trả lời hay nhất
@@ -574,7 +574,7 @@ Mọi lỗi trả JSON `{ "error": "..." }` bằng tiếng Việt, mã HTTP đú
 | `POST /posts/:id/comments` `{ body, parent_id? }` | Chỉ trên bài `approved`; giới hạn 5/phút; bộ lọc liên hệ; tự theo dõi bài; thông báo cho người theo dõi. |
 | `PATCH /comments/:id` `{ body }` | Sửa bình luận của mình. |
 | `DELETE /comments/:id` | Xóa bình luận của mình. |
-| `PUT /comments/:id/helpful`, `DELETE ...` | Hữu ích (không cho bình luận của chính mình). |
+| `PUT /comments/:id/helpful`, `DELETE ...` | Hữu ích (mọi tài khoản đã đăng nhập và tham gia được). |
 | `POST /reports` `{ target_type, target_id, reason, detail? }` | Báo cáo. |
 | `GET /mine` | "Bài của tôi" theo trạng thái. |
 | `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read` | Chấm đỏ và danh sách. |
@@ -655,7 +655,7 @@ Kiểu dữ liệu thêm vào `app/src/lib/types.ts`. Dùng `api()` và `useLoad
 - Vòng đời bài: gửi → pending (khách không thấy, người khác không thấy, tác giả thấy) → duyệt → hiện, có `published_at` → sửa tạo bản sửa, **bản cũ vẫn hiện** → duyệt bản sửa thay thế, từ chối bản sửa giữ bản cũ → admin ẩn → công khai 404 → khôi phục → tác giả xóa.
 - Từ chối bắt buộc có lý do; lý do hiện cho tác giả.
 - Bình luận hiện ngay; chỉ trên bài `approved`; trả lời một cấp; sửa, xóa; gỡ bởi admin có chỗ giữ.
-- Hữu ích: một lần mỗi người, không tự bấm.
+- Hữu ích: một lần mỗi người, ai đăng nhập cũng bấm được.
 - Đã giải quyết và câu trả lời hay nhất: chỉ tác giả, không chọn bình luận của mình.
 - Giới hạn tốc độ: bình luận (429 sau 5/phút), bài (3/24 giờ).
 - Bộ lọc liên hệ: bộ test riêng cho `findContactInfo` gồm số có dấu cách/chấm/+84, email, link, tên miền trần, Zalo kèm số, và các ca không được chặn nhầm.
@@ -800,7 +800,7 @@ Chỉ báo hoàn tất khi TẤT CẢ đúng:
 - [ ] Không có loại bài, không có ô chọn môn/cấp học/thẻ khi soạn bài; không có ảnh/đính kèm.
 - [ ] Bài mới `pending`, chỉ tác giả và admin thấy; chỉ hiện công khai sau khi admin duyệt; từ chối bắt buộc có lý do và tác giả thấy lý do.
 - [ ] Sửa bài đã đăng: bản cũ vẫn hiện công khai trong lúc bản sửa chờ duyệt; duyệt thì thay thế; từ chối thì giữ bản cũ.
-- [ ] Bình luận hiện ngay; hai cấp; Hữu ích (không tự bấm); sửa/xóa của mình; Đã giải quyết và câu trả lời hay nhất.
+- [ ] Bình luận hiện ngay; hai cấp; Hữu ích (ai đăng nhập cũng bấm được); sửa/xóa của mình; Đã giải quyết và câu trả lời hay nhất.
 - [ ] Nhãn đúng: `Tên hiển thị - Học sinh/Phụ huynh`; gia sư đã duyệt `Họ tên thật - Gia sư` (liên kết hồ sơ); gia sư chờ duyệt như học sinh; admin `Quản trị viên`. Nhãn tính live.
 - [ ] Không có họ tên thật/email/id của học sinh hoặc phụ huynh trong bất kỳ phản hồi công khai nào (có test).
 - [ ] Số điện thoại/email/link/Zalo bị chặn ở bài, bình luận và tên hiển thị (có test, kể cả cách viết có dấu cách/chấm).

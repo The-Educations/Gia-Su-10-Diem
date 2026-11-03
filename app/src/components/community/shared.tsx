@@ -21,24 +21,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+export function memberImageUrl(author: Pick<CommunityAuthor, "profile_code" | "image_version">, kind: "avatar" | "cover") {
+  return `/api/community/members/${author.profile_code}/${kind}?v=${encodeURIComponent(author.image_version)}`;
+}
 export function AuthorLabel({ author }: { author: CommunityAuthor }) {
-  return (
-    <span className="community-author">
-      <Person name={author.name_part} />
-      {author.tier === "tutor" ? (
-        <Link className="text-link" to={`/tutors/${author.tutor_id}`}>
-          {author.label}
-        </Link>
-      ) : author.tier === "admin" ? (
-        <Badge variant="secondary">
-          <ShieldCheck aria-hidden="true" />
-          {author.label}
-        </Badge>
-      ) : (
-        <strong>{author.label}</strong>
-      )}
-    </span>
-  );
+  return <Link className="community-author text-link" to={`/community/members/${author.profile_code}`}>
+    <Person name={author.name_part} src={author.has_avatar ? memberImageUrl(author, "avatar") : undefined} />
+    {author.tier === "admin" ? <Badge variant="secondary"><ShieldCheck aria-hidden="true" />{author.label}</Badge> : <strong>{author.label}</strong>}
+  </Link>;
 }
 export function PostBody({
   text,

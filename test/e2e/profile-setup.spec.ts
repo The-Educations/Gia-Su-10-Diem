@@ -39,7 +39,7 @@ test("searchable address, crop preview and tutor steps preserve edits and save t
   expect(
     (
       await page.request.put("/api/account/onboarding", {
-        data: { step: 1, name: "Gia sư thiết lập" },
+        data: { step: 1, name: "Gia sư thiết lập", display_name: "Bạn học mới" },
       })
     ).ok(),
   ).toBe(true);

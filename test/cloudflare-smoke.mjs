@@ -75,7 +75,7 @@ const setup = async (body) => {
 };
 assert.equal((await (await get('/api/auth/me')).json()).user.onboarding_step,0);
 assert.equal((await setup({step:0,role:'tutor'})).onboarding_step,1);
-assert.equal((await setup({step:1,name:'Cloudflare test',headline:'Gia sư kiểm thử',bio:'Học theo mục tiêu.',education:'Sư phạm Toán',subjects:['toan'],rate:150000,experience:1,location:'Trực tuyến',mode:'online'})).onboarding_step,3);
+assert.equal((await setup({step:1,display_name:'Bạn học Cloudflare',name:'Cloudflare test',headline:'Gia sư kiểm thử',bio:'Học theo mục tiêu.',education:'Sư phạm Toán',subjects:['toan'],rate:150000,experience:1,location:'Trực tuyến',mode:'online'})).onboarding_step,3);
 
 const photo=await sharp({create:{width:80,height:80,channels:3,background:'#852f36'}}).png().toBuffer();
 for(const [kind,body,type] of [['photo',photo,'image/png'],['banner',photo,'image/png']]){
@@ -144,7 +144,7 @@ assert.equal(parentSetup.status, 200);
 const parentUser = (await parentSetup.json()).user;
 assert.equal(parentUser.role, 'student');
 assert.equal(parentUser.learner_type, 'parent');
-for (const data of [{step:1,name:'Parent runtime',goal:'Help my child study Math',school:'THCS Ba Đình',province_code:'1',ward_code:'4'}]) {
+for (const data of [{step:1,display_name:'Phụ huynh học tập',name:'Parent runtime',goal:'Help my child study Math',school:'THCS Ba Đình',province_code:'1',ward_code:'4'}]) {
  const response = await fetch(base+'/api/account/onboarding', {method:'PUT',headers:{Cookie:parentCookie,'Content-Type':'application/json'},body:JSON.stringify(data)});
  assert.equal(response.status,200);
 }
@@ -197,6 +197,24 @@ assert.equal((await fetch(base + '/app/community/' + draft.id)).status, 404);
 assert.ok(!(await (await fetch(base + '/sitemap.xml')).text()).includes('/app/community/' + draft.id + '</loc>'));
 assert.equal((await communityWrite('/posts/' + draft.id, 'PUT', {title:'Tìm gia sư tiếng Anh',body:'Con mình đang học lớp 8.'})).status, 200);
 assert.equal((await communityWrite('/posts/' + draft.id, 'DELETE', {})).status, 200);
+const member = (await (await get('/api/community/me')).json()).author;
+assert.match(member.profile_code, /^[a-z2-9]{8}$/);
+const memberPath = '/api/community/members/' + member.profile_code;
+assert.equal((await fetch(base + memberPath)).status, 401);
+assert.equal((await get(memberPath)).status, 200);
+const memberHtml = await fetch(base + '/app/community/members/' + member.profile_code);
+assert.equal(memberHtml.status, 200);
+const memberShell = await memberHtml.text();
+assert.match(memberShell, /noindex/); assert.ok(!memberShell.includes('og:image')); assert.ok(!memberShell.includes('application/ld+json'));
+for (const kind of ['avatar', 'cover']) {
+ const uploaded = await fetch(base+'/api/community/me/'+kind,{method:'PUT',headers:{Cookie:cookie,'Content-Type':'image/png'},body:photo});
+ assert.equal(uploaded.status,200,await uploaded.clone().text());
+ assert.equal((await fetch(base+memberPath+'/'+kind)).status,401);
+ const image = await get(memberPath+'/'+kind); assert.equal(image.status,200); assert.match(image.headers.get('cache-control'),/private/);
+ const meta = await sharp(Buffer.from(await image.arrayBuffer())).metadata();
+ assert.equal(meta.width,kind==='avatar'?640:1280); assert.equal(meta.height,kind==='avatar'?640:320);
+}
+assert.ok(!(await (await fetch(base+'/sitemap.xml')).text()).includes('/community/members/'));
 console.log('Cloudflare community: additive schema, display name, contact filter, pending privacy, edits, deletion and SEO passed.');
 
 } finally { await new Promise(resolve => mailServer.close(resolve)); }
