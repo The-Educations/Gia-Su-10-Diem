@@ -17,6 +17,12 @@ await seedDemo(db, "BrowserStudy2026!");
 for (const [slug, role, learner] of [
   ["community-parent", "student", "parent"],
   ["community-pending", "tutor", "student"],
+  ["profile-student", "student", "student"],
+  ["profile-parent", "student", "parent"],
+  ["profile-tutor", "tutor", "student"],
+  ["profile-pending", "tutor", "student"],
+  ["profile-other", "student", "student"],
+  ["profile-admin", "admin", "student"],
 ]) {
   const id = Number(
     run(
@@ -33,7 +39,8 @@ for (const [slug, role, learner] of [
     ).lastInsertRowid,
   );
   if (role === "tutor")
-    run(db, "INSERT INTO tutors(user_id,status) VALUES (?,'pending')", id);
+    run(db, "INSERT INTO tutors(user_id,status) VALUES (?,?)", id, slug === "profile-tutor" ? "approved" : "pending");
+  if (slug.startsWith("profile-")) run(db, "UPDATE users SET display_name=? WHERE id=?", `Bạn ${slug.slice(8)}`, id);
 }
 db.close();
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));

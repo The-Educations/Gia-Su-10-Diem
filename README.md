@@ -60,7 +60,7 @@ npm test
 npm run test:e2e
 ```
 
-`npm test` gồm kiểm tra landing và 60 API/OAuth/email/SEO/build tests bằng database tạm. `test:e2e` build ứng dụng rồi chạy 31 luồng Playwright trên cổng 4175, database riêng; cần Chrome đã cài (hoặc `npx playwright install chrome`). Bao gồm booking giữa hai browser context, nhắn tin sau reload, upload ảnh / banner, admin duyệt và công bố hồ sơ, liên hệ trước khi đặt lịch, responsive 320–1440 px, focus menu, lịch tuần bằng bàn phím, giữ bản nháp studio và giữ tab admin sau khi lưu. Các lệnh này được kiểm tra local; không thay thế kiểm tra hosting thực tế.
+`npm test` gồm kiểm tra landing và 97 API/OAuth/email/SEO/build tests bằng database tạm. `test:e2e` build ứng dụng rồi chạy 62 luồng Playwright trên cổng 4175, database riêng; cần Chrome đã cài (hoặc `npx playwright install chrome`). Bao gồm booking giữa hai browser context, nhắn tin sau reload, upload ảnh / banner, admin duyệt và công bố hồ sơ, liên hệ trước khi đặt lịch, responsive 320–1440 px, focus menu, lịch tuần bằng bàn phím, giữ bản nháp studio và giữ tab admin sau khi lưu. Các lệnh này được kiểm tra local; không thay thế kiểm tra hosting thực tế.
 
 ## Mã nguồn & tài liệu
 
@@ -75,6 +75,8 @@ npm run test:e2e
 | [Phạm vi](docs/marketplace.md) | Luồng, vai trò, quy tắc và giới hạn |
 | [Kiến trúc](docs/architecture.md) | Routes, API, dữ liệu, cấu hình |
 | [Bàn giao](docs/development-handoff.md) | Bằng chứng kiểm tra và việc còn lại |
+| [Cộng đồng](docs/community-implementation.md) | Triển khai, quyền riêng tư và kết quả kiểm thử |
+| [Hồ sơ thành viên](docs/community-profile.md) | Thiết kế hồ sơ cộng đồng và phạm vi đã chốt |
 
 ## Giới hạn hiện tại
 

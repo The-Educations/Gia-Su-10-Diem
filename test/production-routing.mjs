@@ -60,3 +60,16 @@ await verifySeo(canonical);
 const communityFeed = await fetch(canonical + "/api/community/posts");
 assert.equal(communityFeed.status, 200);
 assert.equal((await communityFeed.json()).rules.kind, "rules");
+
+const memberPath = '/app/community/members/k7x2m9qa';
+const memberPage = await fetch(canonical + memberPath);
+assert.equal(memberPage.status, 200);
+const memberHtml = await memberPage.text();
+assert.match(memberHtml, /name="robots" content="noindex/);
+assert.ok(!memberHtml.includes('og:image'));
+assert.ok(!memberHtml.includes('application/ld+json'));
+for (const suffix of ['', '/avatar', '/cover', '/posts']) {
+  const response = await fetch(canonical + '/api/community/members/k7x2m9qa' + suffix);
+  assert.equal(response.status, 401);
+}
+console.log('Community profiles: private HTML metadata and guest-denied profile/media endpoints passed.');

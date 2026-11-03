@@ -16,7 +16,7 @@ export function pageSeo(path, post = null, community = null) {
     : /^\/app\/news\/\d+$/.test(path) && post
     ? { title: `${post.title} | Gia Sư 10 Điểm`, description: post.summary }
     : Object.hasOwn(pages, path) ? pages[path] : null;
-  const known = page || privateRoutes.has(path) || /^\/app\/tutors\/\d+$/.test(path);
+  const known = page || /^\/app\/community\/members\/[^/]+$/.test(path) || privateRoutes.has(path) || /^\/app\/tutors\/\d+$/.test(path);
   return {
     title: page?.title || (known ? "Tài khoản | Gia Sư 10 Điểm" : "Không tìm thấy trang | Gia Sư 10 Điểm"),
     description: page?.description || "Gia Sư 10 Điểm — kết nối học sinh và gia sư.",

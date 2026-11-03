@@ -17,7 +17,7 @@ import Compose from "@/components/community/Compose";
 import ActionDialog, {
   type CommunityAction,
 } from "@/components/community/ActionDialog";
-import { postStates, PostBody } from "@/components/community/shared";
+import { memberImageUrl, postStates, PostBody } from "@/components/community/shared";
 
 export function CommunityLock({ owner }: { owner: CommunityOwner }) {
   const navigate = useNavigate();
@@ -62,11 +62,16 @@ function Owner({ owner }: { owner: CommunityOwner }) {
 type Report = {
   id: number;
   target_id: number;
-  target_type: "post" | "comment";
+  target_type: "post" | "comment" | "profile";
+  part: "avatar" | "cover" | "bio";
   reason: string;
   detail: string;
   report_count: number;
   target: {
+    profile_code: string;
+    has_avatar: boolean;
+    has_cover: boolean;
+    image_version: string;
     title?: string;
     body: string;
     post_id?: number;
@@ -280,7 +285,13 @@ export default function AdminCommunity() {
                   <Badge variant="secondary">{r.report_count} báo cáo</Badge>
                 </h2>
                 {r.detail && <p>{r.detail}</p>}
-                {r.target && (
+                {r.target_type === "profile" && r.target && <div className="member-report-preview">
+                  <Badge variant="outline">Hồ sơ · {{ avatar:"Ảnh đại diện",cover:"Ảnh bìa",bio:"Giới thiệu" }[r.part]}</Badge>
+                  {r.part === "bio" ? <p className="member-bio">{r.target.body || "Giới thiệu đã được xóa"}</p> : (r.part === "avatar" ? r.target.has_avatar : r.target.has_cover) ? <img src={memberImageUrl(r.target, r.part)} alt={r.part === "avatar" ? "Ảnh đại diện được báo cáo" : "Ảnh bìa được báo cáo"} /> : <p>Ảnh đã được gỡ</p>}
+                  <Link className="text-link" to={`/community/members/${r.target.profile_code}`}>Xem hồ sơ</Link>
+                  <Button variant="outline" disabled={r.part === "bio" ? !r.target.body : r.part === "avatar" ? !r.target.has_avatar : !r.target.has_cover} onClick={() => setAction({ title: { avatar:"Gỡ ảnh đại diện", cover:"Gỡ ảnh bìa", bio:"Xóa giới thiệu" }[r.part], path:`/admin/community/members/${r.target!.profile_code}/${r.part}`, method:"DELETE", reasonField:"note" })}>{{ avatar:"Gỡ ảnh đại diện", cover:"Gỡ ảnh bìa", bio:"Xóa giới thiệu" }[r.part]}</Button>
+                </div>}
+                {r.target && r.target_type !== "profile" && (
                   <>
                     <h3>{r.target.title || "Bình luận được báo cáo"}</h3>
                     <div className="community-body">{r.target.body}</div>

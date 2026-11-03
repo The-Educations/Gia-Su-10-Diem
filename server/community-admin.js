@@ -244,9 +244,17 @@ export function registerCommunityAdmin(
     res.json(
       all(
         db,
-        `SELECT r.*,(SELECT COUNT(*) FROM community_reports x WHERE x.target_type=r.target_type AND x.target_id=r.target_id AND x.status='open') report_count FROM community_reports r WHERE r.status=? ORDER BY report_count DESC,r.id LIMIT 100`,
+        `SELECT r.*,(SELECT COUNT(*) FROM community_reports x WHERE x.target_type=r.target_type AND x.target_id=r.target_id AND x.part=r.part AND x.status='open') report_count FROM community_reports r WHERE r.status=? ORDER BY report_count DESC,r.id LIMIT 100`,
         status,
       ).map((r) => {
+        if (r.target_type === "profile") {
+          const user = one(db, "SELECT id,name,email,status,profile_code,bio,community_locked,community_lock_reason FROM users WHERE id=?", r.target_id);
+          const images = user ? all(db, "SELECT kind,id FROM user_images WHERE user_id=? ORDER BY kind", user.id) : [];
+          return { ...r, owner: user, target: user ? {
+            profile_code: user.profile_code, body: user.bio, status: user.status,
+            has_avatar: images.some(i => i.kind === "avatar"), has_cover: images.some(i => i.kind === "cover"), image_version: images.map(i => i.id).join("-"),
+          } : null };
+        }
         const target = one(
           db,
           `SELECT * FROM ${r.target_type === "post" ? "community_posts" : "community_comments"} WHERE id=?`,

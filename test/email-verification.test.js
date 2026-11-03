@@ -37,6 +37,7 @@ test("no account or session exists until a browser-bound code is verified", asyn
   assert.equal((await request("/auth/signup/verify", "POST", { code: code() }, { Origin: "https://evil.test" })).status, 403);
   assert.equal((await request("/auth/signup/verify", "POST", { code: "000000" })).status, 400);
   const verified = await request("/auth/signup/verify", "POST", { code: code() });
+  assert.match(verified.data.user.profile_code, /^[a-z2-9]{8}$/);
   assert.equal(verified.status, 201); assert.equal(verified.data.user.email_verified, true);
   assert.equal((await request("/auth/me")).data.user.id, verified.data.user.id);
   assert.equal((await request("/auth/signup/verify", "POST", { code: code() })).status, 400);

@@ -1,3 +1,4 @@
+import { assignProfileCode } from "./profile-code.js";
 import { enrichDemo } from "./demo-content.js";
 import { openDatabase } from "./local-db.js";
 import { passwordHash, run, one } from "./db.js";
@@ -99,6 +100,7 @@ export async function seedDemo(db, password, options = {}) {
         role,
       ).lastInsertRowid,
     );
+    assignProfileCode(db, id);
     if (role !== "tutor") continue;
     run(
       db,

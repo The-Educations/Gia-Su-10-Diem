@@ -3185,3 +3185,52 @@ main {
 .chat-attachment-preview > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
 .chat-attachment-preview audio, .chat-audio { width: 280px; max-width: 100%; display: block; }
 .chat-image { max-width: min(280px, 100%); max-height: 320px; display: block; object-fit: contain; border-radius: 8px; margin-top: 4px; }
+
+/* Member profiles remain separate from public tutor profiles. */
+.account-link { width: 100%; text-align: left; cursor: pointer; }
+.account-menu { width: min(18rem, calc(100vw - 2rem)); padding: .4rem; }
+.account-menu a { display: flex; align-items: center; gap: .65rem; padding: .8rem; border-radius: .6rem; }
+.account-menu a:hover, .account-menu a:focus-visible { background: var(--muted); outline-offset: -2px; }
+.account-menu svg { width: 1.1rem; height: 1.1rem; }
+.community-member { max-width: 960px; margin-inline: auto; display: grid; gap: 1.5rem; min-width: 0; }
+.member-header { border: 1px solid var(--border); border-radius: 1.5rem; background: var(--card); overflow: hidden; }
+.member-cover { aspect-ratio: 4 / 1; background: linear-gradient(125deg, #ead6c5, #d5bcb2 55%, #af7a78); }
+.member-cover img { width: 100%; height: 100%; object-fit: cover; }
+.member-summary { padding: 0 1.5rem 1.5rem; display: grid; gap: 1rem; min-width: 0; }
+.member-avatar { margin-top: -2.75rem; width: fit-content; border: 5px solid var(--card); border-radius: 50%; background: var(--card); }
+.member-avatar .person { width: 96px; height: 96px; font-size: 1.8rem; }
+.member-title h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); line-height: 1.15; margin-bottom: .5rem; overflow-wrap: anywhere; }
+.member-title p { color: var(--muted-foreground); font-size: .85rem; margin-top: .6rem; }
+.member-bio { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.member-owner-links { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .9rem; text-decoration: underline; text-underline-offset: 3px; }
+.member-completion { white-space: normal; height: auto; padding: 0; justify-content: flex-start; text-align: left; }
+.member-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); padding-top: 1rem; }
+.member-stats div { display: flex; flex-direction: column-reverse; gap: .25rem; text-align: center; }
+.member-stats div + div { border-left: 1px solid var(--border); }
+.member-stats dt { font-size: .85rem; color: var(--muted-foreground); }
+.member-stats dd { font-size: 1.5rem; font-weight: 650; }
+.member-posts-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.member-posts-heading h2 { font-size: 1.2rem; font-weight: 650; }
+.member-posts-heading > * { min-width: 0; }
+.member-posts-heading > [data-slot="field"] { width: 14rem; flex: 0 0 auto; }
+.community-profile-editor { max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.member-image-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.member-image-fields input { max-width: 100%; }
+.member-image-notice { color: var(--muted-foreground); font-size: .85rem; }
+.community-author { min-width: 0; max-width: 100%; }
+.community-author strong { overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .member-summary { padding: 0 1rem 1rem; }
+  .member-cover { aspect-ratio: 4 / 1; min-height: 86px; }
+  .member-avatar { margin-top: -2rem; }
+  .member-avatar .person { width: 76px; height: 76px; }
+  .member-actions > * { flex: 1 1 auto; }
+  .member-image-fields { grid-template-columns: minmax(0, 1fr); }
+  .member-posts-heading { align-items: stretch; flex-direction: column; }
+  .member-posts-heading > [data-slot="field"] { width: 100%; }
+}
+.member-admin dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; margin-block: 1rem; }
+.member-admin dt { color: var(--muted-foreground); }
+.member-admin dd { overflow-wrap: anywhere; }
+.member-report-preview { display: grid; justify-items: start; gap: .8rem; margin-block: 1rem; }
+.member-report-preview img { max-width: 100%; max-height: 200px; object-fit: contain; border-radius: .75rem; }

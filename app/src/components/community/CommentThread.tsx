@@ -170,27 +170,23 @@ function CommentItem({
             <ReadMore text={c.body} />
           )}
           <div className="community-comment-actions">
-            {user?.role !== "admin" && !c.mine ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                aria-pressed={c.helpful_by_me}
-                onClick={() =>
-                  gate.run(() => {
-                    void mutate(
-                      `/community/comments/${c.id}/helpful`,
-                      c.helpful_by_me ? "DELETE" : "PUT",
-                    );
-                  })
-                }
-              >
-                <ThumbsUp data-icon="inline-start" />
-                Hữu ích ({c.helpful_count})
-              </Button>
-            ) : (
-              <span>{c.helpful_count} hữu ích</span>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              aria-pressed={c.helpful_by_me}
+              onClick={() =>
+                gate.run(() => {
+                  void mutate(
+                    `/community/comments/${c.id}/helpful`,
+                    c.helpful_by_me ? "DELETE" : "PUT",
+                  );
+                })
+              }
+            >
+              <ThumbsUp data-icon="inline-start" />
+              Hữu ích ({c.helpful_count})
+            </Button>
             <Button
               size="sm"
               variant="ghost"

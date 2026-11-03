@@ -1,3 +1,4 @@
+import { registerCommunityProfile, setMemberProfile, memberByCode } from "./community-profile.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
 import {
@@ -7,7 +8,6 @@ import {
   fold,
   content,
   postSchema,
-  displayNameSchema,
   authorLabel,
   subjectAliases,
   levelAliases,
@@ -29,7 +29,7 @@ export function publicCommunityPost(db, id) {
   if (!p) return null;
   const u = one(
     db,
-    "SELECT u.*,t.status tutor_status FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
+    "SELECT u.*,t.status tutor_status,(SELECT id FROM user_images WHERE user_id=u.id AND kind='avatar') image_version FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
     p.author_id,
   );
   return {
@@ -41,17 +41,18 @@ export function publicCommunityPost(db, id) {
     updated_at: p.updated_at,
   };
 }
-export function registerCommunity(app, db, auth, audit) {
+export function registerCommunity(app, db, auth, audit, processPhoto) {
   const fail = (status, message) => {
     throw Object.assign(new Error(message), { status });
   };
-  const author = (id) =>
+  const author = (id, viewer) =>
     authorLabel(
       one(
         db,
-        "SELECT u.*,t.status tutor_status FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
+        "SELECT u.*,t.status tutor_status,(SELECT id FROM user_images WHERE user_id=u.id AND kind='avatar') image_version FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
         id,
       ),
+      viewer,
     );
   const participant = (req, _res, next) => {
     if (req.user.community_locked)
@@ -100,9 +101,9 @@ export function registerCommunity(app, db, auth, audit) {
     return p;
   };
   const visibleComments = "c.status='visible' AND cu.status='active'";
-  const serialize = (p, user) => {
+  const serialize = (p, user, publicOnly = false) => {
     const own = user?.id === p.author_id;
-    const privateView = own || user?.role === "admin";
+    const privateView = !publicOnly && (own || user?.role === "admin");
     const counts = one(
       db,
       `SELECT COUNT(*) comment_count,COALESCE(SUM((SELECT COUNT(*) FROM community_helpful h JOIN users hu ON hu.id=h.user_id WHERE h.comment_id=c.id AND hu.status='active')),0) helpful_count FROM community_comments c JOIN users cu ON cu.id=c.author_id WHERE c.post_id=? AND ${visibleComments}`,
@@ -118,7 +119,7 @@ export function registerCommunity(app, db, auth, audit) {
       title: p.title,
       body: p.body,
       body_html: p.body_html,
-      author: author(p.author_id),
+      author: author(p.author_id, user),
       mine: !!own,
       solved: !!p.solved,
       best_comment_id: p.best_comment_id,
@@ -148,6 +149,7 @@ export function registerCommunity(app, db, auth, audit) {
         : {}),
     };
   };
+  registerCommunityProfile(app, db, auth, audit, processPhoto, { serialize });
   const follow = (post, user) =>
     run(
       db,
@@ -259,17 +261,19 @@ export function registerCommunity(app, db, auth, audit) {
     res.json(serialize(getPost(req.params.id, req.user), req.user)),
   );
   app.get("/api/community/me", auth(), (req, res) => {
-    const identity = author(req.user.id);
+    const identity = author(req.user.id, req.user);
     res.json({
       author: identity,
+      profile_code: req.user.profile_code,
+      has_avatar: identity.has_avatar,
+      bio: req.user.bio,
       needs_name:
         !["admin", "tutor"].includes(identity.tier) && !req.user.display_name,
     });
   });
   app.put("/api/community/me/display-name", auth(), participant, (req, res) => {
-    const name = displayNameSchema.parse(req.body.display_name);
-    run(db, "UPDATE users SET display_name=? WHERE id=?", name, req.user.id);
-    res.json({ display_name: name });
+    if (req.body.display_name === undefined) fail(400, "Vui lòng nhập tên hiển thị.");
+    res.json(transaction(db, () => setMemberProfile(db, req.user.id, { display_name: req.body.display_name })));
   });
   app.post("/api/community/posts", auth(), participant, (req, res) => {
     named(req);
@@ -458,7 +462,7 @@ export function registerCommunity(app, db, auth, audit) {
       post_id: c.post_id,
       parent_id: c.parent_id,
       body: visible ? c.body : "",
-      author: visible ? author(c.author_id) : null,
+      author: visible ? author(c.author_id, user) : null,
       removed: !visible,
       removed_by_admin: c.status === "removed_by_admin",
       mine: user?.id === c.author_id,
@@ -618,8 +622,6 @@ export function registerCommunity(app, db, auth, audit) {
       participant,
       (req, res) => {
         const c = comment(req.params.id);
-        if (req.user.role === "admin" || c.author_id === req.user.id)
-          fail(403, "Không thể bấm Hữu ích cho bình luận này.");
         if (method === "put")
           run(
             db,
@@ -642,8 +644,9 @@ export function registerCommunity(app, db, auth, audit) {
       fail(403, "Quản trị viên xử lý trực tiếp trong hàng đợi.");
     const d = z
       .object({
-        target_type: z.enum(["post", "comment"]),
-        target_id: z.number().int().positive(),
+        target_type: z.enum(["post", "comment", "profile"]),
+        target_id: z.union([z.number().int().positive(), z.string().regex(/^[a-z2-9]{8}$/)]),
+        part: z.enum(["avatar", "cover", "bio"]).optional(),
         reason: z.enum([
           "Quảng cáo",
           "Thông tin liên hệ",
@@ -654,15 +657,25 @@ export function registerCommunity(app, db, auth, audit) {
         detail: z.string().trim().max(300).default(""),
       })
       .parse(req.body);
-    if (d.target_type === "post") livePost(d.target_id);
-    else comment(d.target_id);
+    let targetId = d.target_id;
+    const part = d.target_type === "profile" ? z.enum(["avatar", "cover", "bio"]).parse(d.part) : "";
+    if (d.target_type === "profile") {
+      const user = memberByCode(db, z.string().parse(d.target_id), req.user);
+      if (user.id === req.user.id) fail(403, "Không thể báo cáo hồ sơ của mình.");
+      targetId = user.id;
+    } else {
+      targetId = z.number().int().positive().parse(d.target_id);
+      if (d.target_type === "post") livePost(targetId);
+      else comment(targetId);
+    }
     if (
       one(
         db,
-        "SELECT id FROM community_reports WHERE reporter_id=? AND target_type=? AND target_id=?",
+        "SELECT id FROM community_reports WHERE reporter_id=? AND target_type=? AND target_id=? AND part=?",
         req.user.id,
         d.target_type,
-        d.target_id,
+        targetId,
+        part,
       )
     )
       fail(409, "Bạn đã báo cáo nội dung này.");
@@ -676,12 +689,13 @@ export function registerCommunity(app, db, auth, audit) {
     );
     run(
       db,
-      "INSERT INTO community_reports(reporter_id,target_type,target_id,reason,detail) VALUES (?,?,?,?,?)",
+      "INSERT INTO community_reports(reporter_id,target_type,target_id,reason,detail,part) VALUES (?,?,?,?,?,?)",
       req.user.id,
       d.target_type,
-      d.target_id,
+      targetId,
       d.reason,
       d.detail,
+      part,
     );
     res.status(201).json({ ok: true });
   });
@@ -709,7 +723,7 @@ export function registerCommunity(app, db, auth, audit) {
     res.json(
       one(
         db,
-        `SELECT COUNT(*) count FROM community_notifications n JOIN community_posts p ON p.id=n.post_id JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND n.read_at IS NULL AND p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin')`,
+        `SELECT COUNT(*) count FROM community_notifications n LEFT JOIN community_posts p ON p.id=n.post_id LEFT JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND n.read_at IS NULL AND (n.kind='profile_removed' OR (p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin')))`,
         req.user.id,
         req.user.id,
         req.user.role,
@@ -720,7 +734,7 @@ export function registerCommunity(app, db, auth, audit) {
     res.json(
       all(
         db,
-        `SELECT n.id,n.kind,n.post_id,n.created_at,n.read_at,p.title FROM community_notifications n JOIN community_posts p ON p.id=n.post_id JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin') ORDER BY n.id DESC LIMIT 100`,
+        `SELECT n.id,n.kind,n.post_id,n.created_at,n.read_at,n.detail,p.title FROM community_notifications n LEFT JOIN community_posts p ON p.id=n.post_id LEFT JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND (n.kind='profile_removed' OR (p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin'))) ORDER BY n.id DESC LIMIT 100`,
         req.user.id,
         req.user.id,
         req.user.role,

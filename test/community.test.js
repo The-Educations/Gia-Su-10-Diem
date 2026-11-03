@@ -1,123 +1,14 @@
+import { openDatabase } from "../server/local-db.js";
+import { fixture } from "./community-fixture.js";
 import sharp from "sharp";
-import { processPhoto } from "../server/photo.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openDatabase } from "../server/local-db.js";
-import { migrateDatabase, one, run, tokenHash } from "../server/db.js";
-import { createApi } from "../server/api.js";
-import { seedCatalog } from "../server/seed-catalog.js";
+import { migrateDatabase, one, run } from "../server/db.js";
 import {
   authorLabel,
   findContactInfo,
   displayNameSchema,
 } from "../server/community-policy.js";
-
-async function fixture(t) {
-  const db = openDatabase(":memory:");
-  seedCatalog(db);
-  const ids = {};
-  for (const [key, role, learner] of [
-    ["student", "student", "student"],
-    ["parent", "student", "parent"],
-    ["tutor", "tutor", "student"],
-    ["pending", "tutor", "student"],
-    ["admin", "admin", "student"],
-    ["other", "student", "student"],
-  ]) {
-    ids[key] = Number(
-      run(
-        db,
-        "INSERT INTO users(name,email,password,role,learner_type,display_name) VALUES (?,?,?,?,?,?)",
-        `Private ${key} Real Name`,
-        `${key}@private.test`,
-        "unused",
-        role,
-        learner,
-        key === "admin" ? "" : `Public ${key}`,
-      ).lastInsertRowid,
-    );
-    if (role === "tutor")
-      run(
-        db,
-        "INSERT INTO tutors(user_id,status) VALUES (?,?)",
-        ids[key],
-        key === "tutor" ? "approved" : "pending",
-      );
-    run(
-      db,
-      "INSERT INTO sessions VALUES (?,?,?)",
-      tokenHash(key),
-      ids[key],
-      Date.now() + 600000,
-    );
-  }
-  migrateDatabase(db);
-  const server = createApi(db, { limit: false, processPhoto }).listen(
-    0,
-    "127.0.0.1",
-  );
-  await new Promise((r) => server.once("listening", r));
-  t.after(async () => {
-    await new Promise((r) => server.close(r));
-    db.close();
-  });
-  const call = async (user, path, method = "GET", body = {}) => {
-    const decision = path.match(
-      /^\/admin\/community\/posts\/(\d+)\/(approve|reject)$/,
-    );
-    if (decision && !Object.hasOwn(body, "expected_version")) {
-      body = {
-        ...body,
-        expected_version: one(
-          db,
-          "SELECT review_version FROM community_posts WHERE id=?",
-          decision[1],
-        )?.review_version,
-      };
-    }
-    const r = await fetch(
-      `http://127.0.0.1:${server.address().port}/api${path}`,
-      {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(user ? { Cookie: `giasu_session=${user}` } : {}),
-        },
-        ...(method !== "GET" ? { body: JSON.stringify(body) } : {}),
-      },
-    );
-    return { status: r.status, data: await r.json() };
-  };
-  const create = async (
-    user = "student",
-    title = "Tìm gia sư Anh văn lớp 8",
-  ) => {
-    const r = await call(user, "/community/posts", "POST", {
-      title,
-      body: "Mình muốn tìm cách học hiệu quả hơn.",
-    });
-    assert.equal(r.status, 201, JSON.stringify(r.data));
-    return r.data.id;
-  };
-  const approve = async (id) => {
-    const r = await call(
-      "admin",
-      `/admin/community/posts/${id}/approve`,
-      "POST",
-    );
-    assert.equal(r.status, 200, JSON.stringify(r.data));
-  };
-  const imageRequest = (user, path, data, mime = "image/png") =>
-    fetch(`http://127.0.0.1:${server.address().port}${path}`, {
-      method: data ? "POST" : "GET",
-      headers: {
-        ...(user ? { Cookie: `giasu_session=${user}` } : {}),
-        ...(data ? { "Content-Type": mime } : {}),
-      },
-      ...(data ? { body: data } : {}),
-    });
-  return { db, ids, call, create, approve, imageRequest };
-}
 
 test("contact filtering, names and live public author labels", () => {
   for (const s of [
@@ -152,12 +43,16 @@ test("contact filtering, names and live public author labels", () => {
   assert.equal(displayNameSchema.safeParse("Minh").success, true);
   const u = {
     id: 77,
+    profile_code: "k7x2m9qa",
     name: "Private",
     display_name: "Minh",
     role: "student",
     learner_type: "parent",
   };
   assert.deepEqual(authorLabel(u), {
+    profile_code: "k7x2m9qa",
+    has_avatar: false,
+    image_version: "",
     label: "Minh - Phụ huynh",
     name_part: "Minh",
     tier: "parent",
@@ -297,22 +192,23 @@ test("comments, flattened replies, helpful, best answer, removal and suspension"
   const third = await add("pending", "Cảm ơn", reply.id);
   assert.equal(third.parent_id, root.id);
   assert.equal(third.author.label, "Public pending - Học sinh");
-  assert.equal(
-    (await call("parent", `/community/comments/${root.id}/helpful`, "PUT"))
-      .status,
-    403,
-  );
-  assert.equal(
-    (await call("admin", `/community/comments/${root.id}/helpful`, "PUT"))
-      .status,
-    403,
-  );
+  for (const who of ["parent", "admin", "pending"])
+    assert.equal(
+      (await call(who, `/community/comments/${root.id}/helpful`, "PUT"))
+        .status,
+      200,
+    );
   await call("student", `/community/comments/${root.id}/helpful`, "PUT");
   await call("student", `/community/comments/${root.id}/helpful`, "PUT");
   assert.equal(
     (await call(null, `/community/posts/${id}/comments`)).data.items[0]
       .helpful_count,
-    1,
+    4,
+  );
+  assert.equal(
+    (await call("pending", `/community/comments/${root.id}/helpful`, "DELETE"))
+      .status,
+    200,
   );
   await call("student", `/community/posts/${id}/solve`, "POST", {
     solved: true,

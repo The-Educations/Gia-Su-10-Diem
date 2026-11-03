@@ -69,3 +69,12 @@ test("community metadata and schema escape content and use only public names", (
   assert.deepEqual(schema.author,{"@type":"Person",name:"Minh"});
   assert.match(newsSitemap([], [post]),/\/app\/community\/8<\/loc>/);
 });
+
+test("member profiles never emit indexable metadata or image/schema identities", () => {
+  const path = "/app/community/members/k7x2m9qa";
+  assert.equal(pageSeo(path).status, 200);
+  assert.match(pageSeo(path).robots, /^noindex/);
+  const html = renderSeo(renderSeo("<head></head>", "/"), path);
+  assert.ok(!html.includes("og:image")); assert.ok(!html.includes("application/ld+json"));
+  assert.ok(!newsSitemap([], []).includes("/members/"));
+});

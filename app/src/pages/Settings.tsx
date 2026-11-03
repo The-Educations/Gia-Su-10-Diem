@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { AddressFields } from "@/components/address-fields";
 import { TimezoneField } from "@/components/tutor-timezone";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ export default function Settings() {
   return (
     <Page>
       <Heading title="Tài khoản của tôi" />
+      <Link className="text-link" to={`/community/members/${user?.profile_code}`}>Hồ sơ cộng đồng của tôi</Link>
       {error && <ErrorState error={error} />}
       <section className="settings-section">
         <div>
