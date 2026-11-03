@@ -1,3 +1,4 @@
+import { migrateGoogleCalendar } from "./google-calendar-schema.js";
 import { migrateCommunity } from "./community-schema.js";
 import {
   randomBytes,
@@ -184,6 +185,7 @@ export function migrateDatabase(db) {
     for (const column of ["province_code", "ward_code", ...(table === "users" ? ["school"] : [])])
       if (!columns.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
   }
+  migrateGoogleCalendar(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

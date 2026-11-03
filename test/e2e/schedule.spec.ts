@@ -68,10 +68,6 @@ for (const [slug, heading, other] of [
     const stream = await download.createReadStream(); let content = "";
     for await (const chunk of stream!) content += chunk.toString();
     expect(content.match(/^BEGIN:VEVENT$/gm)).toHaveLength(3);
-    await page.getByRole("button", { name: "Google Calendar", exact: true }).click();
-    await expect(page.getByRole("dialog")).toContainText("không tự cập nhật");
-    await expect(page.getByRole("link", { name: "Mở trang nhập lịch" })).toHaveAttribute("href", "https://calendar.google.com/calendar/u/0/r/settings/export");
-    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Xóa bộ lọc", exact: true }).click();
     await page.getByRole("tab", { name: "Danh sách", exact: true }).click();
     await expect(page.locator(".lesson-card")).toHaveCount(6);

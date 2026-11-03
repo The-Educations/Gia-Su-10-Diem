@@ -26,7 +26,7 @@ Administrators can promote an existing active account from **Quản trị → T�
 
 New email and Google accounts verify an emailed code before entering `/app/onboarding`: choose a role, then save name, timezone and an optional learning goal. `users.onboarding_step` persists each completed step. Existing accounts migrate to step 3 (complete); admins skip setup. Tutor profiles remain pending review. `PUT /api/account/onboarding` validates step order and profile fields server-side, and role selection locks after the first step. Unsaved field edits are not persisted across reloads.
 
-The flow uses an expiring one-use database state, HttpOnly browser binding, PKCE S256, nonce verification, and Google JWKS validation of signature, issuer, audience and expiry. Google access/refresh tokens are not stored. Cancelled/expired/error callbacks return to sign-in with a concise message. If secrets are missing, Google sign-in is hidden and email/password remains available.
+The flow uses an expiring one-use database state, HttpOnly browser binding, PKCE S256, nonce verification, and Google JWKS validation of signature, issuer, audience and expiry. Google access/refresh tokens are not stored by sign-in. Optional Calendar sync stores an encrypted refresh token under a separate `GOOGLE_CALENDAR_TOKEN_KEY`; see `google-calendar.md`. Cancelled/expired/error callbacks return to sign-in with a concise message. If secrets are missing, Google sign-in is hidden and email/password remains available.
 
 For local Node development, use `node --env-file=.env server/index.js`. Use `.dev.vars` (ignored) for Wrangler. Never reuse production sessions in tests.
 

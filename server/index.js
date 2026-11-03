@@ -29,6 +29,7 @@ const app = createApi(db, {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     adminEmail: process.env.GOOGLE_ADMIN_EMAIL,
+    calendarTokenKey: process.env.GOOGLE_CALENDAR_TOKEN_KEY,
   },
 });
 app.use("/assets", express.static(path.resolve("assets")));
@@ -78,12 +79,15 @@ if (production || process.env.SERVE_BUILD === "1") {
   });
   app.use(vite.middlewares);
 }
+const calendarTimer = setInterval(() => { void app.locals.calendarSync.syncDue().catch(() => {}); }, 60000);
+calendarTimer.unref();
 const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
   console.log(`Gia Sư 10 Điểm: ${origin}/app/`),
 );
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () =>
     server.close(() => {
+      clearInterval(calendarTimer);
       db.close();
       process.exit(0);
     }),
