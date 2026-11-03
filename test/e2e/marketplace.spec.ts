@@ -113,10 +113,10 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   // Existing dated lessons remain supported after new requests move to weekly schedules.
   const available = await (await student.request.get("/api/tutors/3")).json();
   expect((await student.request.post("/api/bookings", { data: { slot_id: available.slots[0].id, subject_id: available.subjects[0], mode: "online", note: "Ôn phương trình bậc hai" } })).status()).toBe(201);
-  await student.goto("/app/bookings");
+  await student.goto("/app/bookings?view=list");
   await expect(student.locator(".lesson-card")).toHaveCount(1);
   await login(tutor, "chau");
-  await tutor.goto("/app/bookings");
+  await tutor.goto("/app/bookings?view=list");
   await tutor.getByRole("button", { name: "Nhận buổi học" }).click();
   await tutor.getByRole("button", { name: "Xác nhận", exact: true }).click();
   await expect(tutor.locator(".lesson-card")).toContainText("Đã xác nhận");
@@ -134,7 +134,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   await student.reload();
   await expect(student.locator(".lesson-card")).toContainText("Đã xác nhận");
   const download = student.waitForEvent("download");
-  await student.getByRole("button", { name: "Lưu lịch" }).click();
+  await student.getByRole("button", { name: "Tải toàn bộ lịch" }).click();
   expect((await download).suggestedFilename()).toMatch(/\.ics$/);
   await student.getByRole("link", { name: "Trao đổi" }).click();
   await expect(
@@ -150,7 +150,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   ).toBeVisible();
   await tutor.reload();
   await expect(tutor.getByText("Em cảm ơn cô.", { exact: true })).toBeVisible();
-  await student.goto("/app/bookings");
+  await student.goto("/app/bookings?view=list");
   await student.getByRole("button", { name: "Hủy buổi", exact: true }).click();
   await student.getByRole("button", { name: "Xác nhận", exact: true }).click();
   await expect(student.locator(".lesson-card")).toContainText("Đã hủy");
@@ -839,7 +839,7 @@ test("parent chooses a separate setup and reaches shared booking tools", async (
   await expect(page.locator(".sidebar .brand")).toHaveAttribute("href", "/app/workspace");
   await page.getByRole("link", { name: "Xem buổi học sắp tới: 0", exact: true }).click();
   await expect(page).toHaveURL(/bookings$/);
-  await page.goto("/app/bookings");
+  await page.goto("/app/bookings?view=list");
   await expect(page.locator("main h1")).toBeVisible();
   await page.goto("/app/settings");
   await expect(page.getByLabel("Mục tiêu học tập của con")).toHaveValue("Con ôn thi Toán lớp 9");
@@ -966,11 +966,11 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-
   expect(booked.status()).toBe(201); const booking = await booked.json();
   const accepted = await page.request.patch(`/api/bookings/${booking.id}`, { data: { status: "accepted" } });
   expect(accepted.status()).toBe(200);
-  await student.goto("/app/bookings");
+  await student.goto("/app/bookings?view=list");
   const lesson = student.locator(".lesson-card").filter({ hasText: "Weekly browser test" });
   await expect(lesson).toContainText("60 phút");
   const downloadPromise = student.waitForEvent("download");
-  await lesson.getByRole("button", { name: /Lưu lịch/ }).click();
+  await student.getByRole("button", { name: "Tải toàn bộ lịch" }).click();
   const download = await downloadPromise;
   const stream = await download.createReadStream(); let ics = "";
   for await (const chunk of stream!) ics += chunk.toString();
