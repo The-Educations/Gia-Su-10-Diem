@@ -297,22 +297,23 @@ test("comments, flattened replies, helpful, best answer, removal and suspension"
   const third = await add("pending", "Cảm ơn", reply.id);
   assert.equal(third.parent_id, root.id);
   assert.equal(third.author.label, "Public pending - Học sinh");
-  assert.equal(
-    (await call("parent", `/community/comments/${root.id}/helpful`, "PUT"))
-      .status,
-    403,
-  );
-  assert.equal(
-    (await call("admin", `/community/comments/${root.id}/helpful`, "PUT"))
-      .status,
-    403,
-  );
+  for (const who of ["parent", "admin", "pending"])
+    assert.equal(
+      (await call(who, `/community/comments/${root.id}/helpful`, "PUT"))
+        .status,
+      200,
+    );
   await call("student", `/community/comments/${root.id}/helpful`, "PUT");
   await call("student", `/community/comments/${root.id}/helpful`, "PUT");
   assert.equal(
     (await call(null, `/community/posts/${id}/comments`)).data.items[0]
       .helpful_count,
-    1,
+    4,
+  );
+  assert.equal(
+    (await call("pending", `/community/comments/${root.id}/helpful`, "DELETE"))
+      .status,
+    200,
   );
   await call("student", `/community/posts/${id}/solve`, "POST", {
     solved: true,

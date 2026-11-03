@@ -618,8 +618,6 @@ export function registerCommunity(app, db, auth, audit) {
       participant,
       (req, res) => {
         const c = comment(req.params.id);
-        if (req.user.role === "admin" || c.author_id === req.user.id)
-          fail(403, "Không thể bấm Hữu ích cho bình luận này.");
         if (method === "put")
           run(
             db,
