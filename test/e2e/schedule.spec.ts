@@ -47,6 +47,7 @@ for (const [slug, heading, other] of [
     await page.route("**/api/bookings", route => route.fulfill({ json: fixtures }));
     await page.goto("/app/bookings");
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+    if (slug === "chau") await page.getByRole("button", { name: "Buổi tiếp theo", exact: true }).click();
     await expect(page.locator(".dated-lesson")).toHaveCount(5);
     await expect(page.locator(".schedule-next")).toContainText(other);
     await expect(page.locator(".schedule-next a[href*='messages']")).toHaveAttribute("href", "/app/messages?inquiry=81&context=lesson&contextId=901");

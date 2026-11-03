@@ -3170,3 +3170,18 @@ main {
   .google-calendar-buttons button[aria-label] { width: 44px; flex: none; }
   .google-calendar-buttons button[aria-label] svg { display: block; }
 }
+
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; font-size: 13px; }
+.calendar-free-slot:hover { background: var(--accent); }
+.calendar-legend a { margin-left: auto; text-decoration: underline; }
+.calendar-free-slot { display: grid; gap: 8px; padding: 12px 8px; font-size: 12px; border: 1px dashed var(--border); border-left-width: 3px; border-radius: 6px; background: var(--background); border-style: dashed; border-left-color: var(--muted-foreground); }
+.calendar-free-label { color: var(--muted-foreground); }
+
+.message-composer { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.chat-composer-actions, .chat-composer-actions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.chat-composer-actions { justify-content: space-between; }
+.chat-attachment-preview { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.chat-attachment-preview img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+.chat-attachment-preview > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+.chat-attachment-preview audio, .chat-audio { width: 280px; max-width: 100%; display: block; }
+.chat-image { max-width: min(280px, 100%); max-height: 320px; display: block; object-fit: contain; border-radius: 8px; margin-top: 4px; }

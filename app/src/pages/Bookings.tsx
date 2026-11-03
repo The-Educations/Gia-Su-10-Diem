@@ -8,7 +8,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { MessageCircle, ExternalLink, CalendarDays, List, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, money, dateTime } from "@/lib/api";
-import type { Booking } from "@/lib/types";
+import type { Booking, Tutor, WeeklySchedule } from "@/lib/types";
 import {
   Page,
   Heading,
@@ -46,6 +46,8 @@ export default function Bookings() {
   }
   const { user, refresh } = useApp(),
     result = useLoad<Booking[]>("/bookings"),
+    profile = useLoad<Tutor>(user?.role === "tutor" ? "/tutor/profile" : null),
+    weekly = useLoad<{ status: string; blocks: WeeklySchedule["blocks"] }[]>(user?.role === "tutor" ? "/weekly-requests" : null),
     offers = useLoad<StudyOffer[]>(user?.role === "admin" ? null : "/offers"),
     [view, setView] = useState<Booking | null>(null),
     [edit, setEdit] = useState<Booking | null>(null),
@@ -57,6 +59,16 @@ export default function Bookings() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const allLessons = result.data || [];
+  const freeSlots = (profile.data?.slots || []).filter(slot => {
+    if (slot.reserved || slot.available === 0) return false;
+    const start = Date.parse(slot.starts_at), end = start + slot.duration_minutes * 60000;
+    if (allLessons.some(b => ["pending", "accepted", "completed"].includes(b.status) && start < Date.parse(b.starts_at) + b.duration_minutes * 60000 && Date.parse(b.starts_at) < end)) return false;
+    return !(weekly.data || []).some(r => r.status === "accepted" && r.blocks.some(block => {
+      const local = new Date(start + 7 * 3600000);
+      const blockStart = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), block.hour) - 7 * 3600000;
+      return block.weekday === (local.getUTCDay() + 6) % 7 && start < blockStart + 3600000 && blockStart < end;
+    }));
+  });
   const contextLessons = allLessons.filter(b => (!inquiryId || String(b.inquiry_id) === inquiryId) && (!lessonId || String(b.id) === lessonId));
   const rows = contextLessons.filter(b => (!filter || b.status === filter) && (!offerId || String(b.offer_id) === offerId))
     .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at) || a.id - b.id);
@@ -116,6 +128,7 @@ export default function Bookings() {
           <Button asChild variant="ghost"><Link to={user?.role === "tutor" ? "/calendar" : "/tutors"}>{user?.role === "tutor" ? "Mở giờ trống" : "Tìm gia sư"}</Link></Button>
         </div>
       </div>
+      {(profile.error || weekly.error) && <ErrorState error={profile.error || weekly.error} retry={() => { profile.reload(); weekly.reload(); }} />}
       {offers.error && <ErrorState error={offers.error} retry={offers.reload} />}
       {(inquiryId || lessonId) && <div className="schedule-context"><strong>{contextLessons[0] ? `Lịch cùng ${personName(contextLessons[0])}` : "Lịch từ cuộc trò chuyện"}</strong><Button asChild variant="outline"><Link to="/bookings">Tất cả lịch học</Link></Button></div>}
       {!result.loading && !result.error && nextLesson && <section className="schedule-next" aria-label="Buổi học sắp tới">
@@ -136,18 +149,18 @@ export default function Bookings() {
             ].map(([value, label]) => ({ value, label }))} />
           </div>
         </div>
-      {result.loading ? (
+      {result.loading || profile.loading || weekly.loading ? (
         <Loading />
       ) : result.error ? (
         <ErrorState error={result.error} retry={result.reload} />
-      ) : !rows.length ? (
+      ) : !rows.length && !(user?.role === "tutor" && layout === "week" && !filter && !offerId && !inquiryId && !lessonId) ? (
         <Blank
           title="Chưa có buổi học trong mục này"
           action={(filter || offerId) ? <Button variant="outline" onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.delete("status"); next.delete("offer"); return next; })}>Xóa bộ lọc</Button> : <Button asChild variant="outline"><Link to={user?.role === "tutor" ? "/offers" : "/tutors"}>{user?.role === "tutor" ? "Xem đề nghị học" : "Tìm gia sư"}</Link></Button>}
         />
       ) : (
         <>
-        <TabsContent value="week"><LessonCalendar key={`${offerId}:${filter}:${inquiryId}:${lessonId}`} lessons={rows} onOpen={setView} personName={personName} /></TabsContent>
+        <TabsContent value="week"><LessonCalendar key={`${offerId}:${filter}:${inquiryId}:${lessonId}`} lessons={rows} freeSlots={user?.role === "tutor" && !lessonId && !inquiryId && !offerId && !filter && !profile.error && !weekly.error && !profile.loading && !weekly.loading ? freeSlots : undefined} onOpen={setView} personName={personName} /></TabsContent>
         <TabsContent value="list"><div className="list-toolbar schedule-list-count"><span>{rows.length} buổi học</span></div><div className="booking-list">
           {rows.map((b) => (
             <article key={b.id} className="lesson-card">

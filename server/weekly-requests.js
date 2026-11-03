@@ -42,8 +42,9 @@ export function registerWeeklyRequests(app, db, auth) {
       if (status !== "cancelled" && req.user.id !== r.tutor_id) fail(403, "Chỉ gia sư có thể xác nhận yêu cầu.");
       if (!(status === "cancelled" ? ["pending", "accepted"] : ["pending"]).includes(r.status)) fail(409, "Yêu cầu đã được xử lý. Vui lòng tải lại.");
       if (status === "accepted") {
-        const tutor = one(db, "SELECT t.status FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", r.tutor_id);
+        const tutor = one(db, "SELECT t.status,t.subjects,t.mode FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", r.tutor_id);
         if (tutor?.status !== "approved" || !one(db, "SELECT id FROM users WHERE id=? AND status='active' AND role='student'", r.student_id)) fail(409, "Tài khoản hiện không thể xác nhận lịch học.");
+        if (!JSON.parse(tutor.subjects).includes(r.subject_id) || (tutor.mode !== "both" && tutor.mode !== r.mode)) fail(409, "Môn học hoặc hình thức dạy đã thay đổi.");
         const blocks = JSON.parse(r.blocks), available = new Set(weeklySchedule(db, r.tutor_id).blocks.map(key));
         if (blocks.some(b => !available.has(key(b)))) fail(409, "Lịch dạy đã thay đổi. Hãy trao đổi với học sinh trước khi xác nhận.");
         const wanted = new Set(blocks.map(key));

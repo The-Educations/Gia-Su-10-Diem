@@ -1,3 +1,5 @@
+import { registerChatMedia, withChatMedia, insertChatMessage } from "./chat-media.js";
+import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
@@ -73,7 +75,7 @@ export function createApi(
       if (
         !(
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && ["/tutor/gallery", "/community/images"].includes(req.path))
+          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path)))
         ) &&
         !req.is("application/json")
       )
@@ -187,7 +189,7 @@ export function createApi(
       String(target),
     );
   const ensureSubjects = (ids) => {
-    if (ids.some((id) => !one(db, "SELECT id FROM subjects WHERE id=?", id)))
+    if (ids.some((id) => !one(db, "SELECT id FROM subjects WHERE id=? AND archived=0", id)))
       fail(400, "Môn học không tồn tại.");
   };
   const booking = (req) => {
@@ -222,6 +224,7 @@ export function createApi(
   registerGoogleAuth(app, db, { origin, production, session, google, signup });
   registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
+  registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
   registerCommunity(app, db, auth, audit);
@@ -358,7 +361,7 @@ export function createApi(
     res.json({ ok: true });
   });
   app.get("/api/subjects", (req, res) =>
-    res.json(all(db, "SELECT * FROM subjects ORDER BY rowid")),
+    res.json(all(db, "SELECT * FROM subjects WHERE archived=0 ORDER BY rowid")),
   );
   app.get("/api/tutors", (req, res) => res.json(tutorRows()));
   const tutorDetail = (preview = false) => (req, res) => {
@@ -443,7 +446,7 @@ export function createApi(
     ensureSubjects(d.subjects);
     const knownGoals = all(
       db,
-      "SELECT DISTINCT category FROM resources WHERE published=1",
+      "SELECT DISTINCT category FROM resources WHERE published=1 AND archived=0",
     ).map((r) => r.category);
     if (d.goals.some((g) => !knownGoals.includes(g)))
       fail(400, "Mục tiêu kỳ thi không có trong danh mục.");
@@ -666,26 +669,19 @@ export function createApi(
     const b = booking(req);
     const context = lessonMessageContext(db, b.id);
     res.json(
-      all(
+      withChatMedia(db, "lesson", b.id, all(
         db,
         "SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender_id WHERE booking_id=? ORDER BY m.id",
         b.id,
-      ).map(message => ({ ...message, context })),
+      ).map(message => ({ ...message, context }))),
     );
   });
   app.post(
     "/api/bookings/:id/messages",
     auth("student", "tutor"),
     (req, res) => {
-      const b = booking(req),
-        d = z.object({ body: text(3000) }).parse(req.body);
-      run(
-        db,
-        "INSERT INTO messages(booking_id,sender_id,body) VALUES (?,?,?)",
-        b.id,
-        req.user.id,
-        d.body,
-      );
+      const b = booking(req);
+      insertChatMessage(db, "lesson", b.id, req.user, req.body);
       res.status(201).json({ ok: true });
     },
   );
@@ -710,7 +706,7 @@ export function createApi(
   const resourceRows = (admin) =>
     all(
       db,
-      `SELECT r.*,s.name AS subject_name FROM resources r JOIN subjects s ON s.id=r.subject_id ${admin ? "" : "WHERE published=1"} ORDER BY r.id`,
+      `SELECT r.*,s.name AS subject_name FROM resources r JOIN subjects s ON s.id=r.subject_id WHERE r.archived=0 ${admin ? "" : "AND published=1"} ORDER BY r.id`,
     );
   app.get("/api/resources", (req, res) => res.json(resourceRows(false)));
   app.get("/api/admin", auth("admin"), (req, res) =>
@@ -772,11 +768,13 @@ export function createApi(
     audit(req.user.id, `user.${d.status}`, u.id);
     res.json({ ok: true });
   });
+  registerCatalogRemoval(app, db, auth, audit);
   app.put("/api/admin/subjects/:id", auth("admin"), (req, res) => {
     const d = subjectSchema.parse({ ...req.body, id: req.params.id });
+    if (one(db, "SELECT id FROM subjects WHERE id=? AND archived=1", d.id)) fail(409, "Mã môn đã được sử dụng. Chọn mã mới.");
     run(
       db,
-      "INSERT INTO subjects VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,stage=excluded.stage,description=excluded.description",
+      "INSERT INTO subjects(id,name,stage,description) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,stage=excluded.stage,description=excluded.description",
       d.id,
       d.name,
       d.stage,
@@ -809,7 +807,7 @@ export function createApi(
   app.put("/api/admin/resources/:id", auth("admin"), (req, res) => {
     const d = resourceSchema.parse(req.body);
     ensureSubjects([d.subject_id]);
-    if (!one(db, "SELECT id FROM resources WHERE id=?", req.params.id))
+    if (!one(db, "SELECT id FROM resources WHERE id=? AND archived=0", req.params.id))
       fail(404, "Không tìm thấy kỳ thi.");
     run(
       db,
@@ -847,7 +845,7 @@ export function createApi(
     if (err.type === "entity.too.large")
       return res
         .status(413)
-        .json({ error: "Tệp quá lớn. Giới hạn tải lên là 5 MB." });
+        .json({ error: req.path.startsWith("/api/chat/") ? "Tệp quá lớn. Giới hạn tải lên là 8 MB." : "Tệp quá lớn. Giới hạn tải lên là 5 MB." });
     const status = err.status || 500;
     if (status === 500) console.error("API error:", err.message);
     res.status(status).json({
