@@ -9,6 +9,8 @@ test("admin can remove subjects and exams with cancellation and historical-safe 
   const id = "browser-removal";
   expect((await page.request.put(`/api/admin/subjects/${id}`,{data:{name:"Môn kiểm tra bỏ",stage:"THPT",description:"Kiểm tra danh mục"}})).ok()).toBe(true);
   expect((await page.request.post("/api/admin/resources",{data:{title:"Kỳ thi kiểm tra bỏ",subject_id:id,category:"Kiểm thử",level:"THPT",year:2026,description:"Kỳ thi kiểm tra danh mục",source_name:"Nguồn kiểm thử",source_url:"https://example.com",published:true}})).ok()).toBe(true);
+  await page.goto("/");
+  await expect(page.locator(`#form-subject option[value=${id}]`)).toHaveText("Môn kiểm tra bỏ");
   await page.goto("/app/admin?tab=resources");
   const exam = page.locator(".admin-list article").filter({hasText:"Kỳ thi kiểm tra bỏ"});
   await exam.getByRole("button",{name:"Bỏ kỳ thi",exact:true}).click();
@@ -22,6 +24,10 @@ test("admin can remove subjects and exams with cancellation and historical-safe 
   await subject.getByRole("button",{name:"Bỏ môn",exact:true}).click();
   await page.getByRole("button",{name:"Bỏ khỏi danh mục",exact:true}).click();
   await expect(subject).toHaveCount(0);
+  await page.goto("/");
+  await expect(page.locator("#form-subject option[value=toan]")).toHaveCount(1);
+  await expect(page.locator(`#form-subject option[value=${id}]`)).toHaveCount(0);
+  await page.goto("/app/admin?tab=subjects");
   for (const width of [320,768,1440]) {
     await page.setViewportSize({width,height:900});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
