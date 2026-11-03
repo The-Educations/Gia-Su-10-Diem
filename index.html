@@ -1119,6 +1119,12 @@ footer {
     font-size: 8.5vw;
   }
 }
+@media (max-width: 700px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
 @media (max-width: 560px) {
   .section-space {
     padding: 65px 0;
@@ -1311,10 +1317,6 @@ footer {
   .tutor-features p {
     font-size: 15px;
   }
-  .contact-grid {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
   .contact h2 {
     font-size: 33px;
   }
@@ -1323,10 +1325,7 @@ footer {
     margin-top: 22px;
   }
   .reply-card {
-    padding: 24px 20px 24px 32px;
-  }
-  .reply-card:before {
-    left: 16px;
+    padding: 24px 20px;
   }
   .reply-card h3 {
     font-size: 28px;
@@ -1522,8 +1521,8 @@ footer {
 <section class='contact section-space' id='contact' aria-labelledby='cta-title' data-od-id='cta'>
   <div class='container contact-grid'>
     <div><h2 id='cta-title' data-reveal>Một khởi đầu nhỏ.<br><em>Một bước tiến xa.</em></h2><p class='lead' data-reveal>Chọn môn học. Tìm người đồng hành.<br>Phần tiếp theo, mình cùng viết.</p></div>
-    <form class='reply-card' id='tutor-booking-form' action='/app/tutors' method='get' data-reveal>
-      <h3>Giờ học của em</h3>
+    <form class='reply-card' id='tutor-booking-form' aria-labelledby='tutor-search-title' action='/app/tutors' method='get' data-reveal>
+      <h3 id='tutor-search-title'>Tìm gia sư</h3>
       <div class='reply-field'><label for='form-subject'>Môn học</label><div class='reply-select'><select id='form-subject' name='subject'><option value=''>Tất cả môn học</option></select><svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='m6 9 6 6 6-6' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg></div></div>
       <div class='reply-field'><label for='form-mode'>Hình thức học</label><div class='reply-select'><select id='form-mode' name='mode'><option value=''>Tất cả hình thức</option><option value='online'>Trực tuyến</option><option value='offline'>Trực tiếp</option></select><svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='m6 9 6 6 6-6' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg></div></div>
       <button class='button primary' type='submit'>Tìm gia sư <svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='M5 19L19 5M5 5h14v14' stroke='currentColor' stroke-width='1.5'/></svg></button>

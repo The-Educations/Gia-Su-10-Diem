@@ -1104,6 +1104,12 @@ footer {
     font-size: 8.5vw;
   }
 }
+@media (max-width: 700px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
 @media (max-width: 560px) {
   .section-space {
     padding: 65px 0;
@@ -1296,10 +1302,6 @@ footer {
   .tutor-features p {
     font-size: 15px;
   }
-  .contact-grid {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
   .contact h2 {
     font-size: 33px;
   }
@@ -1308,10 +1310,7 @@ footer {
     margin-top: 22px;
   }
   .reply-card {
-    padding: 24px 20px 24px 32px;
-  }
-  .reply-card:before {
-    left: 16px;
+    padding: 24px 20px;
   }
   .reply-card h3 {
     font-size: 28px;
