@@ -327,6 +327,11 @@
   margin-top: auto;
   padding-top: 40px;
 }
+.navigation-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
 .landing-link {
   display: flex;
   gap: 12px;
@@ -398,6 +403,12 @@
 .navigation-sheet {
   width: min(320px, calc(100vw - 32px));
   height: 100dvh;
+  gap: 0;
+  overflow: hidden;
+}
+.navigation-sheet > [data-slot="sheet-close"] {
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
 }
 @media (min-width: 951px) {
   .app-shell[data-sidebar-collapsed="true"] {
@@ -1235,6 +1246,10 @@ main {
     gap: 8px;
     font-weight: 600;
   }
+  .mobile-brand [data-slot="sheet-trigger"] {
+    width: 44px;
+    height: 44px;
+  }
   .topbar-location {
     display: none;
   }
@@ -1245,11 +1260,21 @@ main {
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: max(36px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
-    overflow-y: auto;
+    min-height: 0;
+    padding-top: max(20px, env(safe-area-inset-top));
   }
-  .mobile-nav .brand {
-    margin-bottom: 28px;
+  .mobile-nav .navigation-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 0 max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-bottom));
+    scrollbar-width: thin;
+  }
+  .mobile-nav .navigation-body > * {
+    flex-shrink: 0;
+  }
+  .mobile-nav nav a > svg {
+    flex-shrink: 0;
   }
   .mobile-nav nav a {
     font-size: 14px;
@@ -1268,6 +1293,11 @@ main {
 @media (max-width: 700px) {
   body {
     font-size: 14px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px;
   }
   main {
     padding: 26px 20px 40px;
@@ -1432,6 +1462,10 @@ main {
 @media (max-width: 480px) {
   main {
     padding-inline: 16px;
+  }
+  .filter-grid,
+  .filter-grid.three {
+    grid-template-columns: 1fr;
   }
   .tutor-grid,
   .subjects-grid {
@@ -2608,7 +2642,9 @@ main {
   [data-sidebar-collapsed="true"] .sidebar-header .sidebar-toggle { gap: 0; }
 }
 .mobile-nav .sidebar-header {
-  margin-bottom: 28px;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+  padding: 0 72px 0 max(20px, env(safe-area-inset-left));
 }
 
 .account-entry {
