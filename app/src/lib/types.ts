@@ -40,6 +40,7 @@ export type Slot = {
   tutor_id: number;
   starts_at: string;
   reserved?: number;
+  available?: number;
 };
 export type ProfileTheme = { id: "paper" | "sage" | "ink"; name: string };
 export type Tutor = {
@@ -122,7 +123,9 @@ export type MessageContext = {
   duration_minutes?: number;
   blocks?: WeeklySchedule["blocks"];
 };
+export type ChatAttachment = { id: string; kind: "image" | "audio"; size: number; url: string };
 export type Message = {
+  attachment?: ChatAttachment | null;
   id: number;
   booking_id: number;
   sender_id: number;

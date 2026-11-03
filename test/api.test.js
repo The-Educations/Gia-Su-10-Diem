@@ -1333,7 +1333,7 @@ test("support is pinned per user, private between owners, and shared with admini
   assert.equal((await tutor.request(`/support/${a.id}/messages`)).status, 404);
   assert.equal((await tutor.request(`/support/${a.id}/messages`, "POST", { body: "Unauthorized" })).status, 404);
   assert.equal((await student.request(`/support/${a.id}/messages`, "POST", { body: "Cần hỗ trợ lịch học" })).status, 201);
-  assert.equal((await admin.request("/support")).data.length, 2);
+  assert.equal((await admin.request("/support")).data.length, 1);
   assert.equal((await admin.request(`/support/${a.id}/messages`, "POST", { body: "Admin đã nhận yêu cầu" })).status, 201);
   assert.equal((await student.request(`/support/${a.id}/messages`)).data.at(-1).body, "Admin đã nhận yêu cầu");
   run(db, "UPDATE users SET status='suspended' WHERE id=?", a.user_id);
@@ -1582,4 +1582,68 @@ test("message context migration preserves existing plain messages and can run tw
   const messages = (await tutor.request(`/inquiries/${thread.id}/messages`)).data;
   assert.equal(messages[0].body, "Existing message");
   assert.equal(messages[0].context, null);
+});
+
+test("catalog removal keeps lesson history and survives reseeding", async t => {
+  const { db, client } = await fixture(t), admin = client(), student = client();
+  await admin.login("admin"); await student.login("student");
+  const old = all(db, "SELECT id FROM bookings WHERE subject_id='toan'");
+  const resource = one(db, "SELECT id FROM resources WHERE subject_id='toan'");
+  assert.equal((await student.request("/admin/subjects/toan", "DELETE")).status, 403);
+  assert.equal((await admin.request(`/admin/resources/${resource.id}`, "DELETE")).status, 200);
+  assert.equal((await admin.request("/admin/subjects/toan", "DELETE")).status, 200);
+  seedCatalog(db); migrateDatabase(db);
+  assert.ok(!(await student.request("/subjects")).data.some(s => s.id === "toan"));
+  assert.ok(!(await student.request("/resources")).data.some(r => r.subject_id === "toan"));
+  assert.ok(!(await admin.request("/admin")).data.resources.some(r => r.subject_id === "toan"));
+  assert.ok(all(db, "SELECT subjects FROM tutors").every(t => !JSON.parse(t.subjects).includes("toan")));
+  assert.equal(all(db, "SELECT id FROM bookings WHERE subject_id='toan'").length, old.length);
+  assert.equal((await admin.request("/admin/subjects/toan", "PUT", { name: "Toán", stage: "THPT", description: "Môn học" })).status, 409);
+});
+
+test("chat attachments remain private and bind only to the sender's thread", async t => {
+  const { db, base, client } = await fixture(t), student = client(), tutor = client(), other = client(), admin = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  await other.login("nam"); await admin.login("admin");
+  const inquiry = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Chào thầy" })).data;
+  const otherInquiry = (await student.request("/inquiries", "POST", { tutor_id: one(db,"SELECT id FROM users WHERE email='nam@demo.giasu.test'").id, body: "Chào thầy" })).data;
+  const path = `/chat/inquiry/${inquiry.id}/attachments`;
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO/aB9sAAAAASUVORK5CYII=", "base64");
+  // Generate a valid image through the same decoder used by profile uploads.
+  const sharp = (await import("sharp")).default;
+  const image = await sharp({create:{width:10,height:10,channels:3,background:"red"}}).png().toBuffer();
+  const upload = (who, url, data, type) => fetch(base+url, {method:"POST",headers:{Cookie:who.cookie,"Content-Type":type},body:data});
+  assert.equal((await upload(other,path,image,"image/png")).status,404);
+  assert.equal((await upload(student,path,png,"image/svg+xml")).status,400);
+  assert.equal((await upload(student,path,Buffer.from("fake"),"audio/mpeg")).status,400);
+  assert.equal((await upload(student,path,Buffer.alloc(8*1024*1024+1),"audio/wav")).status,413);
+  const response = await upload(student,path,image,"image/png"); assert.equal(response.status,201);
+  const attachment = await response.json();
+  const read = (who, headers={}) => fetch(new URL(attachment.url, base),{headers:{Cookie:who?.cookie || "",...headers}});
+  assert.equal((await read()).status,401);
+  assert.equal((await read(tutor)).status,404); // draft is sender-only
+  assert.equal((await student.request(`/inquiries/${otherInquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  assert.equal((await tutor.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  assert.equal((await student.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,201);
+  assert.equal((await read(tutor)).status,200);
+  assert.equal((await read(other)).status,404);
+  assert.equal((await read(admin)).status,404);
+  const ranged = await read(tutor,{Range:"bytes=0-9"}); assert.equal(ranged.status,206); assert.equal((await ranged.arrayBuffer()).byteLength,10);
+  assert.equal((await read(tutor,{Range:"bytes=999999-"})).status,416);
+  const messages = (await tutor.request(`/inquiries/${inquiry.id}/messages`)).data;
+  assert.equal(messages.at(-1).attachment.id,attachment.id);
+  assert.equal((await student.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  const support = (await student.request("/support")).data[0];
+  assert.equal((await admin.request("/support")).data.length,0);
+  const wav = Buffer.alloc(48); wav.write("RIFF"); wav.write("WAVE",8);
+  const voice = await (await upload(student,`/chat/support/${support.id}/attachments`,wav,"audio/wav")).json();
+  assert.equal((await student.request(`/support/${support.id}/messages`,"POST",{attachment_id:voice.id})).status,201);
+  assert.equal((await admin.request("/support")).data.length,1);
+  assert.equal((await admin.request(`/support/${support.id}/messages`)).data.at(-1).attachment.kind,"audio");
+  const slot = one(db, "SELECT * FROM slots WHERE tutor_id=? LIMIT 1", teacher.id);
+  const booking = { id: Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (?,?,?,'toan',?,180000,'online')", learner.id, teacher.id, slot.id, slot.starts_at).lastInsertRowid) };
+  const lessonVoice = await (await upload(tutor,`/chat/lesson/${booking.id}/attachments`,wav,"audio/wav")).json();
+  assert.equal((await tutor.request(`/bookings/${booking.id}/messages`,"POST",{attachment_id:lessonVoice.id})).status,201);
+  assert.equal((await student.request(`/bookings/${booking.id}/messages`)).data.at(-1).attachment.id,lessonVoice.id);
+  migrateDatabase(db);
 });

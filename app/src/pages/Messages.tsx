@@ -1,6 +1,7 @@
+import { ChatComposer } from "@/components/chat-composer";
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Send, Pin, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, Pin, ShieldCheck, X } from "lucide-react";
 import { api, useApp, useLoad, dateTime } from "@/lib/api";
 import type { Booking, Inquiry, Message as MessageData, MessageContext } from "@/lib/types";
 import { MessageContextCard } from "@/components/message-context-card";
@@ -12,11 +13,8 @@ import {
   Blank,
   Loading,
   ErrorState,
-  Submit,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Message,
   MessageContent,
@@ -66,8 +64,6 @@ function Conversation({ thread }: { thread: Thread }) {
     [messages, setMessages] = useState<MessageData[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
-    [body, setBody] = useState(""),
-    [busy, setBusy] = useState(false),
     [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
@@ -96,20 +92,11 @@ function Conversation({ thread }: { thread: Thread }) {
       clearInterval(timer);
     };
   }, [thread.endpoint, retry]);
-  async function send(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!body.trim() || !contextReady) return;
-    setBusy(true);
-    try {
-      await api(thread.endpoint, "POST", { body, ...(thread.kind === "inquiry" && context ? { context: { kind: context.kind, id: context.id } } : {}) });
-      setBody("");
-      setMessages(await api(thread.endpoint));
-      setError("");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  async function send(body: string, attachment_id?: string) {
+    await api(thread.endpoint, "POST", { body, attachment_id, ...(thread.kind === "inquiry" && context ? { context: { kind: context.kind, id: context.id } } : {}) });
+    setError("");
+    try { setMessages(await api(thread.endpoint)); }
+    catch (e) { setError((e as Error).message); }
   }
   return (
     <>
@@ -129,7 +116,7 @@ function Conversation({ thread }: { thread: Thread }) {
         ) : null}
         </div>
       </header>
-      {thread.kind === "support" && <aside className="support-welcome" aria-label="Tin nhắn được ghim"><Pin size={16} aria-hidden="true" /><div><strong>Hỗ trợ Gia Sư 10 Điểm</strong><p>Chào bạn! Gửi tin nhắn tại đây để được quản trị viên hỗ trợ.</p><a href="mailto:admin@giasudiem10.online">admin@giasudiem10.online</a></div></aside>}
+      {thread.kind === "support" && user?.role !== "admin" && <aside className="support-welcome" aria-label="Tin nhắn được ghim"><Pin size={16} aria-hidden="true" /><div><strong>Hỗ trợ Gia Sư 10 Điểm</strong><p>Chào bạn! Gửi tin nhắn tại đây để được quản trị viên hỗ trợ.</p><a href="mailto:admin@giasudiem10.online">admin@giasudiem10.online</a></div></aside>}
       {error && (
         <ErrorState error={error} retry={() => setRetry((r) => r + 1)} />
       )}
@@ -163,6 +150,7 @@ function Conversation({ thread }: { thread: Thread }) {
                           >
                             <BubbleContent className="whitespace-pre-wrap">
                               {m.body}
+                              {m.attachment && (m.attachment.kind === "image" ? <a href={m.attachment.url} target="_blank" rel="noreferrer" aria-label="Mở ảnh đính kèm"><img className="chat-image" src={m.attachment.url} alt="Ảnh đính kèm" loading="lazy" /></a> : <audio className="chat-audio" src={m.attachment.url} controls preload="none" aria-label={`Tin nhắn thoại từ ${m.name}`} />)}
                             </BubbleContent>
                           </Bubble>
                           <MessageFooter>
@@ -188,26 +176,7 @@ function Conversation({ thread }: { thread: Thread }) {
           {contextResult.loading ? <Loading /> : contextResult.error ? <ErrorState error={contextResult.error} retry={contextResult.reload} /> : context && <MessageContextCard context={context} />}
           {hasContext && <Button variant="ghost" size="icon" aria-label="Bỏ ngữ cảnh tin nhắn" onClick={() => chooseContext(null)}><X aria-hidden="true" /></Button>}
         </aside>}
-        <form className="message-composer" onSubmit={send}>
-          <Field>
-            <FieldLabel htmlFor="message" className="sr-only">
-              Tin nhắn
-            </FieldLabel>
-            <Textarea
-              id="message"
-              placeholder="Nhập tin nhắn…"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              maxLength={3000}
-              required
-              disabled={busy}
-            />
-          </Field>
-          <Submit busy={busy} disabled={!contextReady}>
-            <Send data-icon="inline-start" />
-            Gửi
-          </Submit>
-        </form>
+        <ChatComposer uploadPath={`/chat/${thread.kind}/${thread.id}/attachments`} ready={contextReady} onSend={send} />
         </>
       )}
     </>
@@ -280,8 +249,8 @@ export default function Messages() {
       ) : !threads.length ? (
         <Blank
           title="Chưa có cuộc trò chuyện"
-          description="Liên hệ gia sư từ hồ sơ để bắt đầu trao đổi."
-          action={
+          description={user?.role === "admin" ? "Tin nhắn hỗ trợ sẽ xuất hiện khi người dùng liên hệ." : "Liên hệ gia sư từ hồ sơ để bắt đầu trao đổi."}
+          action={user?.role !== "admin" &&
             <Button variant="outline" asChild>
               <Link to="/tutors">Tìm gia sư</Link>
             </Button>
@@ -298,7 +267,7 @@ export default function Messages() {
               >
                 {t.kind === "support" ? <ShieldCheck size={24} aria-hidden="true" /> : <Person name={t.name} id={t.personId ?? t.tutorId} />}
                 <div>
-                  <strong>{t.name}{t.kind === "support" && <Pin size={13} aria-label="Đã ghim" />}</strong>
+                  <strong>{t.name}{t.kind === "support" && user?.role !== "admin" && <Pin size={13} aria-label="Đã ghim" />}</strong>
                   <span>
                     {t.detail}
                   </span>

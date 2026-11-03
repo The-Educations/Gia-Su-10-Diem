@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Plus,
+  Trash2,
   Search,
   ArrowUpRight,
   Users,
@@ -56,6 +57,7 @@ export default function Admin() {
     subjects = useLoad<Subject[]>("/subjects"),
     [q, setQ] = useState(""),
     [editor, setEditor] = useState<Resource | null | undefined>(undefined),
+    [removal, setRemoval] = useState<{ kind: "subjects" | "resources"; id: string | number; name: string } | null>(null),
     [subject, setSubject] = useState<Subject | null | undefined>(undefined),
     [tutor, setTutor] = useState<Tutor | null>(null),
     [reviewOpen, setReviewOpen] = useState(false),
@@ -75,6 +77,7 @@ export default function Admin() {
       setTutor(null);
       setWithdraw(null);
       setSubject(undefined);
+      setRemoval(null);
       setAccount(null);
       refresh();
       toast.success("Đã lưu thay đổi");
@@ -355,6 +358,7 @@ export default function Admin() {
                   <Button variant="outline" onClick={() => setEditor(r)}>
                     Chỉnh sửa
                   </Button>
+                  <Button variant="ghost" onClick={() => { setError(""); setRemoval({ kind: "resources", id: r.id, name: r.title }); }}><Trash2 aria-hidden="true" />Bỏ kỳ thi</Button>
                 </article>
               ))}
             </div>
@@ -404,6 +408,7 @@ export default function Admin() {
                   >
                     Chỉnh sửa
                   </Button>
+                  <Button variant="ghost" onClick={() => { setError(""); setRemoval({ kind: "subjects", id: s.id, name: s.name }); }}><Trash2 aria-hidden="true" />Bỏ môn</Button>
                 </article>
               ))}
             </div>
@@ -429,6 +434,15 @@ export default function Admin() {
           </TabsContent>
         </Tabs>
       </div>
+      <Dialog open={!!removal} onOpenChange={open => { if (!open && !busy) setRemoval(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Bỏ {removal?.name}?</DialogTitle><DialogDescription>
+            Mục này sẽ không còn trong danh mục để chọn mới.{removal?.kind === "subjects" ? " Các kỳ thi thuộc môn cũng được bỏ." : ""} Lịch học và đề nghị đã có vẫn được giữ lại.
+          </DialogDescription></DialogHeader>
+          {error && <ErrorState error={error} />}
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setRemoval(null)}>Giữ lại</Button><Button variant="destructive" disabled={busy} onClick={() => removal && mutate(`/admin/${removal.kind}/${removal.id}`, "DELETE", {})}>{busy ? "Đang bỏ…" : "Bỏ khỏi danh mục"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={editor !== undefined}
         onOpenChange={(o) => {
