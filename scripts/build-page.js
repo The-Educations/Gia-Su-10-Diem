@@ -138,11 +138,11 @@ const html = `<!DOCTYPE html>
 <section class='contact section-space' id='contact' aria-labelledby='cta-title' data-od-id='cta'>
   <div class='container contact-grid'>
     <div><h2 id='cta-title' data-reveal>Một khởi đầu nhỏ.<br><em>Một bước tiến xa.</em></h2><p class='lead' data-reveal>Chọn môn học. Tìm người đồng hành.<br>Phần tiếp theo, mình cùng viết.</p></div>
-    <form class='reply-card' id='tutor-booking-form' action='/app/tutors' method='get' data-reveal>
-      <h3>Giờ học của em</h3>
-      <label for='form-subject'>Em muốn học môn gì?</label><select id='form-subject' name='subject'><option value=''>Tất cả môn học</option></select>
-      <label for='form-mode'>Em muốn học ở đâu?</label><select id='form-mode' name='mode'><option value=''>Tất cả hình thức</option><option value='online'>Trực tuyến</option><option value='offline'>Trực tiếp</option></select>
-      <button class='button primary' type='submit'>Tìm gia sư phù hợp ${arrow}</button>
+    <form class='reply-card' id='tutor-booking-form' aria-labelledby='tutor-search-title' action='/app/tutors' method='get' data-reveal>
+      <h3 id='tutor-search-title'>Tìm gia sư</h3>
+      <div class='reply-field'><label for='form-subject'>Môn học</label><div class='reply-select'><select id='form-subject' name='subject'><option value=''>Tất cả môn học</option></select><svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='m6 9 6 6 6-6' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg></div></div>
+      <div class='reply-field'><label for='form-mode'>Hình thức học</label><div class='reply-select'><select id='form-mode' name='mode'><option value=''>Tất cả hình thức</option><option value='online'>Trực tuyến</option><option value='offline'>Trực tiếp</option></select><svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='m6 9 6 6 6-6' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg></div></div>
+      <button class='button primary' type='submit'>Tìm gia sư ${arrow}</button>
     </form>
   </div>
   <div class='contact-orbit' aria-hidden='true'>${art("orbit", "", "-0.08")}</div>
