@@ -1,6 +1,5 @@
 import { CommunityUnread } from "./components/community/Notifications";
 import AccountMenu from "./components/community/AccountMenu";
-import { accountRole } from "@/lib/types";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {

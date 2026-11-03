@@ -3212,6 +3212,7 @@ main {
 .member-posts-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .member-posts-heading h2 { font-size: 1.2rem; font-weight: 650; }
 .member-posts-heading > * { min-width: 0; }
+.member-posts-heading > [data-slot="field"] { width: 14rem; flex: 0 0 auto; }
 .community-profile-editor { max-height: calc(100dvh - 2rem); overflow-y: auto; }
 .member-image-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .member-image-fields input { max-width: 100%; }
@@ -3226,6 +3227,7 @@ main {
   .member-actions > * { flex: 1 1 auto; }
   .member-image-fields { grid-template-columns: minmax(0, 1fr); }
   .member-posts-heading { align-items: stretch; flex-direction: column; }
+  .member-posts-heading > [data-slot="field"] { width: 100%; }
 }
 .member-admin dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; margin-block: 1rem; }
 .member-admin dt { color: var(--muted-foreground); }

@@ -39,7 +39,7 @@ test("guest filters, subject navigation and responsive layouts", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/app/tutors");
   await expect(
-    page.getByRole("heading", { name: "6 gia sư", exact: true }),
+    page.getByRole("heading", { name: "7 gia sư", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("textbox", { name: "Tìm gia sư", exact: true })

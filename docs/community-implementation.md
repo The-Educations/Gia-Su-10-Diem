@@ -79,3 +79,49 @@ Tích hợp thêm `65d915b` từ main (lịch theo giờ, lịch học viên và
 - Ảnh được bản nháp tham chiếu không bị dọn sau 24 giờ. Chỉ chủ ảnh xem được ảnh chưa gửi; admin chỉ xem thêm ảnh đã gắn với bài/bản sửa để kiểm duyệt. Đây là cập nhật quyền ảnh so với phiên bản trước.
 - Router dùng `createBrowserRouter` với cùng basename và các route hiện có để hỗ trợ `useBlocker`: điều hướng nội bộ và nút Back/Forward hỏi trước khi bỏ phần chưa lưu; tải lại/đóng tab dùng cảnh báo của trình duyệt. Lưu nháp là thao tác chủ động, không tự động lưu.
 - Kiểm chứng: 61 unit/API tests; kiểm thử trình duyệt cho lưu nháp chưa có tiêu đề, rich text qua reload, Back giữ nội dung, mở lại và gửi ở cả bốn vai trò; Cloudflare local runtime kiểm tra tạo/sửa/đọc nháp, phiên bản cũ và gửi nháp. DevTools mobile 360 px không tràn ngang, không lỗi/warning console.
+
+## Hồ sơ thành viên — 03/11/2026
+
+Triển khai theo [community-profile.md](community-profile.md), trên nhánh con `feat/community-member-profiles` của `hung-new`, đã hợp nhất `main`. Giữ thay đổi Hữu ích cho mọi tài khoản đăng nhập từ `hung-new`.
+
+### Sáu phần đã triển khai
+
+1. **Danh tính:** `profile-code.js`, `community-schema.js`, `community-policy.js` cấp mã mật mã 8 ký tự `a-z2-9`, backfill có unique index và thử lại khi trùng. Cả đăng ký email/Google đã xác minh, seed và CLI tạo admin được cấp mã. Nhãn tác giả vẫn tính theo trạng thái hiện hành; mã và ảnh đi qua cùng `authorLabel`.
+2. **Ảnh tài khoản:** `community-profile.js` quản lý ảnh đại diện/bìa riêng trong `user_images` và `user_image_chunks`. Node dùng Sharp, Worker dùng Cloudflare Images; thay ảnh và dọn chunk cùng giao dịch. Phục vụ ảnh cần phiên, `private, no-store`, URL có phiên bản. Không đổi ảnh `/studio` hay trạng thái duyệt gia sư.
+3. **Hồ sơ và thiết lập:** API theo mã có giới thiệu, tháng tham gia, thống kê nội dung đang công khai và bài đã duyệt; bản sửa chưa duyệt không đi vào danh sách hồ sơ. Tên hiển thị/giới thiệu dùng setter chung có quota; không qua PATCH account. Onboarding bắt buộc tên hiển thị; tài khoản đã hoàn thành không bị đưa về onboarding.
+4. **Giao diện:** `CommunityProfile.tsx`, `ProfileEditor.tsx`, `AccountMenu.tsx`; menu sidebar đúng hai liên kết, ảnh/tên tác giả ở bài/bình luận/trả lời dẫn về hồ sơ; có liên kết tại Cài đặt và vùng thành viên. Form cắt ảnh tái dùng component hiện có. Menu không giành lại focus từ trang đích khi điều hướng; Esc vẫn trả focus về nút mở.
+5. **Kiểm duyệt:** báo cáo phân biệt hồ sơ + avatar/cover/bio; mở rộng CHECK/UNIQUE bằng sao chép nguyên hàng trong giao dịch migration hiện có. Admin xem khung thông tin riêng, nội dung bị báo cáo hiện tại, khóa/mở quyền và gỡ kèm lý do/audit. Thông báo `profile_removed` chứa lý do, chỉ chủ hồ sơ nhận; không email. Xóa tài khoản dọn giới thiệu, ảnh, chunk và lịch sử quota.
+6. **SEO và kiểm chứng:** route hồ sơ nằm trước route bài, có Require; Node/Worker trả shell `noindex`, không metadata ảnh hay JSON-LD, không sitemap. Kiểm tra production chỉ đọc được bổ sung cho route và quyền khách.
+
+### Các mặc định [ĐỀ XUẤT] đã áp dụng
+
+| Nhóm | Mặc định đã dùng |
+| --- | --- |
+| Menu / lối vào | Popover shadcn có Esc, click ngoài, bàn phím và sidebar thu gọn; dùng avatar khi có. Cài đặt, Cộng đồng và Bài của tôi có liên kết hồ sơ. |
+| Bố cục | Bìa mặc định theo màu thương hiệu, avatar gối mép bìa, tên/tư cách, tháng tham gia, hành động, giới thiệu, thống kê, bài viết; không tab. |
+| Chủ hồ sơ | Nút sửa, Bài của tôi, Cài đặt và gợi ý các phần còn thiếu. Chỉnh sửa trong dialog. |
+| Sao chép | Toast khi thành công; ô URL chọn/copy thủ công khi clipboard bị từ chối. |
+| Thống kê | Chỉ bài approved, bình luận visible trên bài approved của tài khoản hoạt động, phiếu từ tài khoản hoạt động; tài khoản bị đình chỉ không có hoạt động công khai. Admin chỉ liệt kê thông báo, không Quy tắc. |
+| Danh sách | 10 bài/trang; Mới nhất/Hữu ích nhất lưu trong URL; hữu ích theo cùng công thức bảng tin, hòa thì published_at và ID mới hơn trước. |
+| Ảnh | Avatar WebP 640×640; bìa 4:1 WebP 1280×320; đầu vào JPG/PNG/WebP tối đa 5 MB/16 triệu pixel; chunk 100 KB. Mỗi loại ảnh tối đa 5 lần tải/24 giờ. |
+| Tên / giới thiệu | Tên 2–30 ký tự, tối đa 3 thay đổi/24 giờ; giới thiệu 300 ký tự, tối đa 5 dòng và 10 thay đổi/24 giờ. Lưu lại giá trị không đổi không tiêu quota. Gia sư đã duyệt/admin thấy ghi chú về tên thật. |
+| Onboarding | Tên hiển thị gợi ý từ từ cuối của họ tên; không hỏi ảnh/giới thiệu tại đây. |
+| Trạng thái | Mã thiếu/tài khoản suspended hoặc deleted trả 404 cho thành viên; admin vẫn đọc khung hồ sơ. Khóa Cộng đồng chặn mọi sửa hồ sơ nhưng vẫn cho đọc; lý do không đưa vào payload của người khác. |
+| Admin / báo cáo | Khung riêng họ tên/email/trạng thái; liên kết quản lý tài khoản; báo cáo ba phần, năm lý do, ghi chú 300 ký tự, duy nhất mỗi phần và chung quota 10/giờ. Gỡ yêu cầu lý do, audit, thông báo trong ứng dụng. |
+| Dữ liệu / API | Các route theo mục 13 của thiết kế. Bảng quota riêng và trường detail trên thông báo để giữ lý do dù nội dung đã được gỡ. |
+
+Khác biệt kỹ thuật so với phác thảo: `user_images.id` dùng UUID TEXT như pipeline ảnh cộng đồng hiện có, thay cho INTEGER trong bản đề xuất. ID mới sau mỗi lần thay ảnh làm phiên bản cache không bị tái sử dụng. Các kích thước, quyền, quota và hành vi giữ đúng tài liệu. Không thêm dependency ứng dụng.
+
+### Kiểm chứng
+
+- API có suite riêng `test/community-profile.test.js`, dùng chung fixture với cộng đồng: mã/backfill ổn định, privacy/role transitions, thông kê/sort/phân trang, quota và rollback, ảnh sai loại/quá byte/quá pixel, trạng thái khóa, báo cáo, migration bảng cũ, audit/thông báo và xóa tài khoản.
+- Playwright bổ sung menu bàn phím/Esc, liên kết mọi vai trò và khách quay lại sau login, crop/upload hai loại ảnh, cập nhật tên trên bài, sắp xếp qua reload, clipboard thành công/thất bại, báo cáo → admin gỡ → chủ nhận thông báo, private SEO; đo overflow ở 320/360/390/768/1024/1440 px và reduced motion.
+- Chrome DevTools đã kiểm tra trực tiếp menu, chỉnh sửa tên/giới thiệu, desktop/mobile 360 px và reduced motion; không lỗi/warning console, mobile không tràn ngang. Kiểm tra focus khi điều hướng phát hiện và sửa lỗi popover cuộn trang về nút mở.
+- Review độc lập không còn blocker; probe quota xác nhận lỗi sửa kết hợp rollback cả tên. Mutation test đảo điều kiện che hồ sơ bị đình chỉ làm test thất bại đúng dự kiến; đã khôi phục nguồn.
+- Cloudflare local smoke đạt với database Durable Object riêng: signup/onboarding mới, API hồ sơ riêng tư, ảnh WebP đúng kích thước, metadata noindex và quyền khách.
+
+Kết quả local cuối: `npm run typecheck` đạt; `npm test` đạt **97/97**; `npm run build` và `npm run build:cloudflare` đạt; `E2E_PORT=4215 npm run test:e2e` đạt **62/62**. Cloudflare local smoke đạt. Bốn ca cũ được cập nhật đúng thay đổi hợp đồng: đếm một lần gửi bình luận thay vì đếm yêu cầu danh tính (sidebar cũng đọc danh tính), liên kết tác giả sang hồ sơ thành viên, danh mục có thêm một fixture gia sư và onboarding fixture gửi tên hiển thị bắt buộc. Đây là bằng chứng local; CI và triển khai được xác minh riêng khi merge.
+
+### Phạm vi giữ nguyên / việc để sau
+
+Không mở hồ sơ hoặc ảnh tài khoản cho khách; không thêm danh sách thành viên, chat, theo dõi/kết bạn, thông tin con, bình luận trên hồ sơ hay email/realtime. Ảnh tài khoản không đi vào Tin nhắn, đánh giá, gallery hoặc thẻ gia sư. **Họ tên thật ở đánh giá gia sư và bình luận ảnh gia sư vẫn giữ hành vi hiện tại**, đúng phạm vi hoãn của thiết kế; cần quyết định riêng trước khi thống nhất chính sách. Bộ lọc liên hệ là mẫu thực dụng, không thay thế kiểm duyệt ảnh/nội dung.
