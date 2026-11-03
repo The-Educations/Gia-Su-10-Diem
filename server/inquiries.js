@@ -105,7 +105,7 @@ export function registerInquiries(app, db, auth) {
     (req, res) => {
       const thread = participant(req, res);
       if (!thread) return;
-      const context = messageContextSchema.nullish().parse(req.body.context);
+      const context = messageContextSchema.nullish().parse(req.body?.context);
       if (context && !inquiryMessageContext(db, thread, context))
         return res.status(404).json({ error: "Không tìm thấy nội dung trong cuộc trò chuyện này." });
       insertChatMessage(db, "inquiry", thread.id, req.user, req.body, context);
