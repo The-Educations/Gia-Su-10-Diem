@@ -1,16 +1,19 @@
+import { description } from "./community-policy.js";
 import pages from "../shared/seo-pages.json" with { type: "json" };
 
 export const siteOrigin = "https://giasudiem10.online";
 export const robots = `User-agent: *\nAllow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`;
 export const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(pages).map(path => `<url><loc>${siteOrigin}${path}</loc></url>`).join("")}</urlset>`;
 const escape = (value) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const privateRoutes = new Set(["/app/auth", "/app/verify-email", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/messages", "/app/settings", "/app/studio", "/app/admin", "/app/favorites"]);
+const privateRoutes = new Set(["/app/community/write", "/app/community/mine", "/app/auth", "/app/verify-email", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/calendar", "/app/offers", "/app/messages", "/app/settings", "/app/availability", "/app/studio", "/app/admin", "/app/favorites"]);
 
-export function newsSitemap(posts) {
-  return sitemap.replace("</urlset>", posts.map(post => `<url><loc>${siteOrigin}/app/news/${Number(post.id)}</loc></url>`).join("") + "</urlset>");
+export function newsSitemap(posts, community = []) {
+  return sitemap.replace("</urlset>", posts.map(post => `<url><loc>${siteOrigin}/app/news/${Number(post.id)}</loc></url>`).join("") + community.map(post => `<url><loc>${siteOrigin}/app/community/${Number(post.id)}</loc></url>`).join("") + "</urlset>");
 }
-export function pageSeo(path, post = null) {
-  const page = /^\/app\/news\/\d+$/.test(path) && post
+export function pageSeo(path, post = null, community = null) {
+  const page = /^\/app\/community\/\d+$/.test(path) && community
+    ? { title: `${community.title} | Cộng đồng Gia Sư 10 Điểm`, description: description(community.body) }
+    : /^\/app\/news\/\d+$/.test(path) && post
     ? { title: `${post.title} | Gia Sư 10 Điểm`, description: post.summary }
     : Object.hasOwn(pages, path) ? pages[path] : null;
   const known = page || privateRoutes.has(path) || /^\/app\/tutors\/\d+$/.test(path);
@@ -23,8 +26,8 @@ export function pageSeo(path, post = null) {
   };
 }
 
-export function renderSeo(html, path, post = null) {
-  const page = pageSeo(path, post);
+export function renderSeo(html, path, post = null, community = null) {
+  const page = pageSeo(path, post, community);
   const tags = [
     `<title>${escape(page.title)}</title>`,
     `<meta name="description" content="${escape(page.description)}">`,
@@ -43,6 +46,12 @@ export function renderSeo(html, path, post = null) {
       '<meta property="og:image:alt" content="Gia Sư 10 Điểm — Tìm gia sư, học theo cách của em">',
       '<meta name="twitter:card" content="summary_large_image">',
     ] : []),
+    ...(community && /^\/app\/community\/\d+$/.test(path) ? [`<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org", "@type": "DiscussionForumPosting", headline: community.title,
+      text: community.body, author: { "@type": "Person", name: community.author.name_part },
+      datePublished: community.published_at?.replace(" ", "T") + "Z", dateModified: community.updated_at?.replace(" ", "T") + "Z",
+      url: page.canonical,
+    }).replace(/</g, "\\u003c")}</script>`] : []),
     ...(path === "/" ? [`<script type="application/ld+json">${JSON.stringify({
       "@context": "https://schema.org", "@type": "WebSite", name: "Gia Sư 10 Điểm", url: siteOrigin + "/", inLanguage: "vi-VN",
     })}</script>`] : []),

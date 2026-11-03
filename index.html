@@ -1524,7 +1524,7 @@ footer {
     <div><h2 id='cta-title' data-reveal>Một khởi đầu nhỏ.<br><em>Một bước tiến xa.</em></h2><p class='lead' data-reveal>Chọn môn học. Tìm người đồng hành.<br>Phần tiếp theo, mình cùng viết.</p></div>
     <form class='reply-card' id='tutor-booking-form' action='/app/tutors' method='get' data-reveal>
       <h3>Giờ học của em</h3>
-      <div class='reply-field'><label for='form-subject'>Môn học</label><div class='reply-select'><select id='form-subject' name='subject'><option value=''>Tất cả môn học</option><option value='toan'>Toán</option><option value='vat-li'>Vật lí</option><option value='hoa-hoc'>Hóa học</option><option value='tieng-anh'>Tiếng Anh</option><option value='ngu-van'>Ngữ văn</option><option value='khtn'>Khoa học tự nhiên</option></select><svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='m6 9 6 6 6-6' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg></div></div>
+      <div class='reply-field'><label for='form-subject'>Môn học</label><div class='reply-select'><select id='form-subject' name='subject'><option value=''>Tất cả môn học</option></select><svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='m6 9 6 6 6-6' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg></div></div>
       <div class='reply-field'><label for='form-mode'>Hình thức học</label><div class='reply-select'><select id='form-mode' name='mode'><option value=''>Tất cả hình thức</option><option value='online'>Trực tuyến</option><option value='offline'>Trực tiếp</option></select><svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='m6 9 6 6 6-6' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg></div></div>
       <button class='button primary' type='submit'>Tìm gia sư <svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='M5 19L19 5M5 5h14v14' stroke='currentColor' stroke-width='1.5'/></svg></button>
     </form>
@@ -1710,6 +1710,17 @@ footer {
       observer.disconnect();
     }
   });
+})();
+
+(function initSubjectOptions() {
+  if (!/^https?:$/.test(location.protocol)) return;
+  const select = document.getElementById("form-subject");
+  fetch("/api/subjects")
+    .then(response => response.ok ? response.json() : [])
+    .then(subjects => {
+      select.replaceChildren(new Option("Tất cả môn học", ""), ...subjects.map(subject => new Option(subject.name, subject.id)));
+    })
+    .catch(() => {}); // The all-subjects search remains usable if the catalog is unavailable.
 })();
 </script>
 </body></html>

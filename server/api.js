@@ -1,3 +1,15 @@
+import { registerChatMedia, withChatMedia, insertChatMessage } from "./chat-media.js";
+import { registerCatalogRemoval } from "./catalog-removal.js";
+import { registerGoogleCalendar } from "./google-calendar.js";
+import { registerOffers } from "./offers.js";
+import { registerWeeklyRequests } from "./weekly-requests.js";
+import { registerSupport } from "./support.js";
+import { registerAccountDeletion } from "./account-deletion.js";
+import { registerSignupVerification } from "./signup-verification.js";
+import { registerCommunityImages } from "./community-images.js";
+import { registerCommunity } from "./community.js";
+import { registerTutorReview } from "./tutor-review.js";
+import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
 import { registerPosts } from "./posts.js";
@@ -6,6 +18,7 @@ import { registerGallery, galleryMetadata } from "./gallery.js";
 import { registerGoogleAuth } from "./google-auth.js";
 import { registerUploads, uploadMetadata } from "./uploads.js";
 import { registerInquiries } from "./inquiries.js";
+import { lessonMessageContext } from "./message-context.js";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -27,7 +40,10 @@ import {
   registerSchema,
   tutorSchema,
   timezoneSchema,
+  addressSchema,
+  addressLabel,
   resourceSchema,
+  availabilitySchema,
   subjectSchema,
 } from "./validation.js";
 
@@ -38,6 +54,7 @@ export function createApi(
     origin = "http://127.0.0.1:4174",
     limit = true,
     google = {},
+    wakeCalendar,
     processPhoto,
     clientIp,
     sendEmail,
@@ -58,7 +75,7 @@ export function createApi(
       if (
         !(
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && req.path === "/tutor/gallery")
+          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path)))
         ) &&
         !req.is("application/json")
       )
@@ -105,7 +122,7 @@ export function createApi(
       }),
     );
     app.use(
-      ["/api/auth/login", "/api/auth/register", "/api/auth/google", "/api/auth/verify-email", "/api/auth/resend-verification"],
+      ["/api/auth/login", "/api/auth/register", "/api/auth/google", "/api/auth/verify-email", "/api/auth/resend-verification", "/api/auth/signup"],
       rateLimit({
         ...(clientIp
           ? {
@@ -172,7 +189,7 @@ export function createApi(
       String(target),
     );
   const ensureSubjects = (ids) => {
-    if (ids.some((id) => !one(db, "SELECT id FROM subjects WHERE id=?", id)))
+    if (ids.some((id) => !one(db, "SELECT id FROM subjects WHERE id=? AND archived=0", id)))
       fail(400, "Môn học không tồn tại.");
   };
   const booking = (req) => {
@@ -185,27 +202,38 @@ export function createApi(
       fail(403, "Bạn không tham gia buổi học này.");
     return b;
   };
-  const tutorRows = () =>
+  const tutorRows = (preview = false) =>
     all(
       db,
-      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
-    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
-    WHERE t.status='approved' AND u.status='active' AND u.role='tutor' GROUP BY t.user_id`,
-    ).map(({ moderation_note, ...t }) => ({
+      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
+    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
+    WHERE ${preview ? '1=1' : "t.status='approved' AND u.status='active' AND u.role='tutor'"} GROUP BY t.user_id`,
+    ).map(({ moderation_note, reserved_weekly_blocks, ...t }) => ({
       ...t,
       ...uploadMetadata(db, t.user_id),
+      weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
       subjects: JSON.parse(t.subjects),
       levels: JSON.parse(t.levels),
       goals: JSON.parse(t.goals),
       education_history: JSON.parse(t.education_history),
       profile_sections: JSON.parse(t.profile_sections),
     }));
-  const verification = registerEmailVerification(app, db, { origin, sendEmail });
-  registerGoogleAuth(app, db, { origin, production, session, google });
+  registerEmailVerification(app, db, { origin, sendEmail });
+  const signup = registerSignupVerification(app, db, { sendEmail, production, session });
+  app.locals.calendarSync = registerGoogleCalendar(app, db, auth, { origin, production, google, wakeCalendar });
+  registerGoogleAuth(app, db, { origin, production, session, google, signup });
+  registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
+  registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
+  registerCommunity(app, db, auth, audit);
+  registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
+  registerSupport(app, db, auth);
+  registerAccountDeletion(app, db, auth, audit);
+  registerWeeklyRequests(app, db, auth);
+  registerOffers(app, db, auth);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
     res.json({ user: publicUser(req.user) }),
@@ -216,24 +244,8 @@ export function createApi(
       fail(403, "Tài khoản này cần đăng nhập bằng Google.");
     if (one(db, "SELECT id FROM users WHERE email=?", data.email))
       fail(409, "Email đã được sử dụng.");
-    if (!verification.configured) fail(503, "Đăng ký tạm thời chưa khả dụng. Vui lòng thử lại sau.");
-    const hash = await passwordHash(data.password);
-    const id = Number(
-      run(
-        db,
-        "INSERT INTO users(name,email,password,role,onboarding_step,email_verification_required) VALUES (?,?,?,?,0,1)",
-        data.name,
-        data.email,
-        hash,
-        data.role,
-      ).lastInsertRowid,
-    );
-    if (data.role === "tutor")
-      run(db, "INSERT INTO tutors(user_id) VALUES (?)", id);
-    const user = one(db, "SELECT * FROM users WHERE id=?", id);
-    let verificationSent = true;
-    try { await verification.send(user); } catch { verificationSent = false; }
-    res.status(201).json({ user: session(res, user), verification_sent: verificationSent });
+    await signup.start(res, { name: data.name, email: data.email, password: await passwordHash(data.password), role: "student" });
+    res.status(202).json({ pending: true });
   });
   const dummyHashPromise = passwordHash(randomBytes(32).toString("hex"));
   app.post("/api/auth/login", async (req, res) => {
@@ -264,7 +276,7 @@ export function createApi(
   });
   app.patch("/api/account", auth(), (req, res) => {
     const d = z
-      .object({ name: text(80), goal: z.string().trim().max(1000), timezone: timezoneSchema })
+      .object({ name: text(80), goal: z.string().trim().max(1000), timezone: timezoneSchema, school: z.string().trim().max(160).optional(), province_code: z.string().max(5).optional(), ward_code: z.string().max(5).optional() })
       .parse(req.body);
     transaction(db, () => {
       run(
@@ -275,10 +287,14 @@ export function createApi(
         d.timezone ?? null,
         req.user.id,
       );
+      if (req.user.role === "student") {
+        const address = addressSchema.parse({ province_code: d.province_code ?? req.user.province_code, ward_code: d.ward_code ?? req.user.ward_code });
+        run(db, "UPDATE users SET school=COALESCE(?,school),province_code=?,ward_code=? WHERE id=?", d.school ?? null, address.province_code, address.ward_code, req.user.id);
+      }
       if (req.user.role === "tutor" && (d.name !== req.user.name || (d.timezone && d.timezone !== req.user.timezone)))
         run(
           db,
-          "UPDATE tutors SET status='pending',moderation_note='' WHERE user_id=?",
+          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
           req.user.id,
         );
     });
@@ -315,16 +331,14 @@ export function createApi(
         run(db, "UPDATE users SET role=?,learner_type=?,onboarding_step=1 WHERE id=?", role, choice === "parent" ? "parent" : "student", user.id);
       } else if (step === 1) {
         const { name } = z.object({ name: text(80) }).parse(req.body);
+        const d = z.object({ goal: z.string().trim().max(1000).default(""), timezone: timezoneSchema }).parse(req.body);
         if (user.role === "student") {
-          const { goal } = z.object({ goal: text(1000) }).parse(req.body);
-          run(db, "UPDATE users SET name=?,goal=?,onboarding_step=2 WHERE id=?", name, goal, user.id);
-        } else {
-          const d = tutorSchema.parse(req.body);
-          ensureSubjects(d.subjects);
-          run(db, `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,education_history=COALESCE(?,education_history),status='pending',moderation_note='' WHERE user_id=?`,
-            d.headline, d.bio, d.location, d.mode, d.rate, d.experience, d.education, JSON.stringify(d.subjects), d.education_history ? JSON.stringify(d.education_history) : null, user.id);
-          run(db, "UPDATE users SET name=?,timezone=COALESCE(?,timezone),onboarding_step=2 WHERE id=?", name, d.timezone ?? null, user.id);
+          const { school } = z.object({ school: text(160) }).parse(req.body);
+          const address = addressSchema.parse(req.body);
+          if (!address.ward_code) fail(400, "Chọn nơi sinh sống.");
+          run(db, "UPDATE users SET school=?,province_code=?,ward_code=? WHERE id=?", school, address.province_code, address.ward_code, user.id);
         }
+        run(db, "UPDATE users SET name=?,goal=?,timezone=COALESCE(?,timezone),onboarding_step=3 WHERE id=?", name, d.goal, d.timezone ?? null, user.id);
       } else {
         run(db, "UPDATE users SET onboarding_step=3 WHERE id=?", user.id);
       }
@@ -347,11 +361,11 @@ export function createApi(
     res.json({ ok: true });
   });
   app.get("/api/subjects", (req, res) =>
-    res.json(all(db, "SELECT * FROM subjects ORDER BY rowid")),
+    res.json(all(db, "SELECT * FROM subjects WHERE archived=0 ORDER BY rowid")),
   );
   app.get("/api/tutors", (req, res) => res.json(tutorRows()));
-  app.get("/api/tutors/:id", (req, res) => {
-    const t = tutorRows().find((t) => t.user_id === Number(req.params.id));
+  const tutorDetail = (preview = false) => (req, res) => {
+    const t = tutorRows(preview).find((t) => t.user_id === Number(req.params.id));
     if (!t) fail(404, "Hồ sơ chưa được công bố.");
     refreshAvailability(db, t.user_id);
     const slots = all(
@@ -366,7 +380,9 @@ export function createApi(
       t.user_id,
     );
     res.json({ ...t, slots, reviews, gallery: galleryMetadata(db, t.user_id) });
-  });
+  };
+  app.get("/api/tutors/:id", tutorDetail());
+  app.get("/api/admin/tutors/:id/preview", auth("admin"), tutorDetail(true));
   app.get("/api/favorites", auth("student"), (req, res) =>
     res.json(
       all(
@@ -401,6 +417,7 @@ export function createApi(
     refreshAvailability(db, req.user.id);
     res.json({
       weekly_schedule: weeklySchedule(db, req.user.id),
+      theme_inventory: themeInventory(db, req.user.id),
       ...t,
       gallery: galleryMetadata(db, t.user_id),
       name: req.user.name,
@@ -422,18 +439,29 @@ export function createApi(
   });
   app.put("/api/tutor/profile", auth("tutor"), (req, res) => {
     const d = tutorSchema.parse(req.body);
+    const address = d.province_code !== undefined || d.ward_code !== undefined ? addressSchema.parse(d) : null;
+    if (address?.ward_code) d.location = addressLabel(address);
+    const schedule = d.availability;
+    if (d.profile_theme && !ownsTheme(db, req.user.id, d.profile_theme)) fail(403, "Giao diện này chưa được quản trị viên cấp.");
     ensureSubjects(d.subjects);
     const knownGoals = all(
       db,
-      "SELECT DISTINCT category FROM resources WHERE published=1",
+      "SELECT DISTINCT category FROM resources WHERE published=1 AND archived=0",
     ).map((r) => r.category);
     if (d.goals.some((g) => !knownGoals.includes(g)))
       fail(400, "Mục tiêu kỳ thi không có trong danh mục.");
     transaction(db, () => {
+      if (schedule) {
+        if (weeklySchedule(db, req.user.id).revision !== schedule.revision) fail(409, "Lịch đã thay đổi ở cửa sổ khác. Tải lại trang trước khi lưu.");
+        run(db, `INSERT INTO weekly_availability(tutor_id,blocks,revision) VALUES (?,?,1)
+          ON CONFLICT(tutor_id) DO UPDATE SET blocks=excluded.blocks,revision=revision+1`, req.user.id, JSON.stringify(schedule.blocks));
+        reconcileAvailability(db, req.user.id);
+      }
+      if (address) run(db, "UPDATE tutors SET province_code=?,ward_code=? WHERE user_id=?", address.province_code, address.ward_code, req.user.id);
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=?,education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status='pending',moderation_note='' WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status='pending',moderation_note='',review_revision=review_revision+1 WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
@@ -446,7 +474,7 @@ export function createApi(
         JSON.stringify(d.goals),
         d.teaching_style,
         d.lesson_plan,
-        d.profile_theme,
+        d.profile_theme ?? null,
         d.education_history ? JSON.stringify(d.education_history) : null,
         d.profile_sections ? JSON.stringify(d.profile_sections) : null,
         req.user.id,
@@ -455,12 +483,7 @@ export function createApi(
     res.json({ ok: true, user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)) });
   });
   app.put("/api/tutor/availability", auth("tutor"), (req, res) => {
-    const d = z.object({
-      revision: z.number().int().nonnegative(),
-      blocks: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(22).multipleOf(2) })).max(84),
-    }).parse(req.body);
-    if (new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size !== d.blocks.length)
-      fail(400, "Khung giờ bị trùng.");
+    const d = availabilitySchema.parse(req.body);
     transaction(db, () => {
       if (weeklySchedule(db, req.user.id).revision !== d.revision)
         fail(409, "Lịch đã thay đổi ở cửa sổ khác. Tải lại trang trước khi lưu.");
@@ -469,6 +492,20 @@ export function createApi(
       reconcileAvailability(db, req.user.id);
     });
     res.json(weeklySchedule(db, req.user.id));
+  });
+  app.get("/api/account/availability", auth("student"), (req, res) => {
+    const row = one(db, "SELECT * FROM learner_availability WHERE user_id=?", req.user.id);
+    res.json({ blocks: row ? JSON.parse(row.blocks) : [], revision: row?.revision ?? 0 });
+  });
+  app.put("/api/account/availability", auth("student"), (req, res) => {
+    const d = availabilitySchema.parse(req.body);
+    transaction(db, () => {
+      const current = one(db, "SELECT revision FROM learner_availability WHERE user_id=?", req.user.id);
+      if ((current?.revision ?? 0) !== d.revision) fail(409, "Lịch đã thay đổi. Tải lại trang trước khi lưu.");
+      run(db, `INSERT INTO learner_availability(user_id,blocks,revision) VALUES (?,?,1)
+        ON CONFLICT(user_id) DO UPDATE SET blocks=excluded.blocks,revision=revision+1`, req.user.id, JSON.stringify(d.blocks));
+    });
+    res.json({ blocks: d.blocks, revision: d.revision + 1 });
   });
   app.post("/api/tutor/slots", auth("tutor"), (req, res) => {
     const d = z.object({ starts_at: z.iso.datetime() }).parse(req.body),
@@ -517,7 +554,7 @@ export function createApi(
     res.json(
       all(
         db,
-        `SELECT b.*,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,r.rating AS reviewed FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id LEFT JOIN reviews r ON r.booking_id=b.id WHERE ${condition} ORDER BY b.starts_at DESC`,
+        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,r.rating AS reviewed FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id LEFT JOIN reviews r ON r.booking_id=b.id WHERE ${condition} ORDER BY b.starts_at DESC`,
         ...(req.user.role === "admin" ? [] : [req.user.id]),
       ),
     );
@@ -630,27 +667,21 @@ export function createApi(
   });
   app.get("/api/bookings/:id/messages", auth(), (req, res) => {
     const b = booking(req);
+    const context = lessonMessageContext(db, b.id);
     res.json(
-      all(
+      withChatMedia(db, "lesson", b.id, all(
         db,
         "SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender_id WHERE booking_id=? ORDER BY m.id",
         b.id,
-      ),
+      ).map(message => ({ ...message, context }))),
     );
   });
   app.post(
     "/api/bookings/:id/messages",
     auth("student", "tutor"),
     (req, res) => {
-      const b = booking(req),
-        d = z.object({ body: text(3000) }).parse(req.body);
-      run(
-        db,
-        "INSERT INTO messages(booking_id,sender_id,body) VALUES (?,?,?)",
-        b.id,
-        req.user.id,
-        d.body,
-      );
+      const b = booking(req);
+      insertChatMessage(db, "lesson", b.id, req.user, req.body);
       res.status(201).json({ ok: true });
     },
   );
@@ -675,21 +706,24 @@ export function createApi(
   const resourceRows = (admin) =>
     all(
       db,
-      `SELECT r.*,s.name AS subject_name FROM resources r JOIN subjects s ON s.id=r.subject_id ${admin ? "" : "WHERE published=1"} ORDER BY r.id`,
+      `SELECT r.*,s.name AS subject_name FROM resources r JOIN subjects s ON s.id=r.subject_id WHERE r.archived=0 ${admin ? "" : "AND published=1"} ORDER BY r.id`,
     );
   app.get("/api/resources", (req, res) => res.json(resourceRows(false)));
   app.get("/api/admin", auth("admin"), (req, res) =>
     res.json({
+      theme_catalog: themeCatalog,
       users: all(
         db,
-        "SELECT id,name,email,role,learner_type,status,demo,created_at FROM users ORDER BY id DESC",
+        "SELECT id,name,email,role,learner_type,status,demo,created_at,community_locked,community_lock_reason FROM users WHERE status<>'deleted' ORDER BY id DESC",
       ),
       tutors: all(
         db,
-        "SELECT t.*,u.name,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id",
+        "SELECT t.*,u.name,u.email,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id WHERE u.status<>'deleted'",
       ).map((t) => ({
         ...t,
         ...uploadMetadata(db, t.user_id),
+        theme_inventory: themeInventory(db, t.user_id),
+        weekly_blocks: weeklySchedule(db, t.user_id).blocks,
         gallery: galleryMetadata(db, t.user_id),
         subjects: JSON.parse(t.subjects),
         levels: JSON.parse(t.levels),
@@ -704,34 +738,7 @@ export function createApi(
       ),
     }),
   );
-  app.patch("/api/admin/tutors/:id", auth("admin"), (req, res) => {
-    const d = z
-      .object({
-        status: z.enum(["approved", "rejected", "pending"]),
-        note: z.string().trim().max(1000),
-      })
-      .parse(req.body);
-    const t = one(db, "SELECT * FROM tutors WHERE user_id=?", req.params.id);
-    if (!t) fail(404, "Không tìm thấy gia sư.");
-    if (d.status === "approved")
-      tutorSchema.parse({
-        ...t,
-        subjects: JSON.parse(t.subjects),
-        levels: JSON.parse(t.levels),
-        goals: JSON.parse(t.goals),
-        education_history: JSON.parse(t.education_history),
-        profile_sections: JSON.parse(t.profile_sections),
-      });
-    run(
-      db,
-      "UPDATE tutors SET status=?,moderation_note=? WHERE user_id=?",
-      d.status,
-      d.note,
-      req.params.id,
-    );
-    audit(req.user.id, `tutor.${d.status}`, req.params.id);
-    res.json({ ok: true });
-  });
+  registerTutorReview(app, db, auth, audit, { sendEmail, origin });
   app.patch("/api/admin/users/:id/role", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     z.object({ role: z.literal("admin") }).strict().parse(req.body);
@@ -752,7 +759,7 @@ export function createApi(
         .object({ status: z.enum(["active", "suspended"]) })
         .parse(req.body),
       u = one(db, "SELECT * FROM users WHERE id=?", req.params.id);
-    if (!u) fail(404, "Không tìm thấy tài khoản.");
+    if (!u || u.status === "deleted") fail(404, "Không tìm thấy tài khoản.");
     if (u.role === "admin")
       fail(403, "Không thể khóa quản trị viên qua giao diện này.");
     run(db, "UPDATE users SET status=? WHERE id=?", d.status, u.id);
@@ -761,11 +768,13 @@ export function createApi(
     audit(req.user.id, `user.${d.status}`, u.id);
     res.json({ ok: true });
   });
+  registerCatalogRemoval(app, db, auth, audit);
   app.put("/api/admin/subjects/:id", auth("admin"), (req, res) => {
     const d = subjectSchema.parse({ ...req.body, id: req.params.id });
+    if (one(db, "SELECT id FROM subjects WHERE id=? AND archived=1", d.id)) fail(409, "Mã môn đã được sử dụng. Chọn mã mới.");
     run(
       db,
-      "INSERT INTO subjects VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,stage=excluded.stage,description=excluded.description",
+      "INSERT INTO subjects(id,name,stage,description) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,stage=excluded.stage,description=excluded.description",
       d.id,
       d.name,
       d.stage,
@@ -798,7 +807,7 @@ export function createApi(
   app.put("/api/admin/resources/:id", auth("admin"), (req, res) => {
     const d = resourceSchema.parse(req.body);
     ensureSubjects([d.subject_id]);
-    if (!one(db, "SELECT id FROM resources WHERE id=?", req.params.id))
+    if (!one(db, "SELECT id FROM resources WHERE id=? AND archived=0", req.params.id))
       fail(404, "Không tìm thấy kỳ thi.");
     run(
       db,
@@ -823,7 +832,7 @@ export function createApi(
   app.use((err, req, res, next) => {
     if (err instanceof z.ZodError)
       return res.status(400).json({
-        error: "Thông tin chưa hợp lệ. Kiểm tra các trường và thử lại.",
+        error: req.path.includes("/community/") ? err.issues.map(i => i.message).join(" ") : "Thông tin chưa hợp lệ. Kiểm tra các trường và thử lại.",
         fields: err.issues.map((i) => ({
           path: i.path.join("."),
           message: i.message,
@@ -836,7 +845,7 @@ export function createApi(
     if (err.type === "entity.too.large")
       return res
         .status(413)
-        .json({ error: "Tệp quá lớn. Giới hạn tải lên là 5 MB." });
+        .json({ error: req.path.startsWith("/api/chat/") ? "Tệp quá lớn. Giới hạn tải lên là 8 MB." : "Tệp quá lớn. Giới hạn tải lên là 5 MB." });
     const status = err.status || 500;
     if (status === 500) console.error("API error:", err.message);
     res.status(status).json({

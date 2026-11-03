@@ -20,7 +20,7 @@ export async function api<T>(
   });
   const data = await response.json();
   if (!response.ok)
-    throw new Error(data.error || "Không thể kết nối. Vui lòng thử lại.");
+    throw Object.assign(new Error(data.error || "Không thể kết nối. Vui lòng thử lại."), { fields: data.fields });
   return data;
 }
 const Context = createContext<{
@@ -164,6 +164,7 @@ export const statusNames: Record<string, string> = {
   completed: "Đã hoàn thành",
   approved: "Đã công bố",
   rejected: "Cần bổ sung",
+  withdrawn: "Đã gỡ hồ sơ",
   active: "Hoạt động",
   suspended: "Tạm khóa",
 };

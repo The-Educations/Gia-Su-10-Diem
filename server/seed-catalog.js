@@ -2,7 +2,7 @@ import { run, one } from "./db.js";
 import { subjects, references } from "./catalog.js";
 export function seedCatalog(db) {
   for (const s of subjects)
-    run(db, "INSERT OR IGNORE INTO subjects VALUES (?,?,?,?)", ...s);
+    run(db, "INSERT OR IGNORE INTO subjects(id,name,stage,description) VALUES (?,?,?,?)", ...s);
   if (one(db, "SELECT count(*) AS n FROM resources").n) return;
   for (const [title, subject, category, level, source, url] of references)
     run(

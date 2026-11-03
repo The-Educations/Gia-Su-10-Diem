@@ -6,18 +6,18 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../server/local-db.js";
-import { all, one, run } from "../server/db.js";
+import { all, one, run, migrateDatabase } from "../server/db.js";
 import { seedCatalog, seedDemo } from "../server/seed.js";
 import { createApi } from "../server/api.js";
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "giasu-api-")),
     file = join(dir, "db.sqlite"),
     db = openDatabase(file);
   seedCatalog(db);
   await seedDemo(db, "TestStudy2026!");
   const emails = [];
-  const server = createApi(db, { processPhoto, limit: false, sendEmail: async message => { emails.push(message); } }).listen(0, "127.0.0.1");
+  const server = createApi(db, { processPhoto, limit: false, sendEmail: async message => { emails.push(message); }, ...options }).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
   t.after(async () => {
@@ -41,14 +41,17 @@ async function fixture(t) {
           },
           body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
         });
-        const c = response.headers.get("set-cookie");
-        if (c) cookie = c.split(";")[0];
+        const cookies = response.headers.getSetCookie();
+        if (cookies.length) cookie = cookies.map(c => c.split(";")[0]).join("; ");
         let data = await response.json();
         // Existing business-flow tests use verified accounts; verification-specific tests use raw fetch.
-        if (path === "/auth/register" && response.status === 201) {
-          const token = new URL(emails.at(-1).link).hash.slice(7);
-          const verified = await this.request("/auth/verify-email", "POST", { token });
-          data = { ...data, user: verified.data.user };
+        if (path === "/auth/register" && response.status === 202) {
+          const verified = await this.request("/auth/signup/verify", "POST", { code: emails.at(-1).code });
+          if (body.role === "tutor") {
+            const choice = await this.request("/account/onboarding", "PUT", { step: 0, role: "tutor" });
+            verified.data.user = choice.data.user;
+          }
+          return verified;
         }
         return {
           status: response.status,
@@ -536,7 +539,7 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   run(original, "INSERT INTO bookings(id,student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (1,2,1,1,'toan','2030-01-07T11:00:00.000Z',180000,'online')");
   original.exec("ALTER TABLE slots DROP COLUMN duration_minutes; ALTER TABLE slots DROP COLUMN source; ALTER TABLE slots DROP COLUMN available; ALTER TABLE bookings DROP COLUMN duration_minutes; DROP TABLE weekly_availability");
   original.exec(
-    "ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; ALTER TABLE users DROP COLUMN timezone; ALTER TABLE tutors DROP COLUMN education_history; ALTER TABLE tutors DROP COLUMN profile_sections; ALTER TABLE users DROP COLUMN email_verified_at; ALTER TABLE users DROP COLUMN email_verification_required; PRAGMA user_version = 0",
+    "ALTER TABLE users DROP COLUMN school; ALTER TABLE users DROP COLUMN province_code; ALTER TABLE users DROP COLUMN ward_code; ALTER TABLE tutors DROP COLUMN province_code; ALTER TABLE tutors DROP COLUMN ward_code; ALTER TABLE users DROP COLUMN onboarding_step; ALTER TABLE tutors DROP COLUMN levels; ALTER TABLE tutors DROP COLUMN goals; ALTER TABLE tutors DROP COLUMN teaching_style; ALTER TABLE tutors DROP COLUMN lesson_plan; ALTER TABLE tutors DROP COLUMN profile_theme; ALTER TABLE users DROP COLUMN timezone; ALTER TABLE tutors DROP COLUMN education_history; ALTER TABLE tutors DROP COLUMN profile_sections; ALTER TABLE users DROP COLUMN email_verified_at; ALTER TABLE users DROP COLUMN email_verification_required; PRAGMA user_version = 0",
   );
   original.close();
   const migrated = openDatabase(file);
@@ -550,6 +553,8 @@ test("additive tutor migration preserves existing accounts and profile data", (t
   assert.equal(one(migrated, "SELECT email_verification_required FROM users WHERE id=1").email_verification_required, 0);
   assert.equal(one(migrated, "SELECT email_verified_at FROM users WHERE id=1").email_verified_at, null);
   assert.equal(one(migrated, "SELECT onboarding_step FROM users WHERE id=1").onboarding_step, 3);
+  assert.deepEqual({ ...one(migrated, "SELECT school,province_code,ward_code FROM users WHERE id=1") }, { school: "", province_code: "", ward_code: "" });
+  assert.equal(one(migrated, "SELECT ward_code FROM tutors WHERE user_id=1").ward_code, "");
   assert.equal(
     one(migrated, "SELECT headline FROM tutors WHERE user_id=1").headline,
     "Hồ sơ giữ nguyên",
@@ -767,6 +772,8 @@ test("custom tutor presentation validates, persists and requires moderation; pub
     ).status,
     400,
   );
+  assert.equal((await tutor.request("/tutor/profile", "PUT", custom)).status, 403);
+  assert.equal((await admin.request(`/admin/tutors/${user.id}/themes/sage`, "PUT")).status, 200);
   assert.equal(
     (await tutor.request("/tutor/profile", "PUT", custom)).status,
     200,
@@ -929,27 +936,23 @@ test("new accounts complete resumable role-specific setup without escalating rol
     assert.equal(choice.data.user.role, role);
     assert.equal(choice.data.user.onboarding_step, 1);
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "student" })).status, 409);
-    assert.equal((await account.request("/account/onboarding", "PUT", { step: 1, name: "Incomplete" })).status, 400);
-    const profile = role === "student" ? { name: "Học sinh mới", goal: "Ôn Toán lớp 9" } : { name: "Gia sư mới", headline: "Toán THCS", bio: "Dạy theo năng lực từng học sinh", education: "Đại học Sư phạm", subjects: ["toan"], rate: 180000, experience: 2, location: "Hà Nội", mode: "both" };
-    if (role === "tutor") {
-      assert.equal((await account.request("/account/onboarding", "PUT", { ...profile, step: 1, subjects: ["unknown"] })).status, 400);
-      assert.equal((await account.request("/account/onboarding", "PUT", { ...profile, step: 1, rate: 0 })).status, 400);
-    }
+    assert.equal((await account.request("/account/onboarding", "PUT", { step: 1, name: "" })).status, 400);
+    const profile = role === "student" ? { name: "Học sinh mới", goal: "Ôn Toán lớp 9", school: "THCS Ba Đình", province_code: "1", ward_code: "4" } : { name: "Gia sư mới", headline: "Toán THCS", bio: "Dạy theo năng lực từng học sinh", education: "Đại học Sư phạm", subjects: ["toan"], rate: 180000, experience: 2, location: "Hà Nội", mode: "both" };
     const saved = await account.request("/account/onboarding", "PUT", { ...profile, step: 1 });
-    assert.equal(saved.data.user.onboarding_step, 2);
+    assert.equal(saved.data.user.onboarding_step, 3);
     await account.request("/auth/logout", "POST");
     const resumed = await account.request("/auth/login", "POST", { email: `${role}-setup@example.com`, password: "NewAccount2026!" });
-    assert.equal(resumed.data.user.onboarding_step, 2);
+    assert.equal(resumed.data.user.onboarding_step, 3);
     assert.equal(resumed.data.user.name, profile.name);
     const complete = await account.request("/account/onboarding", "PUT", { step: 2 });
-    assert.equal(complete.data.user.onboarding_step, 3);
+    assert.equal(complete.status, 409);
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "admin" })).status, 409);
     assert.equal((await account.request("/auth/me")).data.user.onboarding_step, 3);
     if (role === "tutor") {
       const tutor = one(db, "SELECT * FROM tutors WHERE user_id=?", signup.data.user.id);
       assert.equal(tutor.status, "pending");
-      assert.equal(tutor.rate, 180000);
-      assert.deepEqual(JSON.parse(tutor.subjects), ["toan"]);
+      assert.equal(tutor.rate, 150000);
+      assert.deepEqual(JSON.parse(tutor.subjects), []);
       assert.equal((await guest.request(`/tutors/${signup.data.user.id}`)).status, 404);
     }
   }
@@ -1010,8 +1013,8 @@ test("parent setup is distinct, resumable and shares student permissions", async
   assert.equal(r.data.user.role, "student");
   assert.equal(r.data.user.learner_type, "parent");
   assert.equal((await parent.request("/auth/me")).data.user.learner_type, "parent");
-  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", goal: "Con ôn Toán lớp 9" })).status, 200);
-  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 2 })).status, 200);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", goal: "Con ôn Toán lớp 9", school: "THCS Ba Đình", province_code: "1", ward_code: "4" })).status, 200);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 2 })).status, 409);
   assert.equal((await parent.request("/favorites")).status, 200);
   assert.equal((await parent.request("/bookings")).status, 200);
   assert.equal((await parent.request("/admin")).status, 403);
@@ -1095,7 +1098,7 @@ test("weekly availability validates ownership, revisions and preserves cancelled
   const save = (revision, value = blocks) => tutor.request(path, "PUT", { revision, blocks: value });
   assert.equal((await guest.request(path, "PUT", { revision: 0, blocks })).status, 401);
   assert.equal((await student.request(path, "PUT", { revision: 0, blocks })).status, 403);
-  for (const bad of [[{ weekday: 7, hour: 0 }], [{ weekday: 0, hour: 1 }], [{ weekday: 0, hour: 24 }], [...blocks, blocks[0]]])
+  for (const bad of [[{ weekday: 7, hour: 0 }], [{ weekday: 0, hour: 1.5 }], [{ weekday: 0, hour: 24 }], [...blocks, blocks[0]]])
     assert.equal((await save(0, bad)).status, 400);
   const oldSlots = all(db, "SELECT * FROM slots WHERE tutor_id=?", u.id);
   assert.ok(oldSlots.every(s => s.duration_minutes === 60 && s.source === "manual"));
@@ -1105,7 +1108,7 @@ test("weekly availability validates ownership, revisions and preserves cancelled
   assert.deepEqual(profile.weekly_schedule, { blocks, revision: 1 });
   const weekly = profile.slots.filter(s => s.source === "weekly");
   assert.ok(weekly.length >= 14 && weekly.length <= 16);
-  assert.ok(weekly.every(s => s.duration_minutes === 120));
+  assert.ok(weekly.every(s => s.duration_minutes === 60));
   const first = weekly[0];
   const local = new Date(Date.parse(first.starts_at) + 7 * 3600000);
   assert.equal(local.getUTCDay(), 1); assert.ok([0, 2].includes(local.getUTCHours()));
@@ -1115,7 +1118,7 @@ test("weekly availability validates ownership, revisions and preserves cancelled
   const booking = await student.request("/bookings", "POST", body);
   assert.equal(booking.status, 201);
   const snapshot = one(db, "SELECT * FROM bookings WHERE id=?", booking.data.id);
-  assert.equal(snapshot.duration_minutes, 120);
+  assert.equal(snapshot.duration_minutes, 60);
   assert.equal(snapshot.rate, profile.rate);
   assert.equal((await tutor.request(`/tutor/slots/${first.id}`, "DELETE")).status, 409);
   assert.equal((await save(1, [])).status, 200);
@@ -1156,7 +1159,7 @@ test("weekly horizon rolls forward and skips legacy slots without changing their
   const tutor = client(); const u = await tutor.login("chau");
   const now = Date.parse("2030-01-06T00:00:00Z");
   run(db, "INSERT INTO weekly_availability(tutor_id,blocks,revision) VALUES (?,?,1)", u.id, JSON.stringify([{ weekday: 0, hour: 18 }]));
-  const legacy = Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", u.id, "2030-01-07T12:00:00.000Z").lastInsertRowid);
+  const legacy = Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", u.id, "2030-01-07T11:00:00.000Z").lastInsertRowid);
   reconcileAvailability(db, u.id, now);
   let slots = all(db, "SELECT * FROM slots WHERE tutor_id=? AND source='weekly' AND available=1", u.id);
   assert.equal(slots.length, 7);
@@ -1166,4 +1169,481 @@ test("weekly horizon rolls forward and skips legacy slots without changing their
   slots = all(db, "SELECT * FROM slots WHERE tutor_id=? AND source='weekly' AND available=1", u.id);
   assert.equal(slots.length, 8);
   assert.ok(slots.some(s => s.starts_at === "2030-03-04T11:00:00.000Z"));
+});
+
+
+test("learner schedules are private, revision guarded and available to parents", async t => {
+  const { client, db, file } = await fixture(t);
+  const student = client(), parent = client(), tutor = client(), guest = client();
+  const user = await student.login("student"); await tutor.login("chau");
+  const path = "/account/availability", blocks = [{ weekday: 0, hour: 19 }, { weekday: 6, hour: 23 }];
+  for (const method of ["GET", "PUT"]) {
+    assert.equal((await guest.request(path, method, { revision: 0, blocks })).status, 401);
+    assert.equal((await tutor.request(path, method, { revision: 0, blocks })).status, 403);
+  }
+  for (const bad of [[blocks[0], blocks[0]], [{ weekday: -1, hour: 0 }], [{ weekday: 0, hour: 1.5 }], [{ weekday: 6, hour: 24 }]])
+    assert.equal((await student.request(path, "PUT", { revision: 0, blocks: bad })).status, 400);
+  assert.equal((await student.request(path, "PUT", { revision: 0, blocks })).status, 200);
+  assert.equal((await student.request(path, "PUT", { revision: 0, blocks: [] })).status, 409);
+  assert.deepEqual((await student.request(path)).data, { revision: 1, blocks });
+  const registered = await parent.request("/auth/register", "POST", { name: "Parent schedule", email: "parent-schedule@test.vn", password: "TestStudy2026!", role: "student" });
+  run(db, "UPDATE users SET learner_type='parent',onboarding_step=3 WHERE id=?", registered.data.user.id);
+  assert.deepEqual((await parent.request(path)).data, { revision: 0, blocks: [] });
+  assert.equal((await parent.request(path, "PUT", { revision: 0, blocks: [blocks[1]], user_id: user.id })).status, 200);
+  assert.deepEqual((await student.request(path)).data.blocks, blocks);
+  const reopened = openDatabase(file);
+  assert.deepEqual(JSON.parse(one(reopened, "SELECT blocks FROM learner_availability WHERE user_id=?", user.id).blocks), blocks);
+  reopened.close();
+  assert.equal((await student.request(path, "PUT", { revision: 1, blocks: [] })).status, 200);
+});
+
+test("admin grants inventory; only owned themes can be equipped without reopening review", async t => {
+  const { client, db } = await fixture(t);
+  const admin = client(), tutor = client(), student = client(), other = client(), guest = client();
+  await admin.login("admin"); const user = await tutor.login("chau"); await student.login("student"); await other.login("linh");
+  const grant = `/admin/tutors/${user.id}/themes/sage`;
+  assert.equal((await guest.request(grant, "PUT")).status, 401);
+  assert.equal((await tutor.request(grant, "PUT")).status, 403);
+  assert.equal((await student.request("/tutor/theme", "PUT", { theme: "sage" })).status, 403);
+  assert.equal((await tutor.request("/tutor/theme", "PUT", { theme: "sage" })).status, 403);
+  const profile = (await tutor.request("/tutor/profile")).data;
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...profile, profile_theme: "sage" })).status, 403);
+  assert.equal((await admin.request(grant, "PUT")).status, 200);
+  assert.equal((await admin.request(grant, "PUT")).status, 200);
+  assert.equal(one(db, "SELECT count(*) n FROM tutor_theme_inventory WHERE tutor_id=?", user.id).n, 1);
+  assert.equal((await other.request("/tutor/theme", "PUT", { theme: "sage" })).status, 403);
+  assert.equal((await tutor.request("/tutor/theme", "PUT", { theme: "sage" })).status, 200);
+  const equipped = (await tutor.request("/tutor/profile")).data;
+  assert.equal(equipped.status, "approved"); assert.equal(equipped.review_revision, profile.review_revision);
+  assert.deepEqual(equipped.theme_inventory.map(t => t.id), ["paper", "sage"]);
+  assert.equal((await guest.request(`/tutors/${user.id}`)).data.profile_theme, "sage");
+  assert.equal((await tutor.request("/tutor/theme", "PUT", { theme: "custom" })).status, 400);
+  assert.equal((await tutor.request("/tutor/theme", "PUT", { theme: "paper" })).status, 200);
+});
+
+test("review sends a template, rejects stale versions and requires explicit resubmission", async t => {
+  const { client, db, emails } = await fixture(t);
+  const admin = client(), tutor = client(); await admin.login("admin"); const user = await tutor.login("chau");
+  const path = `/admin/tutors/${user.id}`, profile = (await tutor.request("/tutor/profile")).data;
+  assert.equal((await tutor.request(path, "PATCH", { status: "approved" })).status, 403);
+  assert.equal((await admin.request(path, "PATCH", { status: "rejected", revision: 999 })).status, 409);
+  assert.equal(emails.length, 0);
+  assert.equal((await admin.request(path, "PATCH", { status: "rejected", revision: profile.review_revision, note: "Do not store" })).status, 200);
+  assert.equal(emails.length, 1); assert.equal(emails[0].kind, "profile_update");
+  assert.equal(emails[0].to, user.email); assert.match(emails[0].link, /app\/studio\?tab=profile$/);
+  assert.equal(one(db, "SELECT moderation_note FROM tutors WHERE user_id=?", user.id).moderation_note, "");
+  assert.equal((await admin.request(path, "PATCH", { status: "rejected" })).status, 409);
+  assert.equal(emails.length, 1);
+  assert.equal((await tutor.request("/account", "PATCH", { name: "Updated Tutor", goal: "" })).status, 200);
+  assert.equal((await tutor.request("/tutor/profile")).data.status, "rejected");
+  assert.equal((await tutor.request("/tutor/profile", "PUT", profile)).status, 200);
+  const revised = (await tutor.request("/tutor/profile")).data;
+  assert.equal(revised.status, "pending");
+  assert.equal((await admin.request(path, "PATCH", { status: "approved", revision: profile.review_revision })).status, 409);
+  assert.equal((await admin.request(path, "PATCH", { status: "approved", revision: revised.review_revision })).status, 200);
+});
+
+test("review email failure and edits during delivery never overwrite a profile", async t => {
+  let send = async () => { throw new Error("mail unavailable"); };
+  const { client } = await fixture(t, { sendEmail: message => send(message) });
+  const admin = client(), tutor = client(); await admin.login("admin"); const user = await tutor.login("chau");
+  const path = `/admin/tutors/${user.id}`;
+  const initial = (await tutor.request("/tutor/profile")).data;
+  assert.equal((await admin.request(path, "PATCH", { status: "rejected" })).status, 503);
+  assert.equal((await tutor.request("/tutor/profile")).data.status, "approved");
+  let release, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  send = async () => { entered(); await new Promise(resolve => { release = resolve; }); };
+  const pending = admin.request(path, "PATCH", { status: "rejected", revision: initial.review_revision });
+  await started;
+  assert.equal((await admin.request(path, "PATCH", { status: "approved" })).status, 409);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...initial, headline: "Updated during email delivery" })).status, 200);
+  release();
+  assert.equal((await pending).status, 409);
+  const current = (await tutor.request("/tutor/profile")).data;
+  assert.equal(current.status, "pending"); assert.equal(current.headline, "Updated during email delivery");
+});
+
+test("two-hour migration expands rules once and preserves reserved booking snapshots", async t => {
+  const { client, db } = await fixture(t);
+  const tutor = client(), student = client(); const user = await tutor.login("chau"), learner = await student.login("student");
+  db.exec("ALTER TABLE weekly_availability DROP COLUMN interval_minutes");
+  run(db, "INSERT INTO weekly_availability(tutor_id,blocks,revision) VALUES (?,?,3)", user.id, JSON.stringify([{ weekday: 0, hour: 18 }]));
+  const start = "2030-01-07T11:00:00.000Z", now = Date.parse("2030-01-06T00:00:00Z");
+  const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes,source) VALUES (?,?,120,'weekly')", user.id, start).lastInsertRowid);
+  const booking = Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,duration_minutes) VALUES (?,?,?,'toan',?,200000,'online',120)", learner.id, user.id, slot, start).lastInsertRowid);
+  migrateDatabase(db); migrateDatabase(db);
+  const rule = one(db, "SELECT * FROM weekly_availability WHERE tutor_id=?", user.id);
+  assert.deepEqual(JSON.parse(rule.blocks), [{ weekday: 0, hour: 18 }, { weekday: 0, hour: 19 }]);
+  assert.equal(rule.revision, 4);
+  reconcileAvailability(db, user.id, now);
+  assert.equal(one(db, "SELECT duration_minutes FROM slots WHERE id=?", slot).duration_minutes, 120);
+  assert.equal(one(db, "SELECT count(*) n FROM slots WHERE tutor_id=? AND starts_at='2030-01-07T12:00:00.000Z'", user.id).n, 0);
+  run(db, "UPDATE bookings SET status='cancelled' WHERE id=?", booking);
+  reconcileAvailability(db, user.id, now);
+  assert.equal(one(db, "SELECT duration_minutes FROM slots WHERE id=?", slot).duration_minutes, 60);
+  assert.equal(one(db, "SELECT count(*) n FROM slots WHERE tutor_id=? AND starts_at='2030-01-07T12:00:00.000Z' AND duration_minutes=60 AND available=1", user.id).n, 1);
+  assert.equal(one(db, "SELECT duration_minutes FROM bookings WHERE id=?", booking).duration_minutes, 120);
+});
+
+test("weekly requests validate availability, keep participants private, prevent conflicts and start chat", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), outsider = client(), admin = client(), guest = client();
+  await student.login("student"); const teacher = await tutor.login("chau"); await admin.login("admin");
+  await outsider.request("/auth/register", "POST", { name: "Another learner", email: "weekly-other@test.vn", password: "TestStudy2026!" });
+  const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 20 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const data = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, note: "Ôn Toán" };
+  assert.equal((await guest.request("/weekly-requests", "POST", data)).status, 401);
+  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [] })).status, 400);
+  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [blocks[0], blocks[0]] })).status, 400);
+  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [{ weekday: 1, hour: 3 }] })).status, 409);
+  const created = await student.request("/weekly-requests", "POST", data);
+  assert.equal(created.status, 201);
+  assert.equal((await student.request("/weekly-requests", "POST", data)).status, 409);
+  assert.equal((await tutor.request("/weekly-requests")).data.length, 1);
+  assert.equal((await outsider.request("/weekly-requests")).data.length, 0);
+  assert.equal((await outsider.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 404);
+  assert.equal((await student.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 403);
+  assert.equal((await student.request(`/inquiries/${created.data.inquiry_id}/messages`)).data[0].body.includes("Thứ 2 19:00"), true);
+  const other = await outsider.request("/weekly-requests", "POST", data);
+  assert.equal((await tutor.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+  assert.equal((await tutor.request(`/weekly-requests/${other.data.id}`, "PATCH", { status: "accepted" })).status, 409);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).data.weekly_blocks.length, 0);
+  assert.equal((await student.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "cancelled" })).status, 200);
+  assert.equal((await tutor.request(`/weekly-requests/${other.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+  assert.equal((await guest.request(`/admin/tutors/${teacher.id}/preview`)).status, 401);
+  assert.equal((await student.request(`/admin/tutors/${teacher.id}/preview`)).status, 403);
+  run(db, "UPDATE tutors SET status='pending' WHERE user_id=?", teacher.id);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).status, 404);
+  const preview = await admin.request(`/admin/tutors/${teacher.id}/preview`);
+  assert.equal(preview.status, 200); assert.ok(Array.isArray(preview.data.reviews)); assert.ok(Array.isArray(preview.data.weekly_blocks));
+  assert.equal(preview.data.email, undefined);
+});
+
+test("support is pinned per user, private between owners, and shared with administrators", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), admin = client(), guest = client();
+  await student.login("student"); await tutor.login("chau"); await admin.login("admin");
+  assert.equal((await guest.request("/support")).status, 401);
+  const a = (await student.request("/support")).data[0];
+  assert.equal((await student.request("/support")).data[0].id, a.id);
+  const b = (await tutor.request("/support")).data[0];
+  assert.notEqual(a.id, b.id);
+  assert.equal((await tutor.request(`/support/${a.id}/messages`)).status, 404);
+  assert.equal((await tutor.request(`/support/${a.id}/messages`, "POST", { body: "Unauthorized" })).status, 404);
+  assert.equal((await student.request(`/support/${a.id}/messages`, "POST", { body: "Cần hỗ trợ lịch học" })).status, 201);
+  assert.equal((await admin.request("/support")).data.length, 1);
+  assert.equal((await admin.request(`/support/${a.id}/messages`, "POST", { body: "Admin đã nhận yêu cầu" })).status, 201);
+  assert.equal((await student.request(`/support/${a.id}/messages`)).data.at(-1).body, "Admin đã nhận yêu cầu");
+  run(db, "UPDATE users SET status='suspended' WHERE id=?", a.user_id);
+  assert.equal((await admin.request(`/support/${a.id}/messages`, "POST", { body: "Không gửi" })).status, 409);
+});
+
+test("contact includes validated free hours without reserving weekly or dated lessons", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(); await student.login("student"); const teacher = await tutor.login("chau");
+  const blocks = [{ weekday: 0, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const before = one(db, "SELECT COUNT(*) AS n FROM bookings").n;
+  const data = { tutor_id: teacher.id, body: "Em muốn trao đổi", subject_id: "toan", mode: "online", blocks };
+  assert.equal((await student.request("/inquiries", "POST", { ...data, blocks: [{weekday:1,hour:3}] })).status, 409);
+  assert.equal((await student.request("/inquiries", "POST", { ...data, subject_id: "not-offered" })).status, 400);
+  const r = await student.request("/inquiries", "POST", data);
+  assert.equal(r.status, 201);
+  const message = (await tutor.request(`/inquiries/${r.data.id}/messages`)).data.at(-1).body;
+  assert.match(message, /Môn học: Toán/); assert.match(message, /Thứ 2 19:00–20:00/);
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM weekly_requests").n, 0);
+  assert.equal(one(db, "SELECT COUNT(*) AS n FROM bookings").n, before);
+  assert.equal((await student.request("/inquiries", "POST", { tutor_id:teacher.id,body:"Trao đổi khi chưa chọn giờ" })).status, 201);
+});
+
+test("admin deletion erases profile data, revokes access and preserves anonymous message history", async t => {
+  const { client, db } = await fixture(t);
+  const admin = client(), student = client(), tutor = client();
+  const administrator = await admin.login("admin"), learner = await student.login("student"), teacher = await tutor.login("chau");
+  const thread = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Trao đổi được giữ lại" })).data;
+  const support = (await tutor.request("/support")).data[0];
+  const slot = one(db,"SELECT * FROM slots WHERE tutor_id=? ORDER BY id LIMIT 1",teacher.id);
+  const booking = Number(run(db,"INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (?,?,?,'toan',?,150000,'online')",learner.id,teacher.id,slot.id,slot.starts_at).lastInsertRowid);
+  await tutor.request(`/support/${support.id}/messages`, "POST", { body: "Lịch sử hỗ trợ" });
+  const { saveUpload } = await import("../server/uploads.js");
+  const upload = saveUpload(db, teacher.id, "photo", Buffer.from("test-image"), "image/webp", "personal.webp");
+  run(db, "INSERT INTO oauth_identities VALUES ('google','deleted-subject',?)", teacher.id);
+  await tutor.request("/tutor/availability", "PUT", { revision:0,blocks:[{weekday:0,hour:19}] });
+  const weekly = await student.request("/weekly-requests", "POST", { tutor_id:teacher.id,subject_id:"toan",mode:"online",blocks:[{weekday:0,hour:19}] });
+  assert.equal(weekly.status,201);
+  await tutor.request(`/weekly-requests/${weekly.data.id}`, "PATCH", { status:"accepted" });
+  assert.equal((await student.request(`/admin/users/${teacher.id}`, "DELETE", { email:teacher.email })).status,403);
+  assert.equal((await admin.request(`/admin/users/${administrator.id}`, "DELETE", { email:administrator.email })).status,403);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", { email:learner.email })).status,400);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", { email:teacher.email }, { Origin:"https://evil.test" })).status,403);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", { email:teacher.email })).status,200);
+  const deleted = one(db,"SELECT * FROM users WHERE id=?",teacher.id);
+  assert.equal(deleted.status,"deleted"); assert.equal(deleted.name,"Tài khoản đã xóa"); assert.notEqual(deleted.email,teacher.email); assert.equal(deleted.password,"");
+  assert.equal((await tutor.request("/auth/me")).data.user,null);
+  assert.equal(one(db,"SELECT * FROM oauth_identities WHERE user_id=?",teacher.id),undefined);
+  assert.equal(one(db,"SELECT * FROM tutor_uploads WHERE id=?",upload),undefined);
+  assert.equal(one(db,"SELECT * FROM upload_chunks WHERE upload_id=?",upload),undefined);
+  assert.equal(one(db,"SELECT status FROM weekly_requests WHERE id=?",weekly.data.id).status,"cancelled");
+  assert.equal(one(db,"SELECT status FROM bookings WHERE id=?",booking).status,"cancelled");
+  assert.equal((await student.request(`/tutors/${teacher.id}`)).status,404);
+  assert.equal((await student.request(`/inquiries/${thread.id}/messages`)).data[0].body,"Trao đổi được giữ lại");
+  assert.equal((await admin.request(`/support/${support.id}/messages`)).data[0].name,"Tài khoản đã xóa");
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "PATCH", {status:"active"})).status,404);
+  assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", {email:teacher.email})).status,404);
+  assert.equal((await admin.request("/admin")).data.users.some(u=>u.id===teacher.id),false);
+  assert.ok(one(db,"SELECT id FROM audit WHERE action='user.deleted' AND target=?",String(teacher.id)));
+});
+
+function offerPeriod(offset = 21) {
+  const start = new Date(Date.now() + offset * 86400000);
+  start.setUTCDate(start.getUTCDate() + (8 - start.getUTCDay()) % 7);
+  const start_date = start.toISOString().slice(0, 10);
+  const end_date = new Date(Date.parse(`${start_date}T00:00:00Z`) + 13 * 86400000).toISOString().slice(0, 10);
+  return { start_date, end_date };
+}
+
+test("dated offers preview, accept into real lessons, share notes and preserve history on cancellation", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), outsider = client();
+  await student.login("student"); const teacher = await tutor.login("chau"); await outsider.login("linh");
+  const blocks = [{weekday:0,hour:19},{weekday:2,hour:19}];
+  await tutor.request("/tutor/availability", "PUT", {revision:0,blocks});
+  const data = { tutor_id:teacher.id,subject_id:"toan",mode:"online",blocks,note:"Ôn thi",...offerPeriod() };
+  const preview = await student.request("/offers/preview", "POST", data);
+  assert.equal(preview.status,200); assert.equal(preview.data.sessions.length,4); assert.equal(preview.data.conflict_count,0);
+  assert.equal(preview.data.sessions[0].starts_at,`${data.start_date}T12:00:00.000Z`);
+  const before = one(db,"SELECT COUNT(*) n FROM bookings").n;
+  const created = await student.request("/offers", "POST", data);
+  assert.equal(created.status,201); assert.equal(one(db,"SELECT COUNT(*) n FROM bookings").n,before);
+  const path = `/offers/${created.data.id}`;
+  assert.equal((await student.request("/offers")).data[0].status,"pending");
+  assert.equal((await tutor.request(path)).data.sessions.length,4);
+  assert.equal((await outsider.request(path)).status,404);
+  assert.equal((await outsider.request(path,"PATCH",{status:"accepted"})).status,404);
+  assert.equal((await student.request(path,"PATCH",{status:"accepted"})).status,403);
+  assert.equal((await tutor.request(path,"PATCH",{status:"accepted"})).status,200);
+  assert.equal((await tutor.request(path,"PATCH",{status:"accepted"})).status,409);
+  const lessons = (await student.request("/bookings")).data.filter(b=>b.offer_id===created.data.id);
+  assert.equal(lessons.length,4); assert.ok(lessons.every(b=>b.status==="accepted" && b.duration_minutes===60 && b.inquiry_id===created.data.inquiry_id));
+  const lesson = lessons[0];
+  assert.equal((await student.request(`/bookings/${lesson.id}/lesson`,"PATCH",{lesson_note:"bad",meeting_url:""})).status,403);
+  assert.equal((await tutor.request(`/bookings/${lesson.id}/lesson`,"PATCH",{lesson_note:"Ôn phương trình, bài tập 1–5",meeting_url:"https://meet.google.com/lesson"})).status,200);
+  assert.equal((await student.request("/bookings")).data.find(b=>b.id===lesson.id).lesson_note,"Ôn phương trình, bài tập 1–5");
+  run(db,"UPDATE bookings SET status='completed' WHERE id=?",lesson.id);
+  assert.equal((await student.request(path,"PATCH",{status:"cancelled"})).status,200);
+  const retained = all(db,"SELECT status,lesson_note FROM bookings WHERE offer_id=?",created.data.id);
+  assert.equal(retained.filter(b=>b.status==="cancelled").length,3);
+  assert.equal(retained.find(b=>b.status==="completed").lesson_note,"Ôn phương trình, bài tập 1–5");
+});
+
+test("offers reject invalid dates and availability, recheck conflicts atomically and allow later date ranges", async t => {
+  const { client, db } = await fixture(t);
+  const student=client(), other=client(), tutor=client(); await student.login("student"); const teacher=await tutor.login("chau");
+  await other.request("/auth/register","POST",{name:"Second Learner",email:"second-offer@example.com",password:"TestStudy2026!",role:"student"});
+  const blocks=[{weekday:0,hour:19}];
+  await tutor.request("/tutor/availability","PUT",{revision:0,blocks});
+  const data={tutor_id:teacher.id,subject_id:"toan",mode:"online",blocks,...offerPeriod()};
+  for (const invalid of [{start_date:"2030-02-30"},{end_date:"2020-01-01"},{end_date:"2099-01-01"},{blocks:[]},{blocks:[{weekday:2,hour:19}]}]) assert.ok((await student.request("/offers","POST",{...data,...invalid})).status>=400);
+  const a=await student.request("/offers","POST",data),b=await other.request("/offers","POST",data);
+  assert.equal(a.status,201); assert.equal(b.status,201);
+  const accepted=await Promise.all([a,b].map(r=>tutor.request(`/offers/${r.data.id}`,"PATCH",{status:"accepted"})));
+  assert.deepEqual(accepted.map(r=>r.status).sort(),[200,409]);
+  const winner=accepted[0].status===200?a:b,loser=accepted[0].status===200?b:a;
+  assert.equal(all(db,"SELECT id FROM bookings WHERE offer_id=?",winner.data.id).length,2);
+  assert.equal(all(db,"SELECT id FROM bookings WHERE offer_id=?",loser.data.id).length,0);
+  const check=(await tutor.request(`/offers/${loser.data.id}`)).data;
+  assert.equal(check.conflict_count,2); assert.match(check.sessions[0].conflict,/Gia sư/);
+  assert.equal((await tutor.request(`/offers/${loser.data.id}`,"PATCH",{status:"declined"})).status,200);
+  const later=await student.request("/offers","POST",{...data,...offerPeriod(70)});
+  assert.equal(later.status,201);
+  assert.equal((await tutor.request(`/offers/${later.data.id}`,"PATCH",{status:"accepted"})).status,200);
+  const changed=await other.request("/offers","POST",{...data,...offerPeriod(100)});
+  assert.equal(changed.status,201);
+  await tutor.request("/tutor/availability","PUT",{revision:1,blocks:[]});
+  assert.equal((await tutor.request(`/offers/${changed.data.id}`,"PATCH",{status:"accepted"})).status,409);
+});
+
+test("profile steps save address and calendar atomically and reject invalid or stale schedules", async t => {
+  const { client, db } = await fixture(t);
+  const tutor = client(); const user = await tutor.login("chau");
+  const original = (await tutor.request("/tutor/profile")).data;
+  const payload = { ...original, headline: "Hồ sơ theo bước", province_code: "1", ward_code: "4", availability: { revision: 0, blocks: [{ weekday: 0, hour: 18 }] } };
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...payload, ward_code: "99999" })).status, 400);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...payload, availability: { ...payload.availability, blocks: [{ weekday: 0, hour: 25 }] } })).status, 400);
+  assert.equal(one(db, "SELECT headline FROM tutors WHERE user_id=?", user.id).headline, original.headline);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", payload)).status, 200);
+  const saved = (await tutor.request("/tutor/profile")).data;
+  assert.equal(saved.location, "Phường Ba Đình, Thành phố Hà Nội");
+  assert.equal(saved.ward_code, "4"); assert.equal(saved.status, "pending");
+  assert.deepEqual(saved.weekly_schedule, { revision: 1, blocks: [{ weekday: 0, hour: 18 }] });
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...payload, headline: "Stale tab must not overwrite" })).status, 409);
+  assert.equal(one(db, "SELECT headline FROM tutors WHERE user_id=?", user.id).headline, payload.headline);
+});
+
+test("admin can take down and restore a tutor without deleting accounts or history", async t => {
+  const { client, db } = await fixture(t);
+  const admin = client(), tutor = client(), student = client(), guest = client();
+  await admin.login("admin"); const teacher = await tutor.login("chau"); await student.login("student");
+  const path = `/admin/tutors/${teacher.id}`, original = (await tutor.request("/tutor/profile")).data;
+  const bookings = all(db, "SELECT * FROM bookings WHERE tutor_id=?", teacher.id);
+  assert.equal((await tutor.request(path, "PATCH", { status: "withdrawn" })).status, 403);
+  assert.equal((await guest.request(path, "PATCH", { status: "withdrawn" })).status, 401);
+  assert.equal((await admin.request(path, "PATCH", { status: "withdrawn", revision: 999 })).status, 409);
+  assert.equal((await admin.request(path, "PATCH", { status: "withdrawn", revision: original.review_revision })).status, 200);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).status, 404);
+  assert.equal((await guest.request("/tutors")).data.some(t => t.user_id === teacher.id), false);
+  assert.equal((await tutor.request("/auth/me")).data.user.id, teacher.id);
+  assert.deepEqual(all(db, "SELECT * FROM bookings WHERE tutor_id=?", teacher.id), bookings);
+  assert.equal((await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Tư vấn" })).status, 404);
+  assert.equal((await admin.request(path, "PATCH", { status: "approved", revision: original.review_revision + 1 })).status, 200);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).status, 200);
+  assert.ok(one(db, "SELECT * FROM audit WHERE action='tutor.withdrawn' AND target=?", String(teacher.id)));
+});
+
+test("student school and ward are private, validated and persist across sessions", async t => {
+  const { client } = await fixture(t);
+  const student = client(); const user = await student.login("student");
+  const fields = { name: user.name, goal: "", school: "THCS Ba Đình", province_code: "1", ward_code: "4" };
+  assert.equal((await student.request("/account", "PATCH", { ...fields, province_code: "79" })).status, 400);
+  assert.equal((await student.request("/account", "PATCH", fields)).status, 200);
+  await student.request("/auth/logout", "POST");
+  const saved = await student.login("student");
+  assert.equal(saved.school, fields.school); assert.equal(saved.province_code, "1"); assert.equal(saved.ward_code, "4");
+  // Unrelated legacy account edits preserve the new fields.
+  assert.equal((await student.request("/account", "PATCH", { name: user.name, goal: "Toán" })).status, 200);
+  assert.equal((await student.request("/auth/me")).data.user.school, fields.school);
+});
+
+test("message context persists for both participants and rejects content from another conversation", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), other = client(), outsider = client();
+  await student.login("student"); const teacher = await tutor.login("chau"); await outsider.login("linh");
+  await other.request("/auth/register", "POST", { name: "Other learner", email: "context-other@example.com", password: "TestStudy2026!", role: "student" });
+  const blocks = [{ weekday: 0, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const input = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, ...offerPeriod() };
+  const offer = (await student.request("/offers", "POST", input)).data;
+  const otherOffer = (await other.request("/offers", "POST", input)).data;
+  const path = `/inquiries/${offer.inquiry_id}`;
+  const context = { kind: "offer", id: offer.id };
+  assert.equal((await student.request(`${path}/context/offer/${offer.id}`)).data.subject_name, "Toán");
+  assert.equal((await outsider.request(`${path}/context/offer/${offer.id}`)).status, 404);
+  assert.equal((await other.request(`${path}/messages`)).status, 404);
+  assert.equal((await student.request(`${path}/messages`, "POST", { body: "Em muốn trao đổi lịch này", context })).status, 201);
+  const received = (await tutor.request(`${path}/messages`)).data.at(-1);
+  assert.equal(received.context.id, offer.id);
+  assert.equal(received.context.kind, "offer");
+  assert.equal(received.context.start_date, input.start_date);
+  for (const sender of [student, tutor]) {
+    assert.equal((await sender.request(`${path}/messages`, "POST", { body: "Wrong conversation", context: { kind: "offer", id: otherOffer.id } })).status, 404);
+    assert.equal((await sender.request(`${path}/context/offer/${otherOffer.id}`)).status, 404);
+  }
+  for (const context of [{ kind: "offer", id: 999999 }, { kind: "lesson", id: 999999 }]) {
+    assert.equal((await student.request(`${path}/messages`, "POST", { body: "Missing", context })).status, 404);
+  }
+  for (const context of [{ kind: "offer", id: 0 }, { kind: "support", id: 1 }, { kind: "offer", id: offer.id, href: "https://evil.invalid" }]) {
+    assert.equal((await student.request(`${path}/messages`, "POST", { body: "Invalid", context })).status, 400);
+  }
+  assert.equal((await tutor.request(`${path}/messages`)).data.length, 1);
+  assert.equal((await tutor.request(`/offers/${offer.id}`, "PATCH", { status: "accepted" })).status, 200);
+  const lesson = (await student.request("/bookings")).data.find(b => b.offer_id === offer.id);
+  assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Bài tập của buổi này", context: { kind: "lesson", id: lesson.id } })).status, 201);
+  const lessonMessage = (await student.request(`${path}/messages`)).data.at(-1);
+  assert.equal(lessonMessage.context.starts_at, lesson.starts_at);
+  assert.equal(lessonMessage.context.duration_minutes, 60);
+  assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Trao đổi chung" })).status, 201);
+  assert.equal((await student.request(`${path}/messages`)).data.at(-1).context, null);
+  await student.request(`/offers/${offer.id}`, "PATCH", { status: "cancelled" });
+  assert.equal((await student.request(`${path}/messages`)).data[0].context.status, "cancelled");
+  const weekly = (await student.request("/weekly-requests", "POST", { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks })).data;
+  const weeklyMessage = (await tutor.request(`${path}/messages`)).data.at(-1);
+  assert.equal(weeklyMessage.context.kind, "weekly-request");
+  assert.equal(weeklyMessage.context.id, weekly.id);
+  assert.deepEqual(weeklyMessage.context.blocks, blocks);
+  // Old per-lesson conversations have an implicit, immutable lesson context.
+  await student.request(`/bookings/${lesson.id}/messages`, "POST", { body: "Old lesson thread" });
+  assert.equal((await tutor.request(`/bookings/${lesson.id}/messages`)).data[0].context.id, lesson.id);
+  run(db, "UPDATE inquiry_messages SET context_id=999999 WHERE id=?", received.id);
+  const unavailable = (await student.request(`${path}/messages`)).data[0];
+  assert.equal(unavailable.context, null);
+  assert.equal(unavailable.context_kind, "offer");
+});
+
+test("message context migration preserves existing plain messages and can run twice", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client();
+  await student.login("student"); const teacher = await tutor.login("chau");
+  const thread = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Existing message" })).data;
+  db.exec("ALTER TABLE inquiry_messages DROP COLUMN context_kind");
+  db.exec("ALTER TABLE inquiry_messages DROP COLUMN context_id");
+  migrateDatabase(db); migrateDatabase(db);
+  const messages = (await tutor.request(`/inquiries/${thread.id}/messages`)).data;
+  assert.equal(messages[0].body, "Existing message");
+  assert.equal(messages[0].context, null);
+});
+
+test("catalog removal keeps lesson history and survives reseeding", async t => {
+  const { db, client } = await fixture(t), admin = client(), student = client();
+  await admin.login("admin"); await student.login("student");
+  const old = all(db, "SELECT id FROM bookings WHERE subject_id='toan'");
+  const resource = one(db, "SELECT id FROM resources WHERE subject_id='toan'");
+  assert.equal((await student.request("/admin/subjects/toan", "DELETE")).status, 403);
+  assert.equal((await admin.request(`/admin/resources/${resource.id}`, "DELETE")).status, 200);
+  assert.equal((await admin.request("/admin/subjects/toan", "DELETE")).status, 200);
+  seedCatalog(db); migrateDatabase(db);
+  assert.ok(!(await student.request("/subjects")).data.some(s => s.id === "toan"));
+  assert.ok(!(await student.request("/resources")).data.some(r => r.subject_id === "toan"));
+  assert.ok(!(await admin.request("/admin")).data.resources.some(r => r.subject_id === "toan"));
+  assert.ok(all(db, "SELECT subjects FROM tutors").every(t => !JSON.parse(t.subjects).includes("toan")));
+  assert.equal(all(db, "SELECT id FROM bookings WHERE subject_id='toan'").length, old.length);
+  assert.equal((await admin.request("/admin/subjects/toan", "PUT", { name: "Toán", stage: "THPT", description: "Môn học" })).status, 409);
+});
+
+test("chat attachments remain private and bind only to the sender's thread", async t => {
+  const { db, base, client } = await fixture(t), student = client(), tutor = client(), other = client(), admin = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  await other.login("nam"); await admin.login("admin");
+  const inquiry = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Chào thầy" })).data;
+  const otherInquiry = (await student.request("/inquiries", "POST", { tutor_id: one(db,"SELECT id FROM users WHERE email='nam@demo.giasu.test'").id, body: "Chào thầy" })).data;
+  const path = `/chat/inquiry/${inquiry.id}/attachments`;
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO/aB9sAAAAASUVORK5CYII=", "base64");
+  // Generate a valid image through the same decoder used by profile uploads.
+  const sharp = (await import("sharp")).default;
+  const image = await sharp({create:{width:10,height:10,channels:3,background:"red"}}).png().toBuffer();
+  const upload = (who, url, data, type) => fetch(base+url, {method:"POST",headers:{Cookie:who.cookie,"Content-Type":type},body:data});
+  assert.equal((await upload(other,path,image,"image/png")).status,404);
+  assert.equal((await upload(student,path,png,"image/svg+xml")).status,400);
+  assert.equal((await upload(student,path,Buffer.from("fake"),"audio/mpeg")).status,400);
+  assert.equal((await upload(student,path,Buffer.alloc(8*1024*1024+1),"audio/wav")).status,413);
+  const response = await upload(student,path,image,"image/png"); assert.equal(response.status,201);
+  const attachment = await response.json();
+  const read = (who, headers={}) => fetch(new URL(attachment.url, base),{headers:{Cookie:who?.cookie || "",...headers}});
+  assert.equal((await read()).status,401);
+  assert.equal((await read(tutor)).status,404); // draft is sender-only
+  assert.equal((await student.request(`/inquiries/${otherInquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  assert.equal((await tutor.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  assert.equal((await student.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,201);
+  assert.equal((await read(tutor)).status,200);
+  assert.equal((await read(other)).status,404);
+  assert.equal((await read(admin)).status,404);
+  const ranged = await read(tutor,{Range:"bytes=0-9"}); assert.equal(ranged.status,206); assert.equal((await ranged.arrayBuffer()).byteLength,10);
+  assert.equal((await read(tutor,{Range:"bytes=999999-"})).status,416);
+  const messages = (await tutor.request(`/inquiries/${inquiry.id}/messages`)).data;
+  assert.equal(messages.at(-1).attachment.id,attachment.id);
+  assert.equal((await student.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  const support = (await student.request("/support")).data[0];
+  assert.equal((await admin.request("/support")).data.length,0);
+  const wav = Buffer.alloc(48); wav.write("RIFF"); wav.write("WAVE",8);
+  const voice = await (await upload(student,`/chat/support/${support.id}/attachments`,wav,"audio/wav")).json();
+  assert.equal((await student.request(`/support/${support.id}/messages`,"POST",{attachment_id:voice.id})).status,201);
+  assert.equal((await admin.request("/support")).data.length,1);
+  assert.equal((await admin.request(`/support/${support.id}/messages`)).data.at(-1).attachment.kind,"audio");
+  const slot = one(db, "SELECT * FROM slots WHERE tutor_id=? LIMIT 1", teacher.id);
+  const booking = { id: Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (?,?,?,'toan',?,180000,'online')", learner.id, teacher.id, slot.id, slot.starts_at).lastInsertRowid) };
+  const lessonVoice = await (await upload(tutor,`/chat/lesson/${booking.id}/attachments`,wav,"audio/wav")).json();
+  assert.equal((await tutor.request(`/bookings/${booking.id}/messages`,"POST",{attachment_id:lessonVoice.id})).status,201);
+  assert.equal((await student.request(`/bookings/${booking.id}/messages`)).data.at(-1).attachment.id,lessonVoice.id);
+  migrateDatabase(db);
 });

@@ -1,3 +1,4 @@
+import { communitySitemap, publicCommunityPost } from "./community.js";
 import { pathToFileURL } from "node:url";
 import { createMailflareSender } from "./email-verification.js";
 import { pageSeo, renderSeo, robots, newsSitemap } from "./seo.js";
@@ -28,6 +29,7 @@ const app = createApi(db, {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     adminEmail: process.env.GOOGLE_ADMIN_EMAIL,
+    calendarTokenKey: process.env.GOOGLE_CALENDAR_TOKEN_KEY,
   },
 });
 app.use("/assets", express.static(path.resolve("assets")));
@@ -37,16 +39,18 @@ app.get(["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"], (req, res)
 });
 app.get(["/app", "/app/"], (req, res) => res.redirect("/"));
 app.get("/robots.txt", (req, res) => res.type("text/plain").send(robots));
-app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(newsSitemap(all(db, "SELECT id FROM posts WHERE published=1"))));
+app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(newsSitemap(all(db, "SELECT id FROM posts WHERE published=1"), communitySitemap(db))));
 app.get(["/privacy", "/terms"], (req, res) => res.sendFile(path.resolve(`dist/legal${req.path}.html`)));
 app.get("/index.html", (req, res) => res.redirect(308, "/"));
 app.get("/", (req, res) => res.sendFile(path.resolve("index.html")));
 const sendApp = (req, res, html) => {
   const match = req.path.match(/^\/app\/news\/(\d+)$/);
   const post = match ? one(db, "SELECT title,summary FROM posts WHERE id=? AND published=1", match[1]) : null;
-  const seo = pageSeo(req.path, post);
+  const communityMatch = req.path.match(/^\/app\/community\/(\d+)$/);
+  const community = communityMatch ? publicCommunityPost(db, communityMatch[1]) : null;
+  const seo = pageSeo(req.path, post, community);
   res.set("X-Robots-Tag", seo.robots).set("Cache-Control", "no-cache")
-    .status(seo.status).type("html").send(renderSeo(html, req.path, post));
+    .status(seo.status).type("html").send(renderSeo(html, req.path, post, community));
 };
 if (production || process.env.SERVE_BUILD === "1") {
   app.use("/app/assets", express.static(path.resolve("dist/app/assets")));
@@ -75,12 +79,15 @@ if (production || process.env.SERVE_BUILD === "1") {
   });
   app.use(vite.middlewares);
 }
+const calendarTimer = setInterval(() => { void app.locals.calendarSync.syncDue().catch(() => {}); }, 60000);
+calendarTimer.unref();
 const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
   console.log(`Gia Sư 10 Điểm: ${origin}/app/`),
 );
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () =>
     server.close(() => {
+      clearInterval(calendarTimer);
       db.close();
       process.exit(0);
     }),

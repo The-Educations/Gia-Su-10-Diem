@@ -1,14 +1,13 @@
-import { ProfileSections } from "@/components/tutor-sections";
-import { EducationTimeline } from "@/components/tutor-education";
-import { TimezoneTag } from "@/components/tutor-timezone";
+import AdminCommunity, { CommunityLock } from "./AdminCommunity";
+import { TutorReviewDialog } from "@/components/tutor-review-dialog";
 import AdminPosts from "./AdminPosts";
 import { accountRole } from "@/lib/types";
-import { TutorGallery } from "@/components/tutor-gallery";
 import { WorkspaceStats } from "@/components/workspace";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Plus,
+  Trash2,
   Search,
   ArrowUpRight,
   Users,
@@ -21,7 +20,6 @@ import { api, useApp, useLoad, fold, dateTime, money } from "@/lib/api";
 import type { AdminData, Resource, Subject, Tutor, User } from "@/lib/types";
 import {
   Page,
-  Section,
   Heading,
   Person,
   State,
@@ -47,30 +45,39 @@ import {
 import ResourceEditor from "./ResourceEditor";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts"].includes(
+  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts", "community"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
       : "tutors",
     status = params.get("status") || "";
+  const communityQueue = useLoad<unknown[]>("/admin/community/queue");
   const { refresh } = useApp(),
     result = useLoad<AdminData>("/admin"),
     subjects = useLoad<Subject[]>("/subjects"),
     [q, setQ] = useState(""),
     [editor, setEditor] = useState<Resource | null | undefined>(undefined),
+    [removal, setRemoval] = useState<{ kind: "subjects" | "resources"; id: string | number; name: string } | null>(null),
     [subject, setSubject] = useState<Subject | null | undefined>(undefined),
     [tutor, setTutor] = useState<Tutor | null>(null),
+    [reviewOpen, setReviewOpen] = useState(false),
+    [withdraw, setWithdraw] = useState<Tutor | null>(null),
     [account, setAccount] = useState<(User & { status: string }) | null>(null),
-    [accountAction, setAccountAction] = useState<"status" | "admin">("status"),
+    [accountAction, setAccountAction] = useState<"status" | "admin" | "delete">("status"),
+    [deleteEmail, setDeleteEmail] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const reviewTrigger = useRef<HTMLButtonElement | null>(null);
+  const withdrawTrigger = useRef<HTMLButtonElement | null>(null);
   async function mutate(path: string, method: string, data: unknown) {
     setBusy(true);
     setError("");
     try {
       await api(path, method, data);
       setTutor(null);
+      setWithdraw(null);
       setSubject(undefined);
+      setRemoval(null);
       setAccount(null);
       refresh();
       toast.success("Đã lưu thay đổi");
@@ -121,6 +128,7 @@ export default function Admin() {
       />
       <WorkspaceStats
         items={[
+          { label: "Bài cộng đồng chờ duyệt", value: communityQueue.data?.length || 0, icon: Clock, to: "/admin?tab=community" },
           {
             label: "Hồ sơ chờ duyệt",
             value: pending.length,
@@ -161,9 +169,10 @@ export default function Admin() {
             <TabsTrigger value="resources">Kỳ thi</TabsTrigger>
             <TabsTrigger value="subjects">Môn học</TabsTrigger>
             <TabsTrigger value="posts">Tin tức</TabsTrigger>
+            <TabsTrigger value="community">Cộng đồng ({communityQueue.data?.length || 0})</TabsTrigger>
             <TabsTrigger value="audit">Nhật ký</TabsTrigger>
           </TabsList>
-          {tab !== "posts" && <div className="admin-toolbar">
+          {tab !== "posts" && tab !== "community" && <div className="admin-toolbar">
             <div className="admin-search">
               <Field>
                 <FieldLabel htmlFor="admin-search" className="sr-only">
@@ -190,10 +199,12 @@ export default function Admin() {
                   { value: "pending", label: "Chờ duyệt" },
                   { value: "approved", label: "Đã công bố" },
                   { value: "rejected", label: "Cần bổ sung" },
+                  { value: "withdrawn", label: "Đã gỡ hồ sơ" },
                 ]}
               />
             )}
           </div>}
+          <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="tutors">
             {!matchingTutors.length && (
@@ -224,7 +235,7 @@ export default function Admin() {
                     <h2>{t.name}</h2>
                     <p>{t.headline || "Chưa hoàn thiện hồ sơ"}</p>
                     <span>
-                      {money(t.rate)} / giờ{t.demo ? " · Hồ sơ mẫu" : ""}
+                      {money(t.rate)} / buổi{t.demo ? " · Hồ sơ mẫu" : ""}
                     </span>
                   </div>
                   <State
@@ -234,13 +245,15 @@ export default function Admin() {
                   />
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setError("");
+                    onClick={e => {
+                      reviewTrigger.current = e.currentTarget;
                       setTutor(t);
+                      setReviewOpen(true);
                     }}
                   >
                     Xem & duyệt
                   </Button>
+                  {t.status !== "withdrawn" && <Button variant="destructive" onClick={e => { withdrawTrigger.current = e.currentTarget; setError(""); setWithdraw(t); }}>Gỡ hồ sơ</Button>}
                 </article>
               ))}
             </div>
@@ -275,6 +288,7 @@ export default function Admin() {
                     </span>
                   </div>
                   <State value={u.status} />
+                  <CommunityLock owner={{...u,community_locked:Number(u.community_locked)}} />
                   {u.role !== "admin" && u.status === "active" && (
                     <Button
                       variant="outline"
@@ -300,6 +314,9 @@ export default function Admin() {
                       {u.status === "active" ? "Tạm khóa" : "Kích hoạt"}
                     </Button>
                   )}
+                  {u.role !== "admin" && <Button variant="destructive" onClick={() => {
+                    setError(""); setDeleteEmail(""); setAccountAction("delete"); setAccount(u);
+                  }}>Xóa tài khoản</Button>}
                 </article>
               ))}
             </div>
@@ -341,6 +358,7 @@ export default function Admin() {
                   <Button variant="outline" onClick={() => setEditor(r)}>
                     Chỉnh sửa
                   </Button>
+                  <Button variant="ghost" onClick={() => { setError(""); setRemoval({ kind: "resources", id: r.id, name: r.title }); }}><Trash2 aria-hidden="true" />Bỏ kỳ thi</Button>
                 </article>
               ))}
             </div>
@@ -390,6 +408,7 @@ export default function Admin() {
                   >
                     Chỉnh sửa
                   </Button>
+                  <Button variant="ghost" onClick={() => { setError(""); setRemoval({ kind: "subjects", id: s.id, name: s.name }); }}><Trash2 aria-hidden="true" />Bỏ môn</Button>
                 </article>
               ))}
             </div>
@@ -415,6 +434,15 @@ export default function Admin() {
           </TabsContent>
         </Tabs>
       </div>
+      <Dialog open={!!removal} onOpenChange={open => { if (!open && !busy) setRemoval(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Bỏ {removal?.name}?</DialogTitle><DialogDescription>
+            Mục này sẽ không còn trong danh mục để chọn mới.{removal?.kind === "subjects" ? " Các kỳ thi thuộc môn cũng được bỏ." : ""} Lịch học và đề nghị đã có vẫn được giữ lại.
+          </DialogDescription></DialogHeader>
+          {error && <ErrorState error={error} />}
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setRemoval(null)}>Giữ lại</Button><Button variant="destructive" disabled={busy} onClick={() => removal && mutate(`/admin/${removal.kind}/${removal.id}`, "DELETE", {})}>{busy ? "Đang bỏ…" : "Bỏ khỏi danh mục"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={editor !== undefined}
         onOpenChange={(o) => {
@@ -508,119 +536,17 @@ export default function Admin() {
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={!!tutor}
-        onOpenChange={(o) => {
-          if (!o) setTutor(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{tutor?.name}</DialogTitle>
-            <DialogDescription>
-              {tutor?.headline || "Chưa hoàn thiện hồ sơ"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="admin-profile-preview">
-            {tutor && (
-              <Person
-                name={tutor.name}
-                src={tutor.photo_url || undefined}
-                large
-              />
-            )}
-            <p>{tutor?.bio}</p>
-          </div>
-          {tutor && <TimezoneTag zone={tutor.timezone} />}
-          {!!tutor?.education_history.length && <Section title="Quá trình học tập"><EducationTimeline entries={tutor.education_history} /></Section>}
-          {tutor?.teaching_style && (
-            <Section title="Phương pháp giảng dạy">
-              <p className="reading-text">{tutor.teaching_style}</p>
-            </Section>
-          )}
-          {tutor?.lesson_plan && (
-            <Section title="Một buổi học cùng tôi">
-              <p className="reading-text">{tutor.lesson_plan}</p>
-            </Section>
-          )}
-          {tutor && <TutorGallery images={tutor.gallery || []} name={tutor.name} />}
-          {tutor && <ProfileSections sections={tutor.profile_sections} />}
-          {tutor?.banner_url && <img className="admin-banner" src={tutor.banner_url} alt={`Ảnh bìa của ${tutor.name}`} />}
-          <dl className="summary-list">
-            <div>
-              <dt>Học vấn</dt>
-              <dd>{tutor?.education || "Chưa cung cấp"}</dd>
-            </div>
-            <div>
-              <dt>Môn dạy</dt>
-              <dd>
-                {tutor?.subjects
-                  .map((id) => subjects.data?.find((s) => s.id === id)?.name)
-                  .join(", ")}
-              </dd>
-            </div>
-            <div>
-              <dt>Cấp học</dt>
-              <dd>{tutor?.levels.join(", ") || "Chưa chọn"}</dd>
-            </div>
-            <div>
-              <dt>Mục tiêu kỳ thi</dt>
-              <dd>{tutor?.goals.join(", ") || "Chưa chọn"}</dd>
-            </div>
-            <div>
-              <dt>Kinh nghiệm</dt>
-              <dd>{tutor?.experience} năm</dd>
-            </div>
-            <div>
-              <dt>Học phí</dt>
-              <dd>{money(tutor?.rate || 0)} / giờ</dd>
-            </div>
-          </dl>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.currentTarget,
-                d = new FormData(form),
-                status = (e.nativeEvent as SubmitEvent).submitter?.getAttribute(
-                  "value",
-                );
-              if (tutor)
-                mutate(`/admin/tutors/${tutor.user_id}`, "PATCH", {
-                  status,
-                  note: d.get("note"),
-                });
-            }}
-          >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="moderation-note">
-                  Ghi chú cho gia sư
-                </FieldLabel>
-                <Textarea
-                  id="moderation-note"
-                  name="note"
-                  defaultValue={tutor?.moderation_note}
-                  maxLength={1000}
-                />
-              </Field>
-              {error && <ErrorState error={error} />}
-              <div className="actions">
-                <Button type="submit" value="approved" disabled={busy}>
-                  Duyệt & công bố
-                </Button>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  value="rejected"
-                  disabled={busy}
-                >
-                  Yêu cầu bổ sung
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
+      <Dialog open={!!withdraw} onOpenChange={open => { if (!open && !busy) setWithdraw(null); }}>
+        <DialogContent closeDisabled={busy} onCloseAutoFocus={e => { e.preventDefault(); if (withdrawTrigger.current?.isConnected) withdrawTrigger.current.focus(); else document.getElementById("admin-search")?.focus(); }}>
+          <DialogHeader><DialogTitle>Gỡ hồ sơ gia sư?</DialogTitle><DialogDescription>Hồ sơ của {withdraw?.name} sẽ ngừng hiển thị công khai. Tài khoản, tin nhắn và lịch đã đặt được giữ lại. Có thể duyệt lại để công bố.</DialogDescription></DialogHeader>
+          {error && <ErrorState error={error} />}
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setWithdraw(null)}>Hủy</Button><Button variant="destructive" disabled={busy} onClick={() => withdraw && mutate(`/admin/tutors/${withdraw.user_id}`, "PATCH", { status: "withdrawn", revision: withdraw.review_revision })}>{busy ? "Đang gỡ…" : "Xác nhận gỡ hồ sơ"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      <TutorReviewDialog tutor={tutor} catalog={d.theme_catalog} subjects={subjects.data || []} open={reviewOpen} onOpenChange={setReviewOpen} onSaved={refresh} returnFocus={() => {
+        if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus();
+        else document.getElementById("admin-search")?.focus();
+      }} />
       <Dialog
         open={!!account}
         onOpenChange={(o) => {
@@ -630,13 +556,13 @@ export default function Admin() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {accountAction === "admin"
+              {accountAction === "delete" ? "Xóa tài khoản?" : accountAction === "admin"
                 ? "Cấp quyền quản trị?"
                 : `${account?.status === "active" ? "Tạm khóa" : "Kích hoạt"} tài khoản?`}
             </DialogTitle>
             <DialogDescription>
               {account?.name} · {account?.email}.
-              {accountAction === "admin"
+              {accountAction === "delete" ? " Hồ sơ cá nhân, email và ảnh sẽ bị xóa; mọi phiên đăng nhập bị thu hồi. Lịch đang chờ hoặc đã nhận sẽ bị hủy. Lịch sử học và tin nhắn được giữ dưới tên Tài khoản đã xóa. Không thể khôi phục tài khoản này." : accountAction === "admin"
                 ? " Tài khoản sẽ chuyển sang quản trị viên, có quyền quản lý tài khoản, hồ sơ và danh mục. Người này cần đăng nhập lại."
                 : " Tạm khóa sẽ đăng xuất mọi phiên của tài khoản."}
             </DialogDescription>
@@ -648,19 +574,20 @@ export default function Admin() {
               if (account)
                 mutate(
                   `/admin/users/${account.id}${accountAction === "admin" ? "/role" : ""}`,
-                  "PATCH",
-                  accountAction === "admin"
+                  accountAction === "delete" ? "DELETE" : "PATCH",
+                  accountAction === "delete" ? { email: deleteEmail } : accountAction === "admin"
                     ? { role: "admin" }
                     : { status: account.status === "active" ? "suspended" : "active" },
                 );
             }}
           >
+            {accountAction === "delete" && <Field className="mb-4"><FieldLabel htmlFor="delete-account-email">Nhập lại email tài khoản để xác nhận</FieldLabel><Input id="delete-account-email" type="email" value={deleteEmail} onChange={e => setDeleteEmail(e.target.value)} autoComplete="off" required /></Field>}
             <DialogFooter>
               <Button type="button" variant="outline" disabled={busy} onClick={() => setAccount(null)}>
                 Hủy
               </Button>
-              <Submit busy={busy}>
-                {accountAction === "admin" ? "Xác nhận cấp quyền" : "Xác nhận"}
+              <Submit busy={busy} disabled={accountAction === "delete" && deleteEmail.trim().toLowerCase() !== account?.email.toLowerCase()}>
+                {accountAction === "delete" ? "Xác nhận xóa tài khoản" : accountAction === "admin" ? "Xác nhận cấp quyền" : "Xác nhận"}
               </Submit>
             </DialogFooter>
           </form>

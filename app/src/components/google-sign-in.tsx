@@ -3,7 +3,9 @@ import { Button } from "./ui/button";
 import { useLoad } from "@/lib/api";
 export const googleErrors: Record<string, string> = {
   unavailable:
-    "Đăng nhập Google chưa được cấu hình. Bạn có thể dùng email và mật khẩu.",
+    "Đăng nhập Google tạm thời không khả dụng. Bạn có thể dùng email và mật khẩu.",
+  rate_limited: "Vui lòng chờ một phút trước khi yêu cầu mã mới.",
+  mail_unavailable: "Chưa gửi được mã xác minh. Vui lòng thử lại sau.",
   expired: "Phiên đăng nhập đã hết hạn. Vui lòng thử lại.",
   cancelled: "Bạn đã hủy đăng nhập Google.",
   failed: "Không thể xác thực Google. Vui lòng thử lại.",
@@ -15,8 +17,14 @@ export const googleErrors: Record<string, string> = {
 };
 export function GoogleSignIn({
   next,
+  disabled = false,
+  allowed = true,
+  onBlocked,
 }: {
   next?: string | null;
+  disabled?: boolean;
+  allowed?: boolean;
+  onBlocked?: () => void;
 }) {
   const providers = useLoad<{ google: boolean }>("/auth/providers");
   if (providers.error)
@@ -37,7 +45,7 @@ export function GoogleSignIn({
         >
           {providers.loading
             ? "Đang tải đăng nhập Google…"
-            : "Google chưa được cấu hình"}
+            : "Google tạm thời không khả dụng"}
         </Button>
       </div>
     );
@@ -45,8 +53,10 @@ export function GoogleSignIn({
   if (next) params.set("next", next);
   return (
     <div className="google-sign-in">
-      <Button asChild variant="outline" className="w-full">
-        <a href={`/api/auth/google/start${params.size ? `?${params}` : ""}`}>
+      <Button asChild variant="outline" className="w-full aria-disabled:opacity-50">
+        <a role="link" aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : 0} onClick={event => {
+          if (disabled || !allowed) { event.preventDefault(); if (!disabled) onBlocked?.(); }
+        }} href={disabled ? undefined : !allowed ? "#account-consent" : `/api/auth/google/start${params.size ? `?${params}` : ""}`}>
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="#4285F4"

@@ -1,6 +1,5 @@
 import { useId, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Slide } from "@animate-ui/react/primitives/effects/slide";
 import { ArrowUpRight, BookOpen, LoaderCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Field, FieldLabel } from "./ui/field";
@@ -26,9 +25,9 @@ import { Badge } from "./ui/badge";
 import { statusNames } from "@/lib/api";
 export function Page({ children }: { children: ReactNode }) {
   return (
-    <Slide className="page" direction="up" offset={8}>
+    <div className="page">
       {children}
-    </Slide>
+    </div>
   );
 }
 export function Heading({

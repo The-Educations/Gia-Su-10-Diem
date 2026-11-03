@@ -1,3 +1,5 @@
+import { migrateGoogleCalendar } from "./google-calendar-schema.js";
+import { migrateCommunity } from "./community-schema.js";
 import {
   randomBytes,
   scrypt as scryptCallback,
@@ -51,6 +53,10 @@ export function migrateDatabase(db) {
       published INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, actor_id INTEGER NOT NULL REFERENCES users(id), action TEXT NOT NULL, target TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   `);
+  for (const table of ["subjects", "resources"]) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "archived"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
+  }
   // Existing accounts keep their workspace; only new signups enter setup.
   if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "onboarding_step"))
     db.exec("ALTER TABLE users ADD COLUMN onboarding_step INTEGER NOT NULL DEFAULT 3");
@@ -118,6 +124,45 @@ export function migrateDatabase(db) {
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE,
     expires INTEGER NOT NULL, sent_at INTEGER NOT NULL, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL
   )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS pending_signups (
+    email TEXT PRIMARY KEY, browser_hash TEXT NOT NULL UNIQUE, payload TEXT NOT NULL,
+    code_hash TEXT NOT NULL, expires INTEGER NOT NULL, sent_at INTEGER NOT NULL,
+    sends INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS weekly_requests (
+    id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES users(id), tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
+    inquiry_id INTEGER NOT NULL REFERENCES inquiries(id), subject_id TEXT NOT NULL REFERENCES subjects(id),
+    mode TEXT NOT NULL, blocks TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', rate INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE UNIQUE INDEX IF NOT EXISTS active_weekly_request ON weekly_requests(student_id,tutor_id) WHERE status IN ('pending','accepted')`);
+  db.exec(`CREATE TABLE IF NOT EXISTS offers (
+    id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES users(id), tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
+    inquiry_id INTEGER NOT NULL REFERENCES inquiries(id), subject_id TEXT NOT NULL REFERENCES subjects(id),
+    mode TEXT NOT NULL, blocks TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', rate INTEGER NOT NULL,
+    start_date TEXT NOT NULL, end_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE UNIQUE INDEX IF NOT EXISTS pending_offer ON offers(student_id,tutor_id) WHERE status='pending'`);
+  if (!db.prepare("PRAGMA table_info(bookings)").all().some(c => c.name === "offer_id")) db.exec("ALTER TABLE bookings ADD COLUMN offer_id INTEGER REFERENCES offers(id)");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS offer_session ON bookings(offer_id,starts_at) WHERE offer_id IS NOT NULL");
+  const messageColumns = db.prepare("PRAGMA table_info(inquiry_messages)").all();
+  if (!messageColumns.some(c => c.name === "context_kind")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request'))");
+  if (!messageColumns.some(c => c.name === "context_id")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_id INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS chat_attachments (
+    id TEXT PRIMARY KEY, thread_kind TEXT NOT NULL, thread_id INTEGER NOT NULL,
+    owner_id INTEGER NOT NULL REFERENCES users(id), message_id INTEGER,
+    kind TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE INDEX IF NOT EXISTS chat_attachment_thread ON chat_attachments(thread_kind,thread_id,message_id);
+  CREATE TABLE IF NOT EXISTS chat_attachment_chunks (
+    attachment_id TEXT NOT NULL REFERENCES chat_attachments(id) ON DELETE CASCADE,
+    part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(attachment_id,part)
+  );`);
+  migrateCommunity(db);
+  db.exec(`CREATE TABLE IF NOT EXISTS support_threads (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE TABLE IF NOT EXISTS support_messages (
+    id INTEGER PRIMARY KEY, thread_id INTEGER NOT NULL REFERENCES support_threads(id), sender_id INTEGER NOT NULL REFERENCES users(id),
+    body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE INDEX IF NOT EXISTS support_message_thread ON support_messages(thread_id,id)`);
   for (const table of ["slots", "bookings"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "duration_minutes"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60`);
@@ -128,6 +173,33 @@ export function migrateDatabase(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS weekly_availability (
     tutor_id INTEGER PRIMARY KEY REFERENCES tutors(user_id), blocks TEXT NOT NULL DEFAULT '[]', revision INTEGER NOT NULL DEFAULT 0
   )`);
+  if (!db.prepare("PRAGMA table_info(weekly_availability)").all().some(c => c.name === "interval_minutes")) {
+    db.exec("ALTER TABLE weekly_availability ADD COLUMN interval_minutes INTEGER NOT NULL DEFAULT 60");
+    for (const row of db.prepare("SELECT * FROM weekly_availability").all()) {
+      const blocks = JSON.parse(row.blocks).flatMap(b => [b, { ...b, hour: b.hour + 1 }]);
+      db.prepare("UPDATE weekly_availability SET blocks=?,revision=revision+1 WHERE tutor_id=?").run(JSON.stringify(blocks), row.tutor_id);
+    }
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS learner_availability (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id), blocks TEXT NOT NULL DEFAULT '[]', revision INTEGER NOT NULL DEFAULT 0
+  )`);
+  if (!db.prepare("PRAGMA table_info(tutor_theme_inventory)").all().length) {
+    db.exec(`CREATE TABLE tutor_theme_inventory (
+      tutor_id INTEGER NOT NULL REFERENCES tutors(user_id), theme_id TEXT NOT NULL,
+      granted_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(tutor_id,theme_id)
+    )`);
+    // Previous self-selected styles do not grant admin-controlled inventory items.
+    db.exec("UPDATE tutors SET profile_theme='paper'");
+  }
+  if (!db.prepare("PRAGMA table_info(tutors)").all().some(c => c.name === "review_revision"))
+    db.exec("ALTER TABLE tutors ADD COLUMN review_revision INTEGER NOT NULL DEFAULT 0");
+  for (const table of ["users", "tutors"]) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+    for (const column of ["province_code", "ward_code", ...(table === "users" ? ["school"] : [])])
+      if (!columns.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+  }
+  migrateGoogleCalendar(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);
@@ -140,11 +212,17 @@ export const publicUser = (u) =>
         name: u.name,
         email: u.email,
         timezone: u.timezone,
+        display_name: u.display_name,
+        community_locked: !!u.community_locked,
+        community_lock_reason: u.community_lock_reason,
         email_verified: !!u.email_verified_at,
         email_verification_required: !!u.email_verification_required && !u.email_verified_at,
         role: u.role,
         learner_type: u.learner_type,
         goal: u.goal,
+        school: u.school,
+        province_code: u.province_code,
+        ward_code: u.ward_code,
         demo: !!u.demo,
         onboarding_step: u.onboarding_step,
       }

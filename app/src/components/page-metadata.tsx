@@ -1,5 +1,5 @@
 import { useLoad } from "@/lib/api";
-import type { Post } from "@/lib/types";
+import type { Post, CommunityPostData } from "@/lib/types";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import pages from "../../../shared/seo-pages.json";
@@ -8,9 +8,19 @@ export function PageMetadata() {
   const { pathname } = useLocation();
   const match = pathname.match(/^\/news\/(\d+)$/);
   const post = useLoad<Post>(match ? `/posts/${match[1]}` : null);
+  const communityMatch = pathname.match(/^\/community\/(\d+)$/);
+  const community = useLoad<CommunityPostData>(communityMatch ? `/community/posts/${communityMatch[1]}` : null);
   useEffect(() => {
     const path = `/app${pathname}`;
-    const page = post.data ? { title: `${post.data.title} | Gia Sư 10 Điểm`, description: post.data.summary } : pages[path as keyof typeof pages];
+    const approved = community.data?.public ? community.data : null;
+    const page = approved ? { title: `${approved.title} | Cộng đồng Gia Sư 10 Điểm`, description: approved.body.replace(/\s+/g, " ").trim().slice(0, 160) } : post.data ? { title: `${post.data.title} | Gia Sư 10 Điểm`, description: post.data.summary } : pages[path as keyof typeof pages];
+    document.head.querySelectorAll('script[type="application/ld+json"]').forEach(element => element.remove());
+    if (approved) {
+      const schema = document.createElement("script");
+      schema.type = "application/ld+json";
+      schema.textContent = JSON.stringify({ "@context":"https://schema.org", "@type":"DiscussionForumPosting", headline:approved.title, text:approved.body, author:{"@type":"Person",name:approved.author.name_part}, url:`https://giasudiem10.online${path}`, datePublished:approved.published_at?.replace(" ","T")+"Z", dateModified:approved.updated_at.replace(" ","T")+"Z" });
+      document.head.append(schema);
+    }
     document.title = page?.title || "Tài khoản | Gia Sư 10 Điểm";
     const meta = (name: string, content: string, property = false) => {
       const attr = property ? "property" : "name";
@@ -41,6 +51,6 @@ export function PageMetadata() {
       meta("og:image", "https://giasudiem10.online/assets/social-preview.png", true);
       meta("twitter:card", "summary_large_image");
     }
-  }, [pathname, post.data]);
+  }, [pathname, post.data, community.data]);
   return null;
 }

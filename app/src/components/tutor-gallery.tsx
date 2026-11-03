@@ -1,3 +1,4 @@
+import { ImageCropDialog } from "./image-crop-dialog";
 import { GallerySocial } from "./gallery-social";
 import { useEffect, useState, useRef } from "react";
 import {
@@ -41,7 +42,7 @@ export function TutorGallery({
   return (
     <section className="tutor-gallery" aria-label={`Thư viện ảnh của ${name}`}>
       <div className="section-heading">
-        <h2>Góc dạy & học</h2>
+        <h2>Góc flexing</h2>
         <span className="muted">{images.length} ảnh</span>
       </div>
       <div className="gallery-grid">
@@ -217,6 +218,7 @@ export function TutorGalleryEditor({
   onPending: () => void;
 }) {
   const { refresh } = useApp();
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
   const [items, setItems] = useState(images),
     [files, setFiles] = useState<File[]>([]),
     [previews, setPreviews] = useState<string[]>([]),
@@ -275,9 +277,10 @@ export function TutorGalleryEditor({
   }
   return (
     <section className="gallery-editor" aria-label="Quản lý thư viện ảnh">
+      {cropQueue[0] && <ImageCropDialog key={`${cropQueue[0].name}-${cropQueue.length}`} file={cropQueue[0]} onCancel={() => setCropQueue([])} onApply={file => { setFiles(f => [...f, file]); setCropQueue(q => q.slice(1)); }} />}
       <div className="section-heading">
         <h2>
-          <Images /> Góc dạy & học
+          <Images /> Góc flexing
         </h2>
         <span>{items.length} / 12 ảnh</span>
       </div>
@@ -290,7 +293,7 @@ export function TutorGalleryEditor({
               type="file"
               multiple
               accept="image/jpeg,image/png,image/webp"
-              disabled={busy || items.length >= 12}
+              disabled={busy || !!cropQueue.length || items.length >= 12}
               aria-describedby="gallery-help"
               onChange={(e) => {
                 const selected = Array.from(e.target.files || []);
@@ -312,7 +315,7 @@ export function TutorGalleryEditor({
                   );
                   return;
                 }
-                setFiles(selected);
+                setFiles([]); setCropQueue(selected); e.target.value = "";
               }}
             />
             <FieldDescription id="gallery-help">

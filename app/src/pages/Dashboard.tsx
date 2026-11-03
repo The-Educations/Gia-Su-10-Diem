@@ -1,3 +1,6 @@
+import { lessonMessageHref } from "@/lib/message-context";
+import type { StudyOffer } from "@/lib/offers";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link, Navigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -32,6 +35,7 @@ import { Progress } from "@/components/ui/progress";
 export default function Dashboard() {
   const { user } = useApp(),
     bookings = useLoad<Booking[]>("/bookings"),
+    offers = useLoad<StudyOffer[]>(user?.role === "admin" ? null : "/offers"),
     profile = useLoad<Tutor>(user?.role === "tutor" ? "/tutor/profile" : null),
     favorites = useLoad<number[]>(
       user?.role === "student" ? "/favorites" : null,
@@ -45,6 +49,8 @@ export default function Dashboard() {
   if (bookings.loading) return <Loading />;
   if (bookings.error)
     return <ErrorState error={bookings.error} retry={bookings.reload} />;
+  if (offers.error)
+    return <ErrorState error={offers.error} retry={offers.reload} />;
   const isTutor = user.role === "tutor",
     rows = bookings.data || [],
     upcoming = rows
@@ -55,6 +61,7 @@ export default function Dashboard() {
       )
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
     next = upcoming.find((b) => b.status === "accepted") || upcoming[0],
+    pendingOffers = (offers.data || []).filter(o=>o.status === "pending"),
     pending = upcoming.filter((b) => b.status === "pending"),
     saved = (tutors.data || []).filter((t) =>
       favorites.data?.includes(t.user_id),
@@ -85,6 +92,7 @@ export default function Dashboard() {
           </Button>
         }
       />
+      {!isTutor && (!user.school || !user.ward_code) && <Alert><AlertDescription><Link to="/settings">Hoàn thiện hồ sơ: trường học & nơi sinh sống</Link></AlertDescription></Alert>}
       <WorkspaceStats
         items={[
           {
@@ -94,10 +102,10 @@ export default function Dashboard() {
             to: "/bookings",
           },
           {
-            label: "Chờ xác nhận",
-            value: pending.length,
+            label: "Chờ phản hồi",
+            value: pending.length + pendingOffers.length,
             icon: Clock,
-            to: "/bookings?status=pending",
+            to: pendingOffers.length ? "/offers" : "/bookings?status=pending",
           },
           {
             label: "Đã hoàn thành",
@@ -145,12 +153,12 @@ export default function Dashboard() {
                 </div>
                 <div className="next-lesson-actions">
                   <Button asChild variant="secondary">
-                    <Link to={`/messages?lesson=${next.id}`}>
+                    <Link to={lessonMessageHref(next)}>
                       <MessageCircle data-icon="inline-start" />
                       Trao đổi buổi học
                     </Link>
                   </Button>
-                  <Link to={`/bookings?status=${next.status}`}>
+                  <Link to={next.offer_id ? `/bookings?offer=${next.offer_id}` : `/bookings?status=${next.status}`}>
                     Xem lịch
                     <ArrowUpRight size={16} />
                   </Link>
@@ -174,16 +182,17 @@ export default function Dashboard() {
             )}
           </section>
           <WorkspacePanel
-            title={isTutor ? "Yêu cầu cần phản hồi" : user.learner_type === "parent" ? "Mục tiêu học tập của con" : "Mục tiêu của bạn"}
+            title={isTutor ? "Đề nghị cần phản hồi" : user.learner_type === "parent" ? "Mục tiêu học tập của con" : "Mục tiêu của bạn"}
             action={
-              <TextLink to={isTutor ? "/bookings?status=pending" : "/settings"}>
+              <TextLink to={isTutor ? (pendingOffers.length ? "/offers" : "/bookings?status=pending") : "/settings"}>
                 {isTutor ? "Xem tất cả" : "Chỉnh sửa"}
               </TextLink>
             }
           >
             {isTutor ? (
-              pending.length ? (
+              pending.length || pendingOffers.length ? (
                 <div className="request-preview">
+                  {pendingOffers.slice(0,3).map(o=><Link to={`/offers?id=${o.id}`} key={`offer-${o.id}`}><Person name={o.student_name} id={o.student_id} /><div><strong>{o.student_name}</strong><span>{o.subject_name} · {o.blocks.length} giờ / tuần</span></div><ArrowUpRight size={18} /></Link>)}
                   {pending.slice(0, 3).map((b) => (
                     <Link to="/bookings?status=pending" key={b.id}>
                       <Person name={b.student_name} id={b.student_id} />
@@ -299,7 +308,7 @@ export default function Dashboard() {
                       <Person name={t.name} src={t.photo_url || undefined} />
                       <div>
                         <strong>{t.name}</strong>
-                        <span>{money(t.rate)} / giờ</span>
+                        <span>{money(t.rate)} / buổi</span>
                       </div>
                       <ArrowUpRight size={16} />
                     </Link>

@@ -1,9 +1,11 @@
+import { CommunityUnread } from "./components/community/Notifications";
 import { timezoneLabel } from "./components/tutor-timezone";
 import { accountRole } from "@/lib/types";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  BrowserRouter,
+  createBrowserRouter,
+  RouterProvider,
   Routes,
   Route,
   NavLink,
@@ -19,6 +21,7 @@ import {
   Users,
   CalendarDays,
   MessageCircle,
+  MessagesSquare,
   Heart,
   House,
   Settings,
@@ -44,8 +47,14 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
 import { PageMetadata } from "./components/page-metadata";
+const Offers = lazy(() => import("./pages/Offers"));
+const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
+const Community = lazy(() => import("./pages/Community"));
+const CommunityPost = lazy(() => import("./pages/CommunityPost"));
+const CommunityWrite = lazy(() => import("./pages/CommunityWrite"));
+const CommunityMine = lazy(() => import("./pages/CommunityMine"));
 const News = lazy(() => import("./pages/News"));
 const Library = lazy(() => import("./pages/Library"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -55,6 +64,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Bookings = lazy(() => import("./pages/Bookings"));
 const Messages = lazy(() => import("./pages/Messages"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
+const TutorCalendar = lazy(() => import("./pages/TutorCalendar"));
 const TutorStudio = lazy(() => import("./pages/TutorStudio"));
 const Admin = lazy(() => import("./pages/Admin"));
 
@@ -91,6 +101,9 @@ function Shell() {
       try { return localStorage.getItem("giasu.sidebar.collapsed") === "true"; }
       catch { return false; }
     });
+  const navigationOpenedAt = React.useRef(loc.pathname);
+  // The exiting sheet retains its previous props until its animation finishes.
+  const currentPath = React.useRef(loc.pathname);
   useEffect(() => {
     try { localStorage.setItem("giasu.sidebar.collapsed", String(collapsed)); }
     catch { /* Navigation still works when storage is unavailable. */ }
@@ -102,6 +115,7 @@ function Shell() {
     return () => desktop.removeEventListener("change", closeMobileNavigation);
   }, []);
   useEffect(() => {
+    currentPath.current = loc.pathname;
     setOpen(false);
     window.scrollTo(0, 0);
     document.getElementById("main")?.focus();
@@ -115,30 +129,32 @@ function Shell() {
             icon: user.role === "admin" ? ShieldCheck : House,
           },
           {
-            to: "/bookings",
+            to: user.role === "admin" ? "/calendar" : "/bookings",
             label:
               user.role === "admin"
-                ? "Quản lý buổi học"
+                ? "Lịch dạy"
                 : user.role === "tutor"
-                  ? "Lịch dạy & yêu cầu"
+                  ? "Lịch dạy của tôi"
                   : user.learner_type === "parent" ? "Lịch học của con" : "Lịch học của tôi",
             icon: CalendarDays,
           },
           {
             to: "/messages",
-            label: user.role === "admin" ? "Hội thoại buổi học" : "Tin nhắn",
+            label: "Tin nhắn",
             icon: MessageCircle,
           },
         ]
       : []),
+    ...(["student", "tutor"].includes(user?.role || "") ? [{to:"/offers",label:"Đề nghị học",icon:BookOpen}] : []),
     ...(user?.role === "tutor"
-      ? [{ to: "/studio", label: "Hồ sơ & giờ trống", icon: Settings }]
+      ? [{ to: "/calendar", label: "Giờ trống hằng tuần", icon: CalendarDays }, { to: "/studio", label: "Hồ sơ gia sư", icon: Settings }]
       : []),
     ...(user?.role === "student"
-      ? [{ to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
+      ? [{ to: "/availability", label: "Lịch rảnh", icon: CalendarDays }, { to: "/favorites", label: "Gia sư đã lưu", icon: Heart }]
       : []),
     { to: "/tutors", label: "Tìm gia sư", icon: Users },
     { to: "/library", label: "Tìm môn học", icon: BookOpen },
+    { to: "/community", label: "Cộng đồng", icon: MessagesSquare },
     { to: "/news", label: "Tin tức", icon: Newspaper },
   ];
   const navigation = (
@@ -162,6 +178,7 @@ function Shell() {
           <span className="nav-label">Thu gọn</span>
         </Button>
       </div>
+      <div className="navigation-body">
       <nav aria-label="Điều hướng chính">
         {nav.map(({ to, label, icon: Icon }) => (
           <React.Fragment key={to}>
@@ -169,6 +186,7 @@ function Shell() {
           <NavLink to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
             <Icon size={19} aria-hidden="true" />
             <span className="nav-label">{label}</span>
+            {to === "/community" && <CommunityUnread />}
           </NavLink>
           </React.Fragment>
         ))}
@@ -217,10 +235,11 @@ function Shell() {
           </Button>
         )}
       </div>
+      </div>
     </>
   );
   return (
-    <div className="app-shell" data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
+    <div className="app-shell" data-auth-page={loc.pathname === "/auth" || undefined} data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
       <PageMetadata />
       <a href="#main" className="skip-link">
         Đến nội dung
@@ -230,13 +249,21 @@ function Shell() {
         <header className="topbar">
           <div className="topbar-leading">
           <div className="mobile-brand">
-            <Sheet open={open} onOpenChange={setOpen}>
+            <Sheet open={open} onOpenChange={(next) => {
+              if (next) navigationOpenedAt.current = loc.pathname;
+              setOpen(next);
+            }}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Mở điều hướng">
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="navigation-sheet">
+              <SheetContent side="left" className="navigation-sheet" onCloseAutoFocus={(event) => {
+                if (navigationOpenedAt.current !== currentPath.current || window.matchMedia("(min-width: 951px)").matches) {
+                  event.preventDefault();
+                  document.getElementById("main")?.focus({ preventScroll: true });
+                }
+              }}>
                 <SheetTitle className="sr-only">Điều hướng</SheetTitle>
                 <SheetDescription className="sr-only">
                   Gia Sư 10 Điểm
@@ -247,7 +274,7 @@ function Shell() {
             <Link to="/tutors">10 Điểm</Link>
           </div>
           <span className="topbar-location">
-            {nav.find((n) => n.to === loc.pathname)?.label || "Gia Sư 10 Điểm"}
+            {(loc.pathname.startsWith("/community") ? "Cộng đồng" : nav.find((n) => n.to === loc.pathname)?.label) || "Gia Sư 10 Điểm"}
           </span>
           </div>
           <div className="topbar-right">
@@ -264,7 +291,11 @@ function Shell() {
                 <Route path="/" element={<Navigate to="/tutors" replace />} />
                 <Route path="/tutors" element={<Tutors />} />
                 <Route path="/tutors/:id" element={<TutorDetail />} />
-                <Route path="/news" element={<News />} />
+                <Route path="/community" element={<Community />} />
+              <Route path="/community/write" element={<Require><CommunityWrite /></Require>} />
+              <Route path="/community/mine" element={<Require><CommunityMine /></Require>} />
+              <Route path="/community/:id" element={<CommunityPost />} />
+              <Route path="/news" element={<News />} />
                 <Route path="/news/:id" element={<News />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/auth" element={<Auth />} />
@@ -302,6 +333,9 @@ function Shell() {
                     </Require>
                   }
                 />
+                <Route path="/offers" element={<Require><Offers /></Require>} />
+                <Route path="/calendar" element={<Require><TutorCalendar /></Require>} />
+                <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route
                   path="/settings"
                   element={
@@ -347,15 +381,14 @@ function Shell() {
     </div>
   );
 }
+const router = createBrowserRouter([{ path: "*", element:
+  <AnimateUIProvider>
+    <AppProvider>
+      <Shell />
+      <Toaster richColors position="top-right" />
+    </AppProvider>
+  </AnimateUIProvider>,
+}], { basename: "/app" });
 createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter basename="/app">
-      <AnimateUIProvider>
-        <AppProvider>
-          <Shell />
-          <Toaster richColors position="top-right" />
-        </AppProvider>
-      </AnimateUIProvider>
-    </BrowserRouter>
-  </React.StrictMode>,
+  <React.StrictMode><RouterProvider router={router} /></React.StrictMode>,
 );

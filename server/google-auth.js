@@ -52,7 +52,7 @@ export async function verifyGoogleToken(idToken, clientId, keys = jwks) {
 export function registerGoogleAuth(
   app,
   db,
-  { origin, production, session, google = {} },
+  { origin, production, session, google = {}, signup },
 ) {
   const {
     clientId,
@@ -223,25 +223,18 @@ export function registerGoogleAuth(
           isGoogleAdmin(email, adminEmail)
             ? "admin"
             : "student";
-        const id = Number(
-          run(
-            db,
-            "INSERT INTO users(name,email,password,role,onboarding_step) VALUES (?,?,'',?,?)",
-            name || email.split("@")[0],
-            email,
-            role,
-            role === "admin" ? 3 : 0,
-          ).lastInsertRowid,
-        );
-        run(
-          db,
-          "INSERT INTO oauth_identities VALUES ('google',?,?)",
-          claims.sub,
-          id,
-        );
-        return { user: one(db, "SELECT * FROM users WHERE id=?", id) };
+        return { pending: { name: name || email.split("@")[0], email, role, googleSubject: claims.sub, next: state.next } };
       });
       if (result.error) return fail(result.error);
+      if (result.pending) {
+        if (!signup.configured) return fail("mail_unavailable");
+        try { await signup.start(res, result.pending); }
+        catch (error) {
+          if (error.status === 429) return fail("rate_limited");
+          return res.redirect("/app/verify-email?delivery=failed");
+        }
+        return res.redirect("/app/verify-email");
+      }
       if (!result.user || result.user.status !== "active")
         return fail("suspended");
       // Promotion requires a verified, explicitly linked Google identity. Revoke

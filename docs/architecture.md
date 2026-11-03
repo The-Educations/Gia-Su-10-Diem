@@ -56,7 +56,7 @@ Các đường dẫn sau đều có tiền tố `/app`.
 | `/auth` | `Auth.tsx` | Đăng nhập / đăng ký |
 | `/workspace` | `Dashboard.tsx` | Đã đăng nhập |
 | `/bookings` | `Bookings.tsx` | Lịch theo vai trò / quyền sở hữu |
-| `/messages` | `Messages.tsx` | Hội thoại của các buổi học được phép xem |
+| `/messages` | `Messages.tsx` | Hỗ trợ admin được ghim, liên hệ gia sư và hội thoại buổi học |
 | `/favorites` | `Tutors.tsx` | Student |
 | `/settings` | `Settings.tsx` | Đã đăng nhập |
 | `/studio` | `TutorStudio.tsx` | Tutor |
@@ -80,6 +80,7 @@ Tên `Library`, `ResourceEditor` và API `resources` được giữ từ scaffol
 | `reviews` | Một review / booking; số sao và nội dung |
 | `resources` | Mục kỳ thi, một subject liên quan, cấp học, năm, nguồn, HTTPS URL, công bố / nháp |
 | `tutor_uploads` | Một ảnh và một CV mỗi tutor; UUID, BLOB, MIME, filename, size; replace loại bỏ bản cũ |
+| `support_threads`, `support_messages` | Hội thoại riêng giữa chủ tài khoản và đội ngũ admin |
 | `inquiries`, `inquiry_messages` | Một thread/student/tutor và tin nhắn trước booking |
 | `demo_seeds` | Dấu mốc seed, tránh ghi đè hoặc nhân đôi dữ liệu minh họa |
 | `audit` | Actor, action, target và thời điểm |
@@ -99,6 +100,8 @@ Tất cả dưới `/api`. Chi tiết payload hiện nằm trong `server/validat
 | Tutor | `GET/PUT tutor/profile`, `POST tutor/slots`, `DELETE tutor/slots/:id` |
 | Booking | `GET/POST bookings`, `PATCH bookings/:id`, `PATCH bookings/:id/lesson` |
 | Upload | `PUT/DELETE tutor/uploads/:kind`, `GET uploads/:uuid`; kind = photo hoặc cv |
+| Support | `GET support`, `GET/POST support/:id/messages` |
+| Delete account | `DELETE admin/users/:id` (admin, xác nhận email, ẩn danh lịch sử) |
 | Inquiry | `GET/POST inquiries`, `GET/POST inquiries/:id/messages` |
 | Messages / review | `GET/POST bookings/:id/messages`, `POST bookings/:id/review` |
 | Admin | `GET admin`, `PATCH admin/tutors/:id`, `PATCH admin/users/:id`, `PUT admin/subjects/:id`, `POST admin/resources`, `PUT admin/resources/:id` |
@@ -154,6 +157,12 @@ Google OAuth và adapter Cloudflare: `server/google-auth.js`, `server/local-db.j
 
 ### Account entry and news (2026-11-02)
 
-New UI registrations omit role; new Google identities start at onboarding step 0. Step 0 explicitly chooses student, parent or tutor. Parent maps to student permissions plus `learner_type=parent`; existing users default to `student` learner type without changing their role or onboarding progress. Legacy email API role input remains supported.
+New UI registrations omit role; new Google identities start at onboarding step 0. Step 0 explicitly chooses student, parent or tutor. Parent maps to student permissions plus `learner_type=parent`; existing users default to `student` learner type without changing their role or onboarding progress. New accounts remain in `pending_signups` until email code verification; the registration role input never assigns a role. Both Google and password signups use this gate. Quick setup needs only role, name, timezone and an optional goal.
 
 `server/posts.js` provides published-only `GET /api/posts` and `GET /api/posts/:id`, plus admin-only list/create/update at `/api/admin/posts`. Saving an unchecked publication box returns a post to draft. Bodies render as React text, never HTML. Published articles receive canonical metadata on both Node and Worker HTML responses and enter the sitemap; unpublished/missing articles return 404 with noindex. Lists currently return all rows, matching the existing small-marketplace API.
+
+### Cộng đồng (2026-11-02)
+
+`server/community-schema.js` được gọi từ migration chung, bổ sung `users.display_name`, khóa quyền cộng đồng và sáu bảng `community_*`; độc lập với Tin tức. `community.js` quản lý public/member routes; `community-admin.js` quản lý kiểm duyệt/audit; `community-policy.js` giữ kiểm tra liên hệ, nhãn tác giả và giới hạn. API công khai chỉ phát danh tính công khai, không trả ID/email/họ tên thật của học sinh, phụ huynh hoặc gia sư chưa duyệt. Bản sửa chờ duyệt nằm riêng trên bài, không thay bản công khai.
+
+Routes SPA `/community`, `/community/:id`, `/community/mine`; admin có tab Cộng đồng. Chỉ số thông báo được tải theo điều hướng/visibilitychange, không polling. Node/Worker cùng trả metadata, JSON-LD, sitemap theo trạng thái công khai. Xem [bàn giao và mặc định đề xuất](community-implementation.md).
