@@ -9,6 +9,7 @@ import {
 async function login(page: Page, slug: string, next = "/community") {
   await page.goto(`/app/auth?next=${encodeURIComponent(next)}`);
   await page.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await page
     .getByLabel("Email", { exact: true })
     .fill(`${slug}@demo.giasu.test`);

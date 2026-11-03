@@ -2710,7 +2710,10 @@ main {
 .account-email-tabs [role="tab"] { flex: 1; }
 .auth-layout .account-entry [type="submit"] { width: 100%; min-height: 48px; }
 .auth-layout .account-entry [data-slot="input"] { min-height: 48px; }
-.auth-layout .account-entry .auth-policy { margin-top: 28px; font-size: 12px; line-height: 1.8; }
+.auth-layout .account-entry .auth-policy { margin: 0 0 20px; font-size: 12px; line-height: 1.8; }
+.auth-consent { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.auth-consent input { width: 18px; height: 18px; flex-shrink: 0; }
+.auth-consent label { padding-block: 11px; cursor: pointer; }
 .auth-footer { font-size: 11px; color: var(--muted-foreground); }
 @media (max-width: 950px) {
   .auth-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
