@@ -28,7 +28,7 @@ export function registerWeeklyRequests(app, db, auth) {
       const { id: inquiry } = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", req.user.id, d.tutor_id);
       const id = Number(run(db, "INSERT INTO weekly_requests(student_id,tutor_id,inquiry_id,subject_id,mode,blocks,note,rate) VALUES (?,?,?,?,?,?,?,?)", req.user.id, d.tutor_id, inquiry, d.subject_id, d.mode, JSON.stringify(blocks), d.note, tutor.rate).lastInsertRowid);
       const hours = blocks.map(b => `${labels[b.weekday]} ${String(b.hour).padStart(2, "0")}:00–${String(b.hour + 1).padStart(2, "0")}:00`).join(", ");
-      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body) VALUES (?,?,?)", inquiry, req.user.id, `Yêu cầu học hằng tuần #${id}: ${hours} (giờ Việt Nam).${d.note ? `\n${d.note}` : ""}`);
+      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id) VALUES (?,?,?,'weekly-request',?)", inquiry, req.user.id, `Yêu cầu học hằng tuần #${id}: ${hours} (giờ Việt Nam).${d.note ? `\n${d.note}` : ""}`, id);
       return { id, inquiry_id: inquiry };
     });
     res.status(201).json(result);
@@ -52,7 +52,7 @@ export function registerWeeklyRequests(app, db, auth) {
       }
       run(db, "UPDATE weekly_requests SET status=? WHERE id=?", status, id);
       const label = { accepted: "Đã xác nhận", declined: "Đã từ chối", cancelled: "Đã hủy" }[status];
-      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body) VALUES (?,?,?)", r.inquiry_id, req.user.id, `${label} yêu cầu học hằng tuần #${id}.`);
+      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id) VALUES (?,?,?,'weekly-request',?)", r.inquiry_id, req.user.id, `${label} yêu cầu học hằng tuần #${id}.`, id);
     });
     res.json({ ok: true });
   });

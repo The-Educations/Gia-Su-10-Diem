@@ -138,6 +138,9 @@ export function migrateDatabase(db) {
   ); CREATE UNIQUE INDEX IF NOT EXISTS pending_offer ON offers(student_id,tutor_id) WHERE status='pending'`);
   if (!db.prepare("PRAGMA table_info(bookings)").all().some(c => c.name === "offer_id")) db.exec("ALTER TABLE bookings ADD COLUMN offer_id INTEGER REFERENCES offers(id)");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS offer_session ON bookings(offer_id,starts_at) WHERE offer_id IS NOT NULL");
+  const messageColumns = db.prepare("PRAGMA table_info(inquiry_messages)").all();
+  if (!messageColumns.some(c => c.name === "context_kind")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request'))");
+  if (!messageColumns.some(c => c.name === "context_id")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_id INTEGER");
   migrateCommunity(db);
   db.exec(`CREATE TABLE IF NOT EXISTS support_threads (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

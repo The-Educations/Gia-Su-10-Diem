@@ -1,3 +1,4 @@
+import { lessonMessageHref } from "@/lib/message-context";
 import { LessonCalendar } from "@/components/lesson-calendar";
 import { type StudyOffer } from "@/lib/offers";
 import { LessonExport } from "@/components/lesson-export";
@@ -63,7 +64,6 @@ export default function Bookings() {
   const courses = [...new Map(contextLessons.filter(b => b.offer_id).map(b => [b.offer_id!, b])).values()];
   const nextLesson = rows.find(b => b.status === "accepted" && Date.parse(b.starts_at) + b.duration_minutes * 60000 > Date.now());
   const pendingOffers = (offers.data || []).filter(o => o.status === "pending");
-  const threadLink = (b: Booking) => b.inquiry_id ? `/messages?inquiry=${b.inquiry_id}` : `/messages?lesson=${b.id}`;
   async function mutate(path: string, method: string, data: unknown) {
     setBusy(true);
     setError("");
@@ -85,7 +85,7 @@ export default function Bookings() {
     const future = Date.parse(b.starts_at) > Date.now();
     const changeStatus = (status: string) => { setError(""); setView(null); setAction({ booking: b, status }); };
     return <>
-      {(user?.role !== "admin" || !b.inquiry_id) && <Button asChild variant="outline"><Link to={threadLink(b)}><MessageCircle data-icon="inline-start" />{details ? "Nhắn tin" : "Trao đổi"}</Link></Button>}
+      {(user?.role !== "admin" || !b.inquiry_id) && <Button asChild variant="outline"><Link to={lessonMessageHref(b)}><MessageCircle data-icon="inline-start" />{details ? "Nhắn tin" : "Trao đổi"}</Link></Button>}
       {user?.role === "tutor" && b.status === "pending" && future && <>
         <Button onClick={() => changeStatus("accepted")}>Nhận buổi học</Button>
         <Button variant="ghost" onClick={() => changeStatus("declined")}>Từ chối</Button>
@@ -123,7 +123,7 @@ export default function Bookings() {
         <div className="actions">
           {nextLesson.meeting_url && <Button asChild><a href={nextLesson.meeting_url} target="_blank" rel="noreferrer">Vào phòng học<ExternalLink data-icon="inline-end" /></a></Button>}
           <Button variant="outline" onClick={() => setView(nextLesson)}>Chi tiết buổi học</Button>
-          {user?.role !== "admin" && <Button asChild variant="outline"><Link to={threadLink(nextLesson)}><MessageCircle data-icon="inline-start" />{user?.role === "tutor" ? "Nhắn tin" : "Nhắn gia sư"}</Link></Button>}
+          {user?.role !== "admin" && <Button asChild variant="outline"><Link to={lessonMessageHref(nextLesson)}><MessageCircle data-icon="inline-start" />{user?.role === "tutor" ? "Nhắn tin" : "Nhắn gia sư"}</Link></Button>}
         </div>
       </section>}
       <Tabs value={layout} onValueChange={value => setParam("view", value)} className="schedule-views">

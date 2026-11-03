@@ -49,9 +49,9 @@ for (const [slug, heading, other] of [
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     await expect(page.locator(".dated-lesson")).toHaveCount(5);
     await expect(page.locator(".schedule-next")).toContainText(other);
-    await expect(page.locator(".schedule-next a[href*='messages']")).toHaveAttribute("href", "/app/messages?inquiry=81");
+    await expect(page.locator(".schedule-next a[href*='messages']")).toHaveAttribute("href", "/app/messages?inquiry=81&context=lesson&contextId=901");
     await page.locator(".dated-lesson").first().click();
-    await expect(page.getByRole("dialog").getByRole("link", { name: "Nhắn tin", exact: true })).toHaveAttribute("href", "/app/messages?inquiry=81");
+    await expect(page.getByRole("dialog").getByRole("link", { name: "Nhắn tin", exact: true })).toHaveAttribute("href", "/app/messages?inquiry=81&context=lesson&contextId=901");
     await expect(page.getByRole("button", { name: "Viết ghi chú", exact: true })).toHaveCount(slug === "chau" ? 1 : 0);
     await page.keyboard.press("Escape");
     await page.getByRole("combobox", { name: "Khóa học", exact: true }).click();
