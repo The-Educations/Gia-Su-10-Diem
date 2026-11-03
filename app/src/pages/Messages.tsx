@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Send, Pin, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Send, Pin, ShieldCheck, X } from "lucide-react";
 import { api, useApp, useLoad, dateTime } from "@/lib/api";
-import type { Booking, Inquiry, Message as MessageData } from "@/lib/types";
+import type { Booking, Inquiry, Message as MessageData, MessageContext } from "@/lib/types";
+import { MessageContextCard } from "@/components/message-context-card";
 import {
   Page,
   Heading,
@@ -44,8 +45,23 @@ type Thread = {
   endpoint: string;
   scheduleHref?: string;
   inactive?: boolean;
+  context?: MessageContext;
 };
 function Conversation({ thread }: { thread: Thread }) {
+  const [params, setParams] = useSearchParams();
+  const hasContext = thread.kind === "inquiry" && (params.has("context") || params.has("contextId"));
+  const contextResult = useLoad<MessageContext>(hasContext ? `/inquiries/${thread.id}/context/${encodeURIComponent(params.get("context") || "unknown")}/${encodeURIComponent(params.get("contextId") || "0")}` : null);
+  const context = hasContext ? contextResult.data : thread.context;
+  const contextReady = !hasContext || (!!context && !contextResult.error && !contextResult.loading);
+  function chooseContext(next: MessageContext | null) {
+    setParams(previous => {
+      const nextParams = new URLSearchParams(previous);
+      nextParams.delete("context"); nextParams.delete("contextId");
+      if (next) { nextParams.set("context", next.kind); nextParams.set("contextId", String(next.id)); }
+      return nextParams;
+    });
+    document.getElementById("message")?.focus();
+  }
   const { user } = useApp(),
     [messages, setMessages] = useState<MessageData[]>([]),
     [loading, setLoading] = useState(true),
@@ -82,10 +98,10 @@ function Conversation({ thread }: { thread: Thread }) {
   }, [thread.endpoint, retry]);
   async function send(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() || !contextReady) return;
     setBusy(true);
     try {
-      await api(thread.endpoint, "POST", { body });
+      await api(thread.endpoint, "POST", { body, ...(thread.kind === "inquiry" && context ? { context: { kind: context.kind, id: context.id } } : {}) });
       setBody("");
       setMessages(await api(thread.endpoint));
       setError("");
@@ -138,6 +154,8 @@ function Conversation({ thread }: { thread: Thread }) {
                       >
                         <MessageContent>
                           <MessageHeader>{m.name}</MessageHeader>
+                          {m.context && <MessageContextCard context={m.context} onReply={thread.kind === "inquiry" ? () => chooseContext(m.context!) : undefined} />}
+                          {m.context_kind && !m.context && <span className="muted">Nội dung liên quan không còn khả dụng.</span>}
                           <Bubble
                             variant={
                               m.sender_id === user?.id ? "default" : "secondary"
@@ -165,6 +183,11 @@ function Conversation({ thread }: { thread: Thread }) {
         )}
       </div>
       {!thread.inactive && (user?.role !== "admin" || thread.kind === "support") && (
+        <>
+        {(hasContext || context) && <aside className="message-context-draft" aria-label="Ngữ cảnh tin nhắn">
+          {contextResult.loading ? <Loading /> : contextResult.error ? <ErrorState error={contextResult.error} retry={contextResult.reload} /> : context && <MessageContextCard context={context} />}
+          {hasContext && <Button variant="ghost" size="icon" aria-label="Bỏ ngữ cảnh tin nhắn" onClick={() => chooseContext(null)}><X aria-hidden="true" /></Button>}
+        </aside>}
         <form className="message-composer" onSubmit={send}>
           <Field>
             <FieldLabel htmlFor="message" className="sr-only">
@@ -177,13 +200,15 @@ function Conversation({ thread }: { thread: Thread }) {
               onChange={(e) => setBody(e.target.value)}
               maxLength={3000}
               required
+              disabled={busy}
             />
           </Field>
-          <Submit busy={busy}>
+          <Submit busy={busy} disabled={!contextReady}>
             <Send data-icon="inline-start" />
             Gửi
           </Submit>
         </form>
+        </>
       )}
     </>
   );
@@ -233,6 +258,7 @@ export default function Messages() {
       personId: user?.role === "tutor" ? b.student_id : b.tutor_id,
       endpoint: `/bookings/${b.id}/messages`,
       scheduleHref: `/bookings?lesson=${b.id}`,
+      context: { kind: "lesson" as const, id: b.id, subject_name: b.subject_name, status: b.status, starts_at: b.starts_at, duration_minutes: b.duration_minutes },
     })),
   ];
   const selected = threads.find((t) => params.get(t.kind) === String(t.id)) || (!params.size && user?.role !== "admin" ? threads.find(t => t.kind === "support") : undefined),

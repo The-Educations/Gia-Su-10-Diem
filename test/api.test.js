@@ -1515,3 +1515,71 @@ test("student school and ward are private, validated and persist across sessions
   assert.equal((await student.request("/account", "PATCH", { name: user.name, goal: "Toán" })).status, 200);
   assert.equal((await student.request("/auth/me")).data.user.school, fields.school);
 });
+
+test("message context persists for both participants and rejects content from another conversation", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), other = client(), outsider = client();
+  await student.login("student"); const teacher = await tutor.login("chau"); await outsider.login("linh");
+  await other.request("/auth/register", "POST", { name: "Other learner", email: "context-other@example.com", password: "TestStudy2026!", role: "student" });
+  const blocks = [{ weekday: 0, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const input = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, ...offerPeriod() };
+  const offer = (await student.request("/offers", "POST", input)).data;
+  const otherOffer = (await other.request("/offers", "POST", input)).data;
+  const path = `/inquiries/${offer.inquiry_id}`;
+  const context = { kind: "offer", id: offer.id };
+  assert.equal((await student.request(`${path}/context/offer/${offer.id}`)).data.subject_name, "Toán");
+  assert.equal((await outsider.request(`${path}/context/offer/${offer.id}`)).status, 404);
+  assert.equal((await other.request(`${path}/messages`)).status, 404);
+  assert.equal((await student.request(`${path}/messages`, "POST", { body: "Em muốn trao đổi lịch này", context })).status, 201);
+  const received = (await tutor.request(`${path}/messages`)).data.at(-1);
+  assert.equal(received.context.id, offer.id);
+  assert.equal(received.context.kind, "offer");
+  assert.equal(received.context.start_date, input.start_date);
+  for (const sender of [student, tutor]) {
+    assert.equal((await sender.request(`${path}/messages`, "POST", { body: "Wrong conversation", context: { kind: "offer", id: otherOffer.id } })).status, 404);
+    assert.equal((await sender.request(`${path}/context/offer/${otherOffer.id}`)).status, 404);
+  }
+  for (const context of [{ kind: "offer", id: 999999 }, { kind: "lesson", id: 999999 }]) {
+    assert.equal((await student.request(`${path}/messages`, "POST", { body: "Missing", context })).status, 404);
+  }
+  for (const context of [{ kind: "offer", id: 0 }, { kind: "support", id: 1 }, { kind: "offer", id: offer.id, href: "https://evil.invalid" }]) {
+    assert.equal((await student.request(`${path}/messages`, "POST", { body: "Invalid", context })).status, 400);
+  }
+  assert.equal((await tutor.request(`${path}/messages`)).data.length, 1);
+  assert.equal((await tutor.request(`/offers/${offer.id}`, "PATCH", { status: "accepted" })).status, 200);
+  const lesson = (await student.request("/bookings")).data.find(b => b.offer_id === offer.id);
+  assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Bài tập của buổi này", context: { kind: "lesson", id: lesson.id } })).status, 201);
+  const lessonMessage = (await student.request(`${path}/messages`)).data.at(-1);
+  assert.equal(lessonMessage.context.starts_at, lesson.starts_at);
+  assert.equal(lessonMessage.context.duration_minutes, 60);
+  assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Trao đổi chung" })).status, 201);
+  assert.equal((await student.request(`${path}/messages`)).data.at(-1).context, null);
+  await student.request(`/offers/${offer.id}`, "PATCH", { status: "cancelled" });
+  assert.equal((await student.request(`${path}/messages`)).data[0].context.status, "cancelled");
+  const weekly = (await student.request("/weekly-requests", "POST", { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks })).data;
+  const weeklyMessage = (await tutor.request(`${path}/messages`)).data.at(-1);
+  assert.equal(weeklyMessage.context.kind, "weekly-request");
+  assert.equal(weeklyMessage.context.id, weekly.id);
+  assert.deepEqual(weeklyMessage.context.blocks, blocks);
+  // Old per-lesson conversations have an implicit, immutable lesson context.
+  await student.request(`/bookings/${lesson.id}/messages`, "POST", { body: "Old lesson thread" });
+  assert.equal((await tutor.request(`/bookings/${lesson.id}/messages`)).data[0].context.id, lesson.id);
+  run(db, "UPDATE inquiry_messages SET context_id=999999 WHERE id=?", received.id);
+  const unavailable = (await student.request(`${path}/messages`)).data[0];
+  assert.equal(unavailable.context, null);
+  assert.equal(unavailable.context_kind, "offer");
+});
+
+test("message context migration preserves existing plain messages and can run twice", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client();
+  await student.login("student"); const teacher = await tutor.login("chau");
+  const thread = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Existing message" })).data;
+  db.exec("ALTER TABLE inquiry_messages DROP COLUMN context_kind");
+  db.exec("ALTER TABLE inquiry_messages DROP COLUMN context_id");
+  migrateDatabase(db); migrateDatabase(db);
+  const messages = (await tutor.request(`/inquiries/${thread.id}/messages`)).data;
+  assert.equal(messages[0].body, "Existing message");
+  assert.equal(messages[0].context, null);
+});

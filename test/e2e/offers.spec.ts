@@ -88,7 +88,7 @@ test("dated study proposals become lessons only after acceptance, with conflict 
   await expect(page).toHaveURL(new RegExp(`bookings\\?inquiry=${nextLesson.inquiry_id}`));
   await expect(page.locator(".dated-lesson")).toHaveCount(1);
   await page.goto("/app/workspace");
-  await expect(page.getByRole("link", { name: "Trao đổi buổi học", exact: true })).toHaveAttribute("href", `/app/messages?inquiry=${nextLesson.inquiry_id}`);
+  await expect(page.getByRole("link", { name: "Trao đổi buổi học", exact: true })).toHaveAttribute("href", `/app/messages?inquiry=${nextLesson.inquiry_id}&context=lesson&contextId=${nextLesson.id}`);
   await expect(page.getByRole("link", { name: "Xem lịch", exact: true })).toHaveAttribute("href", `/app/bookings?offer=${id}`);
   await page.unroute("**/api/bookings");
   await page.goto(`/app/bookings?offer=${id}`);
@@ -99,7 +99,7 @@ test("dated study proposals become lessons only after acceptance, with conflict 
   await expect(tutor.getByRole("button",{name:"Chấp nhận",exact:true})).toBeDisabled();
   await tutor.getByRole("button",{name:"Từ chối",exact:true}).click();
   await expect(tutor.getByRole("dialog")).toContainText("Đã từ chối");
-  await parent.goto("/app/offers"); await expect(parent.locator(".offer-card")).toContainText("Đã từ chối");
+  await parent.goto("/app/offers"); await expect(parent.locator(".offer-card").filter({ hasText: "Nguyễn Minh Châu" })).toContainText("Đã từ chối");
   await page.request.patch(`/api/offers/${id}`,{data:{status:"cancelled"}});
   const current = await (await tutor.request.get("/api/tutor/profile")).json();
   await tutor.request.put("/api/tutor/availability", { data: { revision: current.weekly_schedule.revision, blocks: original.weekly_schedule.blocks } });

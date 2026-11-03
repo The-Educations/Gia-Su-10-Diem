@@ -111,6 +111,17 @@ export type Resource = {
   source_url: string;
   published: number | boolean;
 };
+export type MessageContext = {
+  kind: "offer" | "lesson" | "weekly-request";
+  id: number;
+  subject_name: string;
+  status: string;
+  start_date?: string;
+  end_date?: string;
+  starts_at?: string;
+  duration_minutes?: number;
+  blocks?: WeeklySchedule["blocks"];
+};
 export type Message = {
   id: number;
   booking_id: number;
@@ -118,6 +129,8 @@ export type Message = {
   name: string;
   body: string;
   created_at: string;
+  context?: MessageContext | null;
+  context_kind?: MessageContext["kind"] | null;
 };
 export type AdminData = {
   theme_catalog: ProfileTheme[];

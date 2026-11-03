@@ -15,6 +15,7 @@ import { registerGallery, galleryMetadata } from "./gallery.js";
 import { registerGoogleAuth } from "./google-auth.js";
 import { registerUploads, uploadMetadata } from "./uploads.js";
 import { registerInquiries } from "./inquiries.js";
+import { lessonMessageContext } from "./message-context.js";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -660,12 +661,13 @@ export function createApi(
   });
   app.get("/api/bookings/:id/messages", auth(), (req, res) => {
     const b = booking(req);
+    const context = lessonMessageContext(db, b.id);
     res.json(
       all(
         db,
         "SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender_id WHERE booking_id=? ORDER BY m.id",
         b.id,
-      ),
+      ).map(message => ({ ...message, context })),
     );
   });
   app.post(
