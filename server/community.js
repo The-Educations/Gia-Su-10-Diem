@@ -1,4 +1,4 @@
-import { registerCommunityProfile } from "./community-profile.js";
+import { registerCommunityProfile, setMemberProfile } from "./community-profile.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
 import {
@@ -8,7 +8,6 @@ import {
   fold,
   content,
   postSchema,
-  displayNameSchema,
   authorLabel,
   subjectAliases,
   levelAliases,
@@ -102,9 +101,9 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
     return p;
   };
   const visibleComments = "c.status='visible' AND cu.status='active'";
-  const serialize = (p, user) => {
+  const serialize = (p, user, publicOnly = false) => {
     const own = user?.id === p.author_id;
-    const privateView = own || user?.role === "admin";
+    const privateView = !publicOnly && (own || user?.role === "admin");
     const counts = one(
       db,
       `SELECT COUNT(*) comment_count,COALESCE(SUM((SELECT COUNT(*) FROM community_helpful h JOIN users hu ON hu.id=h.user_id WHERE h.comment_id=c.id AND hu.status='active')),0) helpful_count FROM community_comments c JOIN users cu ON cu.id=c.author_id WHERE c.post_id=? AND ${visibleComments}`,
@@ -265,14 +264,16 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
     const identity = author(req.user.id, req.user);
     res.json({
       author: identity,
+      profile_code: req.user.profile_code,
+      has_avatar: identity.has_avatar,
+      bio: req.user.bio,
       needs_name:
         !["admin", "tutor"].includes(identity.tier) && !req.user.display_name,
     });
   });
   app.put("/api/community/me/display-name", auth(), participant, (req, res) => {
-    const name = displayNameSchema.parse(req.body.display_name);
-    run(db, "UPDATE users SET display_name=? WHERE id=?", name, req.user.id);
-    res.json({ display_name: name });
+    if (req.body.display_name === undefined) fail(400, "Vui lòng nhập tên hiển thị.");
+    res.json(transaction(db, () => setMemberProfile(db, req.user.id, { display_name: req.body.display_name })));
   });
   app.post("/api/community/posts", auth(), participant, (req, res) => {
     named(req);

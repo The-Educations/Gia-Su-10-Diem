@@ -1199,3 +1199,81 @@ test("member images are private, independent, bounded and atomically replaced", 
   assert.equal((await call("tutor", "/community/me/avatar", "DELETE")).status, 200);
   assert.equal(one(db, "SELECT COUNT(*) n FROM user_image_chunks c LEFT JOIN user_images i ON i.id=c.image_id WHERE i.id IS NULL").n, 0);
 });
+
+
+test("member profiles preserve privacy, live tiers, edit quotas and onboarding requirements", async t => {
+  const { db, ids, call, create, approve } = await fixture(t);
+  const codes = Object.fromEntries(Object.entries(ids).map(([key,id]) => [key, one(db, "SELECT profile_code FROM users WHERE id=?", id).profile_code]));
+  for (const who of ["student", "parent", "pending", "tutor", "admin"]) {
+    const path = `/community/members/${codes[who]}`;
+    assert.equal((await call(null, path)).status, 401);
+    const r = await call("other", path); assert.equal(r.status, 200);
+    const p = r.data.profile;
+    assert.equal(p.code, codes[who]); assert.equal(p.mine, false); assert.equal(r.data.admin, undefined);
+    const identity = (await call(who, "/community/me")).data.author;
+    assert.equal(p.label, identity.label);
+    if (["student", "parent", "pending"].includes(who)) {
+      assert.equal(p.id, undefined); assert.equal(p.email, undefined); assert.equal(p.tutor_id, undefined);
+      assert.ok(!JSON.stringify(r.data).includes(`Private ${who}`));
+    }
+    assert.equal((await call("admin", path)).data.admin.email, `${who}@private.test`);
+  }
+  const post = await create("pending"); await approve(post);
+  for (const status of ["approved", "rejected"]) {
+    run(db, "UPDATE tutors SET status=? WHERE user_id=?", status, ids.pending);
+    const p = (await call("student", `/community/members/${codes.pending}`)).data.profile;
+    const author = (await call(null, `/community/posts/${post}`)).data.author;
+    assert.equal(p.label, author.label); assert.equal(p.tier, status === "approved" ? "tutor" : "student");
+  }
+  for (const bio of ["https://example.com", "0912 345 678", "a@b.vn", "x".repeat(301), "1\n2\n3\n4\n5\n6"])
+    assert.equal((await call("tutor", "/community/me/profile", "PUT", { bio })).status, 400);
+  for (const display_name of ["a", "Quản trị", "ADMIN", "minh.vn"])
+    assert.equal((await call("tutor", "/community/me/profile", "PUT", { display_name })).status, 400);
+  for (let i=0;i<3;i++) assert.equal((await call("tutor", i%2 ? "/community/me/display-name" : "/community/me/profile", "PUT", { display_name: `Tên mới ${i}` })).status, 200);
+  assert.equal((await call("tutor", "/community/me/display-name", "PUT", { display_name: "Tên cuối" })).status, 429);
+  assert.equal((await call("tutor", "/community/me/profile", "PUT", { display_name: "Tên mới 2" })).status, 200);
+  for (let i=0;i<10;i++) assert.equal((await call("tutor", "/community/me/profile", "PUT", { bio: `Mình thích học toán ${i}` })).status, 200);
+  assert.equal((await call("tutor", "/community/me/profile", "PUT", { bio: "Đổi tiếp" })).status, 429);
+  assert.equal(one(db, "SELECT status FROM tutors WHERE user_id=?", ids.tutor).status, "approved");
+  run(db, "UPDATE users SET community_locked=1 WHERE id=?", ids.parent);
+  assert.equal((await call("parent", "/community/me/profile", "PUT", { bio: "Toán" })).status, 403);
+  assert.equal((await call("other", `/community/members/${codes.parent}`)).status, 200);
+  assert.equal((await call("other", `/community/members/${codes.parent}`)).data.profile.community_lock_reason, undefined);
+  for (const who of ["student", "pending"]) {
+    run(db, "UPDATE users SET onboarding_step=1 WHERE id=?", ids[who]);
+    assert.equal((await call(who, "/account/onboarding", "PUT", { step:1, name:"Tên" })).status, 400);
+    assert.equal(one(db, "SELECT onboarding_step FROM users WHERE id=?", ids[who]).onboarding_step, 1);
+  }
+  run(db, "UPDATE users SET status='suspended' WHERE id=?", ids.parent);
+  assert.equal((await call("other", `/community/members/${codes.parent}`)).status, 404);
+  assert.equal((await call("other", `/community/members/${codes.parent}/posts`)).status, 404);
+  assert.equal((await call("admin", `/community/members/${codes.parent}`)).status, 200);
+});
+
+test("member posts and statistics include only published activity with stable sorting and pagination", async t => {
+  const { db, ids, call } = await fixture(t);
+  const code = one(db, "SELECT profile_code FROM users WHERE id=?", ids.student).profile_code;
+  const path = `/community/members/${code}`;
+  const posts = [];
+  for (let i=0;i<12;i++) posts.push(Number(run(db, "INSERT INTO community_posts(author_id,title,body,status,published_at) VALUES (?,'Toán','Nội dung','approved',?)", ids.student, `2026-10-${String(i+1).padStart(2,'0')} 00:00:00`).lastInsertRowid));
+  for (const status of ["pending","hidden","deleted","rejected"])
+    run(db, "INSERT INTO community_posts(author_id,title,body,status) VALUES (?,'Riêng tư','Nội dung',?)", ids.student, status);
+  const comment = Number(run(db,"INSERT INTO community_comments(author_id,post_id,body) VALUES (?,?,'Bình luận')", ids.student,posts[0]).lastInsertRowid);
+  run(db, "INSERT INTO community_helpful VALUES (?,?)", comment, ids.other);
+  run(db,"INSERT INTO community_comments(author_id,post_id,body,status) VALUES (?,?,'Đã gỡ','removed_by_admin')", ids.student, posts[0]);
+  run(db,"INSERT INTO community_comments(author_id,post_id,body) SELECT ?,id,'Ẩn' FROM community_posts WHERE status='hidden'", ids.student);
+  run(db, "UPDATE community_posts SET revision_body='Riêng tư' WHERE id=?", posts[0]);
+  const stats = (await call("other",path)).data.profile.stats;
+  assert.deepEqual(stats,{ posts:12, comments:1, helpful:1 });
+  const first = (await call("student",path+"/posts?sort=new")).data;
+  assert.equal(first.items.length,10); assert.equal(first.more,true); assert.equal(first.items[0].id,posts[11]);
+  const second = (await call("other",path+"/posts?page=2")).data;
+  assert.equal(second.items.length,2); assert.equal(second.more,false);
+  const helpful = (await call("student",path+"/posts?sort=helpful")).data;
+  assert.equal(helpful.items[0].id,posts[0]); assert.equal(helpful.items[1].id,posts[11]);
+  assert.equal(helpful.items[0].revision_body,undefined);
+  const adminCode=one(db,"SELECT profile_code FROM users WHERE id=?",ids.admin).profile_code;
+  await call("admin","/community/posts","POST",{title:"Thông báo",body:"Nội dung"});
+  const adminPosts=(await call("other",`/community/members/${adminCode}/posts`)).data.items;
+  assert.equal(adminPosts.length,1);assert.equal(adminPosts[0].kind,"announcement");
+});

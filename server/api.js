@@ -1,3 +1,5 @@
+import { setMemberProfile } from "./community-profile.js";
+import { displayNameSchema } from "./community-policy.js";
 import { registerChatMedia, withChatMedia, insertChatMessage } from "./chat-media.js";
 import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
@@ -331,7 +333,8 @@ export function createApi(
         }
         run(db, "UPDATE users SET role=?,learner_type=?,onboarding_step=1 WHERE id=?", role, choice === "parent" ? "parent" : "student", user.id);
       } else if (step === 1) {
-        const { name } = z.object({ name: text(80) }).parse(req.body);
+        const { name, display_name } = z.object({ name: text(80), display_name: displayNameSchema }).parse(req.body);
+        setMemberProfile(db, user.id, { display_name });
         const d = z.object({ goal: z.string().trim().max(1000).default(""), timezone: timezoneSchema }).parse(req.body);
         if (user.role === "student") {
           const { school } = z.object({ school: text(160) }).parse(req.body);
@@ -341,6 +344,7 @@ export function createApi(
         }
         run(db, "UPDATE users SET name=?,goal=?,timezone=COALESCE(?,timezone),onboarding_step=3 WHERE id=?", name, d.goal, d.timezone ?? null, user.id);
       } else {
+        setMemberProfile(db, user.id, { display_name: displayNameSchema.parse(req.body.display_name || user.display_name) });
         run(db, "UPDATE users SET onboarding_step=3 WHERE id=?", user.id);
       }
     });

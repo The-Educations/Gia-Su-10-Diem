@@ -938,7 +938,7 @@ test("new accounts complete resumable role-specific setup without escalating rol
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 0, role: "student" })).status, 409);
     assert.equal((await account.request("/account/onboarding", "PUT", { step: 1, name: "" })).status, 400);
     const profile = role === "student" ? { name: "Học sinh mới", goal: "Ôn Toán lớp 9", school: "THCS Ba Đình", province_code: "1", ward_code: "4" } : { name: "Gia sư mới", headline: "Toán THCS", bio: "Dạy theo năng lực từng học sinh", education: "Đại học Sư phạm", subjects: ["toan"], rate: 180000, experience: 2, location: "Hà Nội", mode: "both" };
-    const saved = await account.request("/account/onboarding", "PUT", { ...profile, step: 1 });
+    const saved = await account.request("/account/onboarding", "PUT", { ...profile, display_name: "Thành viên mới", step: 1 });
     assert.equal(saved.data.user.onboarding_step, 3);
     await account.request("/auth/logout", "POST");
     const resumed = await account.request("/auth/login", "POST", { email: `${role}-setup@example.com`, password: "NewAccount2026!" });
@@ -1013,7 +1013,7 @@ test("parent setup is distinct, resumable and shares student permissions", async
   assert.equal(r.data.user.role, "student");
   assert.equal(r.data.user.learner_type, "parent");
   assert.equal((await parent.request("/auth/me")).data.user.learner_type, "parent");
-  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", goal: "Con ôn Toán lớp 9", school: "THCS Ba Đình", province_code: "1", ward_code: "4" })).status, 200);
+  assert.equal((await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh", display_name: "Minh", goal: "Con ôn Toán lớp 9", school: "THCS Ba Đình", province_code: "1", ward_code: "4" })).status, 200);
   assert.equal((await parent.request("/account/onboarding", "PUT", { step: 2 })).status, 409);
   assert.equal((await parent.request("/favorites")).status, 200);
   assert.equal((await parent.request("/bookings")).status, 200);

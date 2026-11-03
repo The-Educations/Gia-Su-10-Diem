@@ -1,7 +1,8 @@
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
-import { LIMITS } from "./community-policy.js";
+import { z } from "./validation.js";
+import { LIMITS, authorLabel, displayNameSchema, findContactInfo } from "./community-policy.js";
 import { UPLOAD_LIMIT } from "./uploads.js";
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
@@ -27,8 +28,56 @@ export function removeMemberImage(db, user, kind) {
   run(db, "DELETE FROM user_image_chunks WHERE image_id IN (SELECT id FROM user_images WHERE user_id=? AND kind=?)", user, kind);
   run(db, "DELETE FROM user_images WHERE user_id=? AND kind=?", user, kind);
 }
+export function setMemberProfile(db, id, input) {
+  const data = z.object({
+    display_name: displayNameSchema.optional(),
+    bio: z.string().trim().max(300).refine(value => value.split("\n").length <= 5, "Giới thiệu tối đa 5 dòng.").superRefine((value, ctx) => {
+      const contact = findContactInfo(value);
+      if (contact) ctx.addIssue({ code: "custom", message: `Vui lòng không đăng ${contact}.` });
+    }).optional(),
+  }).strict().parse(input);
+  const user = editableMember(db, id);
+  for (const field of ["display_name", "bio"]) {
+    if (data[field] !== undefined && data[field] !== user[field]) {
+      recordChange(db, id, field, field === "display_name" ? LIMITS.namesPerDay : LIMITS.biosPerDay);
+      run(db, `UPDATE users SET ${field}=? WHERE id=?`, data[field], id);
+    }
+  }
+  return { display_name: data.display_name ?? user.display_name, bio: data.bio ?? user.bio };
+}
+function memberImages(db, user) {
+  const images = all(db, "SELECT kind,id FROM user_images WHERE user_id=? ORDER BY kind", user);
+  return { has_avatar: images.some(i => i.kind === "avatar"), has_cover: images.some(i => i.kind === "cover"), image_version: images.map(i => i.id).join("-") };
+}
 export function registerCommunityProfile(app, db, auth, audit, processPhoto, { serialize }) {
   const base = "/api/community";
+  app.get(`${base}/members/:code`, auth(), (req, res) => {
+    const user = memberByCode(db, req.params.code, req.user);
+    const images = memberImages(db, user.id);
+    const posts = one(db, "SELECT COUNT(*) n FROM community_posts WHERE author_id=? AND status='approved' AND kind=?", user.id, user.role === "admin" ? "announcement" : "user").n;
+    const stats = one(db, `SELECT COUNT(*) comments,COALESCE(SUM((SELECT COUNT(*) FROM community_helpful h JOIN users hu ON hu.id=h.user_id WHERE h.comment_id=c.id AND hu.status='active')),0) helpful
+      FROM community_comments c JOIN community_posts p ON p.id=c.post_id JOIN users pu ON pu.id=p.author_id
+      WHERE c.author_id=? AND c.status='visible' AND p.status='approved' AND pu.status='active'`, user.id);
+    const mine = req.user.id === user.id;
+    res.json({ profile: {
+      code: user.profile_code, ...authorLabel({ ...user, ...images }, req.user), ...images,
+      bio: user.bio, joined_at: user.created_at.slice(0,7), stats: { posts, ...stats }, mine,
+      ...(mine ? { display_name: user.display_name } : {}),
+    }, ...(req.user.role === "admin" ? { admin: {
+      id: user.id, name: user.name, email: user.email, status: user.status,
+      community_locked: !!user.community_locked, community_lock_reason: user.community_lock_reason,
+    } } : {}) });
+  });
+  app.get(`${base}/members/:code/posts`, auth(), (req, res) => {
+    const user = memberByCode(db, req.params.code, req.user);
+    const { page, sort } = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), sort: z.enum(["new", "helpful"]).default("new") }).parse(req.query);
+    const helpful = `(SELECT COUNT(*) FROM community_helpful h JOIN community_comments c ON c.id=h.comment_id JOIN users cu ON cu.id=c.author_id JOIN users hu ON hu.id=h.user_id WHERE c.post_id=p.id AND c.status='visible' AND cu.status='active' AND hu.status='active')`;
+    const rows = all(db, `SELECT p.* FROM community_posts p WHERE p.author_id=? AND p.status='approved' AND p.kind=? ORDER BY ${sort === "helpful" ? helpful + " DESC," : ""} p.published_at DESC,p.id DESC LIMIT 11 OFFSET ?`, user.id, user.role === "admin" ? "announcement" : "user", (page-1)*10);
+    res.json({ items: rows.slice(0,10).map(p => serialize(p, req.user, true)), more: rows.length > 10 });
+  });
+  app.put(`${base}/me/profile`, auth(), (req, res) => {
+    res.json(transaction(db, () => setMemberProfile(db, req.user.id, req.body)));
+  });
   for (const kind of ["avatar", "cover"]) {
     app.get(`${base}/members/:code/${kind}`, auth(), (req, res) => {
       const user = memberByCode(db, req.params.code, req.user);
