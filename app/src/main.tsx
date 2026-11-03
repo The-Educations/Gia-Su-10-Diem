@@ -101,6 +101,9 @@ function Shell() {
       try { return localStorage.getItem("giasu.sidebar.collapsed") === "true"; }
       catch { return false; }
     });
+  const navigationOpenedAt = React.useRef(loc.pathname);
+  // The exiting sheet retains its previous props until its animation finishes.
+  const currentPath = React.useRef(loc.pathname);
   useEffect(() => {
     try { localStorage.setItem("giasu.sidebar.collapsed", String(collapsed)); }
     catch { /* Navigation still works when storage is unavailable. */ }
@@ -112,6 +115,7 @@ function Shell() {
     return () => desktop.removeEventListener("change", closeMobileNavigation);
   }, []);
   useEffect(() => {
+    currentPath.current = loc.pathname;
     setOpen(false);
     window.scrollTo(0, 0);
     document.getElementById("main")?.focus();
@@ -174,6 +178,7 @@ function Shell() {
           <span className="nav-label">Thu gọn</span>
         </Button>
       </div>
+      <div className="navigation-body">
       <nav aria-label="Điều hướng chính">
         {nav.map(({ to, label, icon: Icon }) => (
           <React.Fragment key={to}>
@@ -230,6 +235,7 @@ function Shell() {
           </Button>
         )}
       </div>
+      </div>
     </>
   );
   return (
@@ -243,13 +249,21 @@ function Shell() {
         <header className="topbar">
           <div className="topbar-leading">
           <div className="mobile-brand">
-            <Sheet open={open} onOpenChange={setOpen}>
+            <Sheet open={open} onOpenChange={(next) => {
+              if (next) navigationOpenedAt.current = loc.pathname;
+              setOpen(next);
+            }}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Mở điều hướng">
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="navigation-sheet">
+              <SheetContent side="left" className="navigation-sheet" onCloseAutoFocus={(event) => {
+                if (navigationOpenedAt.current !== currentPath.current || window.matchMedia("(min-width: 951px)").matches) {
+                  event.preventDefault();
+                  document.getElementById("main")?.focus({ preventScroll: true });
+                }
+              }}>
                 <SheetTitle className="sr-only">Điều hướng</SheetTitle>
                 <SheetDescription className="sr-only">
                   Gia Sư 10 Điểm

@@ -16,12 +16,14 @@ export default function Auth() {
   const register = params.get("mode") === "register";
   const [emailOpen, setEmailOpen] = useState(params.has("mode"));
   const [busy, setBusy] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState(googleErrors[params.get("oauth_error") || ""] || "");
   const { user, loading, authError, retryAuth, setUser, refresh } = useApp();
   if (!loading && !authError && user) return <Navigate to={accountDestination(user, params.get("next"))} replace />;
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!acceptedTerms) return;
     setError("");
     const data = Object.fromEntries(new FormData(e.currentTarget));
     if (register && data.password !== data.confirmPassword) {
@@ -55,7 +57,11 @@ export default function Auth() {
       {loading ? <Loading /> : authError ? <ErrorState error={authError} retry={retryAuth} /> :
     <section className="account-entry" aria-labelledby="account-title">
       <h1 id="account-title">{register ? "Tạo tài khoản" : "Chào mừng bạn."}</h1>
-      <GoogleSignIn next={params.get("next")} />
+      <div className="auth-policy auth-consent">
+        <input id="account-consent" type="checkbox" form="account-email-form" required checked={acceptedTerms} disabled={busy} onChange={event => setAcceptedTerms(event.target.checked)} />
+        <label htmlFor="account-consent">Đồng ý <a href="/terms" target="_blank" rel="noopener noreferrer" aria-label="Điều khoản dịch vụ">Điều khoản</a> &amp; <a href="/privacy" target="_blank" rel="noopener noreferrer" aria-label="Chính sách quyền riêng tư">Quyền riêng tư</a>.</label>
+      </div>
+      <GoogleSignIn next={params.get("next")} disabled={!acceptedTerms || busy} />
       <Button variant="ghost" size="lg" className="account-email-toggle" aria-expanded={emailOpen} aria-controls="email-account" onClick={() => setEmailOpen(value => !value)}>
         <Mail aria-hidden="true" />Dùng email và mật khẩu
       </Button>
@@ -73,7 +79,7 @@ export default function Auth() {
             <TabsTrigger value="register">Tạo tài khoản</TabsTrigger>
           </TabsList>
         <TabsContent value={register ? "register" : "login"}>
-        <form key={register ? "register" : "login"} onSubmit={submit}>
+        <form id="account-email-form" key={register ? "register" : "login"} onSubmit={submit}>
           <FieldGroup>
             {register && <Field>
               <FieldLabel htmlFor="name">Họ và tên</FieldLabel>
@@ -91,13 +97,12 @@ export default function Auth() {
               <FieldLabel htmlFor="confirm-password">Xác nhận mật khẩu</FieldLabel>
               <Input id="confirm-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} required />
             </Field>}
-            <Submit busy={busy}>{register ? "Gửi mã xác minh" : "Đăng nhập"}<ArrowRight data-icon="inline-end" /></Submit>
+            <Submit busy={busy} disabled={!acceptedTerms}>{register ? "Gửi mã xác minh" : "Đăng nhập"}<ArrowRight data-icon="inline-end" /></Submit>
           </FieldGroup>
         </form>
         </TabsContent>
         </Tabs>
       </div>}
-      <p className="auth-policy">Tiếp tục: đồng ý <a href="/terms" aria-label="Điều khoản dịch vụ">Điều khoản</a> &amp; <a href="/privacy" aria-label="Chính sách quyền riêng tư">Quyền riêng tư</a>.</p>
     </section>}
       </div>
       <footer className="auth-footer">© {new Date().getFullYear()} Gia Sư 10 Điểm</footer>
