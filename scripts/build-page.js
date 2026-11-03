@@ -140,7 +140,7 @@ const html = `<!DOCTYPE html>
     <div><h2 id='cta-title' data-reveal>Một khởi đầu nhỏ.<br><em>Một bước tiến xa.</em></h2><p class='lead' data-reveal>Chọn môn học. Tìm người đồng hành.<br>Phần tiếp theo, mình cùng viết.</p></div>
     <form class='reply-card' id='tutor-booking-form' action='/app/tutors' method='get' data-reveal>
       <h3>Giờ học của em</h3>
-      <label for='form-subject'>Em muốn học môn gì?</label><select id='form-subject' name='subject'><option value=''>Tất cả môn học</option><option value='toan'>Toán</option><option value='vat-li'>Vật lí</option><option value='hoa-hoc'>Hóa học</option><option value='tieng-anh'>Tiếng Anh</option><option value='ngu-van'>Ngữ văn</option><option value='khtn'>Khoa học tự nhiên</option></select>
+      <label for='form-subject'>Em muốn học môn gì?</label><select id='form-subject' name='subject'><option value=''>Tất cả môn học</option></select>
       <label for='form-mode'>Em muốn học ở đâu?</label><select id='form-mode' name='mode'><option value=''>Tất cả hình thức</option><option value='online'>Trực tuyến</option><option value='offline'>Trực tiếp</option></select>
       <button class='button primary' type='submit'>Tìm gia sư phù hợp ${arrow}</button>
     </form>

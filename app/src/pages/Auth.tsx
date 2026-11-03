@@ -1,5 +1,5 @@
 import { GoogleSignIn, googleErrors } from "@/components/google-sign-in";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useSearchParams, Navigate, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Mail } from "lucide-react";
 import { api, useApp, accountDestination } from "@/lib/api";
@@ -16,12 +16,23 @@ export default function Auth() {
   const register = params.get("mode") === "register";
   const [emailOpen, setEmailOpen] = useState(params.has("mode"));
   const [busy, setBusy] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [consentError, setConsentError] = useState(false);
+  const consentRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState(googleErrors[params.get("oauth_error") || ""] || "");
   const { user, loading, authError, retryAuth, setUser, refresh } = useApp();
   if (!loading && !authError && user) return <Navigate to={accountDestination(user, params.get("next"))} replace />;
 
+  function requireConsent() {
+    if (acceptedTerms) return true;
+    setConsentError(true);
+    consentRef.current?.focus();
+    return false;
+  }
+
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!requireConsent()) return;
     setError("");
     const data = Object.fromEntries(new FormData(e.currentTarget));
     if (register && data.password !== data.confirmPassword) {
@@ -55,8 +66,19 @@ export default function Auth() {
       {loading ? <Loading /> : authError ? <ErrorState error={authError} retry={retryAuth} /> :
     <section className="account-entry" aria-labelledby="account-title">
       <h1 id="account-title">{register ? "Tạo tài khoản" : "Chào mừng bạn."}</h1>
-      <GoogleSignIn next={params.get("next")} />
-      <Button variant="ghost" size="lg" className="account-email-toggle" aria-expanded={emailOpen} aria-controls="email-account" onClick={() => setEmailOpen(value => !value)}>
+      <fieldset className="auth-policy">
+        <legend>Trước khi tiếp tục</legend>
+        <div className="auth-consent">
+        <input ref={consentRef} id="account-consent" type="checkbox" form="account-email-form" required checked={acceptedTerms} disabled={busy}
+          aria-invalid={consentError || undefined} aria-describedby={consentError ? "account-consent-error" : undefined}
+          onInvalid={event => { event.preventDefault(); requireConsent(); }}
+          onChange={event => { setAcceptedTerms(event.target.checked); setConsentError(false); }} />
+        <label htmlFor="account-consent">Đồng ý <a href="/terms" target="_blank" rel="noopener noreferrer" aria-label="Điều khoản dịch vụ">Điều khoản</a> &amp; <a href="/privacy" target="_blank" rel="noopener noreferrer" aria-label="Chính sách quyền riêng tư">Quyền riêng tư</a>.</label>
+      </div>
+        {consentError && <p id="account-consent-error" className="auth-consent-error" role="alert">Vui lòng tích đồng ý Điều khoản và Quyền riêng tư để tiếp tục.</p>}
+      </fieldset>
+      <GoogleSignIn next={params.get("next")} disabled={busy} allowed={acceptedTerms} onBlocked={requireConsent} />
+      <Button variant="ghost" size="lg" className="account-email-toggle" aria-expanded={emailOpen} aria-controls="email-account" disabled={busy} onClick={() => { if (!emailOpen) requireConsent(); setEmailOpen(value => !value); }}>
         <Mail aria-hidden="true" />Dùng email và mật khẩu
       </Button>
       {error && <ErrorState error={error} />}
@@ -73,7 +95,7 @@ export default function Auth() {
             <TabsTrigger value="register">Tạo tài khoản</TabsTrigger>
           </TabsList>
         <TabsContent value={register ? "register" : "login"}>
-        <form key={register ? "register" : "login"} onSubmit={submit}>
+        <form id="account-email-form" key={register ? "register" : "login"} onSubmit={submit}>
           <FieldGroup>
             {register && <Field>
               <FieldLabel htmlFor="name">Họ và tên</FieldLabel>
@@ -97,7 +119,6 @@ export default function Auth() {
         </TabsContent>
         </Tabs>
       </div>}
-      <p className="auth-policy">Tiếp tục: đồng ý <a href="/terms" aria-label="Điều khoản dịch vụ">Điều khoản</a> &amp; <a href="/privacy" aria-label="Chính sách quyền riêng tư">Quyền riêng tư</a>.</p>
     </section>}
       </div>
       <footer className="auth-footer">© {new Date().getFullYear()} Gia Sư 10 Điểm</footer>

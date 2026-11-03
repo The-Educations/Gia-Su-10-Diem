@@ -40,6 +40,7 @@ export type Slot = {
   tutor_id: number;
   starts_at: string;
   reserved?: number;
+  available?: number;
 };
 export type ProfileTheme = { id: "paper" | "sage" | "ink"; name: string };
 export type Tutor = {
@@ -111,13 +112,28 @@ export type Resource = {
   source_url: string;
   published: number | boolean;
 };
+export type MessageContext = {
+  kind: "offer" | "lesson" | "weekly-request";
+  id: number;
+  subject_name: string;
+  status: string;
+  start_date?: string;
+  end_date?: string;
+  starts_at?: string;
+  duration_minutes?: number;
+  blocks?: WeeklySchedule["blocks"];
+};
+export type ChatAttachment = { id: string; kind: "image" | "audio"; size: number; url: string };
 export type Message = {
+  attachment?: ChatAttachment | null;
   id: number;
   booking_id: number;
   sender_id: number;
   name: string;
   body: string;
   created_at: string;
+  context?: MessageContext | null;
+  context_kind?: MessageContext["kind"] | null;
 };
 export type AdminData = {
   theme_catalog: ProfileTheme[];

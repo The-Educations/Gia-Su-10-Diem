@@ -1,3 +1,4 @@
+import { migrateGoogleCalendar } from "./google-calendar-schema.js";
 import { migrateCommunity } from "./community-schema.js";
 import {
   randomBytes,
@@ -52,6 +53,10 @@ export function migrateDatabase(db) {
       published INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, actor_id INTEGER NOT NULL REFERENCES users(id), action TEXT NOT NULL, target TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   `);
+  for (const table of ["subjects", "resources"]) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "archived"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
+  }
   // Existing accounts keep their workspace; only new signups enter setup.
   if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "onboarding_step"))
     db.exec("ALTER TABLE users ADD COLUMN onboarding_step INTEGER NOT NULL DEFAULT 3");
@@ -138,6 +143,19 @@ export function migrateDatabase(db) {
   ); CREATE UNIQUE INDEX IF NOT EXISTS pending_offer ON offers(student_id,tutor_id) WHERE status='pending'`);
   if (!db.prepare("PRAGMA table_info(bookings)").all().some(c => c.name === "offer_id")) db.exec("ALTER TABLE bookings ADD COLUMN offer_id INTEGER REFERENCES offers(id)");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS offer_session ON bookings(offer_id,starts_at) WHERE offer_id IS NOT NULL");
+  const messageColumns = db.prepare("PRAGMA table_info(inquiry_messages)").all();
+  if (!messageColumns.some(c => c.name === "context_kind")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request'))");
+  if (!messageColumns.some(c => c.name === "context_id")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_id INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS chat_attachments (
+    id TEXT PRIMARY KEY, thread_kind TEXT NOT NULL, thread_id INTEGER NOT NULL,
+    owner_id INTEGER NOT NULL REFERENCES users(id), message_id INTEGER,
+    kind TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ); CREATE INDEX IF NOT EXISTS chat_attachment_thread ON chat_attachments(thread_kind,thread_id,message_id);
+  CREATE TABLE IF NOT EXISTS chat_attachment_chunks (
+    attachment_id TEXT NOT NULL REFERENCES chat_attachments(id) ON DELETE CASCADE,
+    part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(attachment_id,part)
+  );`);
   migrateCommunity(db);
   db.exec(`CREATE TABLE IF NOT EXISTS support_threads (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -181,6 +199,7 @@ export function migrateDatabase(db) {
     for (const column of ["province_code", "ward_code", ...(table === "users" ? ["school"] : [])])
       if (!columns.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
   }
+  migrateGoogleCalendar(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

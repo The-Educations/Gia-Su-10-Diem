@@ -1,3 +1,4 @@
+import { lessonMessageHref } from "@/lib/message-context";
 import type { StudyOffer } from "@/lib/offers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link, Navigate } from "react-router-dom";
@@ -152,7 +153,7 @@ export default function Dashboard() {
                 </div>
                 <div className="next-lesson-actions">
                   <Button asChild variant="secondary">
-                    <Link to={next.inquiry_id ? `/messages?inquiry=${next.inquiry_id}` : `/messages?lesson=${next.id}`}>
+                    <Link to={lessonMessageHref(next)}>
                       <MessageCircle data-icon="inline-start" />
                       Trao đổi buổi học
                     </Link>
@@ -307,7 +308,7 @@ export default function Dashboard() {
                       <Person name={t.name} src={t.photo_url || undefined} />
                       <div>
                         <strong>{t.name}</strong>
-                        <span>{money(t.rate)} / giờ</span>
+                        <span>{money(t.rate)} / buổi</span>
                       </div>
                       <ArrowUpRight size={16} />
                     </Link>

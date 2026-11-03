@@ -17,8 +17,14 @@ export const googleErrors: Record<string, string> = {
 };
 export function GoogleSignIn({
   next,
+  disabled = false,
+  allowed = true,
+  onBlocked,
 }: {
   next?: string | null;
+  disabled?: boolean;
+  allowed?: boolean;
+  onBlocked?: () => void;
 }) {
   const providers = useLoad<{ google: boolean }>("/auth/providers");
   if (providers.error)
@@ -47,8 +53,10 @@ export function GoogleSignIn({
   if (next) params.set("next", next);
   return (
     <div className="google-sign-in">
-      <Button asChild variant="outline" className="w-full">
-        <a href={`/api/auth/google/start${params.size ? `?${params}` : ""}`}>
+      <Button asChild variant="outline" className="w-full aria-disabled:opacity-50">
+        <a role="link" aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : 0} onClick={event => {
+          if (disabled || !allowed) { event.preventDefault(); if (!disabled) onBlocked?.(); }
+        }} href={disabled ? undefined : !allowed ? "#account-consent" : `/api/auth/google/start${params.size ? `?${params}` : ""}`}>
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="#4285F4"

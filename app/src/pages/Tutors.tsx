@@ -167,7 +167,7 @@ export default function Tutors({
               ]}
             />
             <Choose
-              label="Học phí / giờ"
+              label="Học phí / buổi"
               value={budget}
               onChange={(v) => set("budget", v)}
               allLabel="Mọi mức học phí"
@@ -343,7 +343,7 @@ export default function Tutors({
               <div className="tutor-card-footer">
                 <span>
                   <strong>{money(t.rate)}</strong>
-                  <small> / giờ</small>
+                  <small> / buổi</small>
                 </span>
                 <Button asChild>
                   <Link to={`/tutors/${t.user_id}`}>

@@ -41,10 +41,12 @@ export class Marketplace extends DurableObject {
       origin: env.APP_ORIGIN,
       sendEmail: createMailflareSender({ url: env.MAILFLARE_URL, key: env.MAILFLARE_API_KEY, mailboxId: env.MAILFLARE_MAILBOX_ID }),
       clientIp: (req) => req.headers["x-giasu-client-ip"] || "unknown",
+      wakeCalendar: async () => { if (!await ctx.storage.getAlarm()) await ctx.storage.setAlarm(Date.now() + 1000); },
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
         adminEmail: env.GOOGLE_ADMIN_EMAIL,
+        calendarTokenKey: env.GOOGLE_CALENDAR_TOKEN_KEY,
       },
       processPhoto: async (data, gallery = false) => {
         const stream = () => new Response(data).body;
@@ -65,7 +67,13 @@ export class Marketplace extends DurableObject {
         return Buffer.from(await output.response().arrayBuffer());
       },
     });
+    this.calendarSync = api.locals.calendarSync;
+    if (this.calendarSync.hasConnections()) ctx.waitUntil((async () => { if (!await ctx.storage.getAlarm()) await ctx.storage.setAlarm(Date.now() + 1000); })());
     this.handler = httpServerHandler(createServer(api));
+  }
+  async alarm() {
+    try { await this.calendarSync.syncDue(); }
+    finally { if (this.calendarSync.hasConnections()) await this.ctx.storage.setAlarm(Date.now() + 60000); }
   }
   fetch(request) {
     return this.handler.fetch(request);

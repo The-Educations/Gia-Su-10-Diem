@@ -175,3 +175,14 @@
     }
   });
 })();
+
+(function initSubjectOptions() {
+  if (!/^https?:$/.test(location.protocol)) return;
+  const select = document.getElementById("form-subject");
+  fetch("/api/subjects")
+    .then(response => response.ok ? response.json() : [])
+    .then(subjects => {
+      select.replaceChildren(new Option("Tất cả môn học", ""), ...subjects.map(subject => new Option(subject.name, subject.id)));
+    })
+    .catch(() => {}); // The all-subjects search remains usable if the catalog is unavailable.
+})();

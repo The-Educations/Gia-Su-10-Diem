@@ -44,6 +44,10 @@ const pendingCookie=res.headers.getSetCookie().find(c=>c.startsWith('giasu_signu
 const cookie = await verifyEmail(email,pendingCookie);
 const get=path=>fetch(base+path,{headers:{Cookie:cookie}});
 assert.equal((await get('/api/auth/me')).status,200);
+const calendarStatus = await get('/api/account/google-calendar');
+assert.equal(calendarStatus.status,200);
+assert.deepEqual(await calendarStatus.json(), {available:false,connected:false,email:'',lastSynced:null,error:'',calendarUrl:''});
+assert.equal((await fetch(base+'/api/account/google-calendar')).status,401);
 assert.deepEqual(await (await get('/api/offers')).json(), []);
 assert.equal((await fetch(base+'/api/offers')).status,401);
 const supportThread = (await (await get('/api/support')).json())[0];
@@ -51,6 +55,17 @@ assert.equal((await (await get('/api/support')).json())[0].id, supportThread.id)
 const supportMessage = await fetch(base+`/api/support/${supportThread.id}/messages`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({body:'Runtime support request'})});
 assert.equal(supportMessage.status,201);
 assert.equal((await (await get(`/api/support/${supportThread.id}/messages`)).json())[0].body,'Runtime support request');
+const voiceData = Buffer.alloc(48); voiceData.write('RIFF'); voiceData.write('WAVE',8);
+const voiceUpload = await fetch(base+`/api/chat/support/${supportThread.id}/attachments`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'audio/wav'},body:voiceData});
+assert.equal(voiceUpload.status,201);
+const voiceAttachment = await voiceUpload.json();
+assert.equal((await fetch(base+`/api/support/${supportThread.id}/messages`,{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({attachment_id:voiceAttachment.id})})).status,201);
+assert.equal((await (await get(`/api/support/${supportThread.id}/messages`)).json()).at(-1).attachment.id,voiceAttachment.id);
+assert.equal((await fetch(base+voiceAttachment.url)).status,401);
+const voiceRange = await fetch(base+voiceAttachment.url,{headers:{Cookie:cookie,Range:'bytes=0-9'}});
+assert.equal(voiceRange.status,206);
+assert.equal((await voiceRange.arrayBuffer()).byteLength,10);
+
 assert.equal((await fetch(base+'/api/admin/users/1',{method:'DELETE',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({email:'admin@example.test'})})).status,403);
 
 const setup = async (body) => {

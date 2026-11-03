@@ -1333,7 +1333,7 @@ test("support is pinned per user, private between owners, and shared with admini
   assert.equal((await tutor.request(`/support/${a.id}/messages`)).status, 404);
   assert.equal((await tutor.request(`/support/${a.id}/messages`, "POST", { body: "Unauthorized" })).status, 404);
   assert.equal((await student.request(`/support/${a.id}/messages`, "POST", { body: "Cần hỗ trợ lịch học" })).status, 201);
-  assert.equal((await admin.request("/support")).data.length, 2);
+  assert.equal((await admin.request("/support")).data.length, 1);
   assert.equal((await admin.request(`/support/${a.id}/messages`, "POST", { body: "Admin đã nhận yêu cầu" })).status, 201);
   assert.equal((await student.request(`/support/${a.id}/messages`)).data.at(-1).body, "Admin đã nhận yêu cầu");
   run(db, "UPDATE users SET status='suspended' WHERE id=?", a.user_id);
@@ -1514,4 +1514,136 @@ test("student school and ward are private, validated and persist across sessions
   // Unrelated legacy account edits preserve the new fields.
   assert.equal((await student.request("/account", "PATCH", { name: user.name, goal: "Toán" })).status, 200);
   assert.equal((await student.request("/auth/me")).data.user.school, fields.school);
+});
+
+test("message context persists for both participants and rejects content from another conversation", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), other = client(), outsider = client();
+  await student.login("student"); const teacher = await tutor.login("chau"); await outsider.login("linh");
+  await other.request("/auth/register", "POST", { name: "Other learner", email: "context-other@example.com", password: "TestStudy2026!", role: "student" });
+  const blocks = [{ weekday: 0, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const input = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, ...offerPeriod() };
+  const offer = (await student.request("/offers", "POST", input)).data;
+  const otherOffer = (await other.request("/offers", "POST", input)).data;
+  const path = `/inquiries/${offer.inquiry_id}`;
+  const context = { kind: "offer", id: offer.id };
+  assert.equal((await student.request(`${path}/context/offer/${offer.id}`)).data.subject_name, "Toán");
+  assert.equal((await outsider.request(`${path}/context/offer/${offer.id}`)).status, 404);
+  assert.equal((await other.request(`${path}/messages`)).status, 404);
+  assert.equal((await student.request(`${path}/messages`, "POST", { body: "Em muốn trao đổi lịch này", context })).status, 201);
+  const received = (await tutor.request(`${path}/messages`)).data.at(-1);
+  assert.equal(received.context.id, offer.id);
+  assert.equal(received.context.kind, "offer");
+  assert.equal(received.context.start_date, input.start_date);
+  for (const sender of [student, tutor]) {
+    assert.equal((await sender.request(`${path}/messages`, "POST", { body: "Wrong conversation", context: { kind: "offer", id: otherOffer.id } })).status, 404);
+    assert.equal((await sender.request(`${path}/context/offer/${otherOffer.id}`)).status, 404);
+  }
+  for (const context of [{ kind: "offer", id: 999999 }, { kind: "lesson", id: 999999 }]) {
+    assert.equal((await student.request(`${path}/messages`, "POST", { body: "Missing", context })).status, 404);
+  }
+  for (const context of [{ kind: "offer", id: 0 }, { kind: "support", id: 1 }, { kind: "offer", id: offer.id, href: "https://evil.invalid" }]) {
+    assert.equal((await student.request(`${path}/messages`, "POST", { body: "Invalid", context })).status, 400);
+  }
+  assert.equal((await tutor.request(`${path}/messages`)).data.length, 1);
+  assert.equal((await tutor.request(`/offers/${offer.id}`, "PATCH", { status: "accepted" })).status, 200);
+  const lesson = (await student.request("/bookings")).data.find(b => b.offer_id === offer.id);
+  assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Bài tập của buổi này", context: { kind: "lesson", id: lesson.id } })).status, 201);
+  const lessonMessage = (await student.request(`${path}/messages`)).data.at(-1);
+  assert.equal(lessonMessage.context.starts_at, lesson.starts_at);
+  assert.equal(lessonMessage.context.duration_minutes, 60);
+  assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Trao đổi chung" })).status, 201);
+  assert.equal((await student.request(`${path}/messages`)).data.at(-1).context, null);
+  await student.request(`/offers/${offer.id}`, "PATCH", { status: "cancelled" });
+  assert.equal((await student.request(`${path}/messages`)).data[0].context.status, "cancelled");
+  const weekly = (await student.request("/weekly-requests", "POST", { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks })).data;
+  const weeklyMessage = (await tutor.request(`${path}/messages`)).data.at(-1);
+  assert.equal(weeklyMessage.context.kind, "weekly-request");
+  assert.equal(weeklyMessage.context.id, weekly.id);
+  assert.deepEqual(weeklyMessage.context.blocks, blocks);
+  // Old per-lesson conversations have an implicit, immutable lesson context.
+  await student.request(`/bookings/${lesson.id}/messages`, "POST", { body: "Old lesson thread" });
+  assert.equal((await tutor.request(`/bookings/${lesson.id}/messages`)).data[0].context.id, lesson.id);
+  run(db, "UPDATE inquiry_messages SET context_id=999999 WHERE id=?", received.id);
+  const unavailable = (await student.request(`${path}/messages`)).data[0];
+  assert.equal(unavailable.context, null);
+  assert.equal(unavailable.context_kind, "offer");
+});
+
+test("message context migration preserves existing plain messages and can run twice", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client();
+  await student.login("student"); const teacher = await tutor.login("chau");
+  const thread = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Existing message" })).data;
+  db.exec("ALTER TABLE inquiry_messages DROP COLUMN context_kind");
+  db.exec("ALTER TABLE inquiry_messages DROP COLUMN context_id");
+  migrateDatabase(db); migrateDatabase(db);
+  const messages = (await tutor.request(`/inquiries/${thread.id}/messages`)).data;
+  assert.equal(messages[0].body, "Existing message");
+  assert.equal(messages[0].context, null);
+});
+
+test("catalog removal keeps lesson history and survives reseeding", async t => {
+  const { db, client } = await fixture(t), admin = client(), student = client();
+  await admin.login("admin"); await student.login("student");
+  const old = all(db, "SELECT id FROM bookings WHERE subject_id='toan'");
+  const resource = one(db, "SELECT id FROM resources WHERE subject_id='toan'");
+  assert.equal((await student.request("/admin/subjects/toan", "DELETE")).status, 403);
+  assert.equal((await admin.request(`/admin/resources/${resource.id}`, "DELETE")).status, 200);
+  assert.equal((await admin.request("/admin/subjects/toan", "DELETE")).status, 200);
+  seedCatalog(db); migrateDatabase(db);
+  assert.ok(!(await student.request("/subjects")).data.some(s => s.id === "toan"));
+  assert.ok(!(await student.request("/resources")).data.some(r => r.subject_id === "toan"));
+  assert.ok(!(await admin.request("/admin")).data.resources.some(r => r.subject_id === "toan"));
+  assert.ok(all(db, "SELECT subjects FROM tutors").every(t => !JSON.parse(t.subjects).includes("toan")));
+  assert.equal(all(db, "SELECT id FROM bookings WHERE subject_id='toan'").length, old.length);
+  assert.equal((await admin.request("/admin/subjects/toan", "PUT", { name: "Toán", stage: "THPT", description: "Môn học" })).status, 409);
+});
+
+test("chat attachments remain private and bind only to the sender's thread", async t => {
+  const { db, base, client } = await fixture(t), student = client(), tutor = client(), other = client(), admin = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  await other.login("nam"); await admin.login("admin");
+  const inquiry = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Chào thầy" })).data;
+  const otherInquiry = (await student.request("/inquiries", "POST", { tutor_id: one(db,"SELECT id FROM users WHERE email='nam@demo.giasu.test'").id, body: "Chào thầy" })).data;
+  const path = `/chat/inquiry/${inquiry.id}/attachments`;
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO/aB9sAAAAASUVORK5CYII=", "base64");
+  // Generate a valid image through the same decoder used by profile uploads.
+  const sharp = (await import("sharp")).default;
+  const image = await sharp({create:{width:10,height:10,channels:3,background:"red"}}).png().toBuffer();
+  const upload = (who, url, data, type) => fetch(base+url, {method:"POST",headers:{Cookie:who.cookie,"Content-Type":type},body:data});
+  assert.equal((await upload(other,path,image,"image/png")).status,404);
+  assert.equal((await upload(student,path,png,"image/svg+xml")).status,400);
+  assert.equal((await upload(student,path,Buffer.from("fake"),"audio/mpeg")).status,400);
+  assert.equal((await upload(student,path,Buffer.alloc(8*1024*1024+1),"audio/wav")).status,413);
+  const response = await upload(student,path,image,"image/png"); assert.equal(response.status,201);
+  const attachment = await response.json();
+  const read = (who, headers={}) => fetch(new URL(attachment.url, base),{headers:{Cookie:who?.cookie || "",...headers}});
+  assert.equal((await read()).status,401);
+  assert.equal((await read(tutor)).status,404); // draft is sender-only
+  assert.equal((await student.request(`/inquiries/${otherInquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  assert.equal((await tutor.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  assert.equal((await student.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,201);
+  assert.equal((await read(tutor)).status,200);
+  assert.equal((await read(other)).status,404);
+  assert.equal((await read(admin)).status,404);
+  const ranged = await read(tutor,{Range:"bytes=0-9"}); assert.equal(ranged.status,206); assert.equal((await ranged.arrayBuffer()).byteLength,10);
+  assert.equal((await read(tutor,{Range:"bytes=999999-"})).status,416);
+  const messages = (await tutor.request(`/inquiries/${inquiry.id}/messages`)).data;
+  assert.equal(messages.at(-1).attachment.id,attachment.id);
+  assert.equal((await student.request(`/inquiries/${inquiry.id}/messages`,"POST",{attachment_id:attachment.id})).status,400);
+  const support = (await student.request("/support")).data[0];
+  assert.equal((await admin.request("/support")).data.length,0);
+  const wav = Buffer.alloc(48); wav.write("RIFF"); wav.write("WAVE",8);
+  const voice = await (await upload(student,`/chat/support/${support.id}/attachments`,wav,"audio/wav")).json();
+  assert.equal((await student.request(`/support/${support.id}/messages`,"POST",{attachment_id:voice.id})).status,201);
+  assert.equal((await admin.request("/support")).data.length,1);
+  assert.equal((await admin.request(`/support/${support.id}/messages`)).data.at(-1).attachment.kind,"audio");
+  const slot = one(db, "SELECT * FROM slots WHERE tutor_id=? LIMIT 1", teacher.id);
+  const booking = { id: Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode) VALUES (?,?,?,'toan',?,180000,'online')", learner.id, teacher.id, slot.id, slot.starts_at).lastInsertRowid) };
+  const lessonVoice = await (await upload(tutor,`/chat/lesson/${booking.id}/attachments`,wav,"audio/wav")).json();
+  assert.equal((await tutor.request(`/bookings/${booking.id}/messages`,"POST",{attachment_id:lessonVoice.id})).status,201);
+  assert.equal((await student.request(`/bookings/${booking.id}/messages`)).data.at(-1).attachment.id,lessonVoice.id);
+  migrateDatabase(db);
 });

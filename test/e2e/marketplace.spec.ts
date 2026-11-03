@@ -3,6 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 async function login(page: Page, slug: string) {
   await page.goto("/app/auth");
   await page.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await page
     .getByLabel("Email", { exact: true })
     .fill(`${slug}@demo.giasu.test`);
@@ -73,7 +74,7 @@ test("guest filters, subject navigation and responsive layouts", async ({
   await expect(filterToggle).toHaveAttribute("aria-expanded", "false");
   await choose(page, "Môn học", "Toán");
   await expect(page.locator(".tutor-card")).toHaveCount(3);
-  await choose(page, "Học phí / giờ", "Đến 150.000 ₫");
+  await choose(page, "Học phí / buổi", "Đến 150.000 ₫");
   await expect(page.locator(".tutor-card")).toHaveCount(1);
   await page.goto("/app/library");
   await expect(
@@ -112,10 +113,10 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   // Existing dated lessons remain supported after new requests move to weekly schedules.
   const available = await (await student.request.get("/api/tutors/3")).json();
   expect((await student.request.post("/api/bookings", { data: { slot_id: available.slots[0].id, subject_id: available.subjects[0], mode: "online", note: "Ôn phương trình bậc hai" } })).status()).toBe(201);
-  await student.goto("/app/bookings");
+  await student.goto("/app/bookings?view=list");
   await expect(student.locator(".lesson-card")).toHaveCount(1);
   await login(tutor, "chau");
-  await tutor.goto("/app/bookings");
+  await tutor.goto("/app/bookings?view=list");
   await tutor.getByRole("button", { name: "Nhận buổi học" }).click();
   await tutor.getByRole("button", { name: "Xác nhận", exact: true }).click();
   await expect(tutor.locator(".lesson-card")).toContainText("Đã xác nhận");
@@ -133,7 +134,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   await student.reload();
   await expect(student.locator(".lesson-card")).toContainText("Đã xác nhận");
   const download = student.waitForEvent("download");
-  await student.getByRole("button", { name: "Lưu lịch" }).click();
+  await student.getByRole("button", { name: "Tải toàn bộ lịch" }).click();
   expect((await download).suggestedFilename()).toMatch(/\.ics$/);
   await student.getByRole("link", { name: "Trao đổi" }).click();
   await expect(
@@ -149,7 +150,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   ).toBeVisible();
   await tutor.reload();
   await expect(tutor.getByText("Em cảm ơn cô.", { exact: true })).toBeVisible();
-  await student.goto("/app/bookings");
+  await student.goto("/app/bookings?view=list");
   await student.getByRole("button", { name: "Hủy buổi", exact: true }).click();
   await student.getByRole("button", { name: "Xác nhận", exact: true }).click();
   await expect(student.locator(".lesson-card")).toContainText("Đã hủy");
@@ -166,6 +167,7 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor.goto("/app/tutors");
   await tutor.getByRole("link", { name: "Tài khoản", exact: true }).click();
   await tutor.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await tutor.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await tutor.getByRole("tab", { name: "Tạo tài khoản" }).click();
   await tutor.getByLabel("Họ và tên", { exact: true }).fill("Gia sư kiểm thử");
   await tutor
@@ -667,6 +669,7 @@ test("Google-first unified account entry defers role choice and preserves return
     route.fulfill({ json: { google: true } }),
   );
   await page.goto("/app/auth?mode=register&role=tutor&next=%2Fmessages");
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   const google = page.getByRole("link", { name: "Tiếp tục với Google" });
   await expect(google).toHaveAttribute("href", "/api/auth/google/start?next=%2Fmessages");
   await expect(page.getByRole("combobox", { name: "Bạn tham gia với vai trò" })).toHaveCount(0);
@@ -721,6 +724,7 @@ test("student signup validates confirmation, resumes setup, retries saving and p
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/app/auth?mode=register&next=%2Fmessages");
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await page.getByLabel("Họ và tên", { exact: true }).fill("Học sinh mới");
   await page.getByLabel("Email", { exact: true }).fill("new-student@browser.test");
   await page.getByLabel("Mật khẩu (ít nhất 10 ký tự)", { exact: true }).fill("BrowserStudy2026!");
@@ -798,6 +802,7 @@ test("administrator confirms or cancels promotion and the new administrator sign
   expect((await uc.request.get("/api/admin")).status()).toBe(401);
   await user.goto("/app/auth");
   await user.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await user.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await user.getByLabel("Email", { exact: true }).fill(email);
   await user.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await user.getByRole("button", { name: "Đăng nhập", exact: true }).click();
@@ -812,6 +817,7 @@ test("administrator confirms or cancels promotion and the new administrator sign
 
 test("parent chooses a separate setup and reaches shared booking tools", async ({ page }) => {
   await page.goto("/app/auth?mode=register");
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await page.getByLabel("Họ và tên", { exact: true }).fill("Phụ huynh mới");
   await page.getByLabel("Email", { exact: true }).fill("parent@browser.test");
   await page.getByLabel("Mật khẩu (ít nhất 10 ký tự)", { exact: true }).fill("BrowserStudy2026!");
@@ -833,7 +839,7 @@ test("parent chooses a separate setup and reaches shared booking tools", async (
   await expect(page.locator(".sidebar .brand")).toHaveAttribute("href", "/app/workspace");
   await page.getByRole("link", { name: "Xem buổi học sắp tới: 0", exact: true }).click();
   await expect(page).toHaveURL(/bookings$/);
-  await page.goto("/app/bookings");
+  await page.goto("/app/bookings?view=list");
   await expect(page.locator("main h1")).toBeVisible();
   await page.goto("/app/settings");
   await expect(page.getByLabel("Mục tiêu học tập của con")).toHaveValue("Con ôn thi Toán lớp 9");
@@ -884,6 +890,7 @@ test("signup requires a code in the original browser and survives reload", async
   const first = await browser.newContext(), second = await browser.newContext();
   const page = await first.newPage();
   await page.goto("/app/auth?mode=register");
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await page.getByLabel("Họ và tên", { exact: true }).fill("Email ownership test");
   await page.getByLabel("Email", { exact: true }).fill("verify-browser@browser.test");
   await page.getByLabel("Mật khẩu (ít nhất 10 ký tự)", { exact: true }).fill("BrowserStudy2026!");
@@ -959,11 +966,11 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-
   expect(booked.status()).toBe(201); const booking = await booked.json();
   const accepted = await page.request.patch(`/api/bookings/${booking.id}`, { data: { status: "accepted" } });
   expect(accepted.status()).toBe(200);
-  await student.goto("/app/bookings");
+  await student.goto("/app/bookings?view=list");
   const lesson = student.locator(".lesson-card").filter({ hasText: "Weekly browser test" });
   await expect(lesson).toContainText("60 phút");
   const downloadPromise = student.waitForEvent("download");
-  await lesson.getByRole("button", { name: /Lưu lịch/ }).click();
+  await student.getByRole("button", { name: "Tải toàn bộ lịch" }).click();
   const download = await downloadPromise;
   const stream = await download.createReadStream(); let ics = "";
   for await (const chunk of stream!) ics += chunk.toString();

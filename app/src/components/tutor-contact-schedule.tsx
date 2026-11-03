@@ -35,7 +35,7 @@ export function TutorContactSchedule({ tutor, subjects, preview = false }: { tut
     finally { setBusy(false); }
   }
   return <aside className="booking-panel weekly-booking-panel" id="booking-panel">
-    <div className="booking-price">{money(tutor.rate)}<small> / giờ</small></div>
+    <div className="booking-price">{money(tutor.rate)}<small> / buổi</small></div>
     <h2><CalendarDays size={19} />Đề nghị học</h2>
     <form onSubmit={submit}><FieldGroup>
       <Choose label="Môn học" value={subject} onChange={setSubject} options={tutor.subjects.map(id => ({ value: id, label: subjects.find(s => s.id === id)?.name || id }))} />

@@ -28,7 +28,7 @@ export function registerWeeklyRequests(app, db, auth) {
       const { id: inquiry } = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", req.user.id, d.tutor_id);
       const id = Number(run(db, "INSERT INTO weekly_requests(student_id,tutor_id,inquiry_id,subject_id,mode,blocks,note,rate) VALUES (?,?,?,?,?,?,?,?)", req.user.id, d.tutor_id, inquiry, d.subject_id, d.mode, JSON.stringify(blocks), d.note, tutor.rate).lastInsertRowid);
       const hours = blocks.map(b => `${labels[b.weekday]} ${String(b.hour).padStart(2, "0")}:00–${String(b.hour + 1).padStart(2, "0")}:00`).join(", ");
-      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body) VALUES (?,?,?)", inquiry, req.user.id, `Yêu cầu học hằng tuần #${id}: ${hours} (giờ Việt Nam).${d.note ? `\n${d.note}` : ""}`);
+      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id) VALUES (?,?,?,'weekly-request',?)", inquiry, req.user.id, `Yêu cầu học hằng tuần #${id}: ${hours} (giờ Việt Nam).${d.note ? `\n${d.note}` : ""}`, id);
       return { id, inquiry_id: inquiry };
     });
     res.status(201).json(result);
@@ -42,8 +42,9 @@ export function registerWeeklyRequests(app, db, auth) {
       if (status !== "cancelled" && req.user.id !== r.tutor_id) fail(403, "Chỉ gia sư có thể xác nhận yêu cầu.");
       if (!(status === "cancelled" ? ["pending", "accepted"] : ["pending"]).includes(r.status)) fail(409, "Yêu cầu đã được xử lý. Vui lòng tải lại.");
       if (status === "accepted") {
-        const tutor = one(db, "SELECT t.status FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", r.tutor_id);
+        const tutor = one(db, "SELECT t.status,t.subjects,t.mode FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", r.tutor_id);
         if (tutor?.status !== "approved" || !one(db, "SELECT id FROM users WHERE id=? AND status='active' AND role='student'", r.student_id)) fail(409, "Tài khoản hiện không thể xác nhận lịch học.");
+        if (!JSON.parse(tutor.subjects).includes(r.subject_id) || (tutor.mode !== "both" && tutor.mode !== r.mode)) fail(409, "Môn học hoặc hình thức dạy đã thay đổi.");
         const blocks = JSON.parse(r.blocks), available = new Set(weeklySchedule(db, r.tutor_id).blocks.map(key));
         if (blocks.some(b => !available.has(key(b)))) fail(409, "Lịch dạy đã thay đổi. Hãy trao đổi với học sinh trước khi xác nhận.");
         const wanted = new Set(blocks.map(key));
@@ -52,7 +53,7 @@ export function registerWeeklyRequests(app, db, auth) {
       }
       run(db, "UPDATE weekly_requests SET status=? WHERE id=?", status, id);
       const label = { accepted: "Đã xác nhận", declined: "Đã từ chối", cancelled: "Đã hủy" }[status];
-      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body) VALUES (?,?,?)", r.inquiry_id, req.user.id, `${label} yêu cầu học hằng tuần #${id}.`);
+      run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id) VALUES (?,?,?,'weekly-request',?)", r.inquiry_id, req.user.id, `${label} yêu cầu học hằng tuần #${id}.`, id);
     });
     res.json({ ok: true });
   });

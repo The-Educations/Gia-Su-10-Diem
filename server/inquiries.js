@@ -1,6 +1,8 @@
+import { withChatMedia, insertChatMessage } from "./chat-media.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text, availabilitySchema } from "./validation.js";
 import { weeklySchedule } from "./availability.js";
+import { inquiryMessageContext, messageContextSchema, withInquiryContexts } from "./message-context.js";
 export function registerInquiries(app, db, auth) {
   const participant = (req, res) => {
     const thread = one(db, "SELECT * FROM inquiries WHERE id=?", req.params.id);
@@ -75,17 +77,25 @@ export function registerInquiries(app, db, auth) {
     });
     res.status(201).json(result);
   });
+  app.get("/api/inquiries/:id/context/:kind/:contextId", auth("student", "tutor"), (req, res) => {
+    const thread = participant(req, res);
+    if (!thread) return;
+    const context = inquiryMessageContext(db, thread, { kind: req.params.kind, id: Number(req.params.contextId) });
+    if (!context) return res.status(404).json({ error: "Không tìm thấy nội dung trong cuộc trò chuyện này." });
+    res.json(context);
+  });
   app.get(
     "/api/inquiries/:id/messages",
     auth("student", "tutor"),
     (req, res) => {
-      if (!participant(req, res)) return;
+      const thread = participant(req, res);
+      if (!thread) return;
       res.json(
-        all(
+        withChatMedia(db, "inquiry", thread.id, withInquiryContexts(db, thread, all(
           db,
           "SELECT m.*,u.name FROM inquiry_messages m JOIN users u ON u.id=m.sender_id WHERE inquiry_id=? ORDER BY m.id",
           req.params.id,
-        ),
+        ))),
       );
     },
   );
@@ -95,26 +105,10 @@ export function registerInquiries(app, db, auth) {
     (req, res) => {
       const thread = participant(req, res);
       if (!thread) return;
-      const { body } = z.object({ body: text(3000) }).parse(req.body);
-      const recipient =
-        req.user.id === thread.student_id ? thread.tutor_id : thread.student_id;
-      if (
-        !one(
-          db,
-          "SELECT id FROM users WHERE id=? AND status='active'",
-          recipient,
-        )
-      )
-        return res
-          .status(409)
-          .json({ error: "Tài khoản nhận hiện không hoạt động." });
-      run(
-        db,
-        "INSERT INTO inquiry_messages(inquiry_id,sender_id,body) VALUES (?,?,?)",
-        thread.id,
-        req.user.id,
-        body,
-      );
+      const context = messageContextSchema.nullish().parse(req.body?.context);
+      if (context && !inquiryMessageContext(db, thread, context))
+        return res.status(404).json({ error: "Không tìm thấy nội dung trong cuộc trò chuyện này." });
+      insertChatMessage(db, "inquiry", thread.id, req.user, req.body, context);
       res.status(201).json({ ok: true });
     },
   );

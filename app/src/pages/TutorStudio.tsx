@@ -222,7 +222,7 @@ function ProfileForm({
                     ]}
                   />
                   <Field>
-                    <FieldLabel htmlFor="rate">Học phí (VND / giờ)</FieldLabel>
+                    <FieldLabel htmlFor="rate">Học phí (VND / buổi)</FieldLabel>
                     <Input
                       id="rate"
                       name="rate"
@@ -372,7 +372,7 @@ function ProfileForm({
         <aside className="studio-preview" aria-label="Xem trước hồ sơ">
           <div className="studio-preview-heading">
             <h2>Xem trước hồ sơ</h2>
-            <span>{money(draft.rate)} / giờ</span>
+            <span>{money(draft.rate)} / buổi</span>
           </div>
           <TutorPresentation
             preview
