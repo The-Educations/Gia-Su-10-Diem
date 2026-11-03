@@ -40,6 +40,7 @@ export default function Onboarding() {
         <ToggleGroupItem value="tutor"><GraduationCap aria-hidden="true" />Gia sư</ToggleGroupItem>
       </ToggleGroup> : <>
         <Field><FieldLabel htmlFor="setup-name">Họ và tên</FieldLabel><Input id="setup-name" name="name" defaultValue={user!.name} autoComplete="name" required maxLength={80} /></Field>
+        <Field><FieldLabel htmlFor="setup-display-name">Tên hiển thị trong cộng đồng</FieldLabel><Input id="setup-display-name" name="display_name" defaultValue={user!.display_name || user!.name.trim().split(/\s+/).at(-1)} required minLength={2} maxLength={30} /></Field>
         {user!.role === "student" && <>
           <Field><FieldLabel htmlFor="setup-school">{user!.learner_type === "parent" ? "Trường của con" : "Trường đang học"}</FieldLabel><Input id="setup-school" name="school" defaultValue={user!.school} required maxLength={160} /></Field>
           <AddressFields value={address} onChange={setAddress} />

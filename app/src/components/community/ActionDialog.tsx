@@ -18,6 +18,7 @@ export type CommunityAction = {
   body?: Record<string, unknown>;
   reasonField?: "note" | "reason" | "resolution";
   report?: boolean;
+  profileReport?: boolean;
 };
 export default function ActionDialog({
   action,
@@ -29,6 +30,7 @@ export default function ActionDialog({
   done?: () => void;
 }) {
   const { refresh } = useApp();
+  const [part, setPart] = useState("avatar");
   const [reason, setReason] = useState("Quảng cáo"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -59,6 +61,7 @@ export default function ActionDialog({
                 ...action.body,
                 ...fields,
                 ...(action.report ? { reason } : {}),
+                ...(action.profileReport ? { part } : {}),
               });
               refresh();
               toast.success("Đã thực hiện");
@@ -72,6 +75,7 @@ export default function ActionDialog({
           }}
         >
           <FieldGroup>
+            {action.profileReport && <Choose label="Phần cần báo cáo" value={part} onChange={setPart} options={[{ value:"avatar", label:"Ảnh đại diện" },{ value:"cover", label:"Ảnh bìa" },{ value:"bio", label:"Giới thiệu" }]} />}
             {action.report && (
               <Choose
                 label="Lý do báo cáo"

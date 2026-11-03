@@ -40,6 +40,7 @@ export default function CommunityWorkspace() {
         <NavLink to="/community/mine">
           Bài của tôi <CommunityUnread />
         </NavLink>
+        <NavLink to={`/community/members/${user.profile_code}`}>Hồ sơ</NavLink>
         {user.role === "admin" && (
           <Button asChild size="sm">
             <Link to="/admin?tab=community">

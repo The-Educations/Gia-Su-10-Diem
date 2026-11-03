@@ -8,6 +8,7 @@ export type EducationEntry = {
 };
 export type GalleryPhoto = { id: string; url: string; caption: string; created_at: string };
 export type User = {
+  profile_code: string;
   display_name: string;
   community_locked: boolean;
   community_lock_reason: string;
@@ -163,7 +164,7 @@ export const accountRole = (user: User) => user.role === "admin" ? "Quản trị
 
 export type Post = { id: number; title: string; summary: string; body: string; published: number; published_at: string | null };
 
-export type CommunityAuthor = { label: string; name_part: string; tier: "student" | "parent" | "tutor" | "admin"; tutor_id?: number };
+export type CommunityAuthor = { profile_code: string; has_avatar: boolean; image_version: string; label: string; name_part: string; tier: "student" | "parent" | "tutor" | "admin"; tutor_id?: number };
 export interface CommunityDraft {
   id: string;
   title: string;
@@ -192,3 +193,9 @@ export type CommunityFeed = { rules: CommunityPostData | null; items: CommunityP
 export type CommunityNotice = { id: number; kind: string; post_id: number; title: string; created_at: string; read_at: string | null };
 export type CommunityOwner = { id: number; name: string; email: string; community_locked: number; community_lock_reason: string };
 export type CommunityReview = CommunityPostData & { owner: CommunityOwner; review_version: number };
+
+export type CommunityMember = CommunityAuthor & {
+  code: string; has_cover: boolean; bio: string; joined_at: string; mine: boolean; display_name?: string;
+  stats: { posts: number; comments: number; helpful: number };
+};
+export type CommunityMemberResponse = { profile: CommunityMember; admin?: CommunityOwner & { status: string } };
