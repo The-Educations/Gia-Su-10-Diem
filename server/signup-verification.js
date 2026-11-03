@@ -1,3 +1,4 @@
+import { assignProfileCode } from "./profile-code.js";
 import { randomBytes, randomInt } from "node:crypto";
 import { one, run, tokenHash, transaction } from "./db.js";
 import { z } from "./validation.js";
@@ -52,6 +53,7 @@ export function registerSignupVerification(app, db, { sendEmail, production, ses
     const user = transaction(db, () => {
       if (one(db, "SELECT id FROM users WHERE email=?", row.email) || (data.googleSubject && one(db, "SELECT user_id FROM oauth_identities WHERE provider='google' AND subject=?", data.googleSubject))) fail(409, "Tài khoản đã tồn tại. Vui lòng đăng nhập.");
       const id = Number(run(db, "INSERT INTO users(name,email,password,role,onboarding_step,email_verified_at) VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)", data.name, row.email, data.password || "", data.role || "student", data.role === "admin" ? 3 : 0).lastInsertRowid);
+      assignProfileCode(db, id);
       if (data.role === "tutor") run(db, "INSERT INTO tutors(user_id) VALUES (?)", id);
       if (data.googleSubject) run(db, "INSERT INTO oauth_identities VALUES ('google',?,?)", data.googleSubject, id);
       run(db, "DELETE FROM pending_signups WHERE email=?", row.email);

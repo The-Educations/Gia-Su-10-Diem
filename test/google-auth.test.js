@@ -89,6 +89,7 @@ test("Google OAuth binds state to browser, enforces nonce, roles, linking and re
   assert.ok(tutor.email_verified_at, "Google verified claim confirms matching account email");
   assert.equal(tutor.role, "student");
   assert.equal(tutor.onboarding_step, 0);
+  assert.match(tutor.profile_code, /^[a-z2-9]{8}$/);
   assert.equal(tutor.password, "");
   assert.equal(one(db, "SELECT * FROM tutors WHERE user_id=?", tutor.id), undefined);
   assert.match((await callback(flow)).headers.get("location"), /expired/);

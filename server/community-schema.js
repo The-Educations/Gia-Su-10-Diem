@@ -1,3 +1,4 @@
+import { assignProfileCode } from "./profile-code.js";
 import { RULES_TITLE, RULES_BODY, fold } from "./community-policy.js";
 
 export function migrateCommunity(db) {
@@ -6,6 +7,8 @@ export function migrateCommunity(db) {
     .all()
     .map((c) => c.name);
   for (const [name, definition] of Object.entries({
+    profile_code: "TEXT",
+    bio: "TEXT NOT NULL DEFAULT ''",
     display_name: "TEXT NOT NULL DEFAULT ''",
     community_locked: "INTEGER NOT NULL DEFAULT 0",
     community_lock_reason: "TEXT NOT NULL DEFAULT ''",
@@ -13,6 +16,9 @@ export function migrateCommunity(db) {
     if (!columns.includes(name))
       db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
   }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_profile_code ON users(profile_code)");
+  for (const user of db.prepare("SELECT id FROM users WHERE profile_code IS NULL").all())
+    assignProfileCode(db, user.id);
   db.exec(`CREATE TABLE IF NOT EXISTS community_posts (
   id INTEGER PRIMARY KEY,
   author_id INTEGER NOT NULL REFERENCES users(id),

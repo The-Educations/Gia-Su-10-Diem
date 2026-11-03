@@ -152,12 +152,16 @@ test("contact filtering, names and live public author labels", () => {
   assert.equal(displayNameSchema.safeParse("Minh").success, true);
   const u = {
     id: 77,
+    profile_code: "k7x2m9qa",
     name: "Private",
     display_name: "Minh",
     role: "student",
     learner_type: "parent",
   };
   assert.deepEqual(authorLabel(u), {
+    profile_code: "k7x2m9qa",
+    has_avatar: false,
+    image_version: "",
     label: "Minh - Phụ huynh",
     name_part: "Minh",
     tier: "parent",
@@ -1138,4 +1142,19 @@ test("draft images stay private and survive upload cleanup until publication", a
     "POST",
   );
   assert.equal((await imageRequest(null, url)).status, 200);
+});
+
+
+test("member codes are random, unique, stable across migrations and public without private IDs", async (t) => {
+  const { db, call, create, approve } = await fixture(t);
+  const before = db.prepare("SELECT id,profile_code FROM users ORDER BY id").all();
+  assert.equal(new Set(before.map(u => u.profile_code)).size, before.length);
+  for (const u of before) assert.match(u.profile_code, /^[a-z2-9]{8}$/);
+  migrateDatabase(db);
+  assert.deepEqual(db.prepare("SELECT id,profile_code FROM users ORDER BY id").all(), before);
+  const id = await create(); await approve(id);
+  const post = (await call(null, `/community/posts/${id}`)).data;
+  assert.equal(post.author.profile_code, before[0].profile_code);
+  assert.equal(post.author.has_avatar, false);
+  assert.equal(post.author.id, undefined);
 });

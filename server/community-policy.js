@@ -100,7 +100,7 @@ export const displayNameSchema = content(30)
     (s) => !/(admin|quan\s*tri)/.test(fold(s)),
     "Tên hiển thị không được chứa Admin hoặc Quản trị.",
   );
-export function authorLabel(u) {
+export function authorLabel(u, viewer = null) {
   const tier =
     u.role === "admin"
       ? "admin"
@@ -114,6 +114,9 @@ export function authorLabel(u) {
       ? u.name
       : u.display_name || "Thành viên";
   return {
+    profile_code: u.profile_code,
+    has_avatar: !!viewer && !!u.has_avatar,
+    image_version: viewer ? u.image_version || "" : "",
     label: `${name} - ${{ admin: "Quản trị viên", tutor: "Gia sư", parent: "Phụ huynh", student: "Học sinh" }[tier]}`,
     name_part: name,
     tier,

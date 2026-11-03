@@ -213,6 +213,7 @@ export const publicUser = (u) =>
         email: u.email,
         timezone: u.timezone,
         display_name: u.display_name,
+        profile_code: u.profile_code,
         community_locked: !!u.community_locked,
         community_lock_reason: u.community_lock_reason,
         email_verified: !!u.email_verified_at,

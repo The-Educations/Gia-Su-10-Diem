@@ -45,13 +45,14 @@ export function registerCommunity(app, db, auth, audit) {
   const fail = (status, message) => {
     throw Object.assign(new Error(message), { status });
   };
-  const author = (id) =>
+  const author = (id, viewer) =>
     authorLabel(
       one(
         db,
         "SELECT u.*,t.status tutor_status FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
         id,
       ),
+      viewer,
     );
   const participant = (req, _res, next) => {
     if (req.user.community_locked)
@@ -118,7 +119,7 @@ export function registerCommunity(app, db, auth, audit) {
       title: p.title,
       body: p.body,
       body_html: p.body_html,
-      author: author(p.author_id),
+      author: author(p.author_id, user),
       mine: !!own,
       solved: !!p.solved,
       best_comment_id: p.best_comment_id,
@@ -259,7 +260,7 @@ export function registerCommunity(app, db, auth, audit) {
     res.json(serialize(getPost(req.params.id, req.user), req.user)),
   );
   app.get("/api/community/me", auth(), (req, res) => {
-    const identity = author(req.user.id);
+    const identity = author(req.user.id, req.user);
     res.json({
       author: identity,
       needs_name:
@@ -458,7 +459,7 @@ export function registerCommunity(app, db, auth, audit) {
       post_id: c.post_id,
       parent_id: c.parent_id,
       body: visible ? c.body : "",
-      author: visible ? author(c.author_id) : null,
+      author: visible ? author(c.author_id, user) : null,
       removed: !visible,
       removed_by_admin: c.status === "removed_by_admin",
       mine: user?.id === c.author_id,
