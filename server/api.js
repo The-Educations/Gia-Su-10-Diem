@@ -60,6 +60,7 @@ export function createApi(
     processPhoto,
     clientIp,
     sendEmail,
+    sendAdminEmail,
   } = {},
 ) {
   const app = express();
@@ -230,7 +231,7 @@ export function createApi(
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
-  registerCommunity(app, db, auth, audit, processPhoto);
+  registerCommunity(app, db, auth, audit, processPhoto, { sendAdminEmail, origin });
   registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
   registerSupport(app, db, auth);
@@ -462,6 +463,7 @@ export function createApi(
           ON CONFLICT(tutor_id) DO UPDATE SET blocks=excluded.blocks,revision=revision+1`, req.user.id, JSON.stringify(schedule.blocks));
         reconcileAvailability(db, req.user.id);
       }
+      if (d.accepts_trial !== undefined) run(db, "UPDATE tutors SET accepts_trial=? WHERE user_id=?", Number(d.accepts_trial), req.user.id);
       if (address) run(db, "UPDATE tutors SET province_code=?,ward_code=? WHERE user_id=?", address.province_code, address.ward_code, req.user.id);
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
@@ -743,7 +745,7 @@ export function createApi(
       ),
     }),
   );
-  registerTutorReview(app, db, auth, audit, { sendEmail, origin });
+  registerTutorReview(app, db, auth, audit, { sendEmail: sendAdminEmail || sendEmail, origin });
   app.patch("/api/admin/users/:id/role", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     z.object({ role: z.literal("admin") }).strict().parse(req.body);

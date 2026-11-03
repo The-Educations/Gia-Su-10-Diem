@@ -235,6 +235,10 @@ function ProfileForm({
                     />
                   </Field>
                 </div>
+                <Field orientation="horizontal">
+                  <input type="checkbox" id="accepts-trial" checked={!!draft.accepts_trial} onChange={e => setDraft(d => ({ ...d, accepts_trial: e.target.checked }))} />
+                  <FieldLabel htmlFor="accepts-trial">Nhận học thử miễn phí · 60 phút</FieldLabel>
+                </Field>
                 {options(
                   "Môn nhận dạy",
                   "subjects",

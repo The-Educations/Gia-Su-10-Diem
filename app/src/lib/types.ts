@@ -57,6 +57,7 @@ export type Tutor = {
   name: string;
   demo: number;
   headline: string;
+  accepts_trial: number | boolean;
   teaching_style: string;
   lesson_plan: string;
   profile_theme: "paper" | "sage" | "ink";

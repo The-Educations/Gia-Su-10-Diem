@@ -10,7 +10,7 @@ const time = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 export const scheduleKeys = (schedule: WeeklySchedule) => new Set(schedule.blocks.map(b => b.hour * 7 + b.weekday));
 
 export const scheduleBlocks = (selected: Set<number>) => [...selected].sort((a, b) => a - b).map(key => ({ weekday: key % 7, hour: Math.floor(key / 7) }));
-export function AvailabilityGrid({ selected, setSelected, busy = false, available, preferred }: { selected: Set<number>; setSelected: Dispatch<SetStateAction<Set<number>>>; busy?: boolean; available?: Set<number>; preferred?: Set<number> }) {
+export function AvailabilityGrid({ selected, setSelected, busy = false, available, preferred, single = false }: { selected: Set<number>; setSelected: Dispatch<SetStateAction<Set<number>>>; busy?: boolean; available?: Set<number>; preferred?: Set<number>; single?: boolean }) {
   const visibleHours = available ? hours.filter(hour => days.some((_, day) => available.has(hour * 7 + day))) : hours;
   const drag = useRef<{ start: number; add: boolean; original: Set<number> } | null>(null);
   const pointerType = useRef("");
@@ -35,14 +35,15 @@ export function AvailabilityGrid({ selected, setSelected, busy = false, availabl
   function toggle(key: number) {
     setSelected(previous => {
       if (available && !available.has(key)) return previous;
-      const next = new Set(previous);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      const next = new Set(single ? [] : previous);
+      if (previous.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   }
   function paint(end: number) {
     const stroke = drag.current;
     if (!stroke) return;
+    if (single) { setSelected(stroke.add ? new Set([end]) : new Set()); return; }
     const next = new Set(stroke.original);
     for (let row = Math.min(Math.floor(stroke.start / 7), Math.floor(end / 7)); row <= Math.max(Math.floor(stroke.start / 7), Math.floor(end / 7)); row++) {
       for (let day = Math.min(stroke.start % 7, end % 7); day <= Math.max(stroke.start % 7, end % 7); day++) {

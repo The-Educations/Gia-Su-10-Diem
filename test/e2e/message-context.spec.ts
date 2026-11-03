@@ -12,8 +12,7 @@ test("offer and dated lesson messages keep context for both people, with direct 
   const start = new Date(Date.now() + 70 * 86400000);
   start.setUTCDate(start.getUTCDate() + (8 - start.getUTCDay()) % 7);
   const start_date = start.toISOString().slice(0, 10);
-  const end_date = new Date(+start + 7 * 86400000).toISOString().slice(0, 10);
-  const response = await page.request.post("/api/offers", { data: { tutor_id: profile.user_id, subject_id: "vat-li", mode: "online", blocks, start_date, end_date } });
+  const response = await page.request.post("/api/offers", { data: { tutor_id: profile.user_id, subject_id: "vat-li", mode: "online", blocks, start_date, weeks: 2 } });
   expect(response.ok()).toBe(true);
   const offer = await response.json();
   try {

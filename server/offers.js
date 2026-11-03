@@ -8,7 +8,7 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(+parsed) && parsed.toISOString().slice(0, 10) === value;
 }, "Ngày không hợp lệ.");
-const schema = z.object({ tutor_id: z.number().int().positive(), subject_id: z.string(), mode: z.enum(["online", "offline"]), start_date: date, end_date: date, note: z.string().trim().max(2000).default("") });
+const schema = z.object({ tutor_id: z.number().int().positive(), subject_id: z.string(), mode: z.enum(["online", "offline"]), start_date: date, kind: z.enum(["course", "trial"]).default("course"), weeks: z.number().int().min(1).max(52).optional(), end_date: z.never().optional(), note: z.string().trim().max(2000).default("") });
 const blockKey = b => b.weekday * 24 + b.hour;
 
 export function offerDates(offer) {
@@ -53,6 +53,9 @@ export function registerOffers(app, db, auth) {
     if (!offer) fail(404, "Không tìm thấy đề nghị học.");
     return { ...offer, blocks: JSON.parse(offer.blocks) };
   }
+  function trialEligible(studentId, tutorId) {
+    if (one(db, "SELECT id FROM offers WHERE student_id=? AND tutor_id=? AND kind='trial' AND accepted_at IS NOT NULL", studentId, tutorId)) fail(409, "Bạn đã được nhận học thử với gia sư này. Hãy gửi đề nghị học theo khóa.");
+  }
   function input(req) {
     const d = schema.parse(req.body);
     const { blocks } = availabilitySchema.parse({ revision: 0, blocks: req.body.blocks });
@@ -60,7 +63,20 @@ export function registerOffers(app, db, auth) {
     const tutor = one(db, "SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'", d.tutor_id);
     if (!tutor) fail(404, "Gia sư chưa có hồ sơ công khai.");
     if (!JSON.parse(tutor.subjects).includes(d.subject_id) || (tutor.mode !== "both" && tutor.mode !== d.mode)) fail(400, "Môn học hoặc hình thức không phù hợp.");
-    return { ...d, blocks, student_id: req.user.id, rate: tutor.rate, status: "pending" };
+    if (d.kind === "trial") {
+      if (!tutor.accepts_trial) fail(409, "Gia sư hiện không nhận học thử.");
+      if (blocks.length !== 1 || d.weeks !== undefined) fail(400, "Học thử chỉ gồm một buổi 60 phút.");
+      trialEligible(req.user.id, d.tutor_id);
+      const start = new Date(`${d.start_date}T00:00:00Z`);
+      const weekday = (start.getUTCDay() + 6) % 7;
+      start.setUTCDate(start.getUTCDate() + (blocks[0].weekday - weekday + 7) % 7);
+      d.start_date = start.toISOString().slice(0, 10);
+      d.end_date = d.start_date;
+    } else {
+      if (d.weeks === undefined) fail(400, "Chọn số tuần học từ 1 đến 52.");
+      d.end_date = new Date(Date.parse(`${d.start_date}T00:00:00Z`) + (d.weeks * 7 - 1) * dayMs).toISOString().slice(0, 10);
+    }
+    return { ...d, blocks, student_id: req.user.id, rate: d.kind === "trial" ? 0 : tutor.rate, status: "pending" };
   }
   app.get("/api/offers", auth("student", "tutor"), (req, res) => {
     res.json(all(db, `${select} WHERE o.student_id=? OR o.tutor_id=? ORDER BY o.id DESC`, req.user.id, req.user.id).map(o => ({ ...o, blocks: JSON.parse(o.blocks) })));
@@ -77,7 +93,7 @@ export function registerOffers(app, db, auth) {
       if (one(db, "SELECT id FROM offers WHERE student_id=? AND tutor_id=? AND status='pending'", req.user.id, d.tutor_id)) fail(409, "Bạn đã có đề nghị đang chờ gia sư này. Hãy mở Đề nghị học để trao đổi hoặc hủy.");
       run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", d.student_id, d.tutor_id);
       const { id: inquiry_id } = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", d.student_id, d.tutor_id);
-      const id = Number(run(db, "INSERT INTO offers(student_id,tutor_id,inquiry_id,subject_id,mode,blocks,note,rate,start_date,end_date) VALUES (?,?,?,?,?,?,?,?,?,?)", d.student_id, d.tutor_id, inquiry_id, d.subject_id, d.mode, JSON.stringify(d.blocks), d.note, d.rate, d.start_date, d.end_date).lastInsertRowid);
+      const id = Number(run(db, "INSERT INTO offers(student_id,tutor_id,inquiry_id,subject_id,mode,blocks,note,rate,start_date,end_date,kind,weeks) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", d.student_id, d.tutor_id, inquiry_id, d.subject_id, d.mode, JSON.stringify(d.blocks), d.note, d.rate, d.start_date, d.end_date, d.kind, d.weeks ?? null).lastInsertRowid);
       return { id, inquiry_id };
     });
     res.status(201).json(result);
@@ -92,6 +108,11 @@ export function registerOffers(app, db, auth) {
         const tutor = one(db, "SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'", o.tutor_id);
         if (!tutor || !one(db, "SELECT id FROM users WHERE id=? AND status='active' AND role='student'", o.student_id)) fail(409, "Tài khoản hiện không thể xác nhận lịch học.");
         if (!JSON.parse(tutor.subjects).includes(o.subject_id) || (tutor.mode !== "both" && tutor.mode !== o.mode)) fail(409, "Môn học hoặc hình thức dạy đã thay đổi.");
+        if (o.kind === "trial") {
+          if (!tutor.accepts_trial) fail(409, "Gia sư hiện không nhận học thử.");
+          trialEligible(o.student_id, o.tutor_id);
+          if (o.rate !== 0 || offerDates(o).length !== 1) fail(409, "Học thử phải là một buổi miễn phí.");
+        }
         const check = preview(db, o);
         if (check.conflict_count) fail(409, "Lịch đã thay đổi hoặc bị trùng. Vui lòng xem lại đề nghị trước khi chấp nhận.");
         for (const session of check.sessions) {
@@ -101,7 +122,7 @@ export function registerOffers(app, db, auth) {
         }
       }
       if (status === "cancelled") run(db, "UPDATE bookings SET status='cancelled' WHERE offer_id=? AND status IN ('pending','accepted') AND starts_at>?", o.id, new Date().toISOString());
-      run(db, "UPDATE offers SET status=? WHERE id=?", status, o.id);
+      run(db, "UPDATE offers SET status=?,accepted_at=CASE WHEN ?='accepted' THEN CURRENT_TIMESTAMP ELSE accepted_at END WHERE id=?", status, status, o.id);
     });
     res.json({ ok: true });
   });

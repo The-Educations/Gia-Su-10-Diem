@@ -130,6 +130,12 @@ CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notificatio
       DROP TABLE community_reports;
       ALTER TABLE community_reports_with_profiles RENAME TO community_reports;`);
   }
+  db.exec(`CREATE TABLE IF NOT EXISTS community_mail (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+    detail TEXT NOT NULL, reason TEXT NOT NULL, path TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT,
+    attempted_at INTEGER NOT NULL DEFAULT 0, sending_until INTEGER NOT NULL DEFAULT 0
+  )`);
   if (!db.prepare("PRAGMA table_info(community_notifications)").all().some(c => c.name === "detail"))
     db.exec("ALTER TABLE community_notifications ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   if (

@@ -1,3 +1,4 @@
+import { registerCommunityMail } from "./community-mail.js";
 import { registerCommunityProfile, setMemberProfile, memberByCode } from "./community-profile.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
@@ -41,7 +42,8 @@ export function publicCommunityPost(db, id) {
     updated_at: p.updated_at,
   };
 }
-export function registerCommunity(app, db, auth, audit, processPhoto) {
+export function registerCommunity(app, db, auth, audit, processPhoto, mailOptions = {}) {
+  const mail = registerCommunityMail(app, db, auth, audit, mailOptions);
   const fail = (status, message) => {
     throw Object.assign(new Error(message), { status });
   };
@@ -149,7 +151,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
         : {}),
     };
   };
-  registerCommunityProfile(app, db, auth, audit, processPhoto, { serialize });
+  registerCommunityProfile(app, db, auth, audit, processPhoto, { serialize, mail });
   const follow = (post, user) =>
     run(
       db,
@@ -765,5 +767,6 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
     follow,
     rules,
     removeComment,
+    mail,
   });
 }

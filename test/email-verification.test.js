@@ -90,3 +90,17 @@ test("missing mail configuration fails before creating an unusable account", asy
   assert.equal((await request("/auth/register", "POST", signup)).status, 503);
   assert.equal(one(db, "SELECT COUNT(*) AS n FROM users").n, 0);
 });
+
+test("moderation template uses admin mailbox, logo, escaped reason and readable details", async t => {
+  const original = globalThis.fetch; let payload;
+  globalThis.fetch = async (_url, options) => { payload = JSON.parse(options.body); return new Response("{}", { status: 200 }); };
+  t.after(() => { globalThis.fetch = original; });
+  const message = { to: "member@example.test", kind: "community_moderation", detail: 'Ảnh bìa <img onerror="bad"> đã gỡ', reason: '<script>bad</script> & lý do', occurredAt: "03/11/2026 (giờ Việt Nam)", link: "https://giasudiem10.online/app/community" };
+  await assert.rejects(createMailflareSender({ key: "test", mailboxId: "contact" })(message), /admin mailbox/);
+  await createMailflareSender({ key: "test", mailboxId: "admin", from: "admin@giasudiem10.online" })(message);
+  assert.equal(payload.from, "admin@giasudiem10.online"); assert.equal(payload.mailboxId, "admin");
+  assert.deepEqual(payload.to, [message.to]); assert.equal(payload.trackOpens, false);
+  assert.match(payload.html, /brand-icon-20261031.png/); assert.match(payload.html, /&lt;script&gt;bad&lt;\/script&gt;/);
+  assert.equal(payload.html.includes('<img onerror='), false); assert.match(payload.text, /Lý do:/);
+  assert.match(payload.html, /trả lời email này/); assert.match(payload.text, /giờ Việt Nam/);
+});
