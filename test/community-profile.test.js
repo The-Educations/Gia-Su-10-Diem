@@ -564,3 +564,55 @@ test("admin can inspect a suspended profile without counting nonpublic activity"
     { items: [], more: false },
   );
 });
+
+test("moderation sends private reasons from admin and persists failures for authorized retries", async t => {
+  const emails = []; let offline = true;
+  const { db, ids, call, create, approve } = await fixture(t, { sendAdminEmail: async mail => {
+    if (offline) throw new Error("Mailflare unavailable"); emails.push(mail);
+  } });
+  const code = one(db, "SELECT profile_code FROM users WHERE id=?", ids.student).profile_code;
+  run(db, "UPDATE users SET bio='Nội dung cần gỡ' WHERE id=?", ids.student);
+  const path = `/admin/community/members/${code}/bio`;
+  assert.equal((await call("parent", path, "DELETE", { note: "Không được phép" })).status, 403);
+  assert.equal((await call("admin", path, "DELETE", { note: "" })).status, 400);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM community_mail").n, 0);
+  const removed = await call("admin", path, "DELETE", { note: 'Lý do <script>alert("test")</script>' });
+  assert.equal(removed.status, 200); assert.equal(removed.data.email_status, "failed");
+  assert.equal(one(db, "SELECT bio FROM users WHERE id=?", ids.student).bio, "");
+  assert.match((await call("student", "/community/notifications")).data[0]?.detail || JSON.stringify((await call("student", "/community/notifications")).data), /Lý do/);
+  const pending = (await call("admin", "/admin/community/mail")).data;
+  assert.equal(pending.length, 1); const id = pending[0].id;
+  assert.equal((await call("student", "/admin/community/mail")).status, 403);
+  assert.equal((await call("student", `/admin/community/mail/${id}/retry`, "POST")).status, 403);
+  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).status, 429);
+  offline = false; run(db, "UPDATE community_mail SET attempted_at=0");
+  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).data.email_status, "sent");
+  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).data.email_status, "sent");
+  assert.equal(emails.length, 1); assert.equal(emails[0].kind, "community_moderation"); assert.equal(emails[0].to, "student@private.test");
+  assert.match(emails[0].link, new RegExp(`/app/community/members/${code}$`)); assert.match(emails[0].occurredAt, /giờ Việt Nam/);
+  assert.equal((await call("admin", path, "DELETE", { note: "Gỡ lần nữa" })).status, 409);
+  assert.equal((await call("admin", "/admin/community/mail")).data.length, 0);
+  const postId = await create(); await approve(postId);
+  const comment = await call("parent", `/community/posts/${postId}/comments`, "POST", { body: "Mình cũng đang học phần này." });
+  assert.equal(comment.status, 201);
+  assert.equal((await call("admin", `/admin/community/comments/${comment.data.id}`, "DELETE", { note: "Nội dung không phù hợp" })).data.email_status, "sent");
+  assert.equal(emails.at(-1).to, "parent@private.test");
+  assert.equal((await call("admin", `/admin/community/posts/${postId}/hide`, "POST", { note: "Cần điều chỉnh nội dung" })).data.email_status, "sent");
+  assert.match(emails.at(-1).detail, /Bài viết/);
+  assert.equal((await call("admin", `/admin/users/${ids.student}`, "DELETE", { email: "student@private.test" })).status, 200);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM community_mail WHERE user_id=?", ids.student).n, 0);
+});
+
+test("failed moderation mail is paginated and retries claim one delivery at a time", async t => {
+  let release; const sent = [];
+  const { db, ids, call } = await fixture(t, { sendAdminEmail: mail => new Promise(resolve => { sent.push(mail); release = resolve; }) });
+  for (let n = 0; n < 21; n++) run(db, "INSERT INTO community_mail(user_id,detail,reason,path) VALUES (?,?,?,?)", ids.student, `Nội dung ${n}`, "Cần cập nhật", "/app/community");
+  const first = await call("admin", "/admin/community/mail"); const second = await call("admin", "/admin/community/mail?page=2");
+  assert.equal(first.data.length, 20); assert.equal(second.data.length, 1); assert.equal(second.data[0].detail, "Nội dung 0");
+  assert.equal((await call("admin", "/admin/community/mail?page=0")).status, 400);
+  const id = first.data[0].id;
+  const pending = call("admin", `/admin/community/mail/${id}/retry`, "POST");
+  while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).status, 429);
+  release(); assert.equal((await pending).data.email_status, "sent"); assert.equal(sent.length, 1);
+});

@@ -1,3 +1,4 @@
+import PendingMail from "@/components/community/PendingMail";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Clock, Flag, FileText, EyeOff, RotateCw } from "lucide-react";
@@ -158,6 +159,7 @@ export default function AdminCommunity() {
           </Button>
         </div>
       </header>
+      <PendingMail />
       {summary.error ? (
         <ErrorState error={summary.error} retry={summary.reload} />
       ) : summary.data ? (

@@ -10,7 +10,7 @@ export function registerAccountDeletion(app, db, auth, audit) {
       if (!user || user.status === "deleted") throw Object.assign(new Error("Không tìm thấy tài khoản."), { status: 404 });
       if (user.role === "admin") throw Object.assign(new Error("Không thể xóa tài khoản quản trị viên."), { status: 403 });
       if (email !== user.email.toLowerCase()) throw Object.assign(new Error("Email xác nhận không khớp."), { status: 400 });
-      for (const table of ["sessions", "oauth_identities", "google_calendar_states", "google_calendars", "email_verifications", "learner_availability", "community_notifications"]) run(db, `DELETE FROM ${table} WHERE user_id=?`, id);
+      for (const table of ["sessions", "oauth_identities", "google_calendar_states", "google_calendars", "email_verifications", "learner_availability", "community_notifications", "community_mail"]) run(db, `DELETE FROM ${table} WHERE user_id=?`, id);
       run(db, "DELETE FROM user_image_chunks WHERE image_id IN (SELECT id FROM user_images WHERE user_id=?)", id);
       run(db, "DELETE FROM user_images WHERE user_id=?", id);
       run(db, "DELETE FROM community_profile_changes WHERE user_id=?", id);

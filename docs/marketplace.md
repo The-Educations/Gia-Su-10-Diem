@@ -105,3 +105,7 @@ Chính sách hủy sát giờ, xử lý tranh chấp, xác minh gia sư và hỗ
 ## Ngoài phạm vi hiện tại
 
 Quiz / đáp án / chấm điểm, lớp học video tích hợp, cổng thanh toán, ví / hoa hồng, AI tutor, thông báo email / SMS, quản lý nhiều con, ứng dụng di động native. Khôi phục mật khẩu, xác thực email, báo cáo vi phạm, vận hành và chính sách dữ liệu cần được thiết kế trước một đợt ra mắt công khai; hiện chưa triển khai.
+
+### Course duration and trials
+
+New offer/preview input uses `start_date`, `weeks` (integer 1–52) and `kind: "course"` (default). `end_date` input is rejected; the server stores the computed inclusive end date. Existing offers remain valid without `weeks`. Trial input uses `kind: "trial"`, one weekly block and a start-date lower bound, without `weeks`. The first matching weekday is the one lesson date shown in preview. Tutors must opt into free trials with `accepts_trial`; acceptance rechecks eligibility and availability. An `accepted_at` marker persists through cancellation to enforce one accepted trial per learner/tutor. Course offers remain independent.

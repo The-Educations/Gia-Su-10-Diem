@@ -5,7 +5,7 @@ import { createApi } from "../server/api.js";
 import { processPhoto } from "../server/photo.js";
 import { seedCatalog } from "../server/seed-catalog.js";
 
-export async function fixture(t) {
+export async function fixture(t, options = {}) {
   const db = openDatabase(":memory:");
   seedCatalog(db);
   const ids = {};
@@ -45,7 +45,7 @@ export async function fixture(t) {
     );
   }
   migrateDatabase(db);
-  const server = createApi(db, { limit: false, processPhoto }).listen(
+  const server = createApi(db, { limit: false, processPhoto, ...options }).listen(
     0,
     "127.0.0.1",
   );

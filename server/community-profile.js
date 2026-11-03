@@ -119,7 +119,7 @@ export function registerCommunityProfile(
   auth,
   audit,
   processPhoto,
-  { serialize },
+  { serialize, mail },
 ) {
   const base = "/api/community";
   app.get(`${base}/members/:code`, auth(), (req, res) => {
@@ -197,10 +197,10 @@ export function registerCommunityProfile(
   app.delete(
     "/api/admin/community/members/:code/:part",
     auth("admin"),
-    (req, res) => {
+    async (req, res) => {
       const part = z.enum(["avatar", "cover", "bio"]).parse(req.params.part);
       const note = text(1000).parse(req.body.note);
-      transaction(db, () => {
+      const mailId = transaction(db, () => {
         const user = memberByCode(db, req.params.code, req.user);
         if (part === "bio") {
           if (!user.bio) fail(409, "Giới thiệu đã được xóa.");
@@ -233,8 +233,9 @@ export function registerCommunityProfile(
           "community.profile.remove",
           JSON.stringify({ id: user.id, part, note }),
         );
+        return mail.enqueue(user.id, `${label} trong hồ sơ đã được gỡ.`, note, `/app/community/members/${user.profile_code}`);
       });
-      res.json({ ok: true });
+      res.json({ ok: true, ...await mail.deliver(mailId, req.user.id) });
     },
   );
   for (const kind of ["avatar", "cover"]) {

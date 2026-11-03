@@ -28,6 +28,7 @@ export const availabilitySchema = z.object({
 }).refine(d => new Set(d.blocks.map(b => `${b.weekday}:${b.hour}`)).size === d.blocks.length, "Khung giờ bị trùng.");
 
 export const tutorSchema = z.object({
+  accepts_trial: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
   province_code: z.string().max(5).optional(),
   ward_code: z.string().max(5).optional(),
   availability: availabilitySchema.optional(),

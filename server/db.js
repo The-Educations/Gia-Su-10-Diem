@@ -141,6 +141,13 @@ export function migrateDatabase(db) {
     mode TEXT NOT NULL, blocks TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', rate INTEGER NOT NULL,
     start_date TEXT NOT NULL, end_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   ); CREATE UNIQUE INDEX IF NOT EXISTS pending_offer ON offers(student_id,tutor_id) WHERE status='pending'`);
+  if (!db.prepare("PRAGMA table_info(tutors)").all().some(c => c.name === "accepts_trial")) db.exec("ALTER TABLE tutors ADD COLUMN accepts_trial INTEGER NOT NULL DEFAULT 0");
+  const offerColumns = db.prepare("PRAGMA table_info(offers)").all();
+  if (!offerColumns.some(c => c.name === "kind")) db.exec("ALTER TABLE offers ADD COLUMN kind TEXT NOT NULL DEFAULT 'course'");
+  if (!offerColumns.some(c => c.name === "weeks")) db.exec("ALTER TABLE offers ADD COLUMN weeks INTEGER");
+  // Keep this marker after cancellation: an accepted trial cannot be requested again.
+  if (!offerColumns.some(c => c.name === "accepted_at")) db.exec("ALTER TABLE offers ADD COLUMN accepted_at TEXT");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS accepted_trial ON offers(student_id,tutor_id) WHERE kind='trial' AND accepted_at IS NOT NULL");
   if (!db.prepare("PRAGMA table_info(bookings)").all().some(c => c.name === "offer_id")) db.exec("ALTER TABLE bookings ADD COLUMN offer_id INTEGER REFERENCES offers(id)");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS offer_session ON bookings(offer_id,starts_at) WHERE offer_id IS NOT NULL");
   const messageColumns = db.prepare("PRAGMA table_info(inquiry_messages)").all();

@@ -2,7 +2,7 @@ import { inquiryMessageHref } from "@/lib/message-context";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, useApp, useLoad, money, dateTime } from "@/lib/api";
-import { calendarDate, offerStatuses, type StudyOffer, type OfferPreview } from "@/lib/offers";
+import { offerDuration, offerStatuses, type StudyOffer, type OfferPreview } from "@/lib/offers";
 import { Page, Heading, Loading, ErrorState, Blank, Choose } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -30,7 +30,7 @@ export default function Offers() {
     <Heading title="Đề nghị học" />
     <div className="list-toolbar"><span>{rows.length} đề nghị</span><Choose label="Trạng thái" value={filter} onChange={setFilter} allLabel="Tất cả" options={Object.entries(offerStatuses).map(([value,label])=>({value,label}))} /></div>
     {result.loading ? <Loading /> : result.error ? <ErrorState error={result.error} retry={result.reload} /> : !rows.length ? <Blank title="Chưa có đề nghị học" /> : <div className="offer-list">{rows.map(o=><article className="offer-card" key={o.id}>
-      <div><span className={`state state-${o.status}`}>{offerStatuses[o.status]}</span><h2>{o.subject_name} · {user?.role === "tutor" ? o.student_name : o.tutor_name}</h2><p>{calendarDate(o.start_date)} – {calendarDate(o.end_date)} · {o.blocks.length} giờ / tuần</p></div>
+      <div><span className={`state state-${o.status}`}>{offerStatuses[o.status]}</span><h2>{o.subject_name} · {user?.role === "tutor" ? o.student_name : o.tutor_name}</h2><p>{offerDuration(o)}{o.kind !== "trial" && ` · ${o.blocks.length} giờ / tuần`}</p></div>
       <div className="actions"><Button onClick={()=>{setError("");setCancel(false);setParams({id:String(o.id)});}}>Xem đề nghị</Button><Button asChild variant="outline"><Link to={inquiryMessageHref(o.inquiry_id, "offer", o.id)}>Nhắn tin</Link></Button></div>
     </article>)}</div>}
     <WeeklyRequests />
@@ -38,7 +38,7 @@ export default function Offers() {
       <DialogContent className="offer-detail">
         <DialogHeader><DialogTitle>Chi tiết đề nghị học{offer ? ` #${offer.id}` : ""}</DialogTitle><DialogDescription>{offer ? `${offer.subject_name} · ${user?.role === "tutor" ? offer.student_name : offer.tutor_name}` : "Lịch học theo ngày đã chọn"}</DialogDescription></DialogHeader>
         {detail.loading ? <Loading /> : detail.error ? <ErrorState error={detail.error} retry={detail.reload} /> : offer && <>
-          <div className="offer-summary"><span className={`state state-${offer.status}`}>{offerStatuses[offer.status]}</span><span>{calendarDate(offer.start_date)} – {calendarDate(offer.end_date)}</span><span>{offer.mode === "online" ? "Trực tuyến" : "Trực tiếp"} · {money(offer.rate)} / buổi</span></div>
+          <div className="offer-summary"><span className={`state state-${offer.status}`}>{offerStatuses[offer.status]}</span><span>{offerDuration(offer)}</span><span>{offer.mode === "online" ? "Trực tuyến" : "Trực tiếp"} · {offer.kind === "trial" ? "Miễn phí" : `${money(offer.rate)} / buổi`}</span></div>
           <ul className="offer-week">{offer.blocks.map(b=><li key={`${b.weekday}:${b.hour}`}><strong>{["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6","Thứ 7","Chủ nhật"][b.weekday]}</strong>{String(b.hour).padStart(2,"0")}:00–{String(b.hour+1).padStart(2,"0")}:00</li>)}</ul>
           {offer.note && <p className="offer-note">{offer.note}</p>}
           <div className="section-heading"><h3>{offer.sessions.length} {offer.status === "pending" ? "buổi dự kiến" : "buổi học"} · Giờ Việt Nam</h3>{offer.status === "pending" && <span role="status">{offer.conflict_count ? `${offer.conflict_count} buổi cần điều chỉnh` : "Không trùng lịch"}</span>}</div>

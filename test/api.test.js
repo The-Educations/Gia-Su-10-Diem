@@ -1400,8 +1400,7 @@ function offerPeriod(offset = 21) {
   const start = new Date(Date.now() + offset * 86400000);
   start.setUTCDate(start.getUTCDate() + (8 - start.getUTCDay()) % 7);
   const start_date = start.toISOString().slice(0, 10);
-  const end_date = new Date(Date.parse(`${start_date}T00:00:00Z`) + 13 * 86400000).toISOString().slice(0, 10);
-  return { start_date, end_date };
+  return { start_date, weeks: 2 };
 }
 
 test("dated offers preview, accept into real lessons, share notes and preserve history on cancellation", async t => {
@@ -1445,7 +1444,7 @@ test("offers reject invalid dates and availability, recheck conflicts atomically
   const blocks=[{weekday:0,hour:19}];
   await tutor.request("/tutor/availability","PUT",{revision:0,blocks});
   const data={tutor_id:teacher.id,subject_id:"toan",mode:"online",blocks,...offerPeriod()};
-  for (const invalid of [{start_date:"2030-02-30"},{end_date:"2020-01-01"},{end_date:"2099-01-01"},{blocks:[]},{blocks:[{weekday:2,hour:19}]}]) assert.ok((await student.request("/offers","POST",{...data,...invalid})).status>=400);
+  for (const invalid of [{start_date:"2030-02-30"},{weeks:0},{weeks:53},{weeks:1.5},{weeks:"4"},{end_date:"2099-01-01"},{blocks:[]},{blocks:[{weekday:2,hour:19}]}]) assert.ok((await student.request("/offers","POST",{...data,...invalid})).status>=400);
   const a=await student.request("/offers","POST",data),b=await other.request("/offers","POST",data);
   assert.equal(a.status,201); assert.equal(b.status,201);
   const accepted=await Promise.all([a,b].map(r=>tutor.request(`/offers/${r.data.id}`,"PATCH",{status:"accepted"})));
@@ -1646,4 +1645,64 @@ test("chat attachments remain private and bind only to the sender's thread", asy
   assert.equal((await tutor.request(`/bookings/${booking.id}/messages`,"POST",{attachment_id:lessonVoice.id})).status,201);
   assert.equal((await student.request(`/bookings/${booking.id}/messages`)).data.at(-1).attachment.id,lessonVoice.id);
   migrateDatabase(db);
+});
+
+test("weeks compute inclusive dates across leap years and preserve legacy offer acceptance", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(); await student.login("student"); const teacher = await tutor.login("chau");
+  const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const data = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, start_date: "2032-02-16", weeks: 4 };
+  for (const weeks of [1, 4, 52]) {
+    const r = await student.request("/offers/preview", "POST", { ...data, weeks });
+    assert.equal(r.status, 200); assert.equal(r.data.sessions.length, weeks * 2);
+  }
+  const created = await student.request("/offers", "POST", data);
+  assert.equal(created.status, 201);
+  const saved = one(db, "SELECT * FROM offers WHERE id=?", created.data.id);
+  assert.equal(saved.start_date, "2032-02-16"); assert.equal(saved.end_date, "2032-03-14"); assert.equal(saved.weeks, 4);
+  // A pre-migration record has dates but no duration or acceptance marker.
+  run(db, "UPDATE offers SET weeks=NULL,accepted_at=NULL WHERE id=?", saved.id);
+  assert.equal((await tutor.request(`/offers/${saved.id}`)).data.sessions.length, 8);
+  assert.equal((await tutor.request(`/offers/${saved.id}`, "PATCH", { status: "accepted" })).status, 200);
+  assert.equal(all(db, "SELECT id FROM bookings WHERE offer_id=?", saved.id).length, 8);
+  assert.equal((await student.request(`/offers/${saved.id}`, "PATCH", { status: "cancelled" })).status, 200);
+  assert.ok(all(db, "SELECT status FROM bookings WHERE offer_id=?", saved.id).every(b => b.status === "cancelled"));
+});
+
+test("free trials require tutor opt-in, one slot, and one lifetime acceptance per pair", async t => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client(), admin = client(); await student.login("student"); const teacher = await tutor.login("chau"); await admin.login("admin");
+  const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const input = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks: [blocks[1]], start_date: offerPeriod().start_date, kind: "trial", rate: 999999 };
+  assert.equal((await student.request("/offers", "POST", input)).status, 409);
+  const profile = (await tutor.request("/tutor/profile")).data;
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...profile, accepts_trial: true })).status, 200);
+  assert.equal(one(db, "SELECT accepts_trial FROM tutors WHERE user_id=?", teacher.id).accepts_trial, 1);
+  run(db, "UPDATE tutors SET status='approved' WHERE user_id=?", teacher.id);
+  assert.equal((await student.request(`/tutors/${teacher.id}`)).data.accepts_trial, 1);
+  for (const extra of [{ blocks }, { weeks: 1 }, { blocks: [{ weekday: 3, hour: 19 }] }]) assert.ok((await student.request("/offers", "POST", { ...input, ...extra })).status >= 400);
+  const forecast = await student.request("/offers/preview", "POST", input);
+  assert.equal(forecast.status, 200); assert.equal(forecast.data.sessions.length, 1);
+  assert.equal(forecast.data.sessions[0].starts_at, new Date(Date.parse(input.start_date + "T12:00:00Z") + 2 * 86400000).toISOString());
+  for (const status of ["declined", "cancelled"]) {
+    const created = await student.request("/offers", "POST", input); assert.equal(created.status, 201);
+    assert.equal((await student.request("/offers", "POST", input)).status, 409);
+    assert.equal((await (status === "declined" ? tutor : student).request(`/offers/${created.data.id}`, "PATCH", { status })).status, 200);
+  }
+  const created = await student.request("/offers", "POST", input); assert.equal(created.status, 201);
+  run(db, "UPDATE tutors SET accepts_trial=0 WHERE user_id=?", teacher.id);
+  assert.equal((await tutor.request(`/offers/${created.data.id}`, "PATCH", { status: "accepted" })).status, 409);
+  run(db, "UPDATE tutors SET accepts_trial=1 WHERE user_id=?", teacher.id);
+  const responses = await Promise.all([1, 2].map(() => tutor.request(`/offers/${created.data.id}`, "PATCH", { status: "accepted" })));
+  assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
+  const lessons = all(db, "SELECT * FROM bookings WHERE offer_id=?", created.data.id);
+  assert.equal(lessons.length, 1); assert.equal(lessons[0].rate, 0); assert.equal(lessons[0].duration_minutes, 60);
+  assert.equal((await student.request(`/offers/${created.data.id}`, "PATCH", { status: "cancelled" })).status, 200);
+  assert.equal((await student.request("/offers", "POST", { ...input, start_date: offerPeriod(60).start_date })).status, 409);
+  assert.equal((await student.request("/offers/preview", "POST", input)).status, 409);
+  assert.equal((await student.request("/offers", "POST", { ...input, ...offerPeriod(60), kind: "course" })).status, 201);
+  migrateDatabase(db); migrateDatabase(db);
+  assert.ok(one(db, "SELECT accepted_at FROM offers WHERE id=?", created.data.id).accepted_at);
 });

@@ -8,7 +8,7 @@ export function registerCommunityAdmin(
   db,
   auth,
   audit,
-  { fail, getPost, serialize, notify, follow, rules, removeComment },
+  { fail, getPost, serialize, notify, follow, rules, removeComment, mail },
 ) {
   const base = "/api/admin/community";
   const admin = auth("admin");
@@ -69,7 +69,7 @@ export function registerCommunityAdmin(
   });
   app.get(`${base}/rules`, admin, (req, res) => res.json(rules(req.user)));
   for (const action of ["approve", "reject", "hide", "restore"])
-    app.post(`${base}/posts/:id/${action}`, admin, (req, res) => {
+    app.post(`${base}/posts/:id/${action}`, admin, async (req, res) => {
       const p = getPost(req.params.id, req.user);
       if (p.kind === "rules") fail(409, "Sửa Quy tắc bằng biểu mẫu riêng.");
       const note = ["reject", "hide"].includes(action)
@@ -99,7 +99,7 @@ export function registerCommunityAdmin(
         (action === "restore" && p.status !== "hidden")
       )
         fail(409, "Trạng thái bài không phù hợp.");
-      transaction(db, () => {
+      const mailId = transaction(db, () => {
         if (revision && action === "approve") {
           run(
             db,
@@ -152,8 +152,9 @@ export function registerCommunityAdmin(
           `community.${revision && ["approve", "reject"].includes(action) ? "revision" : "post"}.${action}`,
           JSON.stringify({ id: p.id, note }),
         );
+        if (action === "hide" || action === "reject") return mail.enqueue(p.author_id, `${revision && action === "reject" ? "Bản sửa bài viết" : "Bài viết"} “${revision && action === "reject" ? p.revision_title : p.title}” ${action === "hide" ? "đã bị ẩn" : "chưa được duyệt"}.`, note, "/app/community/mine");
       });
-      res.json({ ok: true });
+      res.json({ ok: true, ...(mailId ? await mail.deliver(mailId, req.user.id) : {}) });
     });
   app.post(`${base}/posts`, admin, (req, res) => {
     const d = postSchema.parse(req.body);
@@ -218,7 +219,7 @@ export function registerCommunityAdmin(
     });
     res.json({ ok: true });
   });
-  app.delete(`${base}/comments/:id`, admin, (req, res) => {
+  app.delete(`${base}/comments/:id`, admin, async (req, res) => {
     const note = text(1000).parse(req.body.note);
     const c = one(
       db,
@@ -226,15 +227,17 @@ export function registerCommunityAdmin(
       req.params.id,
     );
     if (!c || c.status !== "visible") fail(404, "Không tìm thấy bình luận.");
-    transaction(db, () => {
+    const mailId = transaction(db, () => {
       removeComment(c.id, "removed_by_admin", note);
       audit(
         req.user.id,
         "community.comment.remove",
         JSON.stringify({ id: c.id, note }),
       );
+      const post = one(db, "SELECT title FROM community_posts WHERE id=?", c.post_id);
+      return mail.enqueue(c.author_id, `Bình luận trong bài “${post.title}” đã được gỡ: “${c.body.slice(0, 300)}”`, note, `/app/community/${c.post_id}`);
     });
-    res.json({ ok: true });
+    res.json({ ok: true, ...await mail.deliver(mailId, req.user.id) });
   });
   app.get(`${base}/reports`, admin, (req, res) => {
     const status = z

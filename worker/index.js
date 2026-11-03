@@ -40,6 +40,7 @@ export class Marketplace extends DurableObject {
       production: env.APP_ORIGIN.startsWith("https://"),
       origin: env.APP_ORIGIN,
       sendEmail: createMailflareSender({ url: env.MAILFLARE_URL, key: env.MAILFLARE_API_KEY, mailboxId: env.MAILFLARE_MAILBOX_ID }),
+      sendAdminEmail: createMailflareSender({ url: env.MAILFLARE_URL, key: env.MAILFLARE_ADMIN_API_KEY, mailboxId: env.MAILFLARE_ADMIN_MAILBOX_ID, from: "admin@giasudiem10.online" }),
       clientIp: (req) => req.headers["x-giasu-client-ip"] || "unknown",
       wakeCalendar: async () => { if (!await ctx.storage.getAlarm()) await ctx.storage.setAlarm(Date.now() + 1000); },
       google: {

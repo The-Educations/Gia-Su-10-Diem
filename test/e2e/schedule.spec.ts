@@ -115,8 +115,7 @@ test("parent and tutor move between their shared schedule, private messages and 
   const blocks = [{ weekday: 3, hour: 17 }];
   expect((await tutor.request.put("/api/tutor/availability", { data: { revision: profile.weekly_schedule.revision, blocks } })).ok()).toBe(true);
   const start_date = new Date(Date.now() + 150 * 86400000).toISOString().slice(0, 10);
-  const end_date = new Date(Date.now() + 163 * 86400000).toISOString().slice(0, 10);
-  const created = await page.request.post("/api/offers", { data: { tutor_id: profile.user_id, subject_id: "toan", mode: "online", blocks, start_date, end_date } });
+  const created = await page.request.post("/api/offers", { data: { tutor_id: profile.user_id, subject_id: "toan", mode: "online", blocks, start_date, weeks: 2 } });
   expect(created.status()).toBe(201);
   const offer = await created.json();
   expect((await tutor.request.patch(`/api/offers/${offer.id}`, { data: { status: "accepted" } })).ok()).toBe(true);
