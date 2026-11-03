@@ -3178,7 +3178,7 @@ main {
 .calendar-free-label { color: var(--muted-foreground); }
 
 .message-composer { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-.chat-composer-actions, .chat-composer-actions > div { display: flex; align-items: center; gap: 4px; }
+.chat-composer-actions, .chat-composer-actions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .chat-composer-actions { justify-content: space-between; }
 .chat-attachment-preview { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .chat-attachment-preview img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
