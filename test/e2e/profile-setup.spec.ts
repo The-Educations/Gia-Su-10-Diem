@@ -199,6 +199,7 @@ test("admin calendar and reversible take-down dialog work without deleting the t
 }) => {
   await page.goto("/app/auth");
   await page.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await page.getByLabel("Email", { exact: true }).fill("admin@demo.giasu.test");
   await page.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();

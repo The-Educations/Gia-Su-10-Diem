@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 async function login(page: Page, slug: string) {
   await page.goto("/app/auth");
   await page.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await page.getByLabel("Email", { exact: true }).fill(`${slug}@demo.giasu.test`);
   await page.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
