@@ -42,6 +42,7 @@ type Thread = {
   tutorId: number;
   personId?: number;
   endpoint: string;
+  scheduleHref?: string;
   inactive?: boolean;
 };
 function Conversation({ thread }: { thread: Thread }) {
@@ -101,13 +102,16 @@ function Conversation({ thread }: { thread: Thread }) {
           <strong>{thread.name}</strong>
           <span>{thread.detail}</span>
         </div>
+        <div className="conversation-heading-actions">
+        {thread.scheduleHref && <Button variant="outline" size="sm" asChild><Link to={thread.scheduleHref}>{user?.role === "tutor" ? "Xem lịch dạy" : "Xem lịch học"}</Link></Button>}
         {thread.kind === "support" ? <ShieldCheck aria-label="Hỗ trợ quản trị" /> : thread.status ? (
           <State value={thread.status} />
-        ) : (
+        ) : user?.role !== "tutor" ? (
           <Button variant="outline" size="sm" asChild>
             <Link to={`/tutors/${thread.tutorId}`}>Xem hồ sơ</Link>
           </Button>
-        )}
+        ) : null}
+        </div>
       </header>
       {thread.kind === "support" && <aside className="support-welcome" aria-label="Tin nhắn được ghim"><Pin size={16} aria-hidden="true" /><div><strong>Hỗ trợ Gia Sư 10 Điểm</strong><p>Chào bạn! Gửi tin nhắn tại đây để được quản trị viên hỗ trợ.</p><a href="mailto:admin@giasudiem10.online">admin@giasudiem10.online</a></div></aside>}
       {error && (
@@ -210,7 +214,8 @@ export default function Messages() {
       id: i.id,
       kind: "inquiry" as const,
       name: user?.role === "tutor" ? i.student_name : i.tutor_name,
-      detail: "Tư vấn trước buổi học",
+      detail: (bookings.data || []).some(b => b.inquiry_id === i.id) ? "Trao đổi lịch học & bài tập" : "Tư vấn trước buổi học",
+      scheduleHref: (bookings.data || []).some(b => b.inquiry_id === i.id) ? `/bookings?inquiry=${i.id}` : undefined,
       time: i.created_at,
       tutorId: i.tutor_id,
       personId: user?.role === "tutor" ? i.student_id : i.tutor_id,
@@ -227,6 +232,7 @@ export default function Messages() {
       tutorId: b.tutor_id,
       personId: user?.role === "tutor" ? b.student_id : b.tutor_id,
       endpoint: `/bookings/${b.id}/messages`,
+      scheduleHref: `/bookings?lesson=${b.id}`,
     })),
   ];
   const selected = threads.find((t) => params.get(t.kind) === String(t.id)) || (!params.size && user?.role !== "admin" ? threads.find(t => t.kind === "support") : undefined),
@@ -268,7 +274,7 @@ export default function Messages() {
                 <div>
                   <strong>{t.name}{t.kind === "support" && <Pin size={13} aria-label="Đã ghim" />}</strong>
                   <span>
-                    {t.kind === "inquiry" ? "Tư vấn trước buổi học" : t.detail}
+                    {t.detail}
                   </span>
                   <small>{dateTime(t.time)}</small>
                 </div>
