@@ -107,9 +107,9 @@ async function fixture(t) {
     );
     assert.equal(r.status, 200, JSON.stringify(r.data));
   };
-  const imageRequest = (user, path, data, mime = "image/png") =>
+  const imageRequest = (user, path, data, mime = "image/png", method = data ? "POST" : "GET") =>
     fetch(`http://127.0.0.1:${server.address().port}${path}`, {
-      method: data ? "POST" : "GET",
+      method,
       headers: {
         ...(user ? { Cookie: `giasu_session=${user}` } : {}),
         ...(data ? { "Content-Type": mime } : {}),
@@ -1157,4 +1157,45 @@ test("member codes are random, unique, stable across migrations and public witho
   assert.equal(post.author.profile_code, before[0].profile_code);
   assert.equal(post.author.has_avatar, false);
   assert.equal(post.author.id, undefined);
+});
+
+
+test("member images are private, independent, bounded and atomically replaced", async t => {
+  const { db, ids, call, imageRequest } = await fixture(t);
+  const code = one(db, "SELECT profile_code FROM users WHERE id=?", ids.tutor).profile_code;
+  const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#880033" } }).png().toBuffer();
+  const put = (kind, data = png, mime = "image/png", who = "tutor") => imageRequest(who, `/api/community/me/${kind}`, data, mime, "PUT");
+  assert.equal((await put("avatar", png, "image/png", null)).status, 401);
+  assert.equal((await put("avatar", Buffer.from("bad"))).status, 400);
+  assert.equal((await put("avatar", png, "image/svg+xml")).status, 400);
+  assert.equal((await put("avatar", Buffer.alloc(5 * 1024 * 1024 + 1))).status, 413);
+  const large = await sharp({ create: { width: 4001, height: 4000, channels: 3, background: "white" } }).png().toBuffer();
+  assert.equal((await put("avatar", large)).status, 400);
+  for (const kind of ["avatar", "cover"]) {
+    assert.equal((await put(kind)).status, 200);
+    const url = `/api/community/members/${code}/${kind}`;
+    assert.equal((await imageRequest(null, url)).status, 401);
+    const response = await imageRequest("student", url);
+    assert.match(response.headers.get("cache-control"), /private.*no-store/);
+    const meta = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+    assert.equal(meta.format, "webp"); assert.equal(meta.width, kind === "avatar" ? 640 : 1280);
+    assert.equal(meta.height, kind === "avatar" ? 640 : 320);
+  }
+  const old = one(db, "SELECT id FROM user_images WHERE user_id=? AND kind='avatar'", ids.tutor).id;
+  assert.equal((await put("avatar")).status, 200);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM user_image_chunks WHERE image_id=?", old).n, 0);
+  for (let i=0; i<3; i++) assert.equal((await put("avatar")).status, 200);
+  assert.equal((await put("avatar")).status, 429);
+  assert.equal(one(db, "SELECT status FROM tutors WHERE user_id=?", ids.tutor).status, "approved");
+  const author = (await call("student", "/community/me")).data.author;
+  assert.equal(author.has_avatar, false);
+  run(db, "UPDATE users SET community_locked=1 WHERE id=?", ids.tutor);
+  assert.equal((await put("cover")).status, 403);
+  assert.equal((await call("tutor", "/community/me/avatar", "DELETE")).status, 403);
+  run(db, "UPDATE users SET status='suspended' WHERE id=?", ids.tutor);
+  assert.equal((await imageRequest("student", `/api/community/members/${code}/avatar`)).status, 404);
+  assert.equal((await imageRequest("admin", `/api/community/members/${code}/avatar`)).status, 200);
+  run(db, "UPDATE users SET status='active',community_locked=0 WHERE id=?", ids.tutor);
+  assert.equal((await call("tutor", "/community/me/avatar", "DELETE")).status, 200);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM user_image_chunks c LEFT JOIN user_images i ON i.id=c.image_id WHERE i.id IS NULL").n, 0);
 });

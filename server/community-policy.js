@@ -9,6 +9,10 @@ export const LIMITS = {
   postsPerDay: 3,
   commentsPerMinute: 5,
   reportsPerHour: 10,
+  namesPerDay: 3,
+  biosPerDay: 10,
+  avatarsPerDay: 5,
+  coversPerDay: 5,
 };
 export const RULES_TITLE = "Quy tắc cộng đồng";
 export const RULES_BODY = `1. Chỉ đăng nội dung về học tập: tìm gia sư, xin review, kinh nghiệm học, chia sẻ kiến thức.
@@ -115,7 +119,7 @@ export function authorLabel(u, viewer = null) {
       : u.display_name || "Thành viên";
   return {
     profile_code: u.profile_code,
-    has_avatar: !!viewer && !!u.has_avatar,
+    has_avatar: !!viewer && !!(u.has_avatar || u.image_version),
     image_version: viewer ? u.image_version || "" : "",
     label: `${name} - ${{ admin: "Quản trị viên", tutor: "Gia sư", parent: "Phụ huynh", student: "Học sinh" }[tier]}`,
     name_part: name,

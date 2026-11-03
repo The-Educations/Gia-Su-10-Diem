@@ -1,3 +1,4 @@
+import { registerCommunityProfile } from "./community-profile.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
 import {
@@ -29,7 +30,7 @@ export function publicCommunityPost(db, id) {
   if (!p) return null;
   const u = one(
     db,
-    "SELECT u.*,t.status tutor_status FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
+    "SELECT u.*,t.status tutor_status,(SELECT id FROM user_images WHERE user_id=u.id AND kind='avatar') image_version FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
     p.author_id,
   );
   return {
@@ -41,7 +42,7 @@ export function publicCommunityPost(db, id) {
     updated_at: p.updated_at,
   };
 }
-export function registerCommunity(app, db, auth, audit) {
+export function registerCommunity(app, db, auth, audit, processPhoto) {
   const fail = (status, message) => {
     throw Object.assign(new Error(message), { status });
   };
@@ -49,7 +50,7 @@ export function registerCommunity(app, db, auth, audit) {
     authorLabel(
       one(
         db,
-        "SELECT u.*,t.status tutor_status FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
+        "SELECT u.*,t.status tutor_status,(SELECT id FROM user_images WHERE user_id=u.id AND kind='avatar') image_version FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.id=?",
         id,
       ),
       viewer,
@@ -149,6 +150,7 @@ export function registerCommunity(app, db, auth, audit) {
         : {}),
     };
   };
+  registerCommunityProfile(app, db, auth, audit, processPhoto, { serialize });
   const follow = (post, user) =>
     run(
       db,

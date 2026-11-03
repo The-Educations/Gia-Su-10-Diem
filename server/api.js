@@ -74,6 +74,7 @@ export function createApi(
         return res.status(403).json({ error: "Nguồn yêu cầu không hợp lệ." });
       if (
         !(
+          (req.method === "PUT" && /^\/community\/me\/(avatar|cover)$/.test(req.path)) ||
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
           (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path)))
         ) &&
@@ -227,7 +228,7 @@ export function createApi(
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
-  registerCommunity(app, db, auth, audit);
+  registerCommunity(app, db, auth, audit, processPhoto);
   registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
   registerSupport(app, db, auth);

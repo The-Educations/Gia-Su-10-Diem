@@ -19,6 +19,21 @@ export function migrateCommunity(db) {
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_profile_code ON users(profile_code)");
   for (const user of db.prepare("SELECT id FROM users WHERE profile_code IS NULL").all())
     assignProfileCode(db, user.id);
+  db.exec(`CREATE TABLE IF NOT EXISTS user_images (
+    id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL CHECK(kind IN ('avatar','cover')), content_type TEXT NOT NULL,
+    size INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id,kind)
+  );
+  CREATE TABLE IF NOT EXISTS user_image_chunks (
+    image_id TEXT NOT NULL REFERENCES user_images(id) ON DELETE CASCADE,
+    idx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(image_id,idx)
+  );
+  CREATE TABLE IF NOT EXISTS community_profile_changes (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS profile_changes_quota ON community_profile_changes(user_id,kind,created_at);`);
   db.exec(`CREATE TABLE IF NOT EXISTS community_posts (
   id INTEGER PRIMARY KEY,
   author_id INTEGER NOT NULL REFERENCES users(id),
