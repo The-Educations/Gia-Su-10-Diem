@@ -1,3 +1,4 @@
+import { CommunityLock } from "./AdminCommunity";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Copy, Pencil, Flag } from "lucide-react";
@@ -52,6 +53,15 @@ export default function CommunityProfile() {
         <dl className="member-stats"><div><dt>Bài viết</dt><dd>{p.stats.posts}</dd></div><div><dt>Bình luận</dt><dd>{p.stats.comments}</dd></div><div><dt>Hữu ích</dt><dd>{p.stats.helpful}</dd></div></dl>
       </div>
     </section>
+    {result.data.admin && <section className="community-card member-admin" aria-label="Quản trị hồ sơ">
+      <h2>Quản trị hồ sơ</h2>
+      <dl><dt>Họ và tên</dt><dd>{result.data.admin.name}</dd><dt>Email</dt><dd>{result.data.admin.email}</dd><dt>Tài khoản</dt><dd>{{ active:"Đang hoạt động", suspended:"Tạm khóa", deleted:"Đã xóa" }[result.data.admin.status] || result.data.admin.status}</dd><dt>Quyền cộng đồng</dt><dd>{result.data.admin.community_locked ? "Đã khóa" : "Đang mở"}</dd></dl>
+      <div className="community-actions">
+        {(["avatar", "cover", "bio"] as const).filter(part => part === "bio" ? !!p.bio : part === "avatar" ? p.has_avatar : p.has_cover).map(part => <Button key={part} variant="outline" onClick={() => setAction({ title: { avatar:"Gỡ ảnh đại diện",cover:"Gỡ ảnh bìa",bio:"Xóa giới thiệu" }[part], path:`/admin/community/members/${p.code}/${part}`, method:"DELETE", reasonField:"note" })}>{{ avatar:"Gỡ ảnh đại diện",cover:"Gỡ ảnh bìa",bio:"Xóa giới thiệu" }[part]}</Button>)}
+        <CommunityLock owner={result.data.admin} />
+        <Button asChild variant="outline"><Link to="/admin?tab=users">Quản lý tài khoản</Link></Button>
+      </div>
+    </section>}
     <section aria-label="Bài viết đã đăng"><div className="member-posts-heading"><h2>Bài viết đã đăng</h2><Choose label="Sắp xếp bài viết" value={sort} onChange={sort => setParams({ sort })} options={[{value:"new",label:"Mới nhất"},{value:"helpful",label:"Hữu ích nhất"}]} /></div>
       {posts.loading ? <Loading /> : posts.error ? <ErrorState error={posts.error} retry={posts.reload} /> : <><div className="community-feed">{posts.data?.items.map(post => <PostCard key={post.id} post={post} />)}</div>{!posts.data?.items.length && <Blank title="Chưa có bài viết nào" />}
       {(page>1 || posts.data?.more) && <nav className="community-actions" aria-label="Trang bài viết"><Button variant="outline" disabled={page===1} onClick={() => setParams({sort,page:String(page-1)})}>Trang trước</Button><span>Trang {page}</span><Button variant="outline" disabled={!posts.data?.more} onClick={() => setParams({sort,page:String(page+1)})}>Trang sau</Button></nav>}</>}

@@ -1,4 +1,4 @@
-import { registerCommunityProfile, setMemberProfile } from "./community-profile.js";
+import { registerCommunityProfile, setMemberProfile, memberByCode } from "./community-profile.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
 import {
@@ -644,8 +644,9 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
       fail(403, "Quản trị viên xử lý trực tiếp trong hàng đợi.");
     const d = z
       .object({
-        target_type: z.enum(["post", "comment"]),
-        target_id: z.number().int().positive(),
+        target_type: z.enum(["post", "comment", "profile"]),
+        target_id: z.union([z.number().int().positive(), z.string().regex(/^[a-z2-9]{8}$/)]),
+        part: z.enum(["avatar", "cover", "bio"]).optional(),
         reason: z.enum([
           "Quảng cáo",
           "Thông tin liên hệ",
@@ -656,15 +657,25 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
         detail: z.string().trim().max(300).default(""),
       })
       .parse(req.body);
-    if (d.target_type === "post") livePost(d.target_id);
-    else comment(d.target_id);
+    let targetId = d.target_id;
+    const part = d.target_type === "profile" ? z.enum(["avatar", "cover", "bio"]).parse(d.part) : "";
+    if (d.target_type === "profile") {
+      const user = memberByCode(db, z.string().parse(d.target_id), req.user);
+      if (user.id === req.user.id) fail(403, "Không thể báo cáo hồ sơ của mình.");
+      targetId = user.id;
+    } else {
+      targetId = z.number().int().positive().parse(d.target_id);
+      if (d.target_type === "post") livePost(targetId);
+      else comment(targetId);
+    }
     if (
       one(
         db,
-        "SELECT id FROM community_reports WHERE reporter_id=? AND target_type=? AND target_id=?",
+        "SELECT id FROM community_reports WHERE reporter_id=? AND target_type=? AND target_id=? AND part=?",
         req.user.id,
         d.target_type,
-        d.target_id,
+        targetId,
+        part,
       )
     )
       fail(409, "Bạn đã báo cáo nội dung này.");
@@ -678,12 +689,13 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
     );
     run(
       db,
-      "INSERT INTO community_reports(reporter_id,target_type,target_id,reason,detail) VALUES (?,?,?,?,?)",
+      "INSERT INTO community_reports(reporter_id,target_type,target_id,reason,detail,part) VALUES (?,?,?,?,?,?)",
       req.user.id,
       d.target_type,
-      d.target_id,
+      targetId,
       d.reason,
       d.detail,
+      part,
     );
     res.status(201).json({ ok: true });
   });
@@ -711,7 +723,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
     res.json(
       one(
         db,
-        `SELECT COUNT(*) count FROM community_notifications n JOIN community_posts p ON p.id=n.post_id JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND n.read_at IS NULL AND p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin')`,
+        `SELECT COUNT(*) count FROM community_notifications n LEFT JOIN community_posts p ON p.id=n.post_id LEFT JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND n.read_at IS NULL AND (n.kind='profile_removed' OR (p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin')))`,
         req.user.id,
         req.user.id,
         req.user.role,
@@ -722,7 +734,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto) {
     res.json(
       all(
         db,
-        `SELECT n.id,n.kind,n.post_id,n.created_at,n.read_at,p.title FROM community_notifications n JOIN community_posts p ON p.id=n.post_id JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin') ORDER BY n.id DESC LIMIT 100`,
+        `SELECT n.id,n.kind,n.post_id,n.created_at,n.read_at,n.detail,p.title FROM community_notifications n LEFT JOIN community_posts p ON p.id=n.post_id LEFT JOIN users u ON u.id=p.author_id WHERE n.user_id=? AND (n.kind='profile_removed' OR (p.status!='deleted' AND (${publicPosts} OR p.author_id=? OR ?='admin'))) ORDER BY n.id DESC LIMIT 100`,
         req.user.id,
         req.user.id,
         req.user.role,

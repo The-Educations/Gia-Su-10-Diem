@@ -52,6 +52,7 @@ export function CommunityUnread() {
   ) : null;
 }
 const names: Record<string, string> = {
+  profile_removed: "Nội dung hồ sơ đã được gỡ",
   post_approved: "Bài đã được duyệt",
   post_rejected: "Bài bị từ chối",
   revision_approved: "Bản sửa đã được duyệt",
@@ -115,7 +116,7 @@ export function Notifications() {
               {result.data.map((n) => (
                 <Link
                   key={n.id}
-                  to={`/community/${n.post_id}`}
+                  to={n.kind === "profile_removed" ? `/community/members/${user.profile_code}` : `/community/${n.post_id}`}
                   onClick={() => {
                     void read({ id: n.id });
                     setOpen(false);
@@ -127,7 +128,7 @@ export function Notifications() {
                     )}
                     {names[n.kind]}
                   </span>
-                  <strong>{n.title}</strong>
+                  <strong>{n.kind === "profile_removed" ? n.detail : n.title}</strong>
                   <time>{dateTime(n.created_at)}</time>
                 </Link>
               ))}

@@ -190,8 +190,8 @@ export type CommunityComment = {
 export type CommunityIdentity = { author: CommunityAuthor; needs_name: boolean };
 export type CommunitySummary = { pending: number; approved: number; hidden: number; reports: number };
 export type CommunityFeed = { rules: CommunityPostData | null; items: CommunityPostData[]; more: boolean };
-export type CommunityNotice = { id: number; kind: string; post_id: number; title: string; created_at: string; read_at: string | null };
-export type CommunityOwner = { id: number; name: string; email: string; community_locked: number; community_lock_reason: string };
+export type CommunityNotice = { detail: string; id: number; kind: string; post_id: number; title: string; created_at: string; read_at: string | null };
+export type CommunityOwner = { id: number; name: string; email: string; community_locked: boolean | number; community_lock_reason: string };
 export type CommunityReview = CommunityPostData & { owner: CommunityOwner; review_version: number };
 
 export type CommunityMember = CommunityAuthor & {

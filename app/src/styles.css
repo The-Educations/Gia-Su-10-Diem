@@ -3227,3 +3227,8 @@ main {
   .member-image-fields { grid-template-columns: minmax(0, 1fr); }
   .member-posts-heading { align-items: stretch; flex-direction: column; }
 }
+.member-admin dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; margin-block: 1rem; }
+.member-admin dt { color: var(--muted-foreground); }
+.member-admin dd { overflow-wrap: anywhere; }
+.member-report-preview { display: grid; justify-items: start; gap: .8rem; margin-block: 1rem; }
+.member-report-preview img { max-width: 100%; max-height: 200px; object-fit: contain; border-radius: .75rem; }

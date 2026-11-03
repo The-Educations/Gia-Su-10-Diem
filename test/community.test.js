@@ -1277,3 +1277,61 @@ test("member posts and statistics include only published activity with stable so
   const adminPosts=(await call("other",`/community/members/${adminCode}/posts`)).data.items;
   assert.equal(adminPosts.length,1);assert.equal(adminPosts[0].kind,"announcement");
 });
+
+
+test("profile reports, moderation notifications, quotas and account cleanup", async t => {
+  const { db, ids, call, imageRequest } = await fixture(t);
+  const code = one(db,"SELECT profile_code FROM users WHERE id=?",ids.student).profile_code;
+  const target = { target_type:"profile",target_id:code,part:"bio",reason:"Khác",detail:"Xem lại nội dung" };
+  assert.equal((await call("student","/community/reports","POST",target)).status,403);
+  assert.equal((await call("admin","/community/reports","POST",target)).status,403);
+  await call("student","/community/me/profile","PUT",{bio:"Mình thích toán"});
+  const png=await sharp({create:{width:32,height:32,channels:3,background:"red"}}).png().toBuffer();
+  for (const kind of ["avatar","cover"]) assert.equal((await imageRequest("student",`/api/community/me/${kind}`,png,"image/png","PUT")).status,200);
+  for (const part of ["bio","avatar","cover"]) {
+    assert.equal((await call("other","/community/reports","POST",{...target,part})).status,201);
+    assert.equal((await call("other","/community/reports","POST",{...target,part})).status,409);
+  }
+  const reports=(await call("admin","/admin/community/reports")).data;
+  assert.equal(reports.length,3); assert.equal(reports[0].target.profile_code,code);
+  assert.equal(reports[0].target.has_avatar,true); assert.equal(reports[0].target.body,"Mình thích toán");
+  for (const part of ["bio","avatar","cover"]) {
+    assert.equal((await call("other",`/admin/community/members/${code}/${part}`,"DELETE",{note:"Lý do"})).status,403);
+    assert.equal((await call("admin",`/admin/community/members/${code}/${part}`,"DELETE",{note:""})).status,400);
+    assert.equal((await call("admin",`/admin/community/members/${code}/${part}`,"DELETE",{note:"Nội dung chưa phù hợp"})).status,200);
+  }
+  assert.equal(one(db,"SELECT COUNT(*) n FROM audit WHERE action='community.profile.remove'").n,3);
+  const notices=(await call("student","/community/notifications")).data;
+  assert.equal(notices.length,3); assert.equal(notices[0].kind,"profile_removed"); assert.match(notices[0].detail,/Nội dung chưa phù hợp/);
+  assert.equal((await call("student","/community/notifications/unread-count")).data.count,3);
+  await call("student","/community/notifications/read","POST",{all:true});
+  assert.equal((await call("student","/community/notifications/unread-count")).data.count,0);
+  assert.equal((await call("other","/community/notifications")).data.length,0);
+  for(let i=0;i<7;i++) run(db,"INSERT INTO community_reports(reporter_id,target_type,target_id,reason) VALUES (?,'post',?,'Khác')",ids.other,1000+i);
+  const tutorCode=one(db,"SELECT profile_code FROM users WHERE id=?",ids.tutor).profile_code;
+  assert.equal((await call("other","/community/reports","POST",{...target,target_id:tutorCode})).status,429);
+  await call("student","/community/me/profile","PUT",{bio:"Giới thiệu mới"});
+  for (const kind of ["avatar","cover"]) await imageRequest("student",`/api/community/me/${kind}`,png,"image/png","PUT");
+  assert.equal((await call("admin",`/admin/users/${ids.student}`,"DELETE",{email:"student@private.test"})).status,200);
+  assert.equal(one(db,"SELECT bio FROM users WHERE id=?",ids.student).bio,"");
+  assert.equal(one(db,"SELECT COUNT(*) n FROM user_images WHERE user_id=?",ids.student).n,0);
+  assert.equal(one(db,"SELECT COUNT(*) n FROM user_image_chunks").n,0);
+  assert.equal((await call("other",`/community/members/${code}`)).status,404);
+  assert.equal((await call("admin",`/community/members/${code}`)).status,200);
+});
+
+test("legacy report migration preserves all decisions and can run twice", async t => {
+  const { db, ids } = await fixture(t);
+  db.exec(`DROP TABLE community_reports;
+    CREATE TABLE community_reports (
+      id INTEGER PRIMARY KEY,reporter_id INTEGER NOT NULL REFERENCES users(id),
+      target_type TEXT NOT NULL CHECK(target_type IN ('post','comment')),target_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,detail TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'open',
+      resolved_by INTEGER REFERENCES users(id),resolution TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(reporter_id,target_type,target_id));`);
+  run(db,"INSERT INTO community_reports(id,reporter_id,target_type,target_id,reason,detail,status,resolved_by,resolution) VALUES (42,?,'comment',20,'Khác','Ghi chú','resolved',?,'Đã xử lý')",ids.student,ids.admin);
+  const old=one(db,"SELECT * FROM community_reports WHERE id=42");
+  migrateDatabase(db); migrateDatabase(db);
+  assert.deepEqual({...one(db,"SELECT * FROM community_reports WHERE id=42")},{...old,part:""});
+  assert.equal(db.prepare("PRAGMA foreign_key_check").all().length,0);
+});

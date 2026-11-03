@@ -113,6 +113,25 @@ CREATE TABLE IF NOT EXISTS community_notifications (
 );
 CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notifications(user_id, read_at, id);
 `);
+  // No tables reference reports. Copy every row before replacing its old CHECK/UNIQUE constraints.
+  if (!db.prepare("PRAGMA table_info(community_reports)").all().some(c => c.name === "part")) {
+    db.exec(`CREATE TABLE community_reports_with_profiles (
+        id INTEGER PRIMARY KEY, reporter_id INTEGER NOT NULL REFERENCES users(id),
+        target_type TEXT NOT NULL CHECK(target_type IN ('post','comment','profile')),
+        target_id INTEGER NOT NULL, part TEXT NOT NULL DEFAULT '' CHECK(part IN ('','avatar','cover','bio')),
+        reason TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved')),
+        resolved_by INTEGER REFERENCES users(id), resolution TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(reporter_id,target_type,target_id,part)
+      );
+      INSERT INTO community_reports_with_profiles(id,reporter_id,target_type,target_id,reason,detail,status,resolved_by,resolution,created_at)
+        SELECT id,reporter_id,target_type,target_id,reason,detail,status,resolved_by,resolution,created_at FROM community_reports;
+      DROP TABLE community_reports;
+      ALTER TABLE community_reports_with_profiles RENAME TO community_reports;`);
+  }
+  if (!db.prepare("PRAGMA table_info(community_notifications)").all().some(c => c.name === "detail"))
+    db.exec("ALTER TABLE community_notifications ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   if (
     !db
       .prepare("PRAGMA table_info(community_posts)")

@@ -1,7 +1,7 @@
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
-import { z } from "./validation.js";
+import { z, text } from "./validation.js";
 import { LIMITS, authorLabel, displayNameSchema, findContactInfo } from "./community-policy.js";
 import { UPLOAD_LIMIT } from "./uploads.js";
 
@@ -77,6 +77,24 @@ export function registerCommunityProfile(app, db, auth, audit, processPhoto, { s
   });
   app.put(`${base}/me/profile`, auth(), (req, res) => {
     res.json(transaction(db, () => setMemberProfile(db, req.user.id, req.body)));
+  });
+  app.delete("/api/admin/community/members/:code/:part", auth("admin"), (req, res) => {
+    const part = z.enum(["avatar", "cover", "bio"]).parse(req.params.part);
+    const note = text(1000).parse(req.body.note);
+    transaction(db, () => {
+      const user = memberByCode(db, req.params.code, req.user);
+      if (part === "bio") {
+        if (!user.bio) fail(409, "Giới thiệu đã được xóa.");
+        run(db, "UPDATE users SET bio='' WHERE id=?", user.id);
+      } else {
+        if (!one(db, "SELECT id FROM user_images WHERE user_id=? AND kind=?", user.id, part)) fail(409, "Ảnh đã được gỡ.");
+        removeMemberImage(db, user.id, part);
+      }
+      const label = { avatar: "Ảnh đại diện", cover: "Ảnh bìa", bio: "Giới thiệu" }[part];
+      run(db, "INSERT INTO community_notifications(user_id,kind,detail) VALUES (?,'profile_removed',?)", user.id, `${label} đã được gỡ: ${note}`);
+      audit(req.user.id, "community.profile.remove", JSON.stringify({ id: user.id, part, note }));
+    });
+    res.json({ ok: true });
   });
   for (const kind of ["avatar", "cover"]) {
     app.get(`${base}/members/:code/${kind}`, auth(), (req, res) => {
