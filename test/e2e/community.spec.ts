@@ -145,7 +145,7 @@ test("community submission, rejection, revisions, tutor comments and moderation"
     tutor.getByRole("heading", { name: "Bình luận (1)", exact: true }),
   ).toBeVisible();
   expect(commentRequests).toBe(1);
-  await tutor.unroute("**/api/community/me");
+  await tutor.unrouteAll({ behavior: "wait" });
   await page.reload();
   await expect(
     page.locator(".community-comment").getByRole("link", { name: /Gia sư/ }),
