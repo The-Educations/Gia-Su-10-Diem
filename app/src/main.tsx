@@ -40,7 +40,9 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "./components/ui/sheet";
-import { Person, Loading, ErrorState } from "./components/common";
+import { Loading, ErrorState } from "./components/common";
+import { I18nProvider, useI18n } from "./lib/i18n";
+import { LanguageSwitch } from "./components/language-switch";
 import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
@@ -94,6 +96,7 @@ function Require({
 }
 function Shell() {
   const { user, setUser, refresh } = useApp(),
+    { t } = useI18n(),
     loc = useLocation(),
     [open, setOpen] = useState(false),
     [collapsed, setCollapsed] = useState(() => {
@@ -167,33 +170,33 @@ function Shell() {
           className="sidebar-toggle"
           variant="ghost"
           size="icon"
-          aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
-          title={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+          aria-label={t(collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng")}
+          title={t(collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng")}
           aria-expanded={!collapsed}
           aria-controls="desktop-navigation"
           onClick={() => setCollapsed((value) => !value)}
         >
           <PanelLeft aria-hidden="true" />
-          <span className="nav-label">Thu gọn</span>
+          <span className="nav-label">{t("Thu gọn")}</span>
         </Button>
       </div>
       <div className="navigation-body">
-      <nav aria-label="Điều hướng chính">
+      <nav aria-label={t("Điều hướng chính")}>
         {nav.map(({ to, label, icon: Icon }) => (
           <React.Fragment key={to}>
           {user && to === "/tutors" && <div className="nav-divider" aria-hidden="true" />}
-          <NavLink to={to} aria-label={label} title={label} onClick={() => setOpen(false)}>
+          <NavLink to={to} aria-label={t(label)} title={t(label)} onClick={() => setOpen(false)}>
             <Icon size={19} aria-hidden="true" />
-            <span className="nav-label">{label}</span>
+            <span className="nav-label">{t(label)}</span>
             {to === "/community" && <CommunityUnread />}
           </NavLink>
           </React.Fragment>
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <a href="/" className="landing-link" aria-label="Về trang giới thiệu" title="Về trang giới thiệu">
+        <a href="/" className="landing-link" aria-label={t("Về trang giới thiệu")} title={t("Về trang giới thiệu")}>
           <ArrowUpRight size={19} aria-hidden="true" />
-          <span className="nav-label">Về trang giới thiệu</span>
+          <span className="nav-label">{t("Về trang giới thiệu")}</span>
         </a>
         {user ? (
           <>
@@ -201,28 +204,28 @@ function Shell() {
             <Button
               variant="ghost"
               className="sidebar-action"
-              aria-label="Đăng xuất"
-              title="Đăng xuất"
+              aria-label={t("Đăng xuất")}
+              title={t("Đăng xuất")}
               onClick={async () => {
                 try {
                   await api("/auth/logout", "POST");
                   setUser(null);
                   refresh();
-                  toast.success("Đã đăng xuất");
+                  toast.success(t("Đã đăng xuất"));
                 } catch (e) {
                   toast.error((e as Error).message);
                 }
               }}
             >
               <LogOut data-icon="inline-start" />
-              <span className="nav-label">Đăng xuất</span>
+              <span className="nav-label">{t("Đăng xuất")}</span>
             </Button>
           </>
         ) : (
           <Button asChild className="sidebar-action">
-            <Link to="/auth" aria-label="Tài khoản" title="Tài khoản" onClick={() => setOpen(false)}>
+            <Link to="/auth" aria-label={t("Tài khoản")} title={t("Tài khoản")} onClick={() => setOpen(false)}>
               <LogIn data-icon="inline-start" />
-              <span className="nav-label">Tài khoản</span>
+              <span className="nav-label">{t("Tài khoản")}</span>
             </Link>
           </Button>
         )}
@@ -234,9 +237,9 @@ function Shell() {
     <div className="app-shell" data-auth-page={loc.pathname === "/auth" || undefined} data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
       <PageMetadata />
       <a href="#main" className="skip-link">
-        Đến nội dung
+        {t("Đến nội dung")}
       </a>
-      <aside className="sidebar" id="desktop-navigation" aria-label="Thanh điều hướng">{navigation}</aside>
+      <aside className="sidebar" id="desktop-navigation" aria-label={t("Thanh điều hướng")}>{navigation}</aside>
       <div className="app-body">
         <header className="topbar">
           <div className="topbar-leading">
@@ -246,7 +249,7 @@ function Shell() {
               setOpen(next);
             }}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Mở điều hướng">
+                <Button variant="ghost" size="icon" aria-label={t("Mở điều hướng")}>
                   <Menu />
                 </Button>
               </SheetTrigger>
@@ -256,7 +259,7 @@ function Shell() {
                   document.getElementById("main")?.focus({ preventScroll: true });
                 }
               }}>
-                <SheetTitle className="sr-only">Điều hướng</SheetTitle>
+                <SheetTitle className="sr-only">{t("Điều hướng")}</SheetTitle>
                 <SheetDescription className="sr-only">
                   Gia Sư 10 Điểm
                 </SheetDescription>
@@ -266,14 +269,14 @@ function Shell() {
             <Link to="/tutors">10 Điểm</Link>
           </div>
           <span className="topbar-location">
-            {(loc.pathname.startsWith("/community") ? "Cộng đồng" : nav.find((n) => n.to === loc.pathname)?.label) || "Gia Sư 10 Điểm"}
+            {t(loc.pathname.startsWith("/community") ? "Cộng đồng" : nav.find((n) => n.to === loc.pathname)?.label || "Gia Sư 10 Điểm")}
           </span>
           </div>
           <div className="topbar-right">
             {user?.demo && (
-              <span className="demo-indicator">Tài khoản mẫu</span>
+              <span className="demo-indicator">{t("Tài khoản mẫu")}</span>
             )}
-            {user && <Person name={user.name} id={user.id} />}
+            <LanguageSwitch />
           </div>
         </header>
         <main id="main" tabIndex={-1}>
@@ -357,8 +360,8 @@ function Shell() {
                   path="*"
                   element={
                     <div className="page">
-                      <h1>Không tìm thấy trang</h1>
-                      <Link to="/tutors">Về tìm gia sư</Link>
+                      <h1>{t("Không tìm thấy trang")}</h1>
+                      <Link to="/tutors">{t("Về tìm gia sư")}</Link>
                     </div>
                   }
                 />
@@ -368,7 +371,7 @@ function Shell() {
         </main>
         <footer className="app-footer">
           <span>Gia Sư 10 Điểm</span>
-          <nav aria-label="Thông tin pháp lý"><a href="/privacy">Quyền riêng tư</a><a href="/terms">Điều khoản dịch vụ</a></nav>
+          <nav aria-label={t("Thông tin pháp lý")}><a href="/privacy">{t("Quyền riêng tư")}</a><a href="/terms">{t("Điều khoản dịch vụ")}</a></nav>
         </footer>
       </div>
     </div>
@@ -376,10 +379,12 @@ function Shell() {
 }
 const router = createBrowserRouter([{ path: "*", element:
   <AnimateUIProvider>
-    <AppProvider>
-      <Shell />
-      <Toaster richColors position="top-right" />
-    </AppProvider>
+    <I18nProvider>
+      <AppProvider>
+        <Shell />
+        <Toaster richColors position="top-right" />
+      </AppProvider>
+    </I18nProvider>
   </AnimateUIProvider>,
 }], { basename: "/app" });
 createRoot(document.getElementById("root")!).render(

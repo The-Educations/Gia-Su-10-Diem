@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Clock3, Settings, UserRound } from "lucide-react";
 import { useApp, useLoad } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { accountRole, type CommunityIdentity } from "@/lib/types";
 import { Person } from "@/components/common";
 import { timezoneLabel } from "@/components/tutor-timezone";
@@ -18,6 +19,7 @@ export default function AccountMenu({
   onNavigate: () => void;
 }) {
   const { user } = useApp();
+  const { t } = useI18n();
   const identity = useLoad<CommunityIdentity>(
     user && !user.email_verification_required ? "/community/me" : null,
   );
@@ -35,7 +37,7 @@ export default function AccountMenu({
         <button
           type="button"
           className="account-link"
-          aria-label={`Tài khoản: ${user.name}`}
+          aria-label={`${t("Tài khoản")}: ${user.name}`}
           title={user.name}
         >
           <Person
@@ -48,7 +50,7 @@ export default function AccountMenu({
           />
           <span className="nav-label">
             <strong>{user.name}</strong>
-            <small>{accountRole(user)}</small>
+            <small>{t(accountRole(user))}</small>
             <small className="account-timezone">
               <Clock3 size={12} aria-hidden="true" />
               {timezoneLabel(user.timezone, true)}
@@ -60,7 +62,7 @@ export default function AccountMenu({
         className="account-menu"
         side="top"
         align="start"
-        aria-label="Tài khoản"
+        aria-label={t("Tài khoản")}
         onCloseAutoFocus={(event) => {
           if (navigating.current) {
             event.preventDefault();
@@ -70,11 +72,11 @@ export default function AccountMenu({
       >
         <Link to={`/community/members/${user.profile_code}`} onClick={close}>
           <UserRound aria-hidden="true" />
-          Xem hồ sơ của tôi
+          {t("Xem hồ sơ của tôi")}
         </Link>
         <Link to="/settings" onClick={close}>
           <Settings aria-hidden="true" />
-          Cài đặt tài khoản
+          {t("Cài đặt tài khoản")}
         </Link>
       </PopoverContent>
     </Popover>
