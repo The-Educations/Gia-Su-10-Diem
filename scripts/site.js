@@ -99,6 +99,7 @@
     frame = 0;
     const still = motion.matches;
     header.classList.toggle("is-scrolled", scrollY > 20);
+    header.classList.toggle("is-collapsed", scrollY > 8);
     const rect = journey.getBoundingClientRect();
     const progress =
       still || narrow.matches

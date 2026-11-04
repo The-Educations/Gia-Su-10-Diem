@@ -11,6 +11,9 @@ const escape = (value) =>
         c
       ],
   );
+const teLogo = fs
+  .readFileSync("scripts/the-educations-logo.html", "utf8")
+  .trim();
 const arrow = `<svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='M5 19L19 5M5 5h14v14' stroke='currentColor' stroke-width='1.5'/></svg>`;
 const brand = `<img src='/assets/icon-v2.svg' width='40' height='40' alt=''><span>${escape(i.brand.name)}</span>`;
 const art = (name, cls = "", speed = "0.1") =>
@@ -55,6 +58,7 @@ const html = `<!DOCTYPE html>
 <header class='nav'>
   <div class='container nav-inner'>
     <a href='/' class='brand' aria-label='Gia Sư 10 Điểm — Trang chủ'>${brand}</a>
+    <a class='te-brand' href='#top' aria-label='The Educations, về đầu trang'>${teLogo}</a>
     <nav class='nav-links' aria-label='Điều hướng chính'>${navLinks}</nav>
     <a class='nav-login' href='/app/auth'>Tài khoản ${arrow}</a>
     <button class='mobile-menu-toggle' type='button' aria-expanded='false' aria-controls='mobile-nav'><span class='sr-only'>Mở menu</span><span aria-hidden='true'>Menu <span class='menu-symbol'>+</span></span></button>

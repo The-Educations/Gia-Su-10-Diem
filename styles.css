@@ -190,6 +190,93 @@ a:hover {
 .mobile-nav {
   display: none;
 }
+/* The Educations — logo giữa header, thu gọn thành EDU khi cuộn (.nav.is-collapsed) */
+.nav-inner {
+  position: relative;
+}
+.nav-links {
+  margin-left: auto;
+}
+.te-brand {
+  --te-ink: #282820;
+  --te-accent: #852f36;
+  --te-ease: cubic-bezier(0.65, 0, 0.35, 1);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: block;
+  line-height: 0;
+}
+.te-logo {
+  display: block;
+  overflow: visible;
+  width: 282px;
+  height: 24px;
+}
+.te-logo g {
+  transform: translateX(0);
+}
+.te-logo .te-keep {
+  transition: transform 480ms var(--te-ease);
+}
+.te-logo .te-fade {
+  transition:
+    transform 480ms var(--te-ease),
+    opacity 300ms ease 140ms;
+}
+.is-collapsed .te-logo .te-keep {
+  transform: translateX(var(--x));
+  transition: transform 600ms var(--te-ease);
+}
+.is-collapsed .te-logo .te-fade {
+  transform: translateX(var(--x));
+  opacity: 0;
+  transition:
+    transform 600ms var(--te-ease),
+    opacity 260ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .te-logo g,
+  .is-collapsed .te-logo g {
+    transition: none !important;
+  }
+}
+/* Logo nằm giữa nên chỉ chạm được phần chữ EDU, để không che các liên kết bên cạnh */
+.te-brand {
+  pointer-events: none;
+}
+.te-keep {
+  pointer-events: auto;
+}
+/* Màn hẹp: thu nhỏ wordmark, rồi giữ sẵn dạng EDU khi không đủ chỗ cho chữ đầy đủ */
+@media (max-width: 1339px) {
+  .nav-links {
+    gap: 20px;
+  }
+  .te-logo {
+    width: clamp(150px, calc(100vw - 992px), 282px);
+    height: auto;
+  }
+}
+@media (max-width: 1159px) {
+  .te-logo {
+    width: 282px;
+    height: 24px;
+  }
+  .te-logo .te-keep,
+  .te-logo .te-fade {
+    transform: translateX(var(--x));
+  }
+  .te-logo .te-fade {
+    opacity: 0;
+  }
+}
+@media (min-width: 881px) and (max-width: 970px), (max-width: 479px) {
+  .te-brand {
+    display: none;
+  }
+}
 .button {
   display: inline-flex;
   align-items: center;
