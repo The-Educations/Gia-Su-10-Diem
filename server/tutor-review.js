@@ -25,7 +25,9 @@ export function registerTutorReview(app, db, auth, audit, { sendEmail, origin })
     const current = one(db, "SELECT review_revision FROM tutors WHERE user_id=?", id);
     if (current.review_revision !== t.review_revision)
       return res.status(409).json({ error: "Email đã gửi nhưng hồ sơ vừa được cập nhật. Đóng và mở lại để duyệt bản mới." });
-    run(db, "UPDATE tutors SET status=?,moderation_note='',review_revision=review_revision+1 WHERE user_id=?", d.status, id);
+    // The new content is now the live version. A withdrawn profile is hidden
+    // entirely, so the previous version must not stay public either.
+    run(db, "UPDATE tutors SET status=?,published=CASE WHEN ? IN ('approved','withdrawn') THEN NULL ELSE published END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?", d.status, d.status, id);
     audit(req.user.id, `tutor.${d.status}`, id);
     res.json({ ok: true });
   });

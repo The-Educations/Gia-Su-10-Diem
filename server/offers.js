@@ -1,3 +1,4 @@
+import { liveTutorSql, publicView } from "./tutor-visibility.js";
 import { all, one, run, transaction } from "./db.js";
 import { overlaps, weeklySchedule } from "./availability.js";
 import { availabilitySchema, z } from "./validation.js";
@@ -60,7 +61,7 @@ export function registerOffers(app, db, auth) {
     const d = schema.parse(req.body);
     const { blocks } = availabilitySchema.parse({ revision: 0, blocks: req.body.blocks });
     if (!blocks.length) fail(400, "Chọn ít nhất một giờ học mỗi tuần.");
-    const tutor = one(db, "SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'", d.tutor_id);
+    const tutor = publicView(one(db, `SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`, d.tutor_id));
     if (!tutor) fail(404, "Gia sư chưa có hồ sơ công khai.");
     if (!JSON.parse(tutor.subjects).includes(d.subject_id) || (tutor.mode !== "both" && tutor.mode !== d.mode)) fail(400, "Môn học hoặc hình thức không phù hợp.");
     if (d.kind === "trial") {
@@ -105,7 +106,7 @@ export function registerOffers(app, db, auth) {
       if (status !== "cancelled" && req.user.id !== o.tutor_id) fail(403, "Chỉ gia sư có thể chấp nhận hoặc từ chối đề nghị.");
       if (!(status === "cancelled" ? ["pending", "accepted"] : ["pending"]).includes(o.status)) fail(409, "Đề nghị đã được xử lý. Vui lòng tải lại.");
       if (status === "accepted") {
-        const tutor = one(db, "SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'", o.tutor_id);
+        const tutor = publicView(one(db, `SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`, o.tutor_id));
         if (!tutor || !one(db, "SELECT id FROM users WHERE id=? AND status='active' AND role='student'", o.student_id)) fail(409, "Tài khoản hiện không thể xác nhận lịch học.");
         if (!JSON.parse(tutor.subjects).includes(o.subject_id) || (tutor.mode !== "both" && tutor.mode !== o.mode)) fail(409, "Môn học hoặc hình thức dạy đã thay đổi.");
         if (o.kind === "trial") {

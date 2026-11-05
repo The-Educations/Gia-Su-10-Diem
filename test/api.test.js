@@ -230,7 +230,8 @@ test("catalogue is seeded idempotently; tutor moderation and private fields", as
   for (const field of ["email", "password", "moderation_note"])
     assert.equal(publicProfile[field], undefined);
   await newTutor.request("/tutor/profile", "PUT", { ...profile, rate: 200000 });
-  assert.equal((await guest.request(`/tutors/${id}`)).status, 404);
+  const repriced = await guest.request(`/tutors/${id}`);
+  assert.equal(repriced.status, 200); assert.equal(repriced.data.rate, 200000);
   const oldCookie = newTutor.cookie;
   await admin.request(`/admin/users/${id}`, "PATCH", { status: "suspended" });
   assert.equal((await newTutor.request("/tutor/profile")).status, 401);
@@ -778,7 +779,11 @@ test("custom tutor presentation validates, persists and requires moderation; pub
     (await tutor.request("/tutor/profile", "PUT", custom)).status,
     200,
   );
-  assert.equal((await guest.request(`/tutors/${user.id}`)).status, 404);
+  // Students keep seeing the approved version while the new text awaits review.
+  const beforeReview = await guest.request(`/tutors/${user.id}`);
+  assert.equal(beforeReview.status, 200);
+  assert.notEqual(beforeReview.data.teaching_style, custom.teaching_style);
+  assert.equal((await tutor.request("/tutor/profile")).data.teaching_style, custom.teaching_style);
   const reopened = openDatabase(file);
   assert.equal(
     one(reopened, "SELECT teaching_style FROM tutors WHERE user_id=?", user.id)
@@ -1064,7 +1069,10 @@ test("tutor education timeline and timezone validate, persist and remain subject
     { profile_sections: [{ title: "Title", body: "x".repeat(2001) }] },
   ]) assert.equal((await tutor.request("/tutor/profile", "PUT", { ...custom, ...patch })).status, 400);
   assert.equal((await tutor.request("/tutor/profile", "PUT", custom)).status, 200);
-  assert.equal((await guest.request(`/tutors/${user.id}`)).status, 404);
+  const unreviewed = await guest.request(`/tutors/${user.id}`);
+  assert.equal(unreviewed.status, 200);
+  assert.deepEqual(unreviewed.data.education_history, old.education_history);
+  assert.equal(unreviewed.data.timezone, custom.timezone);
   const reopened = openDatabase(file);
   assert.deepEqual(JSON.parse(one(reopened, "SELECT education_history FROM tutors WHERE user_id=?", user.id).education_history), education_history);
   reopened.close();
@@ -1241,6 +1249,96 @@ test("review sends a template, rejects stale versions and requires explicit resu
   assert.equal(revised.status, "pending");
   assert.equal((await admin.request(path, "PATCH", { status: "approved", revision: profile.review_revision })).status, 409);
   assert.equal((await admin.request(path, "PATCH", { status: "approved", revision: revised.review_revision })).status, 200);
+});
+
+test("operational settings apply at once and content edits keep the approved version public until reviewed", async t => {
+  const { client, db } = await fixture(t);
+  const tutor = client(), admin = client(), guest = client(), student = client(), other = client();
+  const user = await tutor.login("chau"); await admin.login("admin"); await student.login("student"); await other.login("linh");
+  const path = `/admin/tutors/${user.id}`, publicPath = `/tutors/${user.id}`;
+  const original = (await tutor.request("/tutor/profile")).data;
+  const stored = () => one(db, "SELECT status,published,review_revision,moderation_note FROM tutors WHERE user_id=?", user.id);
+
+  // Saving without changes, or changing only operational settings, never leaves search.
+  const baseRevision = stored().review_revision;
+  let saved = await tutor.request("/tutor/profile", "PUT", original);
+  assert.equal(saved.status, 200); assert.deepEqual(saved.data.review.changed, []);
+  assert.equal(stored().status, "approved"); assert.equal(stored().review_revision, baseRevision);
+  saved = await tutor.request("/tutor/profile", "PUT", { ...original, rate: original.rate + 20000, mode: "both", accepts_trial: true, timezone: "Asia/Bangkok" });
+  assert.equal(saved.status, 200); assert.deepEqual(saved.data.review.changed, []);
+  assert.equal(stored().status, "approved"); assert.equal(stored().published, null);
+  const live = (await guest.request(publicPath)).data;
+  assert.equal(live.rate, original.rate + 20000); assert.equal(live.mode, "both"); assert.equal(live.timezone, "Asia/Bangkok");
+  assert.equal((await tutor.request("/account", "PATCH", { name: user.name, goal: "", timezone: "Asia/Ho_Chi_Minh" })).status, 200);
+  assert.equal(stored().status, "approved");
+
+  // A content edit hides nothing: students keep the approved text, the tutor sees the draft.
+  const edit = { ...original, rate: original.rate + 20000, mode: "both", headline: "Tiêu đề mới chờ duyệt" };
+  saved = await tutor.request("/tutor/profile", "PUT", edit);
+  assert.deepEqual(saved.data.review.changed, ["headline"]); assert.equal(saved.data.review.status, "pending");
+  assert.equal(stored().status, "pending");
+  const duringReview = (await guest.request(publicPath)).data;
+  assert.equal(duringReview.headline, original.headline);
+  assert.equal(duringReview.published, undefined);
+  assert.equal((await guest.request("/tutors")).data.find(x => x.user_id === user.id).headline, original.headline);
+  const draft = (await tutor.request("/tutor/profile")).data;
+  assert.equal(draft.headline, edit.headline); assert.equal(draft.published.headline, original.headline);
+  assert.equal((await admin.request("/admin")).data.tutors.find(x => x.user_id === user.id).published.headline, original.headline);
+  assert.equal((await admin.request(`${path}/preview`)).data.headline, edit.headline);
+
+  // Further edits and operational changes keep the original snapshot.
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...edit, headline: "Tiêu đề sửa lần hai", rate: original.rate + 30000 })).status, 200);
+  assert.equal((await guest.request(publicPath)).data.headline, original.headline);
+  assert.equal((await guest.request(publicPath)).data.rate, original.rate + 30000);
+
+  // Students can still send and the tutor can still accept while the edit waits.
+  const blocks = [{ weekday: 0, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: (await tutor.request("/tutor/profile")).data.weekly_schedule.revision, blocks });
+  const offer = { tutor_id: user.id, subject_id: "toan", mode: "online", blocks, note: "", ...offerPeriod() };
+  const sent = await student.request("/offers", "POST", offer);
+  assert.equal(sent.status, 201);
+  assert.equal((await tutor.request(`/offers/${sent.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+
+  // Rejecting the revision asks for changes but leaves the approved version public; resubmitting queues it again.
+  assert.equal((await admin.request(path, "PATCH", { status: "rejected" })).status, 200);
+  assert.equal(stored().status, "rejected"); assert.notEqual(stored().published, null);
+  assert.equal((await guest.request(publicPath)).data.headline, original.headline);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", (await tutor.request("/tutor/profile")).data)).status, 200);
+  assert.equal(stored().status, "pending");
+
+  // Approving publishes the draft and discards the snapshot.
+  const queued = (await tutor.request("/tutor/profile")).data;
+  assert.equal((await admin.request(path, "PATCH", { status: "approved", revision: queued.review_revision })).status, 200);
+  assert.equal(stored().published, null);
+  assert.equal((await guest.request(publicPath)).data.headline, "Tiêu đề sửa lần hai");
+
+  // Editing the display name, or the photo, still hides the profile until review.
+  assert.equal((await tutor.request("/account", "PATCH", { name: "Tên mới cần duyệt", goal: "" })).status, 200);
+  assert.equal((await guest.request(publicPath)).status, 404);
+  assert.equal((await admin.request(path, "PATCH", { status: "approved" })).status, 200);
+  assert.equal((await guest.request(publicPath)).status, 200);
+
+  // A takedown removes the old version too, even if the tutor edits afterwards.
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...(await tutor.request("/tutor/profile")).data, bio: "Giới thiệu mới sau khi đã duyệt" })).status, 200);
+  assert.equal((await admin.request(path, "PATCH", { status: "withdrawn" })).status, 200);
+  assert.equal(stored().published, null);
+  assert.equal((await guest.request(publicPath)).status, 404);
+  assert.equal((await tutor.request("/tutor/profile", "PUT", { ...(await tutor.request("/tutor/profile")).data, bio: "Gia sư tự sửa sau khi bị gỡ" })).status, 200);
+  assert.equal((await guest.request(publicPath)).status, 404);
+});
+
+test("a tutor without a published version cannot confirm new lessons", async t => {
+  const { client, db } = await fixture(t);
+  const tutor = client(), student = client(), other = client();
+  const user = await tutor.login("chau"); await student.login("student"); await other.login("linh");
+  const start = new Date(Math.ceil((Date.now() + 3 * 3600000) / 3600000) * 3600000).toISOString();
+  assert.equal((await tutor.request("/tutor/slots", "POST", { starts_at: start })).status, 201);
+  const slot = (await student.request(`/tutors/${user.id}`)).data.slots.find(s => s.starts_at === start);
+  const booking = await student.request("/bookings", "POST", { slot_id: slot.id, subject_id: "toan", mode: "online", note: "" });
+  assert.equal(booking.status, 201);
+  run(db, "UPDATE tutors SET status='pending', published=NULL WHERE user_id=?", user.id);
+  assert.equal((await tutor.request(`/bookings/${booking.data.id}`, "PATCH", { status: "accepted" })).status, 409);
+  assert.equal((await tutor.request(`/bookings/${booking.data.id}`, "PATCH", { status: "declined" })).status, 200);
 });
 
 test("review email failure and edits during delivery never overwrite a profile", async t => {

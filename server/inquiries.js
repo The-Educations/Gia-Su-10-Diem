@@ -1,3 +1,4 @@
+import { liveTutorSql, publicView } from "./tutor-visibility.js";
 import { withChatMedia, insertChatMessage } from "./chat-media.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text, availabilitySchema } from "./validation.js";
@@ -36,13 +37,13 @@ export function registerInquiries(app, db, auth) {
     if (
       !one(
         db,
-        "SELECT user_id FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'",
+        `SELECT user_id FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`,
         d.tutor_id,
       )
     )
       return res.status(404).json({ error: "Gia sư chưa có hồ sơ công khai." });
     const result = transaction(db, () => {
-      const tutor = one(db, "SELECT subjects,mode FROM tutors WHERE user_id=?", d.tutor_id);
+      const tutor = publicView(one(db, "SELECT status,published,subjects,mode FROM tutors WHERE user_id=?", d.tutor_id));
       const subject = d.subject_id && one(db, "SELECT name FROM subjects WHERE id=?", d.subject_id);
       if ((d.subject_id && (!subject || !JSON.parse(tutor.subjects).includes(d.subject_id))) || (d.mode && tutor.mode !== "both" && tutor.mode !== d.mode))
         throw Object.assign(new Error("Môn học hoặc hình thức không phù hợp."), { status: 400 });

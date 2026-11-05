@@ -235,7 +235,7 @@ export default function Admin() {
                     <h2>{t.name}</h2>
                     <p>{t.headline || "Chưa hoàn thiện hồ sơ"}</p>
                     <span>
-                      {money(t.rate)} / buổi{t.demo ? " · Hồ sơ mẫu" : ""}
+                      {money(t.rate)} / buổi{t.demo ? " · Hồ sơ mẫu" : ""}{t.published ? " · Chỉnh sửa chờ duyệt" : ""}
                     </span>
                   </div>
                   <State
