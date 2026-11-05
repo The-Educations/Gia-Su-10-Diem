@@ -82,7 +82,7 @@ function ProfileForm({
     setBusy(true);
     setError("");
     try {
-      const result = await api<{ user: User }>("/tutor/profile", "PUT", {
+      const result = await api<{ user: User; review: { status: string; published: boolean } }>("/tutor/profile", "PUT", {
         ...draft,
         // Asset/theme uploads save independently; never overwrite their latest values.
         profile_theme: t.profile_theme,
@@ -93,7 +93,13 @@ function ProfileForm({
       });
       setUser(result.user);
       refresh();
-      toast.success("Hồ sơ đã gửi quản trị viên duyệt.");
+      toast.success(
+        result.review.status === "approved"
+          ? "Đã lưu. Thay đổi áp dụng ngay."
+          : result.review.published
+            ? "Đã gửi duyệt. Học sinh vẫn thấy bản đã duyệt trước đó."
+            : "Hồ sơ đã gửi quản trị viên duyệt.",
+      );
       navigate("/workspace", { replace: true });
     } catch (e) {
       setError((e as Error).message);
@@ -427,7 +433,7 @@ export default function TutorStudio() {
                   : t.status
               }
             />
-            {t.status === "approved" && !uploadPending && (
+            {(t.status === "approved" || !!t.published) && !uploadPending && (
               <Button variant="outline" asChild>
                 <Link to={`/tutors/${t.user_id}`}>Xem hồ sơ công khai</Link>
               </Button>
@@ -437,11 +443,17 @@ export default function TutorStudio() {
       />
       <Alert>
         <AlertDescription>
-          {!uploadPending && t.status === "approved"
-            ? "Chỉnh sửa hồ sơ sẽ cần được duyệt lại."
-            : t.status === "rejected"
-              ? "Kiểm tra email, cập nhật hồ sơ rồi gửi duyệt lại."
-              : "Hoàn thiện hồ sơ và gửi duyệt để xuất hiện trong tìm kiếm."}
+          {uploadPending
+            ? "Ảnh mới sẽ ẩn hồ sơ khỏi tìm kiếm cho đến khi được duyệt."
+            : t.status === "approved"
+              ? "Học phí, hình thức dạy, địa chỉ, học thử và giờ trống áp dụng ngay. Nội dung giới thiệu cần được duyệt lại; đổi tên hoặc ảnh sẽ tạm ẩn hồ sơ."
+              : t.published
+                ? t.status === "rejected"
+                  ? "Kiểm tra email, chỉnh sửa rồi gửi duyệt lại. Học sinh vẫn thấy bản đã duyệt trước đó."
+                  : "Bản chỉnh sửa đang chờ duyệt. Học sinh vẫn thấy bản đã duyệt trước đó."
+                : t.status === "rejected"
+                  ? "Kiểm tra email, cập nhật hồ sơ rồi gửi duyệt lại."
+                  : "Hoàn thiện hồ sơ và gửi duyệt để xuất hiện trong tìm kiếm."}
         </AlertDescription>
       </Alert>
       <ProfileForm

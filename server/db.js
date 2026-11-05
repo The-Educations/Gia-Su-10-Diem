@@ -201,6 +201,8 @@ export function migrateDatabase(db) {
   }
   if (!db.prepare("PRAGMA table_info(tutors)").all().some(c => c.name === "review_revision"))
     db.exec("ALTER TABLE tutors ADD COLUMN review_revision INTEGER NOT NULL DEFAULT 0");
+  if (!db.prepare("PRAGMA table_info(tutors)").all().some(c => c.name === "published"))
+    db.exec("ALTER TABLE tutors ADD COLUMN published TEXT");
   for (const table of ["users", "tutors"]) {
     const columns = db.prepare(`PRAGMA table_info(${table})`).all();
     for (const column of ["province_code", "ward_code", ...(table === "users" ? ["school"] : [])])

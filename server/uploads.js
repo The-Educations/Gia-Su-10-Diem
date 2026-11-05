@@ -1,3 +1,4 @@
+import { isLiveTutor } from "./tutor-visibility.js";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
@@ -84,7 +85,7 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
         saveUpload(db, req.user.id, kind, data, mime, name);
         run(
           db,
-          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
+          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,published=NULL,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
           req.user.id,
         );
         audit(req.user.id, `upload.${kind}`, req.user.id);
@@ -108,13 +109,13 @@ export function registerUploads(app, db, auth, audit, processPhoto) {
   app.get("/api/uploads/:id", (req, res) => {
     const row = one(
       db,
-      `SELECT f.*,t.status AS profile_status,u.status AS account_status,u.role AS account_role FROM (SELECT * FROM tutor_uploads UNION ALL SELECT * FROM tutor_banners) f JOIN tutors t ON t.user_id=f.tutor_id JOIN users u ON u.id=t.user_id WHERE f.id=?`,
+      `SELECT f.*,t.status AS profile_status,t.published AS profile_published,u.status AS account_status,u.role AS account_role FROM (SELECT * FROM tutor_uploads UNION ALL SELECT * FROM tutor_banners) f JOIN tutors t ON t.user_id=f.tutor_id JOIN users u ON u.id=t.user_id WHERE f.id=?`,
       req.params.id,
     );
     if (
       !row || row.kind === "cv" ||
       !(
-        (row.profile_status === "approved" &&
+        (isLiveTutor({ status: row.profile_status, published: row.profile_published }) &&
           row.account_status === "active" && row.account_role === "tutor") ||
         req.user?.id === row.tutor_id ||
         req.user?.role === "admin"

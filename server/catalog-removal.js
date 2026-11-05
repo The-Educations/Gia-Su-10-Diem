@@ -9,7 +9,13 @@ export function registerCatalogRemoval(app, db, auth, audit) {
         run(db, `UPDATE ${kind} SET archived=1 WHERE id=?`, item.id);
         if (kind === "subjects") run(db, "UPDATE resources SET archived=1 WHERE subject_id=?", item.id);
         const goals = new Set(all(db, "SELECT DISTINCT category FROM resources WHERE archived=0 AND published=1").map(r => r.category));
-        for (const tutor of all(db, "SELECT user_id,subjects,goals FROM tutors")) {
+        for (const tutor of all(db, "SELECT user_id,subjects,goals,published FROM tutors")) {
+          if (tutor.published) {
+            const snapshot = JSON.parse(tutor.published);
+            snapshot.subjects = JSON.stringify(JSON.parse(snapshot.subjects).filter(id => kind !== "subjects" || id !== item.id));
+            snapshot.goals = JSON.stringify(JSON.parse(snapshot.goals).filter(goal => goals.has(goal)));
+            run(db, "UPDATE tutors SET published=? WHERE user_id=?", JSON.stringify(snapshot), tutor.user_id);
+          }
           const subjects = JSON.parse(tutor.subjects).filter(id => kind !== "subjects" || id !== item.id);
           const remainingGoals = JSON.parse(tutor.goals).filter(goal => goals.has(goal));
           if (JSON.stringify(subjects) !== tutor.subjects || JSON.stringify(remainingGoals) !== tutor.goals)

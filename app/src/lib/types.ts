@@ -44,8 +44,14 @@ export type Slot = {
   available?: number;
 };
 export type ProfileTheme = { id: "paper" | "sage" | "ink"; name: string };
+export type PublishedProfile = Pick<
+  Tutor,
+  "headline" | "bio" | "education" | "experience" | "education_history" | "profile_sections" | "teaching_style" | "lesson_plan" | "subjects" | "levels" | "goals"
+>;
 export type Tutor = {
   email?: string;
+  // Last approved content while an edited version awaits review.
+  published?: PublishedProfile | null;
   theme_inventory: ProfileTheme[];
   weekly_blocks: WeeklySchedule["blocks"];
   review_revision: number;

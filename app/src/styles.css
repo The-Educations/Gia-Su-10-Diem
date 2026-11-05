@@ -3034,6 +3034,14 @@ main {
 /* The review is a stable student-view canvas; only its opacity changes. */
 .tutor-review-dialog[data-state="open"] { animation: overlay-enter 120ms ease-out; }
 .tutor-review-dialog[data-state="closed"] { animation: overlay-leave 100ms ease-out; }
+.revision-summary { margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
+.revision-summary h3 { margin: 0 0 10px; font-size: 0.95rem; }
+.revision-summary p { margin: 0; color: var(--muted-foreground); }
+.revision-summary dl { display: grid; gap: 10px; margin: 0; }
+.revision-summary dt { font-weight: 600; font-size: 0.85rem; }
+.revision-summary dd { display: grid; gap: 4px; margin: 2px 0 0; overflow-wrap: anywhere; }
+.revision-summary del { color: var(--muted-foreground); }
+.revision-summary ins { text-decoration: none; font-weight: 500; }
 .review-inventory { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 16px; }
 .review-inventory summary { cursor: pointer; font-weight: 600; }
 .weekly-profile-layout { grid-template-columns: minmax(0, 1fr) minmax(440px, 1fr); gap: 32px; }

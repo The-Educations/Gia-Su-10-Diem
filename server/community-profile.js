@@ -1,3 +1,4 @@
+import { liveTutorSql } from "./tutor-visibility.js";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
@@ -16,7 +17,7 @@ const fail = (status, message) => {
 export function memberByCode(db, code, viewer) {
   const user = one(
     db,
-    "SELECT u.*,t.status tutor_status FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.profile_code=?",
+    `SELECT u.*,CASE WHEN ${liveTutorSql("t")} THEN 'approved' ELSE t.status END tutor_status FROM users u LEFT JOIN tutors t ON t.user_id=u.id WHERE u.profile_code=?`,
     code,
   );
   if (!user || (user.status !== "active" && viewer?.role !== "admin"))

@@ -48,7 +48,7 @@ Phụ huynh có lựa chọn thiết lập riêng và mục tiêu học tập c�
 - Chọn môn dạy, cấp học, mục tiêu kỳ thi nhận luyện, mức phí, hình thức, địa điểm, học vấn và kinh nghiệm.
 - Thư viện kiểu lưới với tối đa 12 ảnh, tải nhiều ảnh, sửa chú thích, xóa và xem ảnh đầy đủ. Ảnh mới/chú thích mới đưa hồ sơ về chờ duyệt; chỉ chủ hồ sơ và admin xem được khi chưa duyệt.
 - Tùy chỉnh màu bìa, phương pháp giảng dạy và nội dung một buổi học; xem trước trực tiếp trong trình sửa hồ sơ.
-- Gửi duyệt; chỉnh sửa hồ sơ hoặc tên công khai đã công bố sẽ đưa về chờ duyệt.
+- Gửi duyệt. Cài đặt vận hành (học phí, hình thức dạy, địa chỉ, múi giờ, nhận học thử, giờ trống, giao diện) áp dụng ngay và không đổi trạng thái hồ sơ. Nội dung công khai (tiêu đề, giới thiệu, học vấn, kinh nghiệm, mục tự đặt tên, phương pháp, giáo án, môn/cấp học/mục tiêu luyện thi) cần duyệt lại: trong lúc chờ, học sinh vẫn thấy và gửi đề nghị theo bản đã duyệt gần nhất (`tutors.published` giữ bản đó; các cột là bản nháp của gia sư). Từ chối bản sửa không gỡ bản cũ; muốn gỡ hồ sơ khỏi tìm kiếm, admin dùng "Gỡ hồ sơ". Đổi tên hiển thị, đổi ảnh/banner hoặc ảnh gallery vẫn ẩn hồ sơ đến khi được duyệt.
 - Thêm giờ trống, nhận / từ chối yêu cầu, hủy buổi tương lai khi phù hợp.
 - Xóa bình luận trên thư viện ảnh của mình; admin cũng có quyền kiểm duyệt bình luận.
 - Nhắn tin, cung cấp nội dung và liên kết phòng học.

@@ -1,3 +1,4 @@
+import { liveTutorSql, isLiveTutor, publicView } from "./tutor-visibility.js";
 import { all, one, run, transaction } from "./db.js";
 import { weeklySchedule } from "./availability.js";
 import { availabilitySchema, z } from "./validation.js";
@@ -16,7 +17,7 @@ export function registerWeeklyRequests(app, db, auth) {
     const { blocks } = availabilitySchema.parse({ revision: 0, blocks: req.body.blocks });
     if (!blocks.length) fail(400, "Chọn ít nhất một giờ học.");
     const result = transaction(db, () => {
-      const tutor = one(db, "SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.status='approved' AND u.status='active' AND u.role='tutor'", d.tutor_id);
+      const tutor = publicView(one(db, `SELECT t.* FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`, d.tutor_id));
       if (!tutor) fail(404, "Gia sư chưa có hồ sơ công khai.");
       if (!JSON.parse(tutor.subjects).includes(d.subject_id) || (tutor.mode !== "both" && tutor.mode !== d.mode)) fail(400, "Môn học hoặc hình thức không phù hợp.");
       const available = new Set(weeklySchedule(db, d.tutor_id).blocks.map(key));
@@ -42,8 +43,8 @@ export function registerWeeklyRequests(app, db, auth) {
       if (status !== "cancelled" && req.user.id !== r.tutor_id) fail(403, "Chỉ gia sư có thể xác nhận yêu cầu.");
       if (!(status === "cancelled" ? ["pending", "accepted"] : ["pending"]).includes(r.status)) fail(409, "Yêu cầu đã được xử lý. Vui lòng tải lại.");
       if (status === "accepted") {
-        const tutor = one(db, "SELECT t.status,t.subjects,t.mode FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", r.tutor_id);
-        if (tutor?.status !== "approved" || !one(db, "SELECT id FROM users WHERE id=? AND status='active' AND role='student'", r.student_id)) fail(409, "Tài khoản hiện không thể xác nhận lịch học.");
+        const tutor = publicView(one(db, "SELECT t.status,t.published,t.subjects,t.mode FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", r.tutor_id));
+        if (!isLiveTutor(tutor) || !one(db, "SELECT id FROM users WHERE id=? AND status='active' AND role='student'", r.student_id)) fail(409, "Tài khoản hiện không thể xác nhận lịch học.");
         if (!JSON.parse(tutor.subjects).includes(r.subject_id) || (tutor.mode !== "both" && tutor.mode !== r.mode)) fail(409, "Môn học hoặc hình thức dạy đã thay đổi.");
         const blocks = JSON.parse(r.blocks), available = new Set(weeklySchedule(db, r.tutor_id).blocks.map(key));
         if (blocks.some(b => !available.has(key(b)))) fail(409, "Lịch dạy đã thay đổi. Hãy trao đổi với học sinh trước khi xác nhận.");

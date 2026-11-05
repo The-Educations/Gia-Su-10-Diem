@@ -1,3 +1,4 @@
+import { isLiveTutor } from "./tutor-visibility.js";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
@@ -17,7 +18,7 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
   const pending = (id) =>
     run(
       db,
-      "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
+      "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,published=NULL,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
       id,
     );
   app.post(
@@ -136,11 +137,11 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
   const visible = (req, res, publicOnly = false) => {
     const image = one(
       db,
-      "SELECT g.tutor_id,t.status,u.status AS account_status FROM tutor_gallery g JOIN tutors t ON t.user_id=g.tutor_id JOIN users u ON u.id=g.tutor_id WHERE g.id=?",
+      "SELECT g.tutor_id,t.status,t.published,u.status AS account_status FROM tutor_gallery g JOIN tutors t ON t.user_id=g.tutor_id JOIN users u ON u.id=g.tutor_id WHERE g.id=?",
       req.params.id,
     );
     const published =
-      image?.status === "approved" && image?.account_status === "active";
+      isLiveTutor(image) && image?.account_status === "active";
     if (
       !image ||
       !(

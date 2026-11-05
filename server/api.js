@@ -11,6 +11,7 @@ import { registerSignupVerification } from "./signup-verification.js";
 import { registerCommunityImages } from "./community-images.js";
 import { registerCommunity } from "./community.js";
 import { registerTutorReview } from "./tutor-review.js";
+import { liveTutorSql, isLiveTutor, publicView, publishedView, contentSnapshot, changedContent } from "./tutor-visibility.js";
 import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
@@ -211,9 +212,14 @@ export function createApi(
       db,
       `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
     FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
-    WHERE ${preview ? '1=1' : "t.status='approved' AND u.status='active' AND u.role='tutor'"} GROUP BY t.user_id`,
-    ).map(({ moderation_note, reserved_weekly_blocks, ...t }) => ({
+    WHERE ${preview ? '1=1' : `${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`} GROUP BY t.user_id`,
+    ).map(({ moderation_note, reserved_weekly_blocks, published, ...draft }) => {
+      // Students see the last approved content while an edit awaits review.
+      const { published: _snapshot, ...visible } = publicView({ ...draft, published });
+      const t = preview ? draft : visible;
+      return {
       ...t,
+      ...(preview && { published: publishedView(published) }),
       ...uploadMetadata(db, t.user_id),
       weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
       subjects: JSON.parse(t.subjects),
@@ -221,7 +227,8 @@ export function createApi(
       goals: JSON.parse(t.goals),
       education_history: JSON.parse(t.education_history),
       profile_sections: JSON.parse(t.profile_sections),
-    }));
+      };
+    });
   registerEmailVerification(app, db, { origin, sendEmail });
   const signup = registerSignupVerification(app, db, { sendEmail, production, session });
   app.locals.calendarSync = registerGoogleCalendar(app, db, auth, { origin, production, google, wakeCalendar });
@@ -295,10 +302,13 @@ export function createApi(
         const address = addressSchema.parse({ province_code: d.province_code ?? req.user.province_code, ward_code: d.ward_code ?? req.user.ward_code });
         run(db, "UPDATE users SET school=COALESCE(?,school),province_code=?,ward_code=? WHERE id=?", d.school ?? null, address.province_code, address.ward_code, req.user.id);
       }
-      if (req.user.role === "tutor" && (d.name !== req.user.name || (d.timezone && d.timezone !== req.user.timezone)))
+      // The display name is public and also appears outside the profile page, so
+      // renaming hides the profile until it is reviewed. The time zone is only
+      // informational and never needs a review.
+      if (req.user.role === "tutor" && d.name !== req.user.name)
         run(
           db,
-          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
+          "UPDATE tutors SET status=CASE WHEN status='rejected' THEN 'rejected' ELSE 'pending' END,published=NULL,moderation_note='',review_revision=review_revision+1 WHERE user_id=?",
           req.user.id,
         );
     });
@@ -425,6 +435,7 @@ export function createApi(
       weekly_schedule: weeklySchedule(db, req.user.id),
       theme_inventory: themeInventory(db, req.user.id),
       ...t,
+      published: publishedView(t.published),
       gallery: galleryMetadata(db, t.user_id),
       name: req.user.name,
       timezone: req.user.timezone,
@@ -456,7 +467,23 @@ export function createApi(
     ).map((r) => r.category);
     if (d.goals.some((g) => !knownGoals.includes(g)))
       fail(400, "Mục tiêu kỳ thi không có trong danh mục.");
+    let review;
     transaction(db, () => {
+      const current = one(db, "SELECT * FROM tutors WHERE user_id=?", req.user.id);
+      // Only content students read needs a review. Operational settings apply
+      // at once and never take an approved profile out of search.
+      const changed = changedContent(current, d);
+      if (!address?.ward_code && d.location !== current.location) changed.push("location");
+      const contentChanged = changed.length > 0;
+      let status = current.status, published = current.published;
+      if (current.status === "approved") {
+        if (contentChanged) {
+          status = "pending";
+          published = contentSnapshot(current);
+        }
+      } else if (current.status !== "pending") status = "pending";
+      const touched = contentChanged || status !== current.status;
+      review = { status, changed, published: published != null };
       if (schedule) {
         if (weeklySchedule(db, req.user.id).revision !== schedule.revision) fail(409, "Lịch đã thay đổi ở cửa sổ khác. Tải lại trang trước khi lưu.");
         run(db, `INSERT INTO weekly_availability(tutor_id,blocks,revision) VALUES (?,?,1)
@@ -468,7 +495,7 @@ export function createApi(
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status='pending',moderation_note='',review_revision=review_revision+1 WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
@@ -484,10 +511,14 @@ export function createApi(
         d.profile_theme ?? null,
         d.education_history ? JSON.stringify(d.education_history) : null,
         d.profile_sections ? JSON.stringify(d.profile_sections) : null,
+        status,
+        published,
+        Number(touched),
+        Number(touched),
         req.user.id,
       );
     });
-    res.json({ ok: true, user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)) });
+    res.json({ ok: true, review, user: publicUser(one(db, "SELECT * FROM users WHERE id=?", req.user.id)) });
   });
   app.put("/api/tutor/availability", auth("tutor"), (req, res) => {
     const d = availabilitySchema.parse(req.body);
@@ -577,13 +608,13 @@ export function createApi(
       .parse(req.body);
     const s = one(
       db,
-      `SELECT s.*,t.rate,t.mode,t.subjects FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND s.available=1 AND t.status='approved' AND u.status='active' AND u.role='tutor'`,
+      `SELECT s.*,t.rate,t.mode,t.subjects,t.status AS tutor_status,t.published FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND s.available=1 AND ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`,
       d.slot_id,
     );
     if (!s || new Date(s.starts_at).getTime() < Date.now() + 3600000)
       fail(400, "Khung giờ không còn khả dụng.");
     if (
-      !JSON.parse(s.subjects).includes(d.subject_id) ||
+      !JSON.parse(publicView({ status: s.tutor_status, published: s.published, subjects: s.subjects }).subjects).includes(d.subject_id) ||
       (s.mode !== "both" && d.mode !== s.mode)
     )
       fail(400, "Môn học hoặc hình thức không phù hợp.");
@@ -628,6 +659,10 @@ export function createApi(
         })
         .parse(req.body);
     const future = new Date(b.starts_at).getTime() > Date.now();
+    // Like lesson offers, a new lesson can only be confirmed by a tutor whose
+    // profile students can still see.
+    if (status === "accepted" && req.user.id === b.tutor_id && !isLiveTutor(one(db, "SELECT status,published FROM tutors WHERE user_id=?", b.tutor_id)))
+      fail(409, "Tài khoản hiện không thể xác nhận lịch học.");
     const allowed =
       (status === "cancelled" &&
         ["pending", "accepted"].includes(b.status) &&
@@ -728,6 +763,7 @@ export function createApi(
         "SELECT t.*,u.name,u.email,u.demo,u.timezone FROM tutors t JOIN users u ON u.id=t.user_id WHERE u.status<>'deleted'",
       ).map((t) => ({
         ...t,
+        published: publishedView(t.published),
         ...uploadMetadata(db, t.user_id),
         theme_inventory: themeInventory(db, t.user_id),
         weekly_blocks: weeklySchedule(db, t.user_id).blocks,
