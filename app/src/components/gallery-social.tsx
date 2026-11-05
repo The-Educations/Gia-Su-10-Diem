@@ -16,8 +16,8 @@ type Social = {
   next: number | null;
   comments: {
     id: number;
-    student_id: number;
-    name: string;
+    author: string;
+    mine: boolean;
     body: string;
     created_at: string;
   }[];
@@ -105,14 +105,14 @@ export function GallerySocial({ imageId }: { imageId: string }) {
         {data.comments.map((comment) => (
           <article key={comment.id}>
             <div className="gallery-comment-heading">
-              <strong>{comment.name}</strong>
+              <strong>{comment.author}</strong>
               <time>{dateTime(comment.created_at)}</time>
-              {(data.can_moderate || user?.id === comment.student_id) && (
+              {(data.can_moderate || comment.mine) && (
                 <Button
                   variant="ghost"
                   size="icon"
                   disabled={busy}
-                  aria-label={`Xóa bình luận của ${comment.name}`}
+                  aria-label={`Xóa bình luận của ${comment.author}`}
                   onClick={() =>
                     void mutate(`comments/${comment.id}`, "DELETE")
                   }

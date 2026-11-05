@@ -3,6 +3,7 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
+import { authorLabel } from "./community-policy.js";
 import { UPLOAD_LIMIT } from "./uploads.js";
 
 const captionSchema = z.string().trim().max(500);
@@ -163,7 +164,7 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
       : Number.MAX_SAFE_INTEGER;
     const comments = all(
       db,
-      "SELECT c.id,c.student_id,c.body,c.created_at,u.name FROM gallery_comments c JOIN users u ON u.id=c.student_id WHERE c.image_id=? AND c.id<? ORDER BY c.id DESC LIMIT 21",
+      "SELECT c.id,c.student_id,c.body,c.created_at,u.role,u.learner_type,u.display_name,u.profile_code FROM gallery_comments c JOIN users u ON u.id=c.student_id WHERE c.image_id=? AND c.id<? ORDER BY c.id DESC LIMIT 21",
       req.params.id,
       before,
     );
@@ -189,7 +190,15 @@ export function registerGallery(app, db, auth, audit, processPhoto) {
       can_interact: image.published && req.user?.role === "student",
       can_moderate:
         req.user?.id === image.tutor_id || req.user?.role === "admin",
-      comments,
+      // Authors appear by public display name; the account id never leaves the
+      // server, only whether the comment belongs to the viewer.
+      comments: comments.map(({ id, student_id, body, created_at, ...author }) => ({
+        id,
+        body,
+        created_at,
+        author: authorLabel(author).label,
+        mine: student_id === req.user?.id,
+      })),
       next: more ? comments.at(-1).id : null,
     });
   });

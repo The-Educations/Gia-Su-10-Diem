@@ -331,7 +331,7 @@ export default function Bookings() {
           <DialogHeader>
             <DialogTitle>Đánh giá buổi học</DialogTitle>
             <DialogDescription>
-              Chia sẻ trải nghiệm học cùng {review?.tutor_name}.
+              Chia sẻ trải nghiệm học cùng {review?.tutor_name}. Đánh giá hiển thị công khai là “{user?.display_name || "Thành viên"} - {user?.learner_type === "parent" ? "Phụ huynh" : "Học sinh"}”.
             </DialogDescription>
           </DialogHeader>
           <form

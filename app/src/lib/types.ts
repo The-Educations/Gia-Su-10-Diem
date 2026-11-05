@@ -86,7 +86,7 @@ export type Tutor = {
   rating: number;
   review_count: number;
   slots: Slot[];
-  reviews: { name: string; rating: number; body: string }[];
+  reviews: { author: string; rating: number; body: string; created_at: string }[];
 };
 export type Booking = {
   offer_id?: number | null;

@@ -710,6 +710,24 @@ test("student can contact a tutor before booking; inquiry is private and survive
   );
 });
 
+test("tutor reviews show the reviewer's display name and label, never the real name or ids", async (t) => {
+  const { db, client } = await fixture(t);
+  await seedDemo(db, "TestStudy2026!", { activity: true });
+  const guest = client();
+  const reviewer = one(db, "SELECT u.* FROM reviews r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=b.student_id");
+  const tutorId = one(db, "SELECT b.tutor_id FROM reviews r JOIN bookings b ON b.id=r.booking_id").tutor_id;
+  const reviews = async () => (await guest.request(`/tutors/${tutorId}`)).data.reviews;
+  run(db, "UPDATE users SET display_name='', learner_type='student' WHERE id=?", reviewer.id);
+  let [review] = await reviews();
+  assert.equal(review.author, "Thành viên - Học sinh");
+  assert.deepEqual(Object.keys(review).sort(), ["author", "body", "created_at", "rating"]);
+  assert.ok(!JSON.stringify(await reviews()).includes(reviewer.name));
+  run(db, "UPDATE users SET display_name='Minh An' WHERE id=?", reviewer.id);
+  assert.equal((await reviews())[0].author, "Minh An - Học sinh");
+  run(db, "UPDATE users SET learner_type='parent' WHERE id=?", reviewer.id);
+  assert.equal((await reviews())[0].author, "Minh An - Phụ huynh");
+});
+
 test("rich demo seeding is repeatable and preserves profile edits", async (t) => {
   const { db } = await fixture(t);
   await seedDemo(db, "TestStudy2026!", { activity: true });
@@ -899,6 +917,10 @@ test("gallery likes and paginated comments enforce student ownership and moderat
   assert.equal((await student.request(social+'/comments','POST',{body:'x'.repeat(1001)})).status,400);
   assert.equal((await student.request(social+'/comments','POST',{body:'Em muốn tìm hiểu phương pháp này.'})).status,201);
   let comment=(await student.request(social+'/social')).data.comments[0];
+  // Comments are public: no real name or account id, only the author's public label and whether it is the viewer's.
+  assert.match(comment.author,/ - Học sinh$/); assert.ok(!comment.author.includes(learner.name));
+  assert.equal(comment.name,undefined); assert.equal(comment.student_id,undefined);
+  assert.equal(comment.mine,true); assert.equal((await other.request(social+'/social')).data.comments[0].mine,false); assert.equal((await guest.request(social+'/social')).data.comments[0].mine,false);
   assert.equal((await other.request(social+'/comments/'+comment.id,'DELETE')).status,404);
   assert.equal((await student.request(social+'/comments/'+comment.id,'DELETE')).status,200);
   await student.request(social+'/comments','POST',{body:'<script>alert(1)</script>'});
