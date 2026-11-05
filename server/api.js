@@ -1,5 +1,5 @@
 import { setMemberProfile } from "./community-profile.js";
-import { displayNameSchema } from "./community-policy.js";
+import { displayNameSchema, authorLabel } from "./community-policy.js";
 import { registerChatMedia, withChatMedia, insertChatMessage } from "./chat-media.js";
 import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
@@ -390,11 +390,13 @@ export function createApi(
       t.user_id,
       new Date(Date.now() + 3600000).toISOString(),
     );
+    // Reviewers are shown by their public display name only, never by their
+    // real name, and without internal booking or account ids.
     const reviews = all(
       db,
-      "SELECT r.*,u.name FROM reviews r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=b.student_id WHERE b.tutor_id=? ORDER BY r.created_at DESC",
+      "SELECT r.rating,r.body,r.created_at,u.role,u.learner_type,u.display_name,u.profile_code FROM reviews r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=b.student_id WHERE b.tutor_id=? ORDER BY r.created_at DESC",
       t.user_id,
-    );
+    ).map(({ rating, body, created_at, ...reviewer }) => ({ rating, body, created_at, author: authorLabel(reviewer).label }));
     res.json({ ...t, slots, reviews, gallery: galleryMetadata(db, t.user_id) });
   };
   app.get("/api/tutors/:id", tutorDetail());
