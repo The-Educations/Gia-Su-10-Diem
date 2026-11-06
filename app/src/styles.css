@@ -821,6 +821,9 @@ main {
 .review > span {
   float: right;
 }
+.review > .muted {
+  margin-right: 12px;
+}
 .review p {
   margin-top: 8px;
   color: var(--muted-foreground);

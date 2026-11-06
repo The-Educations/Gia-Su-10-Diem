@@ -375,16 +375,12 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
     ).status,
     201,
   );
-  assert.equal(
-    (
-      await owner.request(`/bookings/${id}/review`, "POST", {
-        rating: 5,
-        body: "Lần hai",
-      })
-    ).status,
-    409,
-  );
-  assert.equal((await owner.request(`/tutors/${u.id}`)).data.rating, 5);
+  // A second review of the same tutor edits the first instead of adding another.
+  const edited = await owner.request(`/bookings/${id}/review`, "POST", { rating: 4, body: "Lần hai" });
+  assert.equal(edited.status, 200); assert.equal(edited.data.updated, true);
+  const rated = (await owner.request(`/tutors/${u.id}`)).data;
+  assert.equal(rated.rating, 4); assert.equal(rated.review_count, 1); assert.equal(rated.reviews.length, 1);
+  assert.equal(rated.reviews[0].body, "Lần hai"); assert.equal(rated.reviews[0].lessons, 1);
   const slot2 = profile.slots[1];
   const second = await owner.request("/bookings", "POST", {
     ...body,
@@ -720,12 +716,57 @@ test("tutor reviews show the reviewer's display name and label, never the real n
   run(db, "UPDATE users SET display_name='', learner_type='student' WHERE id=?", reviewer.id);
   let [review] = await reviews();
   assert.equal(review.author, "Thành viên - Học sinh");
-  assert.deepEqual(Object.keys(review).sort(), ["author", "body", "created_at", "rating"]);
+  assert.deepEqual(Object.keys(review).sort(), ["author", "body", "created_at", "lessons", "rating"]);
   assert.ok(!JSON.stringify(await reviews()).includes(reviewer.name));
   run(db, "UPDATE users SET display_name='Minh An' WHERE id=?", reviewer.id);
   assert.equal((await reviews())[0].author, "Minh An - Học sinh");
   run(db, "UPDATE users SET learner_type='parent' WHERE id=?", reviewer.id);
   assert.equal((await reviews())[0].author, "Minh An - Phụ huynh");
+});
+
+test("students can complete finished lessons themselves and review each tutor once across lessons", async (t) => {
+  const { db, client } = await fixture(t);
+  const tutor = client(), student = client(), other = client(), guest = client();
+  const teacher = await tutor.login("chau"), learner = await student.login("student"); await other.login("linh");
+  const lesson = (offsetHours) => {
+    const starts_at = new Date(Date.now() + offsetHours * 3600000).toISOString();
+    const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", teacher.id, starts_at).lastInsertRowid);
+    return Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,status,duration_minutes) VALUES (?,?,?,?,?,?,?,?,?)", learner.id, teacher.id, slot, "toan", starts_at, 180000, "online", "accepted", 60).lastInsertRowid);
+  };
+  const future = lesson(24), first = lesson(-30), second = lesson(-20), third = lesson(-10);
+  const complete = (who, id) => who.request(`/bookings/${id}`, "PATCH", { status: "completed" });
+  // Only the two people of the lesson, and only once it has ended.
+  assert.equal((await complete(student, future)).status, 409);
+  assert.equal((await complete(other, first)).status, 403);
+  assert.equal((await complete(guest, first)).status, 401);
+  assert.equal((await student.request(`/bookings/${first}/review`, "POST", { rating: 5, body: "Sớm quá" })).status, 403);
+  assert.equal((await complete(student, first)).status, 200);
+  assert.equal((await complete(tutor, second)).status, 200);
+  assert.equal((await complete(student, first)).status, 409);
+  assert.ok(one(db, "SELECT id FROM audit WHERE action='booking.completed' AND actor_id=? AND target=?", learner.id, String(first)));
+
+  // The first review is created; a review through a later lesson edits it.
+  const created = await student.request(`/bookings/${first}/review`, "POST", { rating: 5, body: "Buổi đầu rất tốt." });
+  assert.equal(created.status, 201);
+  const lessons = (await student.request("/bookings")).data;
+  assert.ok(lessons.filter(b => b.status === "completed").every(b => b.reviewed === 5 && b.review_body === "Buổi đầu rất tốt."));
+  const changed = await student.request(`/bookings/${second}/review`, "POST", { rating: 3, body: "Học thêm thì thấy bình thường." });
+  assert.equal(changed.status, 200);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM reviews").n, 1);
+  assert.equal((await student.request("/bookings")).data.find(b => b.id === third).reviewed, 3);
+  assert.equal((await student.request(`/bookings/${third}/review`, "POST", { rating: 4, body: "Chưa hoàn thành." })).status, 403);
+
+  // Public rating counts the student once and shows how many lessons they took.
+  let page = (await guest.request(`/tutors/${teacher.id}`)).data;
+  assert.equal(page.review_count, 1); assert.equal(page.rating, 3);
+  assert.deepEqual(page.reviews.map(r => [r.rating, r.body, r.lessons]), [[3, "Học thêm thì thấy bình thường.", 2]]);
+
+  // Older data may hold several reviews for one pair: only the latest counts.
+  run(db, "UPDATE reviews SET created_at='2026-01-01 00:00:00'");
+  run(db, "INSERT INTO reviews(booking_id,rating,body,created_at) VALUES (?,?,?,?)", second, 1, "Cũ hơn", "2025-12-01 00:00:00");
+  page = (await guest.request(`/tutors/${teacher.id}`)).data;
+  assert.equal(page.review_count, 1); assert.equal(page.rating, 3); assert.equal(page.reviews.length, 1);
+  assert.equal((await guest.request("/tutors")).data.find(x => x.user_id === teacher.id).review_count, 1);
 });
 
 test("rich demo seeding is repeatable and preserves profile edits", async (t) => {

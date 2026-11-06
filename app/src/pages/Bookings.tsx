@@ -93,6 +93,10 @@ export default function Bookings() {
       setBusy(false);
     }
   }
+  // A student reviews each tutor once; later lessons only edit that review.
+  const latestCompleted = (b: Booking) => allLessons.filter(x => x.tutor_id === b.tutor_id && x.status === "completed")
+    .sort((x, y) => Date.parse(y.starts_at) - Date.parse(x.starts_at) || y.id - x.id)[0]?.id === b.id;
+  function openReview(b: Booking) { setError(""); setView(null); setRating(String(b.reviewed ?? 5)); setReview(b); }
   function lessonActions(b: Booking, details = false) {
     const future = Date.parse(b.starts_at) > Date.now();
     const changeStatus = (status: string) => { setError(""); setView(null); setAction({ booking: b, status }); };
@@ -105,8 +109,10 @@ export default function Bookings() {
       {["pending", "accepted"].includes(b.status) && future && <Button variant="ghost" onClick={() => changeStatus("cancelled")}>Hủy buổi</Button>}
       {user?.role === "tutor" && ["accepted", "completed"].includes(b.status) && <Button variant="outline" onClick={() => { setError(""); setView(null); setEdit(b); }}>{details ? "Viết ghi chú" : "Nội dung buổi học"}</Button>}
       {user?.role === "tutor" && b.status === "accepted" && Date.parse(b.starts_at) + b.duration_minutes * 60000 <= Date.now() && <Button onClick={() => changeStatus("completed")}>Hoàn thành</Button>}
-      {user?.role === "student" && b.status === "completed" && !b.reviewed && <Button onClick={() => { setError(""); setView(null); setReview(b); }}>Đánh giá</Button>}
-      {!!b.reviewed && <span className="muted">Đã đánh giá {b.reviewed}/5</span>}
+      {user?.role === "student" && b.status === "accepted" && Date.parse(b.starts_at) + b.duration_minutes * 60000 <= Date.now() && <Button onClick={() => changeStatus("completed")}>Đã học xong</Button>}
+      {user?.role === "student" && b.status === "completed" && !b.reviewed && <Button onClick={() => openReview(b)}>Đánh giá</Button>}
+      {b.status === "completed" && !!b.reviewed && <span className="muted">Đã đánh giá {b.reviewed}/5</span>}
+      {user?.role === "student" && b.status === "completed" && !!b.reviewed && latestCompleted(b) && <Button variant="ghost" onClick={() => openReview(b)}>Sửa đánh giá</Button>}
     </>;
   }
   return (
@@ -329,9 +335,9 @@ export default function Bookings() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Đánh giá buổi học</DialogTitle>
+            <DialogTitle>{review?.reviewed ? "Sửa đánh giá gia sư" : "Đánh giá gia sư"}</DialogTitle>
             <DialogDescription>
-              Chia sẻ trải nghiệm học cùng {review?.tutor_name}. Đánh giá hiển thị công khai là “{user?.display_name || "Thành viên"} - {user?.learner_type === "parent" ? "Phụ huynh" : "Học sinh"}”.
+              Chia sẻ trải nghiệm học cùng {review?.tutor_name}. Mỗi gia sư một đánh giá, bạn sửa được sau này. Hiển thị công khai là “{user?.display_name || "Thành viên"} - {user?.learner_type === "parent" ? "Phụ huynh" : "Học sinh"}”.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -357,14 +363,16 @@ export default function Bookings() {
               <Field>
                 <FieldLabel htmlFor="review-body">Nhận xét</FieldLabel>
                 <Textarea
+                  key={review?.id}
                   id="review-body"
                   name="body"
+                  defaultValue={review?.review_body ?? ""}
                   required
                   maxLength={1000}
                 />
               </Field>
               {error && <ErrorState error={error} />}
-              <Submit busy={busy}>Gửi đánh giá</Submit>
+              <Submit busy={busy}>{review?.reviewed ? "Lưu đánh giá" : "Gửi đánh giá"}</Submit>
             </FieldGroup>
           </form>
         </DialogContent>
