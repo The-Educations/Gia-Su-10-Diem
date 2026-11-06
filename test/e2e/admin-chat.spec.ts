@@ -110,10 +110,29 @@ test("voice can be recorded, previewed, sent, played and attached from a file", 
     const audio=page.locator(".chat-audio").first();
     await audio.evaluate(async (el:HTMLAudioElement)=>{await el.play();el.pause();});
     const bytes=Buffer.from(await (await page.request.get((await audio.getAttribute("src"))!)).body());
-    await page.getByLabel("Chọn âm thanh gửi",{exact:true}).setInputFiles({name:"Ghi âm.webm",mimeType:"audio/webm",buffer:bytes});
+    await page.getByLabel("Chọn tệp gửi",{exact:true}).setInputFiles({name:"Ghi âm.webm",mimeType:"audio/webm",buffer:bytes});
     await page.getByRole("button",{name:"Gửi",exact:true}).click();
     await expect(page.locator(".chat-audio")).toHaveCount(2);
     await page.setViewportSize({width:320,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   } finally {await browser.close();}
+});
+
+test("documents can be attached, sent and downloaded, and unsupported files are refused", async ({ page }) => {
+  await login(page,"community-parent"); await page.goto("/app/messages");
+  const input=page.getByLabel("Chọn tệp gửi",{exact:true});
+  await input.setInputFiles({name:"setup.exe",mimeType:"application/x-msdownload",buffer:Buffer.from("MZ")});
+  await expect(page.getByText("Định dạng chưa được hỗ trợ")).toBeVisible();
+  const name="Bài tập tuần 1 - rất dài rất dài rất dài rất dài rất dài rất dài.pdf";
+  await input.setInputFiles({name,mimeType:"",buffer:Buffer.from("%PDF-1.4\n%%EOF")});
+  await expect(page.locator(".chat-attachment-preview")).toContainText(name);
+  await page.getByRole("button",{name:"Gửi",exact:true}).click();
+  const file=page.locator(".chat-file").first();
+  await expect(file).toContainText(name);
+  await page.reload();
+  await expect(page.locator(".chat-file").first()).toContainText(name);
+  const [download]=await Promise.all([page.waitForEvent("download"),page.locator(".chat-file").first().click()]);
+  expect(download.suggestedFilename()).toBe(name);
+  await page.setViewportSize({width:320,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

@@ -1,7 +1,7 @@
 import { ChatComposer } from "@/components/chat-composer";
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Pin, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, FileText, Pin, ShieldCheck, X } from "lucide-react";
 import { api, useApp, useLoad, dateTime } from "@/lib/api";
 import type { Booking, Inquiry, Message as MessageData, MessageContext } from "@/lib/types";
 import { MessageContextCard } from "@/components/message-context-card";
@@ -150,7 +150,7 @@ function Conversation({ thread }: { thread: Thread }) {
                           >
                             <BubbleContent className="whitespace-pre-wrap">
                               {m.body}
-                              {m.attachment && (m.attachment.kind === "image" ? <a href={m.attachment.url} target="_blank" rel="noreferrer" aria-label="Mở ảnh đính kèm"><img className="chat-image" src={m.attachment.url} alt="Ảnh đính kèm" loading="lazy" /></a> : <audio className="chat-audio" src={m.attachment.url} controls preload="none" aria-label={`Tin nhắn thoại từ ${m.name}`} />)}
+                              {m.attachment && (m.attachment.kind === "image" ? <a href={m.attachment.url} target="_blank" rel="noreferrer" aria-label="Mở ảnh đính kèm"><img className="chat-image" src={m.attachment.url} alt="Ảnh đính kèm" loading="lazy" /></a> : m.attachment.kind === "file" ? <a className="chat-file" href={m.attachment.url} download={m.attachment.name} aria-label={`Tải tệp ${m.attachment.name}`}><FileText aria-hidden="true" /><span>{m.attachment.name}</span><small>{m.attachment.size < 1048576 ? `${Math.max(1, Math.round(m.attachment.size / 1024))} KB` : `${(m.attachment.size / 1048576).toFixed(1)} MB`}</small></a> : <audio className="chat-audio" src={m.attachment.url} controls preload="none" aria-label={`Tin nhắn thoại từ ${m.name}`} />)}
                             </BubbleContent>
                           </Bubble>
                           <MessageFooter>
