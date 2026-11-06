@@ -769,6 +769,58 @@ test("students can complete finished lessons themselves and review each tutor on
   assert.equal((await guest.request("/tutors")).data.find(x => x.user_id === teacher.id).review_count, 1);
 });
 
+test("tutors start, finish or mark lessons missed from the overview with time limits", async (t) => {
+  const { db, client } = await fixture(t);
+  const tutor = client(), student = client(), other = client(), guest = client();
+  const teacher = await tutor.login("chau"), learner = await student.login("student"); await other.login("linh");
+  const minute = 60000;
+  const lesson = (offsetMinutes) => {
+    const starts_at = new Date(Date.now() + offsetMinutes * minute).toISOString();
+    const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", teacher.id, starts_at).lastInsertRowid);
+    return Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,status,duration_minutes) VALUES (?,?,?,?,?,?,?,?,?)", learner.id, teacher.id, slot, "toan", starts_at, 180000, "online", "accepted", 60).lastInsertRowid);
+  };
+  const start = (who, id) => who.request(`/bookings/${id}/start`, "POST");
+  const patch = (who, id, status) => who.request(`/bookings/${id}`, "PATCH", { status });
+  const stored = (id) => one(db, "SELECT status,started_at FROM bookings WHERE id=?", id);
+
+  // Start opens 15 minutes before the lesson and only for the tutor of that lesson.
+  const later = lesson(120), soon = lesson(10), running = lesson(-20), over = lesson(-90), noshow = lesson(-5);
+  assert.equal((await start(tutor, later)).status, 409);
+  assert.equal((await start(student, soon)).status, 403);
+  assert.equal((await start(guest, soon)).status, 401);
+  assert.equal((await start(tutor, over)).status, 409);
+  assert.equal((await start(tutor, soon)).status, 200);
+  assert.ok(stored(soon).started_at);
+  assert.equal((await start(tutor, soon)).status, 409);
+  assert.ok(one(db, "SELECT id FROM audit WHERE action='booking.started' AND actor_id=? AND target=?", teacher.id, String(soon)));
+
+  // A started lesson can be ended before its scheduled end; an unstarted one only after it.
+  assert.equal((await patch(tutor, soon, "completed")).status, 200);
+  assert.equal(stored(soon).status, "completed");
+  assert.equal((await patch(tutor, later, "completed")).status, 409);
+  assert.equal((await start(tutor, running)).status, 200);
+  assert.equal((await patch(student, running, "completed")).status, 409);
+  assert.equal((await patch(tutor, running, "completed")).status, 200);
+  assert.equal((await patch(tutor, over, "completed")).status, 200);
+
+  // Missed: only the tutor, once the lesson time has come, and not after starting.
+  assert.equal((await patch(tutor, later, "missed")).status, 409);
+  assert.equal((await patch(student, noshow, "missed")).status, 409);
+  assert.equal((await patch(tutor, noshow, "missed")).status, 200);
+  assert.equal(stored(noshow).status, "missed");
+  assert.equal((await patch(tutor, noshow, "completed")).status, 409);
+  const startedThenAbsent = lesson(-1);
+  assert.equal((await start(tutor, startedThenAbsent)).status, 200);
+  assert.equal((await patch(tutor, startedThenAbsent, "missed")).status, 409);
+
+  // A missed lesson cannot be reviewed and does not count as taught.
+  assert.equal((await student.request(`/bookings/${noshow}/review`, "POST", { rating: 5, body: "Không học." })).status, 403);
+  const tutorView = (await tutor.request("/bookings")).data.find(b => b.id === noshow);
+  assert.equal(tutorView.status, "missed");
+  assert.equal((await student.request(`/bookings/${over}/review`, "POST", { rating: 5, body: "Buổi học tốt." })).status, 201);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).data.reviews[0].lessons, 3);
+});
+
 test("rich demo seeding is repeatable and preserves profile edits", async (t) => {
   const { db } = await fixture(t);
   await seedDemo(db, "TestStudy2026!", { activity: true });
