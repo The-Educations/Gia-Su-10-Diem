@@ -1864,6 +1864,42 @@ test("chat attachments remain private and bind only to the sender's thread", asy
   migrateDatabase(db);
 });
 
+test("chat accepts common documents, checks their content and serves them as downloads", async t => {
+  const { base, client } = await fixture(t), student = client(), tutor = client(), other = client();
+  await student.login("student"); const teacher = await tutor.login("chau"); await other.login("nam");
+  const inquiry = (await student.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Chào thầy" })).data;
+  const path = `/chat/inquiry/${inquiry.id}/attachments`;
+  const upload = (data, type, name) => fetch(base + path, { method: "POST", headers: { Cookie: student.cookie, "Content-Type": type, ...(name && { "X-File-Name": encodeURIComponent(name) }) }, body: data });
+  const pdf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF");
+  const docx = Buffer.concat([Buffer.from([0x50, 0x4b, 3, 4]), Buffer.from("[Content_Types].xml word/document.xml")]);
+  const ole = Buffer.concat([Buffer.from("d0cf11e0a1b11ae1", "hex"), Buffer.alloc(64)]);
+  // Unsupported types and files whose content does not match the claim are refused.
+  assert.equal((await upload(Buffer.from("MZ\x90\x00"), "application/x-msdownload", "setup.exe")).status, 400);
+  assert.equal((await upload(Buffer.from("MZ\x90\x00"), "application/octet-stream", "setup.exe")).status, 400);
+  assert.equal((await upload(Buffer.from("not a pdf"), "application/pdf", "a.pdf")).status, 400);
+  assert.equal((await upload(Buffer.from([0x50, 0x4b, 3, 4, 1, 2]), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "a.docx")).status, 400);
+  assert.equal((await upload(Buffer.from([65, 0, 66]), "text/plain", "a.txt")).status, 400);
+  // Documents are accepted by type, or by extension when the browser sends no useful type.
+  const sent = await upload(pdf, "application/pdf", "Bài tập tuần 1.pdf");
+  assert.equal(sent.status, 201);
+  const attachment = await sent.json();
+  assert.equal(attachment.kind, "file"); assert.equal(attachment.name, "Bài tập tuần 1.pdf");
+  for (const [data, type, name] of [[docx, "application/octet-stream", "Đề cương.docx"], [docx, "", "slides.docx"], [ole, "application/msword", "cu.doc"], [ole, "application/vnd.ms-excel", "bang.xls"], [Buffer.from("a,b\n1,2"), "text/csv", "diem.csv"], [Buffer.from("ghi chú"), "text/plain", "note.txt"]])
+    assert.equal((await upload(data, type, name)).status, 201, name);
+  assert.equal((await student.request(`/inquiries/${inquiry.id}/messages`, "POST", { attachment_id: attachment.id })).status, 201);
+  // Only the two participants can download, always as an attachment under its own name.
+  const read = who => fetch(new URL(attachment.url, base), { headers: { Cookie: who.cookie } });
+  assert.equal((await read(other)).status, 404);
+  const download = await read(tutor);
+  assert.equal(download.status, 200);
+  assert.equal(download.headers.get("content-type"), "application/pdf");
+  assert.match(download.headers.get("content-disposition"), /^attachment; filename="B_i t_p tu_n 1\.pdf"; filename\*=UTF-8''B%C3%A0i%20t%E1%BA%ADp/);
+  assert.match(download.headers.get("content-security-policy"), /sandbox/);
+  assert.deepEqual(Buffer.from(await download.arrayBuffer()), pdf);
+  const shown = (await tutor.request(`/inquiries/${inquiry.id}/messages`)).data.at(-1).attachment;
+  assert.deepEqual([shown.kind, shown.name, shown.size], ["file", "Bài tập tuần 1.pdf", pdf.length]);
+});
+
 test("weeks compute inclusive dates across leap years and preserve legacy offer acceptance", async t => {
   const { client, db } = await fixture(t);
   const student = client(), tutor = client(); await student.login("student"); const teacher = await tutor.login("chau");
