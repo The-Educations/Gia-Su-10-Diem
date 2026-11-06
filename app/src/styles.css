@@ -973,6 +973,10 @@ main {
   background: var(--positive-soft);
   color: var(--positive);
 }
+.state-missed {
+  background: #f4e6e7;
+  color: #792e35;
+}
 .state-pending {
   background: var(--warning-soft);
   color: var(--warning);
@@ -3284,3 +3288,67 @@ main {
 .member-admin dd { overflow-wrap: anywhere; }
 .member-report-preview { display: grid; justify-items: start; gap: .8rem; margin-block: 1rem; }
 .member-report-preview img { max-width: 100%; max-height: 200px; object-fit: contain; border-radius: .75rem; }
+
+.today-lessons {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 18px 20px;
+}
+.today-lessons > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.today-lessons h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.today-lessons > header span,
+.today-main span,
+.today-time span {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+.today-lessons ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.today-lessons li {
+  display: grid;
+  grid-template-columns: 64px auto minmax(0, 1fr) auto;
+  grid-template-areas: "time person main state" ". actions actions actions";
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+.today-lessons li[data-live] {
+  border-left: 3px solid var(--primary);
+  padding-left: 12px;
+}
+.today-time { grid-area: time; display: grid; }
+.today-lessons li > :nth-child(2) { grid-area: person; }
+.today-main { grid-area: main; display: grid; min-width: 0; }
+.today-lessons li > .state { grid-area: state; }
+.today-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.today-error {
+  margin: 0 0 8px;
+  color: var(--destructive);
+  font-size: 0.9rem;
+}
+@media (max-width: 640px) {
+  .today-lessons li {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    grid-template-areas: "time main state" "actions actions actions";
+  }
+  .today-lessons li > :nth-child(2) { display: none; }
+}

@@ -150,6 +150,8 @@ export function migrateDatabase(db) {
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS accepted_trial ON offers(student_id,tutor_id) WHERE kind='trial' AND accepted_at IS NOT NULL");
   if (!db.prepare("PRAGMA table_info(bookings)").all().some(c => c.name === "offer_id")) db.exec("ALTER TABLE bookings ADD COLUMN offer_id INTEGER REFERENCES offers(id)");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS offer_session ON bookings(offer_id,starts_at) WHERE offer_id IS NOT NULL");
+  // Server time at which the tutor pressed "start" for the lesson.
+  if (!db.prepare("PRAGMA table_info(bookings)").all().some(c => c.name === "started_at")) db.exec("ALTER TABLE bookings ADD COLUMN started_at TEXT");
   const messageColumns = db.prepare("PRAGMA table_info(inquiry_messages)").all();
   if (!messageColumns.some(c => c.name === "context_kind")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request'))");
   if (!messageColumns.some(c => c.name === "context_id")) db.exec("ALTER TABLE inquiry_messages ADD COLUMN context_id INTEGER");

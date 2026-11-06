@@ -20,7 +20,8 @@ export default function Onboarding() {
   const heading = useRef<HTMLHeadingElement>(null);
   const step = user!.onboarding_step;
   useEffect(() => { heading.current?.focus(); }, [step]);
-  if (user!.role === "admin" || step === 3) return <Navigate to={accountDestination(user!, params.get("next"))} replace />;
+  // A new tutor finishes onboarding by completing the profile; everyone else goes to their usual home.
+  if (user!.role === "admin" || step === 3) return <Navigate to={user!.role === "tutor" && !params.get("next") ? "/studio" : accountDestination(user!, params.get("next"))} replace />;
   async function save(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault(); setBusy(true); setError("");
     const fields = Object.fromEntries(new FormData(e.currentTarget));

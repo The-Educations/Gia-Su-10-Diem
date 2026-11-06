@@ -151,7 +151,7 @@ export default function Bookings() {
           <div className="schedule-filters">
             <Choose label="Khóa học" value={offerId} onChange={value => setParam("offer", value)} allLabel="Tất cả khóa học" options={courses.map(b => ({ value: String(b.offer_id), label: `${b.subject_name} · ${personName(b)} (#${b.offer_id})` }))} />
             <Choose label="Trạng thái" value={filter} onChange={value => setParam("status", value)} allLabel="Tất cả" options={[
-              ["pending", "Chờ xác nhận"], ["accepted", "Đã xác nhận"], ["completed", "Đã hoàn thành"], ["cancelled", "Đã hủy"], ["declined", "Đã từ chối"],
+              ["pending", "Chờ xác nhận"], ["accepted", "Đã xác nhận"], ["completed", "Đã hoàn thành"], ["missed", "Học sinh vắng"], ["cancelled", "Đã hủy"], ["declined", "Đã từ chối"],
             ].map(([value, label]) => ({ value, label }))} />
           </div>
         </div>

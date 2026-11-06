@@ -105,6 +105,7 @@ export type Booking = {
   status: string;
   lesson_note: string;
   meeting_url: string;
+  started_at?: string | null;
   reviewed: number | null;
   review_body?: string | null;
 };

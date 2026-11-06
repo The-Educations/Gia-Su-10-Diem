@@ -162,6 +162,7 @@ export const statusNames: Record<string, string> = {
   declined: "Đã từ chối",
   cancelled: "Đã hủy",
   completed: "Đã hoàn thành",
+  missed: "Học sinh vắng",
   approved: "Đã công bố",
   rejected: "Cần bổ sung",
   withdrawn: "Đã gỡ hồ sơ",
@@ -175,5 +176,5 @@ export function accountDestination(user: User, next?: string | null) {
   if (user.email_verification_required) return `/verify-email${safe ? `?next=${encodeURIComponent(safe)}` : ""}`;
   if (user.role !== "admin" && user.onboarding_step < 3)
     return `/onboarding${safe ? `?next=${encodeURIComponent(safe)}` : ""}`;
-  return safe || (user.role === "tutor" ? "/studio" : user.role === "admin" ? "/admin" : "/workspace");
+  return safe || (user.role === "admin" ? "/admin" : "/workspace");
 }
