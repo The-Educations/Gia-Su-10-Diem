@@ -163,6 +163,7 @@ export function migrateDatabase(db) {
     attachment_id TEXT NOT NULL REFERENCES chat_attachments(id) ON DELETE CASCADE,
     part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(attachment_id,part)
   );`);
+  if (!db.prepare("PRAGMA table_info(chat_attachments)").all().some(c => c.name === "name")) db.exec("ALTER TABLE chat_attachments ADD COLUMN name TEXT NOT NULL DEFAULT ''");
   migrateCommunity(db);
   db.exec(`CREATE TABLE IF NOT EXISTS support_threads (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

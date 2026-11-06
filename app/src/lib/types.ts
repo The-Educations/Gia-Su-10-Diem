@@ -132,7 +132,7 @@ export type MessageContext = {
   duration_minutes?: number;
   blocks?: WeeklySchedule["blocks"];
 };
-export type ChatAttachment = { id: string; kind: "image" | "audio"; size: number; url: string };
+export type ChatAttachment = { id: string; kind: "image" | "audio" | "file"; name?: string; size: number; url: string };
 export type Message = {
   attachment?: ChatAttachment | null;
   id: number;
