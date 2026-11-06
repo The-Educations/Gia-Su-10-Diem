@@ -658,10 +658,11 @@ export function createApi(
     const b = booking(req),
       { status } = z
         .object({
-          status: z.enum(["accepted", "declined", "cancelled", "completed"]),
+          status: z.enum(["accepted", "declined", "cancelled", "completed", "missed"]),
         })
         .parse(req.body);
     const future = new Date(b.starts_at).getTime() > Date.now();
+    const ended = new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= Date.now();
     // Like lesson offers, a new lesson can only be confirmed by a tutor whose
     // profile students can still see.
     if (status === "accepted" && req.user.id === b.tutor_id && !isLiveTutor(one(db, "SELECT status,published FROM tutors WHERE user_id=?", b.tutor_id)))
@@ -675,15 +676,35 @@ export function createApi(
         b.status === "pending" &&
         future) ||
       // Either side can mark a finished lesson as done, so a tutor who forgets
-      // does not stop the student from reviewing.
+      // does not stop the student from reviewing. A tutor who pressed "start"
+      // can also end the lesson before its scheduled end.
       (status === "completed" &&
         b.status === "accepted" &&
-        [b.tutor_id, b.student_id].includes(req.user.id) &&
-        new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= Date.now());
+        ((req.user.id === b.tutor_id && (!!b.started_at || ended)) ||
+          (req.user.id === b.student_id && ended))) ||
+      // The tutor reports the student did not show up once the lesson time has come.
+      (status === "missed" &&
+        b.status === "accepted" &&
+        req.user.id === b.tutor_id &&
+        !b.started_at &&
+        !future);
     if (!allowed) fail(409, "Không thể thay đổi buổi học sang trạng thái này.");
     run(db, "UPDATE bookings SET status=? WHERE id=?", status, b.id);
     audit(req.user.id, `booking.${status}`, b.id);
     res.json({ ok: true });
+  });
+  // The tutor opens the lesson from 15 minutes before it begins until it ends.
+  app.post("/api/bookings/:id/start", auth("tutor"), (req, res) => {
+    const b = booking(req);
+    if (b.tutor_id !== req.user.id || b.status !== "accepted" || b.started_at)
+      fail(409, "Không thể bắt đầu buổi học này.");
+    const start = new Date(b.starts_at).getTime(), now = Date.now();
+    if (now < start - 15 * 60000) fail(409, "Chưa đến giờ. Nút Bắt đầu mở trước giờ học 15 phút.");
+    if (now >= start + b.duration_minutes * 60000) fail(409, "Buổi học đã kết thúc. Hãy chọn Hoàn thành hoặc Học sinh vắng.");
+    const started_at = new Date(now).toISOString();
+    run(db, "UPDATE bookings SET started_at=? WHERE id=?", started_at, b.id);
+    audit(req.user.id, "booking.started", b.id);
+    res.json({ ok: true, started_at });
   });
   app.patch("/api/bookings/:id/lesson", auth("tutor"), (req, res) => {
     const b = booking(req);
