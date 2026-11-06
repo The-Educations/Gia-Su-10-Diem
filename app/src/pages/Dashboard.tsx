@@ -93,7 +93,6 @@ export default function Dashboard() {
           </Button>
         }
       />
-      {isTutor && <TodayLessons lessons={rows} role="tutor" onChanged={bookings.reload} />}
       {!isTutor && (!user.school || !user.ward_code) && <Alert><AlertDescription><Link to="/settings">Hoàn thiện hồ sơ: trường học & nơi sinh sống</Link></AlertDescription></Alert>}
       <WorkspaceStats
         items={[
@@ -117,7 +116,7 @@ export default function Dashboard() {
           },
         ]}
       />
-      {!isTutor && <TodayLessons lessons={rows} role="student" onChanged={bookings.reload} />}
+      <TodayLessons lessons={rows} role={isTutor ? "tutor" : "student"} onChanged={bookings.reload} />
       <div className="workspace-overview">
         <WorkspacePanels>
           <section

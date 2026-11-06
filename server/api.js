@@ -676,12 +676,12 @@ export function createApi(
         b.status === "pending" &&
         future) ||
       // Either side can mark a finished lesson as done, so a tutor who forgets
-      // does not stop the student from reviewing. A tutor who pressed "start"
-      // can also end the lesson before its scheduled end.
+      // does not stop the student from reviewing. Nobody can close a lesson
+      // before it is over.
       (status === "completed" &&
         b.status === "accepted" &&
-        ((req.user.id === b.tutor_id && (!!b.started_at || ended)) ||
-          (req.user.id === b.student_id && ended))) ||
+        [b.tutor_id, b.student_id].includes(req.user.id) &&
+        ended) ||
       // The tutor reports the student did not show up once the lesson time has come.
       (status === "missed" &&
         b.status === "accepted" &&
