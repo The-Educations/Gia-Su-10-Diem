@@ -86,7 +86,7 @@ export type Tutor = {
   rating: number;
   review_count: number;
   slots: Slot[];
-  reviews: { author: string; rating: number; body: string; created_at: string }[];
+  reviews: { author: string; rating: number; body: string; created_at: string; lessons: number }[];
 };
 export type Booking = {
   offer_id?: number | null;
@@ -106,6 +106,7 @@ export type Booking = {
   lesson_note: string;
   meeting_url: string;
   reviewed: number | null;
+  review_body?: string | null;
 };
 export type Resource = {
   id: number;

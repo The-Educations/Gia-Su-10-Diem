@@ -11,6 +11,7 @@ import { registerSignupVerification } from "./signup-verification.js";
 import { registerCommunityImages } from "./community-images.js";
 import { registerCommunity } from "./community.js";
 import { registerTutorReview } from "./tutor-review.js";
+import { currentReview, pairReview, completedLessons } from "./reviews.js";
 import { liveTutorSql, isLiveTutor, publicView, publishedView, contentSnapshot, changedContent } from "./tutor-visibility.js";
 import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
@@ -211,7 +212,7 @@ export function createApi(
     all(
       db,
       `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
-    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id
+    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id AND ${currentReview()}
     WHERE ${preview ? '1=1' : `${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`} GROUP BY t.user_id`,
     ).map(({ moderation_note, reserved_weekly_blocks, published, ...draft }) => {
       // Students see the last approved content while an edit awaits review.
@@ -394,9 +395,9 @@ export function createApi(
     // real name, and without internal booking or account ids.
     const reviews = all(
       db,
-      "SELECT r.rating,r.body,r.created_at,u.role,u.learner_type,u.display_name,u.profile_code FROM reviews r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=b.student_id WHERE b.tutor_id=? ORDER BY r.created_at DESC",
+      `SELECT r.rating,r.body,r.created_at,${completedLessons()} AS lessons,u.role,u.learner_type,u.display_name,u.profile_code FROM reviews r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=b.student_id WHERE b.tutor_id=? AND ${currentReview()} ORDER BY r.created_at DESC`,
       t.user_id,
-    ).map(({ rating, body, created_at, ...reviewer }) => ({ rating, body, created_at, author: authorLabel(reviewer).label }));
+    ).map(({ rating, body, created_at, lessons, ...reviewer }) => ({ rating, body, created_at, lessons, author: authorLabel(reviewer).label }));
     res.json({ ...t, slots, reviews, gallery: galleryMetadata(db, t.user_id) });
   };
   app.get("/api/tutors/:id", tutorDetail());
@@ -594,7 +595,7 @@ export function createApi(
     res.json(
       all(
         db,
-        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,r.rating AS reviewed FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id LEFT JOIN reviews r ON r.booking_id=b.id WHERE ${condition} ORDER BY b.starts_at DESC`,
+        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,${pairReview("rating")} AS reviewed,${pairReview("body")} AS review_body FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id WHERE ${condition} ORDER BY b.starts_at DESC`,
         ...(req.user.role === "admin" ? [] : [req.user.id]),
       ),
     );
@@ -670,12 +671,15 @@ export function createApi(
         ["pending", "accepted"].includes(b.status) &&
         future) ||
       (req.user.id === b.tutor_id &&
-        ((["accepted", "declined"].includes(status) &&
-          b.status === "pending" &&
-          future) ||
-          (status === "completed" &&
-            b.status === "accepted" &&
-            new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= Date.now())));
+        ["accepted", "declined"].includes(status) &&
+        b.status === "pending" &&
+        future) ||
+      // Either side can mark a finished lesson as done, so a tutor who forgets
+      // does not stop the student from reviewing.
+      (status === "completed" &&
+        b.status === "accepted" &&
+        [b.tutor_id, b.student_id].includes(req.user.id) &&
+        new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= Date.now());
     if (!allowed) fail(409, "Không thể thay đổi buổi học sang trạng thái này.");
     run(db, "UPDATE bookings SET status=? WHERE id=?", status, b.id);
     audit(req.user.id, `booking.${status}`, b.id);
@@ -736,8 +740,17 @@ export function createApi(
     const d = z
       .object({ rating: z.number().int().min(1).max(5), body: text(1000) })
       .parse(req.body);
-    if (one(db, "SELECT booking_id FROM reviews WHERE booking_id=?", b.id))
-      fail(409, "Bạn đã đánh giá buổi học này.");
+    // One review per student and tutor: a later lesson edits it instead of adding another.
+    const existing = one(
+      db,
+      "SELECT r.booking_id FROM reviews r JOIN bookings x ON x.id=r.booking_id WHERE x.student_id=? AND x.tutor_id=? ORDER BY r.created_at DESC,r.booking_id DESC LIMIT 1",
+      b.student_id,
+      b.tutor_id,
+    );
+    if (existing) {
+      run(db, "UPDATE reviews SET rating=?,body=?,created_at=CURRENT_TIMESTAMP WHERE booking_id=?", d.rating, d.body, existing.booking_id);
+      return res.json({ ok: true, updated: true });
+    }
     run(
       db,
       "INSERT INTO reviews(booking_id,rating,body) VALUES (?,?,?)",
@@ -745,7 +758,7 @@ export function createApi(
       d.rating,
       d.body,
     );
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, updated: false });
   });
   const resourceRows = (admin) =>
     all(
