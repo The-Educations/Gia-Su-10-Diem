@@ -794,12 +794,16 @@ test("tutors start, finish or mark lessons missed from the overview with time li
   assert.equal((await start(tutor, soon)).status, 409);
   assert.ok(one(db, "SELECT id FROM audit WHERE action='booking.started' AND actor_id=? AND target=?", teacher.id, String(soon)));
 
-  // A started lesson can be ended before its scheduled end; an unstarted one only after it.
-  assert.equal((await patch(tutor, soon, "completed")).status, 200);
-  assert.equal(stored(soon).status, "completed");
+  // Nobody can close a lesson before it is over, even after it started.
+  assert.equal((await patch(tutor, soon, "completed")).status, 409);
   assert.equal((await patch(tutor, later, "completed")).status, 409);
   assert.equal((await start(tutor, running)).status, 200);
+  assert.equal((await patch(tutor, running, "completed")).status, 409);
   assert.equal((await patch(student, running, "completed")).status, 409);
+  // Once the lesson time has passed, the tutor completes it.
+  run(db, "UPDATE bookings SET starts_at=? WHERE id IN (?,?)", new Date(Date.now() - 3 * 3600000).toISOString(), soon, running);
+  assert.equal((await patch(tutor, soon, "completed")).status, 200);
+  assert.equal(stored(soon).status, "completed");
   assert.equal((await patch(tutor, running, "completed")).status, 200);
   assert.equal((await patch(tutor, over, "completed")).status, 200);
 

@@ -25,12 +25,14 @@ Mỗi dòng gồm giờ bắt đầu và kết thúc, tên đối phương, môn
 
 ### Nút của gia sư
 
-| Thời điểm | Nút |
+Mỗi buổi hôm nay là một dòng riêng trong ô "Buổi dạy hôm nay" và tự đổi theo thời điểm. **Trước khi điểm danh mở (sớm hơn 15 phút trước giờ học), dòng đó chỉ có ghi chú "Chưa đến giờ · điểm danh mở lúc HH:mm", không có nút nào.** Không đóng được buổi nào trước khi hết giờ. Học sinh thấy ghi chú "Chưa đến giờ học".
+
+| Thời điểm | Gia sư thấy |
 |---|---|
-| Sớm hơn 15 phút trước giờ học | "Mở lúc HH:mm" (khóa) |
-| Từ 15 phút trước đến hết giờ, chưa bắt đầu | **Bắt đầu buổi**; từ đúng giờ học thêm **Học sinh vắng** |
-| Đã bắt đầu, chưa hết giờ | **Kết thúc buổi** (kết thúc sớm được) |
-| Đã hết giờ | **Hoàn thành** (hoặc "Kết thúc buổi" nếu đã bắt đầu); nếu chưa bắt đầu thì thêm **Học sinh vắng** |
+| Sớm hơn 15 phút trước giờ học | Chỉ ghi chú "Chưa đến giờ · điểm danh mở lúc HH:mm", không có nút |
+| Từ 15 phút trước giờ học, chưa bắt đầu | Nút **Bắt đầu buổi**; từ đúng giờ học thêm nút **Học sinh vắng** |
+| Đã bắt đầu, chưa hết giờ | Chỉ dòng chữ "Hoàn thành mở lúc HH:mm" |
+| Đã hết giờ | Nút **Hoàn thành**; nếu chưa bấm bắt đầu thì thêm **Học sinh vắng** |
 
 "Học sinh vắng" cần bấm xác nhận lần hai để tránh bấm nhầm.
 
@@ -45,8 +47,7 @@ Mỗi dòng gồm giờ bắt đầu và kết thúc, tên đối phương, môn
 - Cột mới `bookings.started_at` (giờ máy chủ khi gia sư bấm Bắt đầu), thêm tự động khi khởi động (`server/db.js`). Giờ do máy chủ ghi, không tin giờ của trình duyệt.
 - `POST /api/bookings/:id/start`: chỉ gia sư của buổi, buổi đang `accepted` và chưa bắt đầu, trong khung từ 15 phút trước đến hết giờ học. Ghi nhật ký `booking.started`.
 - `PATCH /api/bookings/:id` với `status: "completed"`:
-  - gia sư: khi đã bắt đầu (kể cả trước giờ kết thúc dự kiến) hoặc đã hết giờ;
-  - học sinh: chỉ khi đã hết giờ (từ Lỗi 4).
+  - gia sư hoặc học sinh của buổi, **chỉ khi buổi đã hết giờ** (không đóng sớm, kể cả khi đã bấm bắt đầu).
 - `PATCH /api/bookings/:id` với `status: "missed"` (trạng thái mới, "Học sinh vắng"): chỉ gia sư, từ giờ học trở đi, và chưa bấm bắt đầu.
 - Trạng thái `missed` không đánh giá được, không thuộc buổi đã dạy (không vào số "Đã học N buổi" và sau này không tính phí), và giải phóng khung giờ như buổi hủy. Nó xuất hiện ở bộ lọc trạng thái trang Lịch học.
 
@@ -64,6 +65,6 @@ Khi làm bước 2, vị trí ở Tổng quan giữ nguyên; chỉ thêm nút v�
 
 ## 6. Kiểm thử
 
-- Test API mới: *tutors start, finish or mark lessons missed from the overview with time limits* (khung giờ bắt đầu, quyền từng bên, kết thúc sớm, vắng, buổi vắng không đánh giá được, nhật ký).
+- Test API mới: *tutors start, finish or mark lessons missed from the overview with time limits* (khung giờ bắt đầu, quyền từng bên, không đóng buổi trước khi hết giờ, vắng, buổi vắng không đánh giá được, nhật ký).
 - Đã xem trên giao diện thật với dữ liệu tạm (đã xóa): gia sư thấy đủ bốn trạng thái nút; học sinh thấy "Đã học xong" và "gia sư đã bắt đầu"; vừa ở 320 px không tràn ngang.
 - Chưa chạy e2e Playwright trên máy; cần xem CI.

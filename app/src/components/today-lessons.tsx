@@ -16,13 +16,17 @@ const clock = (time: number) =>
 const startOf = (b: Booking) => Date.parse(b.starts_at);
 const endOf = (b: Booking) => startOf(b) + b.duration_minutes * 60000;
 
-// Lessons to act on now: everything scheduled today, plus earlier lessons that
-// are over but were never closed.
+const opensAt = (b: Booking) => startOf(b) - START_OPENS_BEFORE;
+const byTime = (a: Booking, b: Booking) => startOf(a) - startOf(b) || a.id - b.id;
+
+// Everything scheduled today, plus earlier lessons that are over but were never
+// closed. Each lesson shows its own state: a note while attendance is not open
+// yet, buttons from 15 minutes before the start.
 export function lessonsToHandle(lessons: Booking[], now = Date.now()) {
   return lessons
     .filter(b => ["accepted", "completed", "missed"].includes(b.status)
       && (dayKey(startOf(b)) === dayKey(now) || (b.status === "accepted" && endOf(b) <= now)))
-    .sort((a, b) => startOf(a) - startOf(b) || a.id - b.id)
+    .sort(byTime)
     .slice(0, 8);
 }
 
@@ -56,21 +60,23 @@ export function TodayLessons({ lessons, role, onChanged }: {
   }
   const complete = (b: Booking) =>
     act(b, () => api(`/bookings/${b.id}`, "PATCH", { status: "completed" }), "Đã ghi nhận buổi học hoàn thành");
+  // Nothing can be closed before the lesson is over: from 15 minutes before the
+  // tutor can start (or, once the lesson time has come, report the student
+  // absent), and Hoàn thành appears at the end.
   function tutorActions(b: Booking) {
     if (b.status !== "accepted") return null;
-    const over = endOf(b) <= now, begun = startOf(b) <= now;
-    if (b.started_at && !over)
-      return <Button disabled={busy === b.id} onClick={() => complete(b)}>Kết thúc buổi</Button>;
-    if (over)
+    if (endOf(b) <= now)
       return <>
-        <Button disabled={busy === b.id} onClick={() => complete(b)}>{b.started_at ? "Kết thúc buổi" : "Hoàn thành"}</Button>
+        <Button disabled={busy === b.id} onClick={() => complete(b)}>Hoàn thành</Button>
         {!b.started_at && absent(b)}
       </>;
-    if (startOf(b) - START_OPENS_BEFORE > now)
-      return <Button disabled variant="outline">Mở lúc {clock(startOf(b) - START_OPENS_BEFORE)}</Button>;
+    if (b.started_at)
+      return <span className="today-hint">Hoàn thành mở lúc {clock(endOf(b))}</span>;
+    if (opensAt(b) > now)
+      return <span className="today-hint">Chưa đến giờ · điểm danh mở lúc {clock(opensAt(b))}</span>;
     return <>
       <Button disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}/start`, "POST"), "Đã bắt đầu buổi học")}>Bắt đầu buổi</Button>
-      {begun && absent(b)}
+      {startOf(b) <= now && absent(b)}
     </>;
   }
   function absent(b: Booking) {
@@ -82,6 +88,8 @@ export function TodayLessons({ lessons, role, onChanged }: {
       : <Button variant="ghost" onClick={() => setConfirmAbsent(b.id)}>Học sinh vắng</Button>;
   }
   function studentActions(b: Booking) {
+    if (b.status === "accepted" && opensAt(b) > now)
+      return <span className="today-hint">Chưa đến giờ học</span>;
     if (b.status === "accepted" && endOf(b) <= now)
       return <Button disabled={busy === b.id} onClick={() => complete(b)}>Đã học xong</Button>;
     if (b.status === "completed" && !b.reviewed)

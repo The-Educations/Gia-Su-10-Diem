@@ -3286,9 +3286,10 @@ main {
 
 .today-lessons {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 12px;
   background: var(--card);
-  padding: 18px 20px;
+  padding: 24px;
+  margin-bottom: 22px;
 }
 .today-lessons > header {
   display: flex;
@@ -3321,6 +3322,9 @@ main {
   padding: 14px 0;
   border-top: 1px solid var(--border);
 }
+.today-lessons li:last-child {
+  padding-bottom: 0;
+}
 .today-lessons li[data-live] {
   border-left: 3px solid var(--primary);
   padding-left: 12px;
@@ -3334,6 +3338,11 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.today-hint {
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  padding: 0 4px;
 }
 .today-error {
   margin: 0 0 8px;

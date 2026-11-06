@@ -1,6 +1,23 @@
 # Lỗi 4: Buổi học chỉ do gia sư bấm hoàn thành, đánh giá không gắn với xác nhận hai phía
 
-Issue: [#48](https://github.com/The-Educations/Gia-Su-10-Diem/issues/48). Tài liệu này ghi lại lỗi, quyết định phạm vi và cách đã sửa.
+Issue: [#48](https://github.com/The-Educations/Gia-Su-10-Diem/issues/48). PR: [#67](https://github.com/The-Educations/Gia-Su-10-Diem/pull/67) (đánh giá) và [#68](https://github.com/The-Educations/Gia-Su-10-Diem/pull/68) (điểm danh ở Tổng quan). Tài liệu này ghi lại lỗi, quyết định phạm vi và cách đã sửa.
+
+## Tóm tắt
+
+**Lỗi là gì.** Buổi học chỉ do gia sư bấm "hoàn thành", học sinh không xác nhận, và đánh giá dựa vào trạng thái đó nên không có gì cho biết buổi học có thật. Đi kèm là hai vấn đề thật với người dùng bình thường: gia sư quên bấm thì học sinh không đánh giá được, và đánh giá tính theo từng buổi nên một khóa 8 buổi bị đếm thành 8 đánh giá.
+
+**Quyết định.** Ở giai đoạn đầu, rủi ro gian lận đánh giá rất thấp (chỉ học sinh mới viết được đánh giá, và gia sư mất công mới lập tài khoản giả). Ưu tiên là dùng thật suôn sẻ, không tạo lỗi và lỗ hổng. Vì vậy hoãn phần chống gian lận (điểm danh hai phía đầy đủ, hàng cần xác minh) cho lúc làm phí, và chọn mô hình **một đánh giá công khai cho mỗi cặp học sinh–gia sư**, viết được sau buổi hoàn thành đầu tiên, sửa được về sau, kèm "Đã học N buổi".
+
+**Đã làm.**
+
+| Việc | PR |
+|---|---|
+| Học sinh cũng bấm được "Đã học xong" khi buổi đã hết giờ | #67 |
+| Mỗi cặp một đánh giá, sửa được; điểm và số đánh giá tính theo số học sinh | #67 |
+| Mỗi đánh giá công khai kèm "Đã học N buổi" | #67 |
+| Khu "Buổi dạy hôm nay" ở Tổng quan: Bắt đầu buổi, Học sinh vắng, Hoàn thành (chỉ khi hết giờ); học sinh thấy "gia sư đã bắt đầu" | #68 |
+
+**Còn lại (cố ý chưa làm).** Học sinh điểm danh phía mình, trạng thái "cần xác minh", tự xác nhận sau 48 giờ, phát hiện tài khoản liên quan, admin gỡ đánh giá (Lỗi 5). Điểm danh hai phía làm cùng thiết kế phí (`docs/tutor-fees.md` mục 3).
 
 ## 1. Lỗi
 
@@ -93,3 +110,13 @@ Không cần chuyển đổi. Nếu một cặp đã có nhiều đánh giá t�
 - Học sinh tự bấm "Đã học xong" cho buổi gia sư chưa bấm. Hệ thống tin học sinh ở giai đoạn này; việc xác minh thật thuộc thiết kế phí.
 - Gia sư mới có đánh giá sớm từ buổi học đầu tiên (kể cả học thử miễn phí), nên số sao ban đầu có thể dao động. Số "Đã học N buổi" bên cạnh giúp người xem cân nhắc. Nếu sau này cần thì đặt ngưỡng số buổi tối thiểu.
 - Khi tính phí (Lỗi 4 phần điểm danh, `docs/tutor-fees.md` mục 3.5), nút "Kết thúc" của gia sư sẽ thay nút "Hoàn thành" thủ công; nút "Đã học xong" của học sinh ở đây sẽ trở thành nửa còn lại của điểm danh. Hai phần này nên làm cùng nhau.
+
+## 6. Phần tiếp theo: điểm danh hằng buổi ở Tổng quan (PR #68)
+
+Phần này đi theo hướng của issue (buổi học cần bằng chứng hơn một cú bấm "hoàn thành"), nhưng làm **một phía** trước, đủ để gia sư dùng thật. Chi tiết quy tắc ở [tong-quan-buoi-day-hom-nay.md](tong-quan-buoi-day-hom-nay.md).
+
+- **Vị trí:** đầu trang Tổng quan của gia sư, vì đó là chỗ gia sư mở nhiều nhất và điểm danh gắn với "hôm nay tôi dạy ai".
+- **Nút theo thời điểm:** trước giờ chỉ có dòng chữ gợi ý; Bắt đầu buổi (mở trước giờ học 15 phút), Học sinh vắng (từ giờ học, có xác nhận lần hai), Hoàn thành (chỉ khi hết giờ).
+- **Dữ liệu:** cột `bookings.started_at` ghi giờ máy chủ khi gia sư bấm Bắt đầu; trạng thái mới `missed` ("Học sinh vắng") không đánh giá được và không tính là buổi đã dạy.
+- **Học sinh và phụ huynh:** thấy "gia sư đã bắt đầu" khi buổi đang diễn ra và bấm "Đã học xong" sau giờ học.
+- **Nối với thiết kế phí:** `started_at` và trạng thái `missed` là nền cho bước 2 (học sinh điểm danh, `needs_review`, tự xác nhận sau 48 giờ). Khi đó nút "Đã học xong" của học sinh trở thành nửa còn lại của điểm danh, và vị trí trên Tổng quan giữ nguyên.
