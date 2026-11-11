@@ -5,6 +5,7 @@ import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
+import { legacyWeeklyBlocksByTutor, legacyCounts } from "./legacy-weekly.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
 import { registerSignupVerification } from "./signup-verification.js";
@@ -14,7 +15,7 @@ import { registerTutorReview } from "./tutor-review.js";
 import { currentReview, pairReview, completedLessons } from "./reviews.js";
 import { liveTutorSql, isLiveTutor, publicView, publishedView, contentSnapshot, changedContent } from "./tutor-visibility.js";
 import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
-import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
+import { weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
 import { registerPosts } from "./posts.js";
 import { isGoogleAdmin } from "./admin-access.js";
@@ -208,13 +209,14 @@ export function createApi(
       fail(403, "Bạn không tham gia buổi học này.");
     return b;
   };
-  const tutorRows = (preview = false) =>
-    all(
+  const tutorRows = (preview = false) => {
+    const reserved = legacyWeeklyBlocksByTutor(db);
+    return all(
       db,
-      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
+      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
     FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id AND ${currentReview()}
     WHERE ${preview ? '1=1' : `${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`} GROUP BY t.user_id`,
-    ).map(({ moderation_note, reserved_weekly_blocks, published, ...draft }) => {
+    ).map(({ moderation_note, published, ...draft }) => {
       // Students see the last approved content while an edit awaits review.
       const { published: _snapshot, ...visible } = publicView({ ...draft, published });
       const t = preview ? draft : visible;
@@ -222,7 +224,7 @@ export function createApi(
       ...t,
       ...(preview && { published: publishedView(published) }),
       ...uploadMetadata(db, t.user_id),
-      weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
+      weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !(reserved.get(t.user_id) || []).some(r => r.weekday === b.weekday && r.hour === b.hour)),
       subjects: JSON.parse(t.subjects),
       levels: JSON.parse(t.levels),
       goals: JSON.parse(t.goals),
@@ -230,6 +232,7 @@ export function createApi(
       profile_sections: JSON.parse(t.profile_sections),
       };
     });
+  };
   registerEmailVerification(app, db, { origin, sendEmail });
   const signup = registerSignupVerification(app, db, { sendEmail, production, session });
   app.locals.calendarSync = registerGoogleCalendar(app, db, auth, { origin, production, google, wakeCalendar });
@@ -548,30 +551,7 @@ export function createApi(
     });
     res.json({ blocks: d.blocks, revision: d.revision + 1 });
   });
-  app.post("/api/tutor/slots", auth("tutor"), (req, res) => {
-    const d = z.object({ starts_at: z.iso.datetime() }).parse(req.body),
-      date = new Date(d.starts_at);
-    if (
-      date.getTime() < Date.now() + 3600000 ||
-      date.getTime() > Date.now() + 180 * 86400000 ||
-      date.getUTCMinutes() !== 0 ||
-      date.getUTCSeconds() !== 0
-    )
-      fail(400, "Chọn giờ tròn, trước ít nhất một giờ và trong 180 ngày tới.");
-    if (
-      all(db, "SELECT starts_at,duration_minutes FROM slots s WHERE tutor_id=? AND (available=1 OR EXISTS(SELECT 1 FROM bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','accepted','completed')))", req.user.id).some(
-        (s) => overlaps(s, { starts_at: date.toISOString(), duration_minutes: 60 }),
-      )
-    )
-      fail(409, "Khung giờ đã có trong lịch.");
-    run(
-      db,
-      "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)",
-      req.user.id,
-      date.toISOString(),
-    );
-    res.status(201).json({ ok: true });
-  });
+  app.post("/api/tutor/slots", auth("tutor"), () => fail(410, "Thêm giờ lẻ đã ngừng. Hãy cập nhật Giờ trống hằng tuần."));
   app.delete("/api/tutor/slots/:id", auth("tutor"), (req, res) => {
     if (one(db, "SELECT id FROM slots WHERE id=? AND tutor_id=? AND source='weekly'", req.params.id, req.user.id))
       fail(409, "Chỉnh sửa khung giờ này trong lịch lặp hằng tuần.");
@@ -600,60 +580,8 @@ export function createApi(
       ),
     );
   });
-  app.post("/api/bookings", auth("student"), (req, res) => {
-    const d = z
-      .object({
-        slot_id: z.number().int().positive(),
-        subject_id: text(50),
-        mode: z.enum(["online", "offline"]),
-        note: z.string().trim().max(2000),
-      })
-      .parse(req.body);
-    const s = one(
-      db,
-      `SELECT s.*,t.rate,t.mode,t.subjects,t.status AS tutor_status,t.published FROM slots s JOIN tutors t ON t.user_id=s.tutor_id JOIN users u ON u.id=t.user_id WHERE s.id=? AND s.available=1 AND ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`,
-      d.slot_id,
-    );
-    if (!s || new Date(s.starts_at).getTime() < Date.now() + 3600000)
-      fail(400, "Khung giờ không còn khả dụng.");
-    if (
-      !JSON.parse(publicView({ status: s.tutor_status, published: s.published, subjects: s.subjects }).subjects).includes(d.subject_id) ||
-      (s.mode !== "both" && d.mode !== s.mode)
-    )
-      fail(400, "Môn học hoặc hình thức không phù hợp.");
-    const result = transaction(db, () => {
-      const conflicts = all(
-        db,
-        `SELECT starts_at,duration_minutes FROM bookings WHERE (student_id=? OR tutor_id=?) AND status IN ('pending','accepted','completed')`,
-        req.user.id,
-        s.tutor_id,
-      );
-      if (
-        conflicts.some(
-          (b) =>
-            overlaps(b, s),
-        )
-      )
-        fail(409, "Bạn hoặc gia sư đã có lịch trong khung giờ này.");
-      const id = Number(
-        run(
-          db,
-          "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,duration_minutes) VALUES (?,?,?,?,?,?,?,?,?)",
-          req.user.id,
-          s.tutor_id,
-          s.id,
-          d.subject_id,
-          s.starts_at,
-          s.rate,
-          d.mode,
-          d.note,
-          s.duration_minutes,
-        ).lastInsertRowid,
-      );
-      return { id };
-    });
-    res.status(201).json(result);
-  });
+  // Retired: lessons are created only through Offers. Kept as 410 so stale tabs and scripts get a clear message.
+  app.post("/api/bookings", auth("student"), () => fail(410, "Đặt buổi lẻ đã ngừng. Hãy gửi Đề nghị học theo khóa hoặc học thử từ hồ sơ gia sư."));
   app.patch("/api/bookings/:id", auth(), (req, res) => {
     const b = booking(req),
       { status } = z
@@ -811,6 +739,7 @@ export function createApi(
         profile_sections: JSON.parse(t.profile_sections),
       })),
       resources: resourceRows(true),
+      legacy: legacyCounts(db),
       audit: all(
         db,
         "SELECT a.*,u.name FROM audit a JOIN users u ON u.id=a.actor_id ORDER BY a.id DESC LIMIT 50",

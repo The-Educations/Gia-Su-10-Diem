@@ -88,15 +88,15 @@ for(const [kind,body,type] of [['photo',photo,'image/png'],['banner',photo,'imag
 const rejectedCv=await fetch(base+'/api/tutor/uploads/cv',{method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/pdf'},body:'legacy-upload'});
 assert.equal(rejectedCv.status,404);
 const slot=await fetch(base+'/api/tutor/slots',{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({starts_at:new Date(Date.now()+3*86400000).toISOString().slice(0,13)+':00:00.000Z'})});
-assert.equal(slot.status,201,await slot.text());
-const profile=await(await get('/api/tutor/profile')).json();assert.equal(profile.slots.length,1);
+assert.equal(slot.status,410,await slot.text());
+const profile=await(await get('/api/tutor/profile')).json();assert.equal(profile.slots.length,0);
 const weeklyResponse = await fetch(base+'/api/tutor/availability', {method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({revision:0,blocks:[{weekday:0,hour:0}]})});
 assert.equal(weeklyResponse.status,200,await weeklyResponse.clone().text());
 const weeklyProfile = await(await get('/api/tutor/profile')).json();
 assert.equal(weeklyProfile.weekly_schedule.revision,1);
 assert.ok(weeklyProfile.slots.filter(s=>s.source==='weekly').length>=7);
 assert.ok(weeklyProfile.slots.filter(s=>s.source==='weekly').every(s=>s.duration_minutes===60));
-assert.equal(weeklyProfile.slots.find(s=>s.source==='manual').duration_minutes,60);
+assert.ok(!weeklyProfile.slots.some(s=>s.source==='manual'));
 const staleSchedule = await fetch(base+'/api/tutor/availability', {method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({revision:0,blocks:[]})});
 assert.equal(staleSchedule.status,409);
 const saved = await fetch(base + '/api/tutor/profile', {method:'PUT', headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({...profile, province_code:'1',ward_code:'4',availability:{revision:1,blocks:[{weekday:1,hour:18}]}, headline:'Gia sư kiểm thử runtime', bio:'Hướng dẫn học sinh theo mục tiêu.', education:'Sư phạm Toán', location:'Hà Nội', subjects:['toan'], teaching_style:'Giải thích bằng hình vẽ.', lesson_plan:'Ôn bài, luyện tập và phản hồi.', profile_theme:'paper',timezone:'Asia/Tokyo',profile_sections:[{title:'Chứng chỉ',body:'Phương pháp giảng dạy'}],education_history:[{level:'university',institution:'Đại học Sư phạm',field:'Toán',start_year:2020,end_year:null}]})});

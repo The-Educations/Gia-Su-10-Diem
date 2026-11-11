@@ -71,6 +71,25 @@ async function fixture(t, options = {}) {
   }
   return { db, file, client, base, emails };
 }
+// Lessons and weekly requests that predate Offers can no longer be created through the API
+// (it answers 410), so tests that exercise their remaining lifecycle seed them directly.
+function legacyLesson(db, { studentId, tutorId, slot, subject = "toan", mode = "online", note = "", status = "pending" }) {
+  const { rate } = one(db, "SELECT rate FROM tutors WHERE user_id=?", tutorId);
+  return Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,duration_minutes,status) VALUES (?,?,?,?,?,?,?,?,?,?)",
+    studentId, tutorId, slot.id, subject, slot.starts_at, rate, mode, note, slot.duration_minutes ?? 60, status).lastInsertRowid);
+}
+const weekdayLabels = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
+function legacyWeekly(db, { studentId, tutorId, blocks, subject = "toan", mode = "online", status = "pending", note = "" }) {
+  const { rate } = one(db, "SELECT rate FROM tutors WHERE user_id=?", tutorId);
+  run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", studentId, tutorId);
+  const { id: inquiry } = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", studentId, tutorId);
+  const id = Number(run(db, "INSERT INTO weekly_requests(student_id,tutor_id,inquiry_id,subject_id,mode,blocks,note,rate,status) VALUES (?,?,?,?,?,?,?,?,?)",
+    studentId, tutorId, inquiry, subject, mode, JSON.stringify(blocks), note, rate, status).lastInsertRowid);
+  const hours = blocks.map(b => `${weekdayLabels[b.weekday]} ${String(b.hour).padStart(2, "0")}:00–${String(b.hour + 1).padStart(2, "0")}:00`).join(", ");
+  run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id) VALUES (?,?,?,'weekly-request',?)", inquiry, studentId, `Yêu cầu học hằng tuần #${id}: ${hours} (giờ Việt Nam).${note ? `\n${note}` : ""}`, id);
+  return { id, inquiry_id: inquiry };
+}
+
 test("registration, sessions, authorization and password revocation", async (t) => {
   const { client, db, base } = await fixture(t),
     guest = client(),
@@ -247,12 +266,12 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
   const s = await student.login("student"),
     u = await tutor.login("chau");
   await admin.login("admin");
-  await outsider.request("/auth/register", "POST", {
+  const o = (await outsider.request("/auth/register", "POST", {
     name: "Học sinh khác",
     email: "other@test.vn",
     password: "TestStudy2026!",
     role: "student",
-  });
+  })).data.user;
   const profile = (await student.request(`/tutors/${u.id}`)).data,
     slot = profile.slots[0],
     body = {
@@ -261,24 +280,18 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
       mode: "online",
       note: "Ôn phương trình",
     };
-  assert.equal(
-    (
-      await student.request("/bookings", "POST", {
-        ...body,
-        subject_id: "ngu-van",
-      })
-    ).status,
-    400,
-  );
-  const concurrent = await Promise.all([
-    student.request("/bookings", "POST", body),
-    outsider.request("/bookings", "POST", body),
-  ]);
-  assert.deepEqual(concurrent.map((r) => r.status).sort(), [201, 409]);
-  // Use the winning client for the remaining ownership assertions.
-  const owner = concurrent[0].status === 201 ? student : outsider,
-    stranger = owner === student ? outsider : student,
-    id = concurrent.find((r) => r.status === 201).data.id;
+  // Booking a single slot is retired: every attempt answers 410 and creates nothing.
+  const bookingsBefore = one(db, "SELECT COUNT(*) n FROM bookings").n;
+  for (const [who, data] of [[student, body], [student, { ...body, subject_id: "ngu-van" }], [outsider, body]]) {
+    const gone = await who.request("/bookings", "POST", data);
+    assert.equal(gone.status, 410);
+    assert.match(gone.data.error, /Đề nghị học/);
+  }
+  assert.equal(one(db, "SELECT COUNT(*) n FROM bookings").n, bookingsBefore);
+  // The one-active-lesson-per-slot guarantee lives in the database, so two learners can never hold the same slot.
+  const id = legacyLesson(db, { studentId: s.id, tutorId: u.id, slot, note: body.note });
+  assert.throws(() => legacyLesson(db, { studentId: o.id, tutorId: u.id, slot }), /UNIQUE/);
+  const owner = student, stranger = outsider;
   assert.equal(
     (await stranger.request(`/bookings/${id}/messages`)).status,
     403,
@@ -382,28 +395,19 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
   assert.equal(rated.rating, 4); assert.equal(rated.review_count, 1); assert.equal(rated.reviews.length, 1);
   assert.equal(rated.reviews[0].body, "Lần hai"); assert.equal(rated.reviews[0].lessons, 1);
   const slot2 = profile.slots[1];
-  const second = await owner.request("/bookings", "POST", {
-    ...body,
-    slot_id: slot2.id,
-  });
-  assert.equal(second.status, 201);
+  const second = legacyLesson(db, { studentId: s.id, tutorId: u.id, slot: slot2, note: body.note });
   assert.equal(
     (
-      await owner.request(`/bookings/${second.data.id}`, "PATCH", {
+      await owner.request(`/bookings/${second}`, "PATCH", {
         status: "cancelled",
       })
     ).status,
     200,
   );
-  assert.equal(
-    (
-      await stranger.request("/bookings", "POST", {
-        ...body,
-        slot_id: slot2.id,
-      })
-    ).status,
-    201,
-  );
+  // Cancelling frees the slot for another learner's (legacy) lesson.
+  legacyLesson(db, { studentId: o.id, tutorId: u.id, slot: slot2 });
+  assert.equal(one(db, "SELECT COUNT(*) n FROM bookings WHERE slot_id=? AND status IN ('pending','accepted','completed')", slot2.id).n, 1);
+  assert.equal((await stranger.request(`/bookings/${second}/messages`)).status, 403);
 });
 test("student cross-tutor collisions, slots, favorites and admin catalogue edits", async (t) => {
   const { client, db } = await fixture(t),
@@ -413,57 +417,18 @@ test("student cross-tutor collisions, slots, favorites and admin catalogue edits
   await student.login("student");
   const tu = await tutor.login("chau");
   await admin.login("admin");
-  const profiles = (await student.request("/tutors")).data,
-    first = (await student.request(`/tutors/${tu.id}`)).data,
-    second = (
-      await student.request(
-        `/tutors/${profiles.find((p) => p.user_id !== tu.id && p.subjects.includes("toan")).user_id}`,
-      )
-    ).data;
-  await student.request("/bookings", "POST", {
-    slot_id: first.slots[0].id,
-    subject_id: "toan",
-    mode: "online",
-    note: "",
-  });
-  assert.equal(
-    (
-      await student.request("/bookings", "POST", {
-        slot_id: second.slots[0].id,
-        subject_id: "toan",
-        mode: "online",
-        note: "",
-      })
-    ).status,
-    409,
-  );
-  assert.equal(
-    (
-      await tutor.request("/tutor/slots", "POST", {
-        starts_at: new Date(Date.now() - 3600000).toISOString(),
-      })
-    ).status,
-    400,
-  );
+  // Adding one-off hours is retired: the endpoint answers 410 and the calendar is untouched.
+  const slotsBefore = one(db, "SELECT COUNT(*) n FROM slots WHERE tutor_id=?", tu.id).n;
   const dt = new Date();
   dt.setUTCDate(dt.getUTCDate() + 30);
   dt.setUTCHours(10, 0, 0, 0);
-  assert.equal(
-    (
-      await tutor.request("/tutor/slots", "POST", {
-        starts_at: dt.toISOString(),
-      })
-    ).status,
-    201,
-  );
-  assert.equal(
-    (
-      await tutor.request("/tutor/slots", "POST", {
-        starts_at: dt.toISOString(),
-      })
-    ).status,
-    409,
-  );
+  for (const starts_at of [new Date(Date.now() - 3600000).toISOString(), dt.toISOString()]) {
+    const gone = await tutor.request("/tutor/slots", "POST", { starts_at });
+    assert.equal(gone.status, 410);
+    assert.match(gone.data.error, /Giờ trống hằng tuần/);
+  }
+  assert.equal((await student.request("/tutor/slots", "POST", { starts_at: dt.toISOString() })).status, 403);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM slots WHERE tutor_id=?", tu.id).n, slotsBefore);
   await student.request(`/favorites/${tu.id}`, "PUT");
   assert.deepEqual((await student.request("/favorites")).data, [tu.id]);
   await student.request(`/favorites/${tu.id}`, "DELETE");
@@ -1122,7 +1087,8 @@ test("only administrators can promote active accounts, with session revocation a
   await learner.request("/auth/register", "POST", { name: "Learner", email: "learner-promotion@test.vn", password: "TestStudy2026!", role: "student" });
   const slot = one(db, "SELECT id FROM slots WHERE tutor_id=? AND starts_at>?", tutorUser.id, new Date(Date.now() + 3600000).toISOString());
   assert.ok(slot);
-  assert.equal((await learner.request("/bookings", "POST", { slot_id: slot.id, subject_id: "toan", mode: "online", note: "" })).status, 400);
+  assert.equal((await learner.request("/bookings", "POST", { slot_id: slot.id, subject_id: "toan", mode: "online", note: "" })).status, 410);
+  assert.ok((await learner.request("/offers", "POST", { tutor_id: tutorUser.id, subject_id: "toan", mode: "online", blocks: [{ weekday: 0, hour: 19 }], ...offerPeriod() })).status >= 400);
   assert.equal((await learner.request("/inquiries", "POST", { tutor_id: tutorUser.id, body: "Xin hỏi lịch học" })).status, 404);
 });
 
@@ -1219,7 +1185,7 @@ test("students customize their own profile and timezone without altering other a
 test("weekly availability validates ownership, revisions and preserves cancelled booking history", async (t) => {
   const { client, db } = await fixture(t);
   const tutor = client(), student = client(), guest = client();
-  const u = await tutor.login("chau"); await student.login("student");
+  const u = await tutor.login("chau"); const learner = await student.login("student");
   const path = "/tutor/availability";
   const blocks = [{ weekday: 0, hour: 0 }, { weekday: 0, hour: 2 }];
   const save = (revision, value = blocks) => tutor.request(path, "PUT", { revision, blocks: value });
@@ -1242,8 +1208,8 @@ test("weekly availability validates ownership, revisions and preserves cancelled
   await tutor.request("/tutor/profile");
   assert.equal(one(db, "SELECT count(*) n FROM slots WHERE tutor_id=? AND source='weekly'", u.id).n, weekly.length);
   const body = { slot_id: first.id, subject_id: "toan", mode: "online", note: "" };
-  const booking = await student.request("/bookings", "POST", body);
-  assert.equal(booking.status, 201);
+  assert.equal((await student.request("/bookings", "POST", body)).status, 410);
+  const booking = { data: { id: legacyLesson(db, { studentId: learner.id, tutorId: u.id, slot: first }) } };
   const snapshot = one(db, "SELECT * FROM bookings WHERE id=?", booking.data.id);
   assert.equal(snapshot.duration_minutes, 60);
   assert.equal(snapshot.rate, profile.rate);
@@ -1253,26 +1219,29 @@ test("weekly availability validates ownership, revisions and preserves cancelled
   assert.equal((await tutor.request("/tutor/profile")).data.slots.find(s => s.id === first.id).reserved, 1);
   assert.equal((await tutor.request(`/bookings/${booking.data.id}`, "PATCH", { status: "accepted" })).status, 200);
   assert.equal((await student.request(`/bookings/${booking.data.id}`, "PATCH", { status: "cancelled" })).status, 200);
-  assert.equal((await student.request("/bookings", "POST", body)).status, 400);
   assert.ok(!(await student.request(`/tutors/${u.id}`)).data.slots.some(s => s.id === first.id));
   assert.deepEqual(all(db, "SELECT * FROM slots WHERE tutor_id=? AND source='manual'", u.id), oldSlots);
   assert.equal((await save(2)).status, 200);
-  assert.equal((await student.request("/bookings", "POST", body)).status, 201);
+  // Restoring the rule reopens the same slot for new lessons and keeps the cancelled one as history.
+  assert.equal(one(db, "SELECT available FROM slots WHERE id=?", first.id).available, 1);
+  assert.ok((await student.request(`/tutors/${u.id}`)).data.slots.some(s => s.id === first.id));
   assert.equal(one(db, "SELECT status FROM bookings WHERE id=?", booking.data.id).status, "cancelled");
 });
 
 test("two-hour intervals block overlaps, allow adjacent lessons and delay completion until the end", async (t) => {
   const { client, db } = await fixture(t);
   const tutor = client(), student = client();
-  const u = await tutor.login("chau"); await student.login("student");
+  const u = await tutor.login("chau"); const learner = await student.login("student");
   const start = new Date(Date.now() + 40 * 86400000); start.setUTCMinutes(0, 0, 0);
-  const make = (offset, duration) => Number(run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes) VALUES (?,?,?)", u.id, new Date(+start + offset * 3600000).toISOString(), duration).lastInsertRowid);
+  const make = (offset, duration) => { const starts_at = new Date(+start + offset * 3600000).toISOString(); return { id: Number(run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes) VALUES (?,?,?)", u.id, starts_at, duration).lastInsertRowid), starts_at, duration_minutes: duration }; };
   const first = make(0, 120), overlapBefore = make(-1, 120), overlapAfter = make(1, 60), adjacent = make(2, 120);
-  const book = slot_id => student.request("/bookings", "POST", { slot_id, subject_id: "toan", mode: "online", note: "" });
-  const result = await book(first); assert.equal(result.status, 201);
-  assert.equal((await book(overlapBefore)).status, 409);
-  assert.equal((await book(overlapAfter)).status, 409);
-  assert.equal((await book(adjacent)).status, 201);
+  // Overlap rules are shared by every scheduler (offers call the same helper); one-off booking itself is retired.
+  assert.equal((await student.request("/bookings", "POST", { slot_id: first.id, subject_id: "toan", mode: "online", note: "" })).status, 410);
+  assert.equal(overlaps(first, overlapBefore), true);
+  assert.equal(overlaps(first, overlapAfter), true);
+  assert.equal(overlaps(first, adjacent), false);
+  const result = { data: { id: legacyLesson(db, { studentId: learner.id, tutorId: u.id, slot: first }) } };
+  assert.equal(one(db, "SELECT duration_minutes FROM bookings WHERE id=?", result.data.id).duration_minutes, 120);
   assert.equal((await tutor.request(`/bookings/${result.data.id}`, "PATCH", { status: "accepted" })).status, 200);
   run(db, "UPDATE bookings SET starts_at=? WHERE id=?", new Date(Date.now() - 90 * 60000).toISOString(), result.data.id);
   assert.equal((await tutor.request(`/bookings/${result.data.id}`, "PATCH", { status: "completed" })).status, 409);
@@ -1449,12 +1418,10 @@ test("operational settings apply at once and content edits keep the approved ver
 test("a tutor without a published version cannot confirm new lessons", async t => {
   const { client, db } = await fixture(t);
   const tutor = client(), student = client(), other = client();
-  const user = await tutor.login("chau"); await student.login("student"); await other.login("linh");
+  const user = await tutor.login("chau"); const learner = await student.login("student"); await other.login("linh");
   const start = new Date(Math.ceil((Date.now() + 3 * 3600000) / 3600000) * 3600000).toISOString();
-  assert.equal((await tutor.request("/tutor/slots", "POST", { starts_at: start })).status, 201);
-  const slot = (await student.request(`/tutors/${user.id}`)).data.slots.find(s => s.starts_at === start);
-  const booking = await student.request("/bookings", "POST", { slot_id: slot.id, subject_id: "toan", mode: "online", note: "" });
-  assert.equal(booking.status, 201);
+  const slot = { id: Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", user.id, start).lastInsertRowid), starts_at: start };
+  const booking = { data: { id: legacyLesson(db, { studentId: learner.id, tutorId: user.id, slot }) } };
   run(db, "UPDATE tutors SET status='pending', published=NULL WHERE user_id=?", user.id);
   assert.equal((await tutor.request(`/bookings/${booking.data.id}`, "PATCH", { status: "accepted" })).status, 409);
   assert.equal((await tutor.request(`/bookings/${booking.data.id}`, "PATCH", { status: "declined" })).status, 200);
@@ -1503,32 +1470,51 @@ test("two-hour migration expands rules once and preserves reserved booking snaps
   assert.equal(one(db, "SELECT duration_minutes FROM bookings WHERE id=?", booking).duration_minutes, 120);
 });
 
-test("weekly requests validate availability, keep participants private, prevent conflicts and start chat", async t => {
+test("retired weekly requests close to new ones, keep blocking while accepted and can only be wound down", async t => {
   const { client, db } = await fixture(t);
   const student = client(), tutor = client(), outsider = client(), admin = client(), guest = client();
-  await student.login("student"); const teacher = await tutor.login("chau"); await admin.login("admin");
-  await outsider.request("/auth/register", "POST", { name: "Another learner", email: "weekly-other@test.vn", password: "TestStudy2026!" });
+  const learner = await student.login("student"); const teacher = await tutor.login("chau"); await admin.login("admin");
+  const stranger = (await outsider.request("/auth/register", "POST", { name: "Another learner", email: "weekly-other@test.vn", password: "TestStudy2026!" })).data.user;
   const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 20 }];
   await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
   const data = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, note: "Ôn Toán" };
+  // Creation is closed before any validation, so even invalid bodies get the same clear answer and nothing is stored.
   assert.equal((await guest.request("/weekly-requests", "POST", data)).status, 401);
-  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [] })).status, 400);
-  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [blocks[0], blocks[0]] })).status, 400);
-  assert.equal((await student.request("/weekly-requests", "POST", { ...data, blocks: [{ weekday: 1, hour: 3 }] })).status, 409);
-  const created = await student.request("/weekly-requests", "POST", data);
-  assert.equal(created.status, 201);
-  assert.equal((await student.request("/weekly-requests", "POST", data)).status, 409);
+  for (const body of [data, { ...data, blocks: [] }, { ...data, blocks: [blocks[0], blocks[0]] }, { ...data, blocks: [{ weekday: 1, hour: 3 }] }]) {
+    const gone = await student.request("/weekly-requests", "POST", body);
+    assert.equal(gone.status, 410); assert.match(gone.data.error, /Đề nghị học/);
+  }
+  assert.equal(one(db, "SELECT COUNT(*) n FROM weekly_requests").n, 0);
+  // A request that already exists stays private to its two participants.
+  const created = legacyWeekly(db, { studentId: learner.id, tutorId: teacher.id, blocks, note: "Ôn Toán" });
   assert.equal((await tutor.request("/weekly-requests")).data.length, 1);
   assert.equal((await outsider.request("/weekly-requests")).data.length, 0);
-  assert.equal((await outsider.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 404);
-  assert.equal((await student.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 403);
-  assert.equal((await student.request(`/inquiries/${created.data.inquiry_id}/messages`)).data[0].body.includes("Thứ 2 19:00"), true);
-  const other = await outsider.request("/weekly-requests", "POST", data);
-  assert.equal((await tutor.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "accepted" })).status, 200);
-  assert.equal((await tutor.request(`/weekly-requests/${other.data.id}`, "PATCH", { status: "accepted" })).status, 409);
+  assert.equal((await outsider.request(`/weekly-requests/${created.id}`, "PATCH", { status: "accepted" })).status, 404);
+  assert.equal((await student.request(`/weekly-requests/${created.id}`, "PATCH", { status: "accepted" })).status, 403);
+  assert.equal((await student.request(`/inquiries/${created.inquiry_id}/messages`)).data[0].body.includes("Thứ 2 19:00"), true);
+  // Accepting is closed: the tutor gets 409 and the request stays pending.
+  const refused = await tutor.request(`/weekly-requests/${created.id}`, "PATCH", { status: "accepted" });
+  assert.equal(refused.status, 409); assert.match(refused.data.error, /Đề nghị học/);
+  assert.equal(one(db, "SELECT status FROM weekly_requests WHERE id=?", created.id).status, "pending");
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).data.weekly_blocks.length, 2);
+  // One accepted before the retirement keeps holding its hours everywhere they are checked.
+  run(db, "UPDATE weekly_requests SET status='accepted' WHERE id=?", created.id);
   assert.equal((await guest.request(`/tutors/${teacher.id}`)).data.weekly_blocks.length, 0);
-  assert.equal((await student.request(`/weekly-requests/${created.data.id}`, "PATCH", { status: "cancelled" })).status, 200);
-  assert.equal((await tutor.request(`/weekly-requests/${other.data.id}`, "PATCH", { status: "accepted" })).status, 200);
+  const offer = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks: [blocks[0]], ...offerPeriod() };
+  const held = await outsider.request("/offers/preview", "POST", offer);
+  assert.equal(held.status, 200); assert.equal(held.data.conflict_count, held.data.sessions.length); assert.match(held.data.sessions[0].conflict, /lịch tuần đã xác nhận/);
+  assert.equal((await outsider.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Xin chọn giờ này", blocks: [blocks[0]] })).status, 409);
+  assert.equal((await outsider.request("/inquiries", "POST", { tutor_id: teacher.id, body: "Chỉ hỏi chung" })).status, 201);
+  assert.equal((await tutor.request(`/weekly-requests/${created.id}`, "PATCH", { status: "declined" })).status, 409);
+  // Cancelling releases the hours again; a pending one can still be declined by its tutor.
+  assert.equal((await student.request(`/weekly-requests/${created.id}`, "PATCH", { status: "cancelled" })).status, 200);
+  assert.match((await student.request(`/inquiries/${created.inquiry_id}/messages`)).data.at(-1).body, /Đã hủy yêu cầu học hằng tuần/);
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).data.weekly_blocks.length, 2);
+  assert.equal((await outsider.request("/offers/preview", "POST", offer)).data.conflict_count, 0);
+  const pending = legacyWeekly(db, { studentId: stranger.id, tutorId: teacher.id, blocks: [blocks[1]] });
+  assert.equal((await tutor.request(`/weekly-requests/${pending.id}`, "PATCH", { status: "declined" })).status, 200);
+  assert.equal(one(db, "SELECT status FROM weekly_requests WHERE id=?", pending.id).status, "declined");
+  assert.equal((await tutor.request(`/weekly-requests/${pending.id}`, "PATCH", { status: "cancelled" })).status, 409);
   assert.equal((await guest.request(`/admin/tutors/${teacher.id}/preview`)).status, 401);
   assert.equal((await student.request(`/admin/tutors/${teacher.id}/preview`)).status, 403);
   run(db, "UPDATE tutors SET status='pending' WHERE user_id=?", teacher.id);
@@ -1536,6 +1522,35 @@ test("weekly requests validate availability, keep participants private, prevent 
   const preview = await admin.request(`/admin/tutors/${teacher.id}/preview`);
   assert.equal(preview.status, 200); assert.ok(Array.isArray(preview.data.reviews)); assert.ok(Array.isArray(preview.data.weekly_blocks));
   assert.equal(preview.data.email, undefined);
+});
+
+test("admin sees how much old scheduling data is left; nobody else can", async t => {
+  const { client, db } = await fixture(t);
+  const admin = client(), student = client(), tutor = client(), guest = client(), other = client();
+  await admin.login("admin"); const learner = await student.login("student"); const teacher = await tutor.login("chau"); const second = await other.login("linh");
+  assert.equal((await guest.request("/admin")).status, 401);
+  assert.equal((await student.request("/admin")).status, 403);
+  assert.equal((await tutor.request("/admin")).status, 403);
+  const before = (await admin.request("/admin")).data.legacy;
+  assert.deepEqual(Object.keys(before).sort(), ["manual_slots", "one_off_open", "weekly_accepted", "weekly_pending"]);
+  legacyWeekly(db, { studentId: learner.id, tutorId: teacher.id, blocks: [{ weekday: 0, hour: 19 }] });
+  legacyWeekly(db, { studentId: second.id, tutorId: teacher.id, blocks: [{ weekday: 2, hour: 19 }], status: "accepted" });
+  legacyWeekly(db, { studentId: second.id, tutorId: teacher.id, blocks: [{ weekday: 3, hour: 19 }], status: "declined" });
+  const future = all(db, "SELECT * FROM slots WHERE tutor_id=? AND available=1 AND starts_at>? ORDER BY starts_at LIMIT 3", teacher.id, new Date(Date.now() + 3600000).toISOString());
+  legacyLesson(db, { studentId: learner.id, tutorId: teacher.id, slot: future[0] });
+  legacyLesson(db, { studentId: learner.id, tutorId: teacher.id, slot: future[1], status: "accepted" });
+  legacyLesson(db, { studentId: learner.id, tutorId: teacher.id, slot: future[2], status: "cancelled" });
+  const past = { id: Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", teacher.id, new Date(Date.now() - 86400000).toISOString()).lastInsertRowid), starts_at: new Date(Date.now() - 86400000).toISOString() };
+  legacyLesson(db, { studentId: learner.id, tutorId: teacher.id, slot: past, status: "accepted" });
+  const after = (await admin.request("/admin")).data.legacy;
+  assert.equal(after.weekly_pending - before.weekly_pending, 1);
+  assert.equal(after.weekly_accepted - before.weekly_accepted, 1);
+  assert.equal(after.one_off_open - before.one_off_open, 2);
+  // Slots that now carry a pending or accepted lesson are no longer free manual hours; the cancelled one still is.
+  assert.equal(before.manual_slots - after.manual_slots, 2);
+  // Only hours still tagged manual count; weekly-rule slots belong to the new scheduler.
+  run(db, "UPDATE slots SET source='weekly' WHERE id=?", future[2].id);
+  assert.equal((await admin.request("/admin")).data.legacy.manual_slots, after.manual_slots - 1);
 });
 
 test("support is pinned per user, private between owners, and shared with administrators", async t => {
@@ -1588,9 +1603,7 @@ test("admin deletion erases profile data, revokes access and preserves anonymous
   const upload = saveUpload(db, teacher.id, "photo", Buffer.from("test-image"), "image/webp", "personal.webp");
   run(db, "INSERT INTO oauth_identities VALUES ('google','deleted-subject',?)", teacher.id);
   await tutor.request("/tutor/availability", "PUT", { revision:0,blocks:[{weekday:0,hour:19}] });
-  const weekly = await student.request("/weekly-requests", "POST", { tutor_id:teacher.id,subject_id:"toan",mode:"online",blocks:[{weekday:0,hour:19}] });
-  assert.equal(weekly.status,201);
-  await tutor.request(`/weekly-requests/${weekly.data.id}`, "PATCH", { status:"accepted" });
+  const weekly = { data: legacyWeekly(db, { studentId: learner.id, tutorId: teacher.id, blocks: [{ weekday: 0, hour: 19 }], status: "accepted" }) };
   assert.equal((await student.request(`/admin/users/${teacher.id}`, "DELETE", { email:teacher.email })).status,403);
   assert.equal((await admin.request(`/admin/users/${administrator.id}`, "DELETE", { email:administrator.email })).status,403);
   assert.equal((await admin.request(`/admin/users/${teacher.id}`, "DELETE", { email:learner.email })).status,400);
@@ -1656,12 +1669,21 @@ test("dated offers preview, accept into real lessons, share notes and preserve h
 
 test("offers reject invalid dates and availability, recheck conflicts atomically and allow later date ranges", async t => {
   const { client, db } = await fixture(t);
-  const student=client(), other=client(), tutor=client(); await student.login("student"); const teacher=await tutor.login("chau");
+  const student=client(), other=client(), tutor=client(); const learner=await student.login("student"); const teacher=await tutor.login("chau");
   await other.request("/auth/register","POST",{name:"Second Learner",email:"second-offer@example.com",password:"TestStudy2026!",role:"student"});
   const blocks=[{weekday:0,hour:19}];
   await tutor.request("/tutor/availability","PUT",{revision:0,blocks});
   const data={tutor_id:teacher.id,subject_id:"toan",mode:"online",blocks,...offerPeriod()};
-  for (const invalid of [{start_date:"2030-02-30"},{weeks:0},{weeks:53},{weeks:1.5},{weeks:"4"},{end_date:"2099-01-01"},{blocks:[]},{blocks:[{weekday:2,hour:19}]}]) assert.ok((await student.request("/offers","POST",{...data,...invalid})).status>=400);
+  for (const invalid of [{subject_id:"ngu-van"},{start_date:"2030-02-30"},{weeks:0},{weeks:53},{weeks:1.5},{weeks:"4"},{end_date:"2099-01-01"},{blocks:[]},{blocks:[{weekday:2,hour:19}]}]) assert.ok((await student.request("/offers","POST",{...data,...invalid})).status>=400);
+  // A learner who already has a lesson with another tutor at that time cannot be offered the same hour.
+  const rival = one(db,"SELECT user_id FROM tutors WHERE user_id<>? LIMIT 1",teacher.id);
+  const firstStart = (await student.request("/offers/preview","POST",data)).data.sessions[0].starts_at;
+  const rivalSlot = { id:Number(run(db,"INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)",rival.user_id,firstStart).lastInsertRowid), starts_at:firstStart };
+  const clash = legacyLesson(db,{studentId:learner.id,tutorId:rival.user_id,slot:rivalSlot,status:"accepted"});
+  const clashing = (await student.request("/offers/preview","POST",data)).data;
+  assert.equal(clashing.conflict_count,1); assert.match(clashing.sessions[0].conflict,/Học sinh/);
+  run(db,"UPDATE bookings SET status='cancelled' WHERE id=?",clash);
+  assert.equal((await student.request("/offers/preview","POST",data)).data.conflict_count,0);
   const a=await student.request("/offers","POST",data),b=await other.request("/offers","POST",data);
   assert.equal(a.status,201); assert.equal(b.status,201);
   const accepted=await Promise.all([a,b].map(r=>tutor.request(`/offers/${r.data.id}`,"PATCH",{status:"accepted"})));
@@ -1735,7 +1757,7 @@ test("student school and ward are private, validated and persist across sessions
 test("message context persists for both participants and rejects content from another conversation", async t => {
   const { client, db } = await fixture(t);
   const student = client(), tutor = client(), other = client(), outsider = client();
-  await student.login("student"); const teacher = await tutor.login("chau"); await outsider.login("linh");
+  const studentUser = await student.login("student"); const teacher = await tutor.login("chau"); await outsider.login("linh");
   await other.request("/auth/register", "POST", { name: "Other learner", email: "context-other@example.com", password: "TestStudy2026!", role: "student" });
   const blocks = [{ weekday: 0, hour: 19 }];
   await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
@@ -1773,7 +1795,7 @@ test("message context persists for both participants and rejects content from an
   assert.equal((await student.request(`${path}/messages`)).data.at(-1).context, null);
   await student.request(`/offers/${offer.id}`, "PATCH", { status: "cancelled" });
   assert.equal((await student.request(`${path}/messages`)).data[0].context.status, "cancelled");
-  const weekly = (await student.request("/weekly-requests", "POST", { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks })).data;
+  const weekly = legacyWeekly(db, { studentId: studentUser.id, tutorId: teacher.id, blocks });
   const weeklyMessage = (await tutor.request(`${path}/messages`)).data.at(-1);
   assert.equal(weeklyMessage.context.kind, "weekly-request");
   assert.equal(weeklyMessage.context.id, weekly.id);

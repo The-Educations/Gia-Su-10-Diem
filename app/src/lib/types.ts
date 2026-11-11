@@ -150,6 +150,7 @@ export type AdminData = {
   users: (User & { status: string; created_at: string })[];
   tutors: Tutor[];
   resources: Resource[];
+  legacy: { weekly_pending: number; weekly_accepted: number; one_off_open: number; manual_slots: number };
   audit: {
     id: number;
     name: string;

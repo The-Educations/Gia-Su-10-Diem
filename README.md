@@ -2,7 +2,7 @@
 
 Website tìm gia sư tại Việt Nam cho học sinh / phụ huynh, gia sư và quản trị viên. Landing tại `/`, ứng dụng tại các route `/app/*`, API tại `/api/`.
 
-Ứng dụng có tìm kiếm, lọc theo môn / cấp học / mục tiêu kỳ thi, hồ sơ gia sư, đặt lịch, liên hệ trước khi đặt lịch, nhắn tin theo buổi học, đánh giá, quản lý giờ trống và quản trị. Dữ liệu lưu trong SQLite. **Không có quiz, đáp án hoặc chấm điểm.**
+Ứng dụng có tìm kiếm, lọc theo môn / cấp học / mục tiêu kỳ thi, hồ sơ gia sư, đề nghị học (cách duy nhất tạo lịch học), liên hệ trước khi gửi đề nghị, nhắn tin theo buổi học, đánh giá, quản lý giờ trống và quản trị. Dữ liệu lưu trong SQLite. **Không có quiz, đáp án hoặc chấm điểm.**
 
 ## Chạy local
 
@@ -46,7 +46,7 @@ npm run preview
 ## Chức năng
 
 - **Khách:** tìm có / không dấu; lọc môn, hình thức, địa điểm, mức phí, cấp học, mục tiêu kỳ thi; sắp xếp; xem hồ sơ và giờ trống.
-- **Học sinh / phụ huynh:** đăng ký, lưu gia sư, xem hồ sơ chuyên môn, nhắn hỏi gia sư trước khi đặt lịch, gửi yêu cầu học, theo dõi / hủy lịch, nhắn tin, xuất lịch `.ics`, đánh giá buổi đã hoàn thành, cập nhật tài khoản và mật khẩu.
+- **Học sinh / phụ huynh:** đăng ký, lưu gia sư, xem hồ sơ chuyên môn, nhắn hỏi gia sư trước khi gửi đề nghị, gửi đề nghị học, theo dõi / hủy lịch, nhắn tin, xuất lịch `.ics`, đánh giá buổi đã hoàn thành, cập nhật tài khoản và mật khẩu.
 - **Gia sư:** tải ảnh đại diện và ảnh bìa, khai báo chuyên môn / mục tiêu, gửi duyệt hồ sơ, thêm giờ trống, nhận / từ chối / hủy / hoàn thành buổi, nhắn tin và ghi chú / liên kết phòng học.
 - **Quản trị:** duyệt hoặc yêu cầu bổ sung hồ sơ, khóa / mở tài khoản, chỉnh môn học và mục kỳ thi, xem lịch và nhật ký thao tác.
 - **Không gian theo vai trò:** lịch tuần và buổi tiếp theo cho học sinh; yêu cầu chờ và mức hoàn thiện hồ sơ cho gia sư; hàng đợi duyệt có bộ lọc cho admin. Studio chia tab Ảnh hồ sơ / Hồ sơ / Giờ trống, giữ bản nháp khi đổi tab.

@@ -2,6 +2,7 @@ import { liveTutorSql, publicView } from "./tutor-visibility.js";
 import { all, one, run, transaction } from "./db.js";
 import { overlaps, weeklySchedule } from "./availability.js";
 import { availabilitySchema, z } from "./validation.js";
+import { legacyWeeklyBlocks } from "./legacy-weekly.js";
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const dayMs = 86400000;
@@ -27,7 +28,7 @@ export function offerDates(offer) {
 function preview(db, offer) {
   const available = new Set(weeklySchedule(db, offer.tutor_id).blocks.map(blockKey));
   const bookings = all(db, "SELECT student_id,tutor_id,starts_at,duration_minutes FROM bookings WHERE (student_id=? OR tutor_id=?) AND status IN ('pending','accepted','completed') AND (offer_id IS NULL OR offer_id<>?)", offer.student_id, offer.tutor_id, offer.id || 0);
-  const legacy = all(db, "SELECT blocks FROM weekly_requests WHERE status='accepted' AND (student_id=? OR tutor_id=?)", offer.student_id, offer.tutor_id).flatMap(row => JSON.parse(row.blocks));
+  const legacy = legacyWeeklyBlocks(db, { tutorId: offer.tutor_id, studentId: offer.student_id });
   const slots = all(db, "SELECT starts_at,duration_minutes FROM slots WHERE tutor_id=? AND duration_minutes<>60", offer.tutor_id);
   const sessions = offerDates(offer).map(session => {
     const local = new Date(Date.parse(session.starts_at) + 7 * 3600000);

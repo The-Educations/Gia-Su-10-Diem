@@ -113,6 +113,12 @@ export default function Admin() {
   const matchingAudit = d.audit.filter((a) =>
     fold(a.name + " " + a.action).includes(fold(q)),
   );
+  const legacyNotice = [
+    [d.legacy.weekly_accepted, "lịch tuần đã nhận"],
+    [d.legacy.weekly_pending, "lịch tuần đang chờ"],
+    [d.legacy.one_off_open, "buổi lẻ sắp tới"],
+    [d.legacy.manual_slots, "giờ lẻ thủ công còn mở"],
+  ].filter(([n]) => Number(n) > 0).map(([n, label]) => `${n} ${label}`).join(", ");
   return (
     <Page>
       <Heading
@@ -155,6 +161,7 @@ export default function Admin() {
           },
         ]}
       />
+      {legacyNotice && <p className="muted" role="status">Dữ liệu lịch mẫu cũ còn hoạt động: {legacyNotice}. Khi tất cả về 0 có thể xóa mã lịch cũ.</p>}
       <div className="admin-board">
         <Tabs
           value={tab}

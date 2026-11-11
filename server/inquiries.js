@@ -3,6 +3,7 @@ import { withChatMedia, insertChatMessage } from "./chat-media.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text, availabilitySchema } from "./validation.js";
 import { weeklySchedule } from "./availability.js";
+import { legacyWeeklyBlocks } from "./legacy-weekly.js";
 import { inquiryMessageContext, messageContextSchema, withInquiryContexts } from "./message-context.js";
 export function registerInquiries(app, db, auth) {
   const participant = (req, res) => {
@@ -49,7 +50,7 @@ export function registerInquiries(app, db, auth) {
         throw Object.assign(new Error("Môn học hoặc hình thức không phù hợp."), { status: 400 });
       const key = b => b.hour * 7 + b.weekday;
       const available = new Set(weeklySchedule(db, d.tutor_id).blocks.map(key));
-      const reserved = new Set(all(db, "SELECT blocks FROM weekly_requests WHERE tutor_id=? AND status='accepted'", d.tutor_id).flatMap(r => JSON.parse(r.blocks).map(key)));
+      const reserved = new Set(legacyWeeklyBlocks(db, { tutorId: d.tutor_id }).map(key));
       if (blocks.some(b => !available.has(key(b)) || reserved.has(key(b))))
         throw Object.assign(new Error("Lịch gia sư đã thay đổi. Vui lòng tải lại để chọn giờ rảnh."), { status: 409 });
       const days = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];

@@ -109,16 +109,24 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
     tutorContext = await browser.newContext(),
     student = await studentContext.newPage(),
     tutor = await tutorContext.newPage();
-  await login(student, "student");
-  // Existing dated lessons remain supported after new requests move to weekly schedules.
-  const available = await (await student.request.get("/api/tutors/3")).json();
-  expect((await student.request.post("/api/bookings", { data: { slot_id: available.slots[0].id, subject_id: available.subjects[0], mode: "online", note: "Ôn phương trình bậc hai" } })).status()).toBe(201);
-  await student.goto("/app/bookings?view=list");
-  await expect(student.locator(".lesson-card")).toHaveCount(1);
+  await login(student, "lesson-student");
   await login(tutor, "chau");
+  // One-off booking is retired: a lesson exists only once a tutor accepts a dated offer.
+  const original = await (await tutor.request.get("/api/tutor/profile")).json();
+  const blocks = [{ weekday: 0, hour: 19 }];
+  expect((await tutor.request.put("/api/tutor/availability", { data: { revision: original.weekly_schedule.revision, blocks } })).ok()).toBe(true);
+  const start = new Date(Date.now() + 7 * 86400000);
+  const offerData = { tutor_id: original.user_id, subject_id: "toan", mode: "online", blocks, start_date: start.toISOString().slice(0, 10), weeks: 1, note: "Ôn phương trình bậc hai" };
+  expect((await student.request.post("/api/bookings", { data: { slot_id: 1, subject_id: "toan", mode: "online", note: "" } })).status()).toBe(410);
+  const created = await student.request.post("/api/offers", { data: offerData });
+  expect(created.status()).toBe(201);
+  const offer = await created.json();
+  await student.goto("/app/bookings?view=list");
+  await expect(student.locator(".lesson-card")).toHaveCount(0);
+  await tutor.goto(`/app/offers?id=${offer.id}`);
+  await tutor.getByRole("button", { name: "Chấp nhận", exact: true }).click();
+  await expect(tutor.getByRole("dialog")).toContainText("Đã chấp nhận");
   await tutor.goto("/app/bookings?view=list");
-  await tutor.getByRole("button", { name: "Nhận buổi học" }).click();
-  await tutor.getByRole("button", { name: "Xác nhận", exact: true }).click();
   await expect(tutor.locator(".lesson-card")).toContainText("Đã xác nhận");
   await tutor.getByRole("link", { name: "Trao đổi" }).click();
   const fallback = tutor.locator('.conversation-list [data-slot="avatar-fallback"]').first();
@@ -154,6 +162,10 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   await student.getByRole("button", { name: "Hủy buổi", exact: true }).click();
   await student.getByRole("button", { name: "Xác nhận", exact: true }).click();
   await expect(student.locator(".lesson-card")).toContainText("Đã hủy");
+  // Withdraw the whole offer so later specs start without this learner/tutor pair.
+  await student.request.patch(`/api/offers/${offer.id}`, { data: { status: "cancelled" } });
+  const current = await (await tutor.request.get("/api/tutor/profile")).json();
+  await tutor.request.put("/api/tutor/availability", { data: { revision: current.weekly_schedule.revision, blocks: original.weekly_schedule.blocks } });
   await studentContext.close();
   await tutorContext.close();
 });
@@ -961,13 +973,16 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-
   const profile = await (await page.request.get(`/api/tutors/${me.user.id}`)).json();
   const weekly = profile.slots.find((s: { source: string }) => s.source === "weekly");
   const studentContext = await browser.newContext(), student = await studentContext.newPage();
-  await login(student, "student");
-  const booked = await student.request.post("/api/bookings", { data: { slot_id: weekly.id, subject_id: profile.subjects[0], mode: "online", note: "Weekly browser test" } });
+  await login(student, "lesson-student");
+  // A one-week offer on exactly this weekly slot becomes the lesson whose .ics we check.
+  const local = new Date(Date.parse(weekly.starts_at) + 7 * 3600000);
+  const slotBlock = { weekday: (local.getUTCDay() + 6) % 7, hour: local.getUTCHours() };
+  const booked = await student.request.post("/api/offers", { data: { tutor_id: me.user.id, subject_id: profile.subjects[0], mode: "online", blocks: [slotBlock], start_date: local.toISOString().slice(0, 10), weeks: 1, note: "Weekly browser test" } });
   expect(booked.status()).toBe(201); const booking = await booked.json();
-  const accepted = await page.request.patch(`/api/bookings/${booking.id}`, { data: { status: "accepted" } });
+  const accepted = await page.request.patch(`/api/offers/${booking.id}`, { data: { status: "accepted" } });
   expect(accepted.status()).toBe(200);
   await student.goto("/app/bookings?view=list");
-  const lesson = student.locator(".lesson-card").filter({ hasText: "Weekly browser test" });
+  const lesson = student.locator(".lesson-card").filter({ hasText: "Đã xác nhận" });
   await expect(lesson).toContainText("60 phút");
   const downloadPromise = student.waitForEvent("download");
   await student.getByRole("button", { name: "Tải toàn bộ lịch" }).click();
@@ -977,7 +992,7 @@ test("weekly grid supports rectangle drag, keyboard, touch, persistence and one-
   const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   expect(ics).toContain(`DTSTART:${stamp(new Date(weekly.starts_at))}`);
   expect(ics).toContain(`DTEND:${stamp(new Date(Date.parse(weekly.starts_at) + 3600000))}`);
-  await student.request.patch(`/api/bookings/${booking.id}`, { data: { status: "cancelled" } });
+  await student.request.patch(`/api/offers/${booking.id}`, { data: { status: "cancelled" } });
   const schedule = (await (await page.request.get("/api/tutor/profile")).json()).weekly_schedule;
   await page.request.put("/api/tutor/availability", { data: { revision: schedule.revision, blocks: [] } });
   await studentContext.close();

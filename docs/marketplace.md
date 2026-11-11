@@ -32,9 +32,9 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng ch�
 - Lưu / bỏ lưu gia sư.
 - Thích ảnh và bình luận công khai trong thư viện gia sư đã duyệt; xóa bình luận của mình. Bình luận không phải đánh giá buổi học.
 - Nhắn hỏi gia sư trước khi đặt lịch qua nút “Liên hệ gia sư”; mỗi cặp student/tutor có một hội thoại tư vấn riêng.
-- Chọn một giờ trống, môn nhận dạy, hình thức và ghi chú nhu cầu.
-- Xem lại học phí, giờ học và gia sư trước khi gửi yêu cầu.
-- Theo dõi yêu cầu và lịch đã xác nhận; hủy buổi tương lai khi được phép.
+- Tạo lịch học chỉ bằng **Đề nghị học** từ hồ sơ gia sư: chọn môn, hình thức, ngày bắt đầu, số tuần (1–52) hoặc một buổi học thử, và các giờ lặp hằng tuần. Xem lịch dự kiến, học phí và gia sư trước khi gửi.
+- Theo dõi đề nghị và lịch đã xác nhận; hủy buổi tương lai khi được phép.
+- Đặt buổi lẻ theo slot (`POST /api/bookings`) và yêu cầu lịch hằng tuần mẫu cũ (`POST /api/weekly-requests`) đã ngừng, trả 410. Dữ liệu tạo trước đó chỉ còn được xử lý nốt (xem bảng quy tắc).
 - Trao đổi trong hội thoại của buổi học; xem ghi chú và liên kết do gia sư cung cấp.
 - Xuất lịch `.ics` cho buổi đã xác nhận.
 - Đánh giá một lần sau khi buổi học hoàn thành.
@@ -49,7 +49,7 @@ Phụ huynh có lựa chọn thiết lập riêng và mục tiêu học tập c�
 - Thư viện kiểu lưới với tối đa 12 ảnh, tải nhiều ảnh, sửa chú thích, xóa và xem ảnh đầy đủ. Ảnh mới/chú thích mới đưa hồ sơ về chờ duyệt; chỉ chủ hồ sơ và admin xem được khi chưa duyệt.
 - Tùy chỉnh màu bìa, phương pháp giảng dạy và nội dung một buổi học; xem trước trực tiếp trong trình sửa hồ sơ.
 - Gửi duyệt. Cài đặt vận hành (học phí, hình thức dạy, địa chỉ, múi giờ, nhận học thử, giờ trống, giao diện) áp dụng ngay và không đổi trạng thái hồ sơ. Nội dung công khai (tiêu đề, giới thiệu, học vấn, kinh nghiệm, mục tự đặt tên, phương pháp, giáo án, môn/cấp học/mục tiêu luyện thi) cần duyệt lại: trong lúc chờ, học sinh vẫn thấy và gửi đề nghị theo bản đã duyệt gần nhất (`tutors.published` giữ bản đó; các cột là bản nháp của gia sư). Từ chối bản sửa không gỡ bản cũ; muốn gỡ hồ sơ khỏi tìm kiếm, admin dùng "Gỡ hồ sơ". Đổi tên hiển thị, đổi ảnh/banner hoặc ảnh gallery vẫn ẩn hồ sơ đến khi được duyệt.
-- Thêm giờ trống, nhận / từ chối yêu cầu, hủy buổi tương lai khi phù hợp.
+- Đặt giờ trống hằng tuần, chấp nhận / từ chối đề nghị học, hủy buổi tương lai khi phù hợp. Thêm giờ lẻ thủ công (`POST /api/tutor/slots`) đã ngừng, trả 410; giờ lẻ cũ chỉ còn xóa được.
 - Xóa bình luận trên thư viện ảnh của mình; admin cũng có quyền kiểm duyệt bình luận.
 - Nhắn tin, cung cấp nội dung và liên kết phòng học.
 - Đánh dấu buổi đã diễn ra là hoàn thành.
@@ -76,6 +76,8 @@ Phụ huynh có lựa chọn thiết lập riêng và mục tiêu học tập c�
 | Xác nhận | Gia sư nhận / từ chối yêu cầu đang chờ và còn ở tương lai |
 | Hoàn thành | Gia sư chỉ hoàn thành buổi đã xác nhận và đã qua giờ kết thúc |
 | Hủy | Buổi chờ / đã xác nhận còn ở tương lai; mở lại khung giờ |
+| Cách tạo lịch | Chỉ Đề nghị học. Khi gia sư chấp nhận, mỗi buổi thành một `booking` có `offer_id`. `bookings` vẫn chứa mọi buổi học thật |
+| Dữ liệu mẫu cũ | Buổi lẻ chưa có đề nghị (`offer_id IS NULL`) vẫn nhận, từ chối, hủy, hoàn thành, đánh giá như trước. Lịch tuần cũ chỉ còn từ chối / hủy (nhận trả 409); lịch tuần đã nhận trước đó vẫn giữ giờ cho đến khi bị hủy. Không tự hủy hay tự chuyển đổi. `GET /api/admin` trả `legacy` để admin biết khi nào xóa mã cũ |
 | Hội thoại | Hội thoại booking theo buổi; inquiry riêng trước booking, student khởi tạo với tutor công khai, chỉ hai bên truy cập |
 | Đánh giá | Học sinh của buổi đã hoàn thành; một đánh giá / buổi |
 | Xác minh | Admin công bố hồ sơ không đồng nghĩa đã xác minh danh tính, bằng cấp hoặc lý lịch |

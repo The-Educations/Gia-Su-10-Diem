@@ -36,6 +36,9 @@ Trong development, Express gắn Vite middleware. Trong production hoặc local 
 | `server/api.js` | Auth, role/ownership, booking, messaging, moderation và catalogue API |
 | `server/uploads.js` | Validate, lưu BLOB, tải ảnh / CV với quyền theo trạng thái profile |
 | `server/inquiries.js` | Liên hệ trước booking; chỉ student/tutor tham gia |
+| `server/offers.js` | Đề nghị học: cách duy nhất tạo lịch học; chấp nhận thì sinh `bookings` có `offer_id` |
+| `server/weekly-requests.js` | Lịch tuần mẫu cũ: chỉ đọc, từ chối, hủy; tạo trả 410, nhận trả 409 |
+| `server/legacy-weekly.js` | Nơi duy nhất đọc giờ bị lịch tuần cũ đã nhận giữ, và số đếm `legacy` cho admin; xóa cùng mẫu cũ ở giai đoạn sau |
 | `server/demo-content.js` | Bio, ảnh minh họa, PDF mẫu và activity idempotent |
 | `server/catalog.js` | Môn học và liên kết kỳ thi khởi đầu |
 | `server/seed.js` | Seed danh mục và demo opt-in, không đặt lại tài khoản đã có |
@@ -97,14 +100,16 @@ Tất cả dưới `/api`. Chi tiết payload hiện nằm trong `server/validat
 | Account | `PATCH account`, `POST account/password` |
 | Discovery | `GET subjects`, `GET tutors`, `GET tutors/:id`, `GET resources` |
 | Favorites | `GET favorites`, `PUT/DELETE favorites/:id` |
-| Tutor | `GET/PUT tutor/profile`, `POST tutor/slots`, `DELETE tutor/slots/:id` |
-| Booking | `GET/POST bookings`, `PATCH bookings/:id`, `PATCH bookings/:id/lesson` |
+| Tutor | `GET/PUT tutor/profile`, `DELETE tutor/slots/:id`; `POST tutor/slots` đã ngừng (410) |
+| Booking | `GET bookings`, `PATCH bookings/:id`, `PATCH bookings/:id/lesson`; `POST bookings` đã ngừng (410) |
+| Offers | `GET/POST offers`, `POST offers/preview`, `GET/PATCH offers/:id` |
+| Weekly (cũ) | `GET weekly-requests`, `PATCH weekly-requests/:id` (declined / cancelled); `POST weekly-requests` đã ngừng (410) |
 | Upload | `PUT/DELETE tutor/uploads/:kind`, `GET uploads/:uuid`; kind = photo hoặc cv |
 | Support | `GET support`, `GET/POST support/:id/messages` |
 | Delete account | `DELETE admin/users/:id` (admin, xác nhận email, ẩn danh lịch sử) |
 | Inquiry | `GET/POST inquiries`, `GET/POST inquiries/:id/messages` |
 | Messages / review | `GET/POST bookings/:id/messages`, `POST bookings/:id/review` |
-| Admin | `GET admin`, `PATCH admin/tutors/:id`, `PATCH admin/users/:id`, `PUT admin/subjects/:id`, `POST admin/resources`, `PUT admin/resources/:id` |
+| Admin | `GET admin` (kèm `legacy`: số lịch tuần chờ / đã nhận, buổi lẻ sắp tới, giờ lẻ thủ công còn mở), `PATCH admin/tutors/:id`, `PATCH admin/users/:id`, `PUT admin/subjects/:id`, `POST admin/resources`, `PUT admin/resources/:id` |
 
 ## Authorization và lifecycle
 

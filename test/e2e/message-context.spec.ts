@@ -81,14 +81,12 @@ test("offer and dated lesson messages keep context for both people, with direct 
 
 test("existing weekly requests link their messages back to the exact weekly card", async ({ page, browser }) => {
   const context = await browser.newContext(), tutor = await context.newPage();
-  await page.request.post("/api/auth/login", { data: { email: "community-parent@demo.giasu.test", password: "BrowserStudy2026!" } });
+  await page.request.post("/api/auth/login", { data: { email: "legacy-weekly@demo.giasu.test", password: "BrowserStudy2026!" } });
   await tutor.request.post("/api/auth/login", { data: { email: "nam@demo.giasu.test", password: "BrowserStudy2026!" } });
-  const profile = await (await tutor.request.get("/api/tutor/profile")).json();
-  const blocks = [{ weekday: 3, hour: 18 }];
-  await tutor.request.put("/api/tutor/availability", { data: { revision: profile.weekly_schedule.revision, blocks } });
-  const response = await page.request.post("/api/weekly-requests", { data: { tutor_id: profile.user_id, subject_id: "vat-li", mode: "online", blocks } });
-  expect(response.ok()).toBe(true);
-  const weekly = await response.json();
+  // The retired template can no longer be created, so test/e2e-server.js seeds this request.
+  expect((await page.request.post("/api/weekly-requests", { data: { tutor_id: 1, subject_id: "vat-li", mode: "online", blocks: [{ weekday: 3, hour: 18 }] } })).status()).toBe(410);
+  const [weekly] = await (await page.request.get("/api/weekly-requests")).json();
+  expect(weekly.status).toBe("pending");
   try {
     await page.goto(`/app/offers?request=${weekly.id}`);
     const card = page.getByRole("article", { name: `Lịch học hằng tuần #${weekly.id}`, exact: true });
@@ -103,9 +101,6 @@ test("existing weekly requests link their messages back to the exact weekly card
     await expect(tutor).toHaveURL(new RegExp(`offers\\?request=${weekly.id}$`));
     await expect(tutor.getByRole("article", { name: `Lịch học hằng tuần #${weekly.id}`, exact: true })).toBeFocused();
   } finally {
-    await page.request.patch(`/api/weekly-requests/${weekly.id}`, { data: { status: "cancelled" } });
-    const current = await (await tutor.request.get("/api/tutor/profile")).json();
-    await tutor.request.put("/api/tutor/availability", { data: { revision: current.weekly_schedule.revision, blocks: profile.weekly_schedule.blocks } });
     await context.close();
   }
 });
