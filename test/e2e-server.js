@@ -49,6 +49,27 @@ const messages = new Map();
 const { startServer } = await import("../server/index.js");
 const { app } = await startServer({ sendAdminEmail: async message => { messages.set(message.to, message); }, sendEmail: async message => { messages.set(message.to, message); } });
 app.get("/__test/email", (req, res) => res.json(messages.get(req.query.email) || null));
+// Test-only: public community posts with a chosen author, status and age, for the "Đang tìm gia sư" strip.
+const stripPosts = new Set();
+app.post("/__test/community-post", express.json(), (req, res) => {
+  const { author, title, body = "Nội dung bài", status = "approved", solved = 0, days_ago = 0, kind = "user" } = req.body;
+  const db = openDatabase();
+  try {
+    const user = one(db, "SELECT id FROM users WHERE email=?", `${author}@demo.giasu.test`);
+    const id = Number(run(db, "INSERT INTO community_posts(author_id,kind,status,title,body,search_text,solved,published_at) VALUES (?,?,?,?,?,?,?,datetime('now',?))",
+      user.id, kind, status, title, body, `${title} ${body}`.toLowerCase(), solved, `-${days_ago * 86400} seconds`).lastInsertRowid);
+    stripPosts.add(id);
+    res.json({ id });
+  } finally { db.close(); }
+});
+app.post("/__test/community-posts/clear", (_req, res) => {
+  const db = openDatabase();
+  try {
+    for (const id of stripPosts) run(db, "DELETE FROM community_posts WHERE id=?", id);
+    stripPosts.clear();
+    res.json({ ok: true });
+  } finally { db.close(); }
+});
 // Test-only: a course that already ended with completed lessons, so ratings and reviews can be exercised.
 app.post("/__test/course", express.json(), (req, res) => {
   const { student, tutor, lessons = 3 } = req.body;

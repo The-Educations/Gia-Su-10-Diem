@@ -3407,3 +3407,72 @@ main {
   .star-picker button { min-width: 40px; padding: 4px; }
   .courses-to-review { padding: 16px; }
 }
+
+/* "Đang tìm gia sư" strip on the tutor dashboard */
+.request-strip {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 20px 24px;
+  margin-bottom: 22px;
+  min-width: 0;
+}
+.request-strip > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.request-strip h2 { margin: 0; font-size: 1.05rem; }
+.request-strip > header a { display: inline-flex; align-items: center; gap: 4px; font-size: 0.9rem; }
+.request-strip-frame { overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+.request-strip-frame[data-mode="marquee"] {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+.request-strip-track { display: flex; width: max-content; }
+.request-strip-frame[data-mode="marquee"] .request-strip-track {
+  animation: request-strip-scroll var(--request-strip-duration, 40s) linear infinite;
+  will-change: transform;
+}
+.request-strip-frame[data-mode="marquee"]:hover .request-strip-track,
+.request-strip-frame[data-mode="marquee"]:focus-within .request-strip-track {
+  animation-play-state: paused;
+}
+@keyframes request-strip-scroll { to { transform: translateX(-50%); } }
+.request-strip-track ul {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0 12px 0 0; /* trailing gap makes the -50% loop seamless */
+  list-style: none;
+}
+.request-card {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  width: 240px;
+  height: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+  color: inherit;
+  text-decoration: none;
+}
+.request-card:hover { border-color: var(--primary); }
+.request-card:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.request-card-author { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 0.85rem; }
+.request-card-author > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); }
+.request-card-author strong { color: var(--foreground); }
+.request-card-topic { font-size: 0.8rem; font-weight: 600; color: var(--primary); }
+.request-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem; }
+@media (max-width: 640px) {
+  .request-strip { padding: 16px; }
+  .request-card { width: 220px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .request-strip-frame[data-mode="marquee"] .request-strip-track { animation: none; }
+}
