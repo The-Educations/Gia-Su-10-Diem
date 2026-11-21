@@ -209,6 +209,8 @@ export type CommunityComment = {
   removed: boolean; removed_by_admin: boolean; mine: boolean; edited: boolean; created_at: string;
   helpful_count: number; helpful_by_me: boolean; replies?: CommunityComment[];
 };
+export type CommunityRequest = { id: number; title: string; subject: string | null; level: string | null; published_at: string; author: CommunityAuthor };
+export type CommunityRequests = { items: CommunityRequest[] };
 export type CommunityIdentity = { author: CommunityAuthor; needs_name: boolean };
 export type CommunitySummary = { pending: number; approved: number; hidden: number; reports: number };
 export type CommunityFeed = { rules: CommunityPostData | null; items: CommunityPostData[]; more: boolean };

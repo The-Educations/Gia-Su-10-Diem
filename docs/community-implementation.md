@@ -125,3 +125,7 @@ Kết quả local cuối: `npm run typecheck` đạt; `npm test` đạt **97/97*
 ### Phạm vi giữ nguyên / việc để sau
 
 Không mở hồ sơ hoặc ảnh tài khoản cho khách; không thêm danh sách thành viên, chat, theo dõi/kết bạn, thông tin con, bình luận trên hồ sơ hay email/realtime. Ảnh tài khoản không đi vào Tin nhắn, đánh giá, gallery hoặc thẻ gia sư. **Họ tên thật ở đánh giá gia sư và bình luận ảnh gia sư vẫn giữ hành vi hiện tại**, đúng phạm vi hoãn của thiết kế; cần quyết định riêng trước khi thống nhất chính sách. Bộ lọc liên hệ là mẫu thực dụng, không thay thế kiểm duyệt ảnh/nội dung.
+
+## Dải "Đang tìm gia sư" trên dashboard gia sư — 21/11/2026
+
+Dashboard gia sư có thêm một dải thẻ nhỏ chạy ngang, ngay dưới "Buổi học hôm nay", lấy các bài tìm gia sư mới và còn hiệu lực của học sinh/phụ huynh trong Cộng đồng. API `GET /api/community/requests` (chỉ gia sư), bộ nhận diện bằng từ khóa ở `server/community-requests.js`, giao diện ở `app/src/components/request-strip.tsx`. Chức năng chỉ đọc, không thêm cột hay bảng. Thiết kế và quyết định chi tiết: `docs/dai-tim-gia-su-dashboard.md` và `docs/dai-tim-gia-su-dashboard-implementation.md`.
