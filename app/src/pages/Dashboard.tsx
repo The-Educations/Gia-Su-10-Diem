@@ -1,6 +1,7 @@
 import { lessonMessageHref } from "@/lib/message-context";
 import type { StudyOffer } from "@/lib/offers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -33,7 +34,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { TodayLessons } from "@/components/today-lessons";
+import { CoursesToReview, CourseReviewDialog } from "@/components/trust";
 export default function Dashboard() {
+  const [reviewing, setReviewing] = useState<StudyOffer | null>(null);
   const { user } = useApp(),
     bookings = useLoad<Booking[]>("/bookings"),
     offers = useLoad<StudyOffer[]>(user?.role === "admin" ? null : "/offers"),
@@ -117,6 +120,8 @@ export default function Dashboard() {
         ]}
       />
       <TodayLessons lessons={rows} role={isTutor ? "tutor" : "student"} onChanged={bookings.reload} />
+      {!isTutor && <CoursesToReview offers={offers.data || []} onReview={setReviewing} />}
+      <CourseReviewDialog offer={reviewing} onClose={() => setReviewing(null)} onDone={() => { offers.reload(); bookings.reload(); }} />
       <div className="workspace-overview">
         <WorkspacePanels>
           <section

@@ -2,6 +2,7 @@ import { liveTutorSql, publicView } from "./tutor-visibility.js";
 import { all, one, run, transaction } from "./db.js";
 import { overlaps, weeklySchedule } from "./availability.js";
 import { availabilitySchema, z } from "./validation.js";
+import { withCourseState } from "./trust.js";
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const dayMs = 86400000;
@@ -80,12 +81,12 @@ export function registerOffers(app, db, auth) {
     return { ...d, blocks, student_id: req.user.id, rate: d.kind === "trial" ? 0 : tutor.rate, status: "pending" };
   }
   app.get("/api/offers", auth("student", "tutor"), (req, res) => {
-    res.json(all(db, `${select} WHERE o.student_id=? OR o.tutor_id=? ORDER BY o.id DESC`, req.user.id, req.user.id).map(o => ({ ...o, blocks: JSON.parse(o.blocks) })));
+    res.json(withCourseState(db, all(db, `${select} WHERE o.student_id=? OR o.tutor_id=? ORDER BY o.id DESC`, req.user.id, req.user.id).map(o => ({ ...o, blocks: JSON.parse(o.blocks) })), req.user));
   });
   app.post("/api/offers/preview", auth("student"), (req, res) => res.json(preview(db, input(req))));
   app.get("/api/offers/:id", auth("student", "tutor"), (req, res) => {
     const offer = owned(req);
-    res.json({ ...offer, ...preview(db, offer) });
+    res.json({ ...withCourseState(db, [offer], req.user)[0], ...preview(db, offer) });
   });
   app.post("/api/offers", auth("student"), (req, res) => {
     const result = transaction(db, () => {
@@ -122,7 +123,12 @@ export function registerOffers(app, db, auth) {
           run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,duration_minutes,status,offer_id) VALUES (?,?,?,?,?,?,?,?,60,'accepted',?)", o.student_id, o.tutor_id, slot.id, o.subject_id, session.starts_at, o.rate, o.mode, o.note, o.id);
         }
       }
-      if (status === "cancelled") run(db, "UPDATE bookings SET status='cancelled' WHERE offer_id=? AND status IN ('pending','accepted') AND starts_at>?", o.id, new Date().toISOString());
+      if (status === "cancelled") {
+        // Ending an accepted course early: the lessons that never happened are not the tutor's fault.
+        const endsCourse = o.kind === "course" && o.status === "accepted", at = new Date().toISOString();
+        run(db, "UPDATE bookings SET status='cancelled',cancelled_by=?,cancelled_at=?,cancel_reason=? WHERE offer_id=? AND status IN ('pending','accepted') AND starts_at>?", req.user.id, at, endsCourse ? "course_ended" : "", o.id, at);
+        if (endsCourse) run(db, "UPDATE offers SET ended_at=?,ended_by=? WHERE id=?", at, req.user.id, o.id);
+      }
       run(db, "UPDATE offers SET status=?,accepted_at=CASE WHEN ?='accepted' THEN CURRENT_TIMESTAMP ELSE accepted_at END WHERE id=?", status, status, o.id);
     });
     res.json({ ok: true });

@@ -1,8 +1,9 @@
+import { TrustLine } from "@/components/trust";
 import { EducationTimeline } from "./tutor-education";
 import { TimezoneTag } from "./tutor-timezone";
 import { ProfileSections } from "./tutor-sections";
 import type { ReactNode } from "react";
-import { GraduationCap, MapPin, Star } from "lucide-react";
+import { GraduationCap, MapPin } from "lucide-react";
 import type { Tutor, Subject } from "@/lib/types";
 import { Person, Section } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
@@ -61,10 +62,7 @@ export function TutorPresentation({
           {t.location}
         </span>
         {!preview && (
-          <span>
-            <Star />
-            {t.review_count ? `${t.rating.toFixed(1)} / 5` : "Chưa có đánh giá"}
-          </span>
+          <TrustLine trust={t.trust} />
         )}
       </div>
       {t.bio && (

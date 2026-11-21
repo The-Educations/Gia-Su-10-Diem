@@ -1,3 +1,4 @@
+import { TrustLine } from "@/components/trust";
 import { TutorLocalTime } from "@/components/tutor-timezone";
 import { Collapsible } from "@animate-ui/react/primitives/radix-ui/collapsible";
 import { useState } from "react";
@@ -9,7 +10,6 @@ import {
   Search,
   SlidersHorizontal,
   GraduationCap,
-  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, money } from "@/lib/api";
@@ -79,12 +79,12 @@ export default function Tutors({
     )
     .sort((a, b) =>
       sort === "schedule" && myHours.size > 0
-        ? matchingHours(b) - matchingHours(a) || b.rating - a.rating
+        ? matchingHours(b) - matchingHours(a) || b.trust.sort_score - a.trust.sort_score
         : sort === "price"
         ? a.rate - b.rate
         : sort === "experience"
           ? b.experience - a.experience
-          : b.rating - a.rating,
+          : b.trust.sort_score - a.trust.sort_score,
     );
   async function favorite(t: Tutor) {
     if (!user) {
@@ -333,12 +333,7 @@ export default function Tutors({
                       : "Trực tiếp"}
                 </span>
                 <TutorLocalTime zone={t.timezone} />
-                <span>
-                  <Star size={16} />
-                  {t.review_count
-                    ? `${t.rating.toFixed(1)} · ${t.review_count} đánh giá`
-                    : "Chưa có đánh giá"}
-                </span>
+                <TrustLine trust={t.trust} />
               </div>
               <div className="tutor-card-footer">
                 <span>

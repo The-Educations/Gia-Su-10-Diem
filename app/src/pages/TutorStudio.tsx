@@ -5,6 +5,8 @@ import { TimezoneField } from "@/components/tutor-timezone";
 import { TutorGallery, TutorGalleryEditor } from "@/components/tutor-gallery";
 import { TutorPresentation } from "@/components/tutor-presentation";
 import { TutorUploads } from "@/components/tutor-uploads";
+import { TutorTrustPanel } from "@/components/tutor-trust-panel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddressFields } from "@/components/address-fields";
 import {
   AvailabilityGrid,
@@ -401,7 +403,7 @@ function ProfileForm({
   );
 }
 export default function TutorStudio() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [uploadPending, setUploadPending] = useState(false);
   const profile = useLoad<Tutor>("/tutor/profile"),
     subjects = useLoad<Subject[]>("/subjects"),
@@ -456,12 +458,18 @@ export default function TutorStudio() {
                   : "Hoàn thiện hồ sơ và gửi duyệt để xuất hiện trong tìm kiếm."}
         </AlertDescription>
       </Alert>
-      <ProfileForm
-        t={t}
-        subjects={subjects.data || []}
-        goals={[...new Set(exams.data?.map((r) => r.category))]}
-        onPending={() => setUploadPending(true)}
-      />
+      <Tabs value={params.get("tab") === "ratings" ? "ratings" : "profile"} onValueChange={tab => setParams(tab === "ratings" ? { tab } : {})}>
+        <TabsList aria-label="Mục hồ sơ gia sư"><TabsTrigger value="profile">Hồ sơ</TabsTrigger><TabsTrigger value="ratings">Đánh giá & điểm</TabsTrigger></TabsList>
+        <TabsContent value="profile">
+          <ProfileForm
+            t={t}
+            subjects={subjects.data || []}
+            goals={[...new Set(exams.data?.map((r) => r.category))]}
+            onPending={() => setUploadPending(true)}
+          />
+        </TabsContent>
+        <TabsContent value="ratings"><TutorTrustPanel /></TabsContent>
+      </Tabs>
     </Page>
   );
 }

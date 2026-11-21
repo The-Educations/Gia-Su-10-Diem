@@ -379,7 +379,7 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
   const edited = await owner.request(`/bookings/${id}/review`, "POST", { rating: 4, body: "Lần hai" });
   assert.equal(edited.status, 200); assert.equal(edited.data.updated, true);
   const rated = (await owner.request(`/tutors/${u.id}`)).data;
-  assert.equal(rated.rating, 4); assert.equal(rated.review_count, 1); assert.equal(rated.reviews.length, 1);
+  assert.equal(rated.reviews[0].rating, 4); assert.equal(rated.review_count, 1); assert.equal(rated.trust.is_new, true); assert.equal(rated.trust.score, null); assert.equal(rated.reviews.length, 1);
   assert.equal(rated.reviews[0].body, "Lần hai"); assert.equal(rated.reviews[0].lessons, 1);
   const slot2 = profile.slots[1];
   const second = await owner.request("/bookings", "POST", {
@@ -758,14 +758,14 @@ test("students can complete finished lessons themselves and review each tutor on
 
   // Public rating counts the student once and shows how many lessons they took.
   let page = (await guest.request(`/tutors/${teacher.id}`)).data;
-  assert.equal(page.review_count, 1); assert.equal(page.rating, 3);
+  assert.equal(page.review_count, 1); assert.equal(page.reviews[0].rating, 3);
   assert.deepEqual(page.reviews.map(r => [r.rating, r.body, r.lessons]), [[3, "Học thêm thì thấy bình thường.", 2]]);
 
   // Older data may hold several reviews for one pair: only the latest counts.
   run(db, "UPDATE reviews SET created_at='2026-01-01 00:00:00'");
   run(db, "INSERT INTO reviews(booking_id,rating,body,created_at) VALUES (?,?,?,?)", second, 1, "Cũ hơn", "2025-12-01 00:00:00");
   page = (await guest.request(`/tutors/${teacher.id}`)).data;
-  assert.equal(page.review_count, 1); assert.equal(page.rating, 3); assert.equal(page.reviews.length, 1);
+  assert.equal(page.review_count, 1); assert.equal(page.reviews[0].rating, 3); assert.equal(page.reviews.length, 1);
   assert.equal((await guest.request("/tutors")).data.find(x => x.user_id === teacher.id).review_count, 1);
 });
 
@@ -1958,4 +1958,216 @@ test("free trials require tutor opt-in, one slot, and one lifetime acceptance pe
   assert.equal((await student.request("/offers", "POST", { ...input, ...offerPeriod(60), kind: "course" })).status, 201);
   migrateDatabase(db); migrateDatabase(db);
   assert.ok(one(db, "SELECT accepted_at FROM offers WHERE id=?", created.data.id).accepted_at);
+});
+
+// ---- Lesson ratings, course reviews and trust score ----
+const secondStudent = async who => (await who.request("/auth/register", "POST", { name: "Học sinh hai", email: "hai@example.com", password: "TestStudy2026!", role: "student" })).data.user;
+const trustHelpers = (db, teacher, learner) => {
+  let n = 0;
+  return {
+    lesson(offsetMinutes, status = "accepted", studentId = learner.id, extra = {}) {
+      const starts_at = new Date(Date.now() + offsetMinutes * 60000 + (n++) * 1000).toISOString();
+      const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", teacher.id, starts_at).lastInsertRowid);
+      const id = Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,status,duration_minutes) VALUES (?,?,?,?,?,?,?,?,?)", studentId, teacher.id, slot, "toan", starts_at, 180000, "online", status, 60).lastInsertRowid);
+      for (const [column, value] of Object.entries(extra)) run(db, `UPDATE bookings SET ${column}=? WHERE id=?`, value, id);
+      return id;
+    },
+  };
+};
+
+test("students rate finished lessons privately with limits, tags and a 24 hour edit window", async t => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client(), other = client(), guest = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau"); await secondStudent(other);
+  const { lesson } = trustHelpers(db, teacher, learner);
+  const done = lesson(-120, "completed"), upcoming = lesson(300), old = lesson(-15 * 24 * 60, "completed");
+  const rate = (who, id, body) => who.request(`/bookings/${id}/rating`, "PUT", body);
+
+  assert.equal((await rate(guest, done, { rating: 5 })).status, 401);
+  assert.equal((await rate(tutor, done, { rating: 5 })).status, 403);
+  assert.equal((await rate(other, done, { rating: 5 })).status, 404);
+  assert.equal((await rate(student, upcoming, { rating: 5 })).status, 409);
+  for (const bad of [{ rating: 0 }, { rating: 6 }, { rating: 3.5 }, { rating: 5, tags: ["la_hoac"] }, { rating: 5, tags: ["de_hieu", "kien_nhan", "nhiet_tinh", "dung_gio"] }, { rating: 5, tags: ["de_hieu", "de_hieu"] }])
+    assert.equal((await rate(student, done, bad)).status, 400, JSON.stringify(bad));
+  // Past 14 days after the lesson there is no rating any more.
+  assert.equal((await rate(student, old, { rating: 5 })).status, 409);
+
+  assert.equal((await rate(student, done, { rating: 4, tags: ["de_hieu", "kien_nhan"] })).status, 201);
+  const mine = (await student.request("/bookings")).data.find(b => b.id === done);
+  assert.equal(mine.my_rating, 4); assert.deepEqual(mine.my_tags, ["de_hieu", "kien_nhan"]); assert.equal(mine.rating_editable, true);
+  assert.equal((await rate(student, done, { rating: 5, tags: [] })).status, 200);
+  assert.equal(one(db, "SELECT rating FROM lesson_ratings WHERE booking_id=?", done).rating, 5);
+  // Locked 24 hours after rating.
+  run(db, "UPDATE lesson_ratings SET created_at=? WHERE booking_id=?", new Date(Date.now() - 25 * 3600000).toISOString(), done);
+  assert.equal((await rate(student, done, { rating: 1 })).status, 409);
+  assert.equal((await student.request("/bookings")).data.find(b => b.id === done).rating_editable, false);
+
+  // The tutor never receives a per-lesson rating, and neither does the public page.
+  const seen = (await tutor.request("/bookings")).data.find(b => b.id === done);
+  assert.equal(Object.keys(seen).some(k => /^(my_)?rating|^my_tags/.test(k)), false);
+  assert.equal(JSON.stringify((await tutor.request("/tutor/trust")).data).includes("my_rating"), false);
+  const page = (await guest.request(`/tutors/${teacher.id}`)).data;
+  assert.equal(page.reviews.length, 0);
+});
+
+test("lessons record who cancelled, tutors can be reported absent, and both feed reliability", async t => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client(), other = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau"); const peer = await secondStudent(other);
+  const { lesson } = trustHelpers(db, teacher, learner);
+  const patch = (who, id, status) => who.request(`/bookings/${id}`, "PATCH", { status });
+  const row = id => one(db, "SELECT * FROM bookings WHERE id=?", id);
+
+  // Cancelling records who and when.
+  const soon = lesson(5 * 60), far = lesson(5 * 24 * 60);
+  assert.equal((await patch(tutor, soon, "cancelled")).status, 200);
+  assert.equal(row(soon).cancelled_by, teacher.id); assert.ok(row(soon).cancelled_at); assert.equal(row(soon).cancel_reason, "");
+  assert.equal((await patch(student, far, "cancelled")).status, 200);
+  assert.equal(row(far).cancelled_by, learner.id);
+
+  // "Tutor did not come": only the student, from 15 minutes after the start, if the tutor never started.
+  const early = lesson(-10), gone = lesson(-30), started = lesson(-30, "accepted", learner.id, { started_at: new Date().toISOString() });
+  const tutorFirst = lesson(-30), longAgo = lesson(-4 * 24 * 60), someoneElse = lesson(-30, "accepted", peer.id);
+  assert.equal((await patch(student, early, "tutor_missed")).status, 409);
+  assert.equal((await patch(tutor, gone, "tutor_missed")).status, 409);
+  assert.equal((await patch(student, started, "tutor_missed")).status, 409);
+  assert.equal((await patch(student, longAgo, "tutor_missed")).status, 409);
+  assert.equal((await patch(student, someoneElse, "tutor_missed")).status, 403);
+  assert.equal((await patch(student, gone, "tutor_missed")).status, 200);
+  assert.equal(row(gone).status, "tutor_missed"); assert.ok(row(gone).tutor_missed_at);
+  // After that the tutor can no longer start, complete or call the student absent for it.
+  assert.equal((await tutor.request(`/bookings/${gone}/start`, "POST")).status, 409);
+  for (const status of ["completed", "missed"]) assert.equal((await patch(tutor, gone, status)).status, 409);
+  assert.equal((await patch(student, gone, "completed")).status, 409);
+  // Whoever reports first stands.
+  assert.equal((await patch(tutor, tutorFirst, "missed")).status, 200);
+  assert.equal((await patch(student, tutorFirst, "tutor_missed")).status, 409);
+  assert.equal((await student.request("/bookings")).data.find(b => b.id === gone).status, "tutor_missed");
+
+  // Reliability: 1 late cancellation by the tutor + 1 no-show against 4 held lessons.
+  for (let i = 0; i < 4; i++) lesson(-24 * 60 - i * 70, "completed");
+  const trust = (await tutor.request("/tutor/trust")).data;
+  assert.equal(trust.held, 4); assert.equal(trust.bad, 2);
+  // Admins read the same totals, students cannot.
+  const admin = client(); await admin.login("admin");
+  assert.equal((await admin.request(`/admin/tutors/${teacher.id}/trust`)).data.held, 4);
+  assert.equal((await student.request(`/admin/tutors/${teacher.id}/trust`)).status, 403);
+  assert.deepEqual(trust.bad_breakdown, { late_cancels: 1, no_shows: 1 });
+  assert.equal(trust.reliability, 4 / 6);
+  // The student cancelling and ending a course early do not count against the tutor.
+  const guest = client();
+  assert.equal((await guest.request(`/tutors/${teacher.id}`)).data.trust.punctuality, 0.67);
+});
+
+test("ending a course early, end-of-course reviews and the public review list", async t => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client(), other = client(), guest = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau"); await secondStudent(other);
+  const blocks = [{ weekday: 0, hour: 19 }, { weekday: 2, hour: 19 }];
+  await tutor.request("/tutor/availability", "PUT", { revision: 0, blocks });
+  const data = { tutor_id: teacher.id, subject_id: "toan", mode: "online", blocks, note: "", ...offerPeriod() };
+  const made = async (period = {}) => {
+    const { id } = (await student.request("/offers", "POST", { ...data, ...period })).data;
+    assert.equal((await tutor.request(`/offers/${id}`, "PATCH", { status: "accepted" })).status, 200);
+    return id;
+  };
+  const review = (who, id, body) => who.request(`/offers/${id}/review`, "PUT", body);
+  const find = (who, id) => who.request("/offers").then(r => r.data.find(o => o.id === id));
+
+  const id = await made();
+  // Not ended yet, and nothing completed yet.
+  assert.equal((await review(student, id, { rating: 5 })).status, 409);
+  const lessons = all(db, "SELECT id FROM bookings WHERE offer_id=? ORDER BY starts_at", id);
+  run(db, "UPDATE bookings SET status='completed' WHERE id=?", lessons[0].id);
+  assert.equal((await review(student, id, { rating: 5 })).status, 409);
+  let offer = await find(student, id);
+  assert.equal(offer.ended, false); assert.equal(offer.review_eligible, false);
+
+  // Ending early: lessons already taught stay, the rest are cancelled without blaming the tutor.
+  assert.equal((await tutor.request(`/offers/${id}`, "PATCH", { status: "cancelled" })).status, 200);
+  const stored = one(db, "SELECT ended_at,ended_by FROM offers WHERE id=?", id);
+  assert.ok(stored.ended_at); assert.equal(stored.ended_by, teacher.id);
+  const after = all(db, "SELECT status,cancel_reason,cancelled_by FROM bookings WHERE offer_id=?", id);
+  assert.equal(after.filter(b => b.status === "completed").length, 1);
+  assert.ok(after.filter(b => b.status === "cancelled").every(b => b.cancel_reason === "course_ended" && b.cancelled_by === teacher.id));
+  assert.equal((await tutor.request("/tutor/trust")).data.bad, 0);
+  offer = await find(student, id);
+  assert.equal(offer.ended, true); assert.equal(offer.review_eligible, true); assert.equal(offer.my_review, null);
+  assert.ok(offer.review_open_until);
+
+  // The old per-lesson review endpoint no longer applies to lessons of an offer.
+  assert.equal((await student.request(`/bookings/${lessons[0].id}/review`, "POST", { rating: 5, body: "Cũ" })).status, 409);
+
+  // Only the student of the course, with a clean comment.
+  assert.equal((await review(tutor, id, { rating: 5 })).status, 403);
+  assert.equal((await review(other, id, { rating: 5 })).status, 404);
+  for (const bad of [{ rating: 0 }, { rating: 5, body: "ngắn" }, { rating: 5, body: "Gọi em số 0912 345 678 nhé." }, { rating: 5, body: "Zalo: thaygiaoA rất tốt luôn" }, { rating: 5, body: "Xem tại https://example.com nhé thầy" }, { rating: 5, body: "x".repeat(1001) }, { rating: 5, continue_intent: "maybe" }])
+    assert.equal((await review(student, id, bad)).status, 400, JSON.stringify(bad));
+  assert.equal((await review(student, id, { rating: 5 })).status, 201);
+  const edited = await review(student, id, { rating: 4, body: "Thầy giảng dễ hiểu và kiên nhẫn.", continue_intent: "yes" });
+  assert.equal(edited.status, 200); assert.equal(edited.data.updated, true);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM course_reviews").n, 1);
+  assert.equal((await find(student, id)).my_review.continue_intent, "yes");
+  // The tutor and the public never see the private answer.
+  const tutorOffer = await find(tutor, id);
+  assert.equal("my_review" in tutorOffer, false);
+  assert.equal(JSON.stringify((await tutor.request(`/offers/${id}`)).data).includes("continue_intent"), false);
+  const page = (await guest.request(`/tutors/${teacher.id}`)).data;
+  assert.equal(JSON.stringify(page).includes("continue_intent"), false);
+  assert.deepEqual(page.reviews.map(r => [r.rating, r.body, r.lessons]), [[4, "Thầy giảng dễ hiểu và kiên nhẫn.", 1]]);
+  assert.equal(page.trust.review_count, 1); assert.equal(page.trust.is_new, true);
+
+  // After 30 days the review is locked.
+  run(db, "UPDATE offers SET ended_at=? WHERE id=?", new Date(Date.now() - 31 * 86400000).toISOString(), id);
+  assert.equal((await review(student, id, { rating: 3 })).status, 409);
+  assert.equal((await find(student, id)).review_eligible, false);
+
+  // Trials and ordinary cancellation of a pending offer are not courses to review.
+  const natural = await made(offerPeriod(100));
+  run(db, "UPDATE bookings SET status='completed' WHERE offer_id=? AND id=(SELECT MIN(id) FROM bookings WHERE offer_id=?)", natural, natural);
+  assert.equal((await find(student, natural)).ended, false);
+  run(db, "UPDATE offers SET end_date=?", new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10));
+  assert.equal((await find(student, natural)).ended, true);
+  assert.equal((await review(student, natural, { rating: 5, body: "Học đủ khóa rất hài lòng." })).status, 201);
+});
+
+test("trust score stays 'new' until enough ratings from enough students, then drives the public number", async t => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client(), other = client(), guest = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau"); const peer = await secondStudent(other);
+  const { lesson } = trustHelpers(db, teacher, learner);
+  const publicTrust = async () => (await guest.request("/tutors")).data.find(x => x.user_id === teacher.id).trust;
+  assert.equal((await student.request("/tutor/trust")).status, 403);
+  assert.equal((await guest.request("/tutor/trust")).status, 401);
+  let trust = await publicTrust();
+  assert.equal(trust.is_new, true); assert.equal(trust.score, null); assert.equal(trust.sort_score, 4.3);
+
+  // Many ratings from one student are still one voice.
+  for (let i = 0; i < 4; i++) {
+    const id = lesson(-60 * (i + 2), "completed");
+    assert.equal((await student.request(`/bookings/${id}/rating`, "PUT", { rating: 5, tags: ["de_hieu"] })).status, 201);
+  }
+  trust = await publicTrust();
+  assert.equal(trust.is_new, true);
+  assert.deepEqual(trust.tags.map(x => x.code), ["de_hieu"]);
+  assert.equal(JSON.stringify(trust).includes("detail"), false);
+  const mine = (await tutor.request("/tutor/trust")).data;
+  assert.deepEqual(mine.progress, { ratings: 4, raters: 1, need_ratings: 3, need_raters: 2 });
+  assert.equal(mine.pairs, 1); assert.equal(mine.lesson_count, 4); assert.equal(mine.tag_counts.find(x => x.code === "de_hieu").count, 4);
+
+  // A second student crosses the threshold: 3+ ratings from 2 students.
+  const id = lesson(-300, "completed", peer.id);
+  assert.equal((await other.request(`/bookings/${id}/rating`, "PUT", { rating: 4 })).status, 201);
+  trust = await publicTrust();
+  assert.equal(trust.is_new, false);
+  // Two pairs: 5 and 4 -> Q = (9 + 5*4.3) / 7, reliability 1 -> 0.7 Q + 1.5.
+  assert.equal(trust.score, Math.round((0.7 * (9 + 21.5) / 7 + 1.5) * 10) / 10);
+  assert.equal(trust.review_count, 0);
+});
+
+test("migration for ratings is repeatable on an existing database", async t => {
+  const { db } = await fixture(t);
+  const before = one(db, "SELECT COUNT(*) n FROM bookings").n;
+  migrateDatabase(db); migrateDatabase(db);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM bookings").n, before);
 });

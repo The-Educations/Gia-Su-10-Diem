@@ -9,6 +9,8 @@ import { MessageCircle, ExternalLink, CalendarDays, List, ArrowRight } from "luc
 import { toast } from "sonner";
 import { api, useApp, useLoad, money, dateTime } from "@/lib/api";
 import type { Booking, Tutor, WeeklySchedule } from "@/lib/types";
+import { canReportTutorAbsent } from "@/lib/lessons";
+import { LessonRatingDialog } from "@/components/trust";
 import {
   Page,
   Heading,
@@ -52,6 +54,7 @@ export default function Bookings() {
     [view, setView] = useState<Booking | null>(null),
     [edit, setEdit] = useState<Booking | null>(null),
     [review, setReview] = useState<Booking | null>(null),
+    [lessonRating, setLessonRating] = useState<Booking | null>(null),
     [rating, setRating] = useState("5"),
     [action, setAction] = useState<{ booking: Booking; status: string } | null>(
       null,
@@ -110,9 +113,13 @@ export default function Bookings() {
       {user?.role === "tutor" && ["accepted", "completed"].includes(b.status) && <Button variant="outline" onClick={() => { setError(""); setView(null); setEdit(b); }}>{details ? "Viết ghi chú" : "Nội dung buổi học"}</Button>}
       {user?.role === "tutor" && b.status === "accepted" && Date.parse(b.starts_at) + b.duration_minutes * 60000 <= Date.now() && <Button onClick={() => changeStatus("completed")}>Hoàn thành</Button>}
       {user?.role === "student" && b.status === "accepted" && Date.parse(b.starts_at) + b.duration_minutes * 60000 <= Date.now() && <Button onClick={() => changeStatus("completed")}>Đã học xong</Button>}
-      {user?.role === "student" && b.status === "completed" && !b.reviewed && <Button onClick={() => openReview(b)}>Đánh giá</Button>}
-      {b.status === "completed" && !!b.reviewed && <span className="muted">Đã đánh giá {b.reviewed}/5</span>}
-      {user?.role === "student" && b.status === "completed" && !!b.reviewed && latestCompleted(b) && <Button variant="ghost" onClick={() => openReview(b)}>Sửa đánh giá</Button>}
+      {user?.role === "student" && canReportTutorAbsent(b) && <Button variant="ghost" onClick={() => changeStatus("tutor_missed")}>Gia sư không đến</Button>}
+      {user?.role === "student" && b.status === "completed" && b.offer_id && (b.my_rating != null
+        ? <><span className="muted">Bạn chấm {b.my_rating}★</span>{b.rating_editable && <Button variant="ghost" onClick={() => { setView(null); setLessonRating(b); }}>Sửa</Button>}</>
+        : b.rating_editable && <Button onClick={() => { setView(null); setLessonRating(b); }}>Chấm buổi học</Button>)}
+      {user?.role === "student" && b.status === "completed" && !b.offer_id && !b.reviewed && <Button onClick={() => openReview(b)}>Đánh giá</Button>}
+      {b.status === "completed" && !b.offer_id && !!b.reviewed && <span className="muted">Đã đánh giá {b.reviewed}/5</span>}
+      {user?.role === "student" && b.status === "completed" && !b.offer_id && !!b.reviewed && latestCompleted(b) && <Button variant="ghost" onClick={() => openReview(b)}>Sửa đánh giá</Button>}
     </>;
   }
   return (
@@ -151,7 +158,7 @@ export default function Bookings() {
           <div className="schedule-filters">
             <Choose label="Khóa học" value={offerId} onChange={value => setParam("offer", value)} allLabel="Tất cả khóa học" options={courses.map(b => ({ value: String(b.offer_id), label: `${b.subject_name} · ${personName(b)} (#${b.offer_id})` }))} />
             <Choose label="Trạng thái" value={filter} onChange={value => setParam("status", value)} allLabel="Tất cả" options={[
-              ["pending", "Chờ xác nhận"], ["accepted", "Đã xác nhận"], ["completed", "Đã hoàn thành"], ["missed", "Học sinh vắng"], ["cancelled", "Đã hủy"], ["declined", "Đã từ chối"],
+              ["pending", "Chờ xác nhận"], ["accepted", "Đã xác nhận"], ["completed", "Đã hoàn thành"], ["missed", "Học sinh vắng"], ["tutor_missed", "Gia sư không đến"], ["cancelled", "Đã hủy"], ["declined", "Đã từ chối"],
             ].map(([value, label]) => ({ value, label }))} />
           </div>
         </div>
@@ -258,7 +265,9 @@ export default function Bookings() {
                 ? "Bạn đồng ý dạy buổi học này."
                 : action?.status === "completed"
                   ? "Xác nhận buổi học đã diễn ra và hoàn thành."
-                  : "Buổi học sẽ bị hủy hoặc từ chối. Khung giờ sẽ được mở lại."}
+                  : action?.status === "tutor_missed"
+                    ? "Xác nhận gia sư không đến buổi học này? Buổi học sẽ không được tính và gia sư không thể bắt đầu hay hoàn thành buổi này nữa."
+                    : "Buổi học sẽ bị hủy hoặc từ chối. Khung giờ sẽ được mở lại."}
             </DialogDescription>
           </DialogHeader>
           {error && <ErrorState error={error} />}
@@ -327,6 +336,7 @@ export default function Bookings() {
           </form>
         </DialogContent>
       </Dialog>
+      <LessonRatingDialog booking={lessonRating} onClose={() => setLessonRating(null)} onDone={refresh} />
       <Dialog
         open={!!review}
         onOpenChange={(o) => {

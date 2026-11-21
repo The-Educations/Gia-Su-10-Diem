@@ -4,6 +4,8 @@ export type StudyOffer = {
   student_name: string; tutor_name: string; subject_name: string; mode: string;
   start_date: string; end_date: string; blocks: WeeklySchedule["blocks"];
   status: string; rate: number; note: string; kind: "course" | "trial"; weeks: number | null;
+  ended?: boolean; ends_at?: string | null; review_open_until?: string | null; review_eligible?: boolean; completed_lessons?: number;
+  my_review?: { rating: number; body: string; continue_intent: "yes" | "no" | "unsure" | null; updated_at: string } | null;
 };
 export type OfferPreview = { sessions: { starts_at: string; duration_minutes: number; conflict: string }[]; conflict_count: number };
 export const offerStatuses: Record<string, string> = { pending: "Chờ gia sư", accepted: "Đã chấp nhận", declined: "Đã từ chối", cancelled: "Đã hủy" };
