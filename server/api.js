@@ -11,7 +11,9 @@ import { registerSignupVerification } from "./signup-verification.js";
 import { registerCommunityImages } from "./community-images.js";
 import { registerCommunity } from "./community.js";
 import { registerTutorReview } from "./tutor-review.js";
-import { currentReview, pairReview, completedLessons } from "./reviews.js";
+import { pairReview } from "./reviews.js";
+import { registerTrust, trustReader, publicReviews, lessonRatingFields } from "./trust.js";
+import { TUTOR_NO_SHOW_WAIT_MINUTES, TUTOR_NO_SHOW_WINDOW_HOURS } from "./trust-policy.js";
 import { liveTutorSql, isLiveTutor, publicView, publishedView, contentSnapshot, changedContent } from "./tutor-visibility.js";
 import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
@@ -208,18 +210,22 @@ export function createApi(
       fail(403, "Bạn không tham gia buổi học này.");
     return b;
   };
-  const tutorRows = (preview = false) =>
-    all(
+  const tutorRows = (preview = false) => {
+    const trust = trustReader(db);
+    return all(
       db,
-      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks,COALESCE(AVG(r.rating),0) AS rating,COUNT(r.rating) AS review_count
-    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id LEFT JOIN bookings b ON b.tutor_id=t.user_id LEFT JOIN reviews r ON r.booking_id=b.id AND ${currentReview()}
-    WHERE ${preview ? '1=1' : `${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`} GROUP BY t.user_id`,
+      `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks
+    FROM tutors t JOIN users u ON u.id=t.user_id LEFT JOIN weekly_availability w ON w.tutor_id=t.user_id
+    WHERE ${preview ? '1=1' : `${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`}`,
     ).map(({ moderation_note, reserved_weekly_blocks, published, ...draft }) => {
       // Students see the last approved content while an edit awaits review.
       const { published: _snapshot, ...visible } = publicView({ ...draft, published });
       const t = preview ? draft : visible;
+      const score = trust.public(t.user_id);
       return {
       ...t,
+      trust: score,
+      review_count: score.review_count,
       ...(preview && { published: publishedView(published) }),
       ...uploadMetadata(db, t.user_id),
       weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
@@ -230,6 +236,7 @@ export function createApi(
       profile_sections: JSON.parse(t.profile_sections),
       };
     });
+  };
   registerEmailVerification(app, db, { origin, sendEmail });
   const signup = registerSignupVerification(app, db, { sendEmail, production, session });
   app.locals.calendarSync = registerGoogleCalendar(app, db, auth, { origin, production, google, wakeCalendar });
@@ -246,6 +253,7 @@ export function createApi(
   registerAccountDeletion(app, db, auth, audit);
   registerWeeklyRequests(app, db, auth);
   registerOffers(app, db, auth);
+  registerTrust(app, db, auth, audit);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
     res.json({ user: publicUser(req.user) }),
@@ -393,11 +401,7 @@ export function createApi(
     );
     // Reviewers are shown by their public display name only, never by their
     // real name, and without internal booking or account ids.
-    const reviews = all(
-      db,
-      `SELECT r.rating,r.body,r.created_at,${completedLessons()} AS lessons,u.role,u.learner_type,u.display_name,u.profile_code FROM reviews r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=b.student_id WHERE b.tutor_id=? AND ${currentReview()} ORDER BY r.created_at DESC`,
-      t.user_id,
-    ).map(({ rating, body, created_at, lessons, ...reviewer }) => ({ rating, body, created_at, lessons, author: authorLabel(reviewer).label }));
+    const reviews = publicReviews(db, t.user_id);
     res.json({ ...t, slots, reviews, gallery: galleryMetadata(db, t.user_id) });
   };
   app.get("/api/tutors/:id", tutorDetail());
@@ -592,13 +596,15 @@ export function createApi(
         : req.user.role === "tutor"
           ? "b.tutor_id=?"
           : "b.student_id=?";
-    res.json(
+    const rows = (
       all(
         db,
         `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,${pairReview("rating")} AS reviewed,${pairReview("body")} AS review_body FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id WHERE ${condition} ORDER BY b.starts_at DESC`,
         ...(req.user.role === "admin" ? [] : [req.user.id]),
-      ),
+      )
     );
+    // Lesson ratings are private to the student who gave them.
+    res.json(req.user.role === "student" ? lessonRatingFields(db, rows, req.user.id) : rows);
   });
   app.post("/api/bookings", auth("student"), (req, res) => {
     const d = z
@@ -658,11 +664,15 @@ export function createApi(
     const b = booking(req),
       { status } = z
         .object({
-          status: z.enum(["accepted", "declined", "cancelled", "completed", "missed"]),
+          status: z.enum(["accepted", "declined", "cancelled", "completed", "missed", "tutor_missed"]),
         })
         .parse(req.body);
-    const future = new Date(b.starts_at).getTime() > Date.now();
-    const ended = new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= Date.now();
+    const now = Date.now();
+    const future = new Date(b.starts_at).getTime() > now;
+    const ended = new Date(b.starts_at).getTime() + b.duration_minutes * 60000 <= now;
+    // The student can report a no-show from 15 minutes after the start until 48 hours after the end.
+    const noShowOpen = new Date(b.starts_at).getTime() + TUTOR_NO_SHOW_WAIT_MINUTES * 60000 <= now
+      && now < new Date(b.starts_at).getTime() + b.duration_minutes * 60000 + TUTOR_NO_SHOW_WINDOW_HOURS * 3600000;
     // Like lesson offers, a new lesson can only be confirmed by a tutor whose
     // profile students can still see.
     if (status === "accepted" && req.user.id === b.tutor_id && !isLiveTutor(one(db, "SELECT status,published FROM tutors WHERE user_id=?", b.tutor_id)))
@@ -687,9 +697,18 @@ export function createApi(
         b.status === "accepted" &&
         req.user.id === b.tutor_id &&
         !b.started_at &&
-        !future);
+        !future) ||
+      // The student reports the tutor never came. Whoever reports first stands; the other side can no longer act.
+      (status === "tutor_missed" &&
+        b.status === "accepted" &&
+        req.user.id === b.student_id &&
+        !b.started_at &&
+        noShowOpen);
     if (!allowed) fail(409, "Không thể thay đổi buổi học sang trạng thái này.");
-    run(db, "UPDATE bookings SET status=? WHERE id=?", status, b.id);
+    const at = new Date(now).toISOString();
+    if (status === "cancelled") run(db, "UPDATE bookings SET status=?,cancelled_by=?,cancelled_at=? WHERE id=?", status, req.user.id, at, b.id);
+    else if (status === "tutor_missed") run(db, "UPDATE bookings SET status=?,tutor_missed_at=? WHERE id=?", status, at, b.id);
+    else run(db, "UPDATE bookings SET status=? WHERE id=?", status, b.id);
     audit(req.user.id, `booking.${status}`, b.id);
     res.json({ ok: true });
   });
@@ -758,6 +777,7 @@ export function createApi(
     const b = booking(req);
     if (b.student_id !== req.user.id || b.status !== "completed")
       fail(403, "Chỉ học sinh đã hoàn thành buổi học mới có thể đánh giá.");
+    if (b.offer_id) fail(409, "Buổi học này thuộc một đề nghị học. Hãy chấm buổi học hoặc đánh giá khóa học khi kết thúc.");
     const d = z
       .object({ rating: z.number().int().min(1).max(5), body: text(1000) })
       .parse(req.body);

@@ -973,7 +973,8 @@ main {
   background: var(--positive-soft);
   color: var(--positive);
 }
-.state-missed {
+.state-missed,
+.state-tutor_missed {
   background: #f4e6e7;
   color: #792e35;
 }
@@ -3360,4 +3361,49 @@ main {
     grid-template-areas: "time main state" "actions actions actions";
   }
   .today-lessons li > :nth-child(2) { display: none; }
+}
+
+/* Lesson ratings, course reviews and trust score */
+.trust-score { display: inline-flex; align-items: center; gap: 6px; }
+.trust-score svg { color: var(--warning); fill: currentColor; }
+.trust-score[data-new] svg { fill: none; }
+.trust-punctuality { display: inline-flex; align-items: center; color: var(--positive); font-weight: 600; }
+.star-picker { display: flex; align-items: center; gap: 4px; }
+.star-picker button { border: 0; background: transparent; padding: 6px; min-width: 44px; min-height: 44px; display: grid; place-items: center; cursor: pointer; border-radius: 8px; color: var(--muted-foreground); }
+.star-picker button svg { width: 28px; height: 28px; }
+.star-picker button[data-on] { color: var(--warning); }
+.star-picker button[data-on] svg { fill: currentColor; }
+.star-picker button:focus-visible, .tag-choices button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.star-picker > span { margin-left: 8px; color: var(--muted-foreground); }
+.field-hint { margin: 0 0 8px; color: var(--muted-foreground); font-size: 0.9rem; }
+.tag-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-choices button { border: 1px solid var(--input); border-radius: 999px; background: var(--card); padding: 8px 14px; min-height: 40px; cursor: pointer; color: var(--foreground); }
+.tag-choices button[aria-pressed="true"] { background: var(--positive-soft); border-color: var(--positive); color: var(--positive); font-weight: 600; }
+.tag-choices button:disabled { opacity: 0.45; cursor: not-allowed; }
+.trust-tags { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0 0 12px; }
+.trust-tags li { border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; background: var(--card); }
+.trust-tags li span { color: var(--muted-foreground); margin-left: 4px; }
+.review-basis { margin: 0 0 12px; font-size: 0.9rem; }
+.courses-to-review { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 24px; margin-bottom: 22px; }
+.courses-to-review > header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 12px; }
+.courses-to-review h2 { margin: 0; font-size: 1.15rem; }
+.courses-to-review > header span { color: var(--muted-foreground); font-size: 0.9rem; }
+.courses-to-review ul { list-style: none; margin: 0; padding: 0; }
+.courses-to-review li { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding: 14px 0; }
+.courses-to-review li > div:first-child { display: grid; gap: 2px; }
+.courses-to-review li span { color: var(--muted-foreground); font-size: 0.9rem; }
+.trust-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
+.trust-headline strong { font-size: 2.2rem; line-height: 1; }
+.trust-headline span { color: var(--muted-foreground); max-width: 56ch; }
+.trust-progress { display: grid; gap: 12px; margin-top: 16px; max-width: 420px; }
+.trust-progress label { display: grid; gap: 6px; font-size: 0.9rem; }
+.trust-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 0 0 20px; }
+.trust-facts > div { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: var(--card); }
+.trust-facts dt { color: var(--muted-foreground); font-size: 0.85rem; }
+.trust-facts dd { margin: 4px 0 0; font-size: 1.25rem; font-weight: 600; }
+.trust-facts dd small { display: block; font-size: 0.8rem; font-weight: 400; color: var(--muted-foreground); }
+.trust-how { padding-left: 20px; display: grid; gap: 8px; color: var(--muted-foreground); }
+@media (max-width: 480px) {
+  .star-picker button { min-width: 40px; padding: 4px; }
+  .courses-to-review { padding: 16px; }
 }

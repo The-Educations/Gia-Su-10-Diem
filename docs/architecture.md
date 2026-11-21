@@ -77,7 +77,9 @@ Tên `Library`, `ResourceEditor` và API `resources` được giữ từ scaffol
 | `bookings` | Student, tutor, slot, subject, giờ / giá được chụp tại lúc đặt, trạng thái, ghi chú, meeting URL |
 | `favorites` | Khóa ghép student/tutor |
 | `messages` | Booking, sender, nội dung, thời điểm |
-| `reviews` | Một review / booking; số sao và nội dung |
+| `reviews` | Đánh giá cũ (một / cặp); coi như đánh giá cuối khóa |
+| `lesson_ratings` | Chấm từng buổi (sao + nhãn), riêng tư |
+| `course_reviews` | Đánh giá cuối khóa (sao, nhận xét, ý định học tiếp nội bộ) |
 | `resources` | Mục kỳ thi, một subject liên quan, cấp học, năm, nguồn, HTTPS URL, công bố / nháp |
 | `tutor_uploads` | Một ảnh và một CV mỗi tutor; UUID, BLOB, MIME, filename, size; replace loại bỏ bản cũ |
 | `support_threads`, `support_messages` | Hội thoại riêng giữa chủ tài khoản và đội ngũ admin |
@@ -103,7 +105,7 @@ Tất cả dưới `/api`. Chi tiết payload hiện nằm trong `server/validat
 | Support | `GET support`, `GET/POST support/:id/messages` |
 | Delete account | `DELETE admin/users/:id` (admin, xác nhận email, ẩn danh lịch sử) |
 | Inquiry | `GET/POST inquiries`, `GET/POST inquiries/:id/messages` |
-| Messages / review | `GET/POST bookings/:id/messages`, `POST bookings/:id/review` |
+| Messages / review | `GET/POST bookings/:id/messages`, `POST bookings/:id/review` (buổi lẻ cũ), `PUT bookings/:id/rating`, `PUT offers/:id/review`, `GET tutor/trust` |
 | Admin | `GET admin`, `PATCH admin/tutors/:id`, `PATCH admin/users/:id`, `PUT admin/subjects/:id`, `POST admin/resources`, `PUT admin/resources/:id` |
 
 ## Authorization và lifecycle

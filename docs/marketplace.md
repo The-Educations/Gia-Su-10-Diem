@@ -13,14 +13,14 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng ch�
 
 ## Luồng sản phẩm chính
 
-**Chọn môn / mục tiêu → tìm gia sư → xem hồ sơ và giờ trống → gửi yêu cầu → gia sư xác nhận → hai bên trao đổi → hoàn thành buổi học → đánh giá.**
+**Chọn môn / mục tiêu → tìm gia sư → xem hồ sơ và giờ trống → gửi yêu cầu → gia sư xác nhận → hai bên trao đổi → hoàn thành buổi học → chấm buổi học → kết thúc khóa → đánh giá khóa học.**
 
 ### Khách truy cập
 
 - Xem gia sư đã được công bố và tài khoản còn hoạt động.
 - Tìm không dấu / có dấu theo tên, giới thiệu, học vấn và địa điểm.
 - Lọc theo môn, cấp học, mục tiêu kỳ thi, hình thức online / trực tiếp, địa điểm và học phí VND/buổi.
-- Sắp xếp theo giá, kinh nghiệm hoặc đánh giá có thật.
+- Sắp xếp theo giá, kinh nghiệm hoặc điểm tin cậy (gia sư “Mới” xếp như 4,3).
 - Xem ảnh, chuyên môn, mức phí, học vấn, mô tả phương pháp, đánh giá, lịch trống và tải CV của hồ sơ đã công bố.
 - Duyệt danh mục môn / kỳ thi và chuyển sang tìm gia sư tương ứng.
 - Một màn hình tài khoản ưu tiên Google, vẫn có email/mật khẩu. Sau khi tạo tài khoản, chọn học sinh, phụ huynh hoặc gia sư và hoàn tất hướng dẫn thiết lập.
@@ -37,7 +37,7 @@ Cập nhật: 31/10/2026. Phạm vi và quy tắc của marketplace. Bằng ch�
 - Theo dõi yêu cầu và lịch đã xác nhận; hủy buổi tương lai khi được phép.
 - Trao đổi trong hội thoại của buổi học; xem ghi chú và liên kết do gia sư cung cấp.
 - Xuất lịch `.ics` cho buổi đã xác nhận.
-- Đánh giá một lần sau khi buổi học hoàn thành.
+- Chấm nhanh từng buổi đã hoàn thành (sao + tối đa 3 nhãn, riêng tư, trong 14 ngày, sửa trong 24 giờ) và viết một đánh giá cuối khóa công khai khi khóa kết thúc (trong 30 ngày). Chi tiết: [danh-gia-va-diem-tin-cay.md](danh-gia-va-diem-tin-cay.md).
 
 Phụ huynh có lựa chọn thiết lập riêng và mục tiêu học tập của con (`learner_type=parent`); quyền đặt lịch vẫn dùng `role=student`. Chưa có tài khoản con hay quản lý nhiều học sinh.
 
@@ -77,7 +77,8 @@ Phụ huynh có lựa chọn thiết lập riêng và mục tiêu học tập c�
 | Hoàn thành | Gia sư chỉ hoàn thành buổi đã xác nhận và đã qua giờ kết thúc |
 | Hủy | Buổi chờ / đã xác nhận còn ở tương lai; mở lại khung giờ |
 | Hội thoại | Hội thoại booking theo buổi; inquiry riêng trước booking, student khởi tạo với tutor công khai, chỉ hai bên truy cập |
-| Đánh giá | Học sinh của buổi đã hoàn thành; một đánh giá / buổi |
+| Chấm buổi học | Học sinh đặt buổi, buổi `completed`; riêng tư; một lượt / buổi |
+| Đánh giá cuối khóa | Học sinh của khóa đã kết thúc, có ít nhất một buổi hoàn thành; một đánh giá / khóa; công khai |
 | Xác minh | Admin công bố hồ sơ không đồng nghĩa đã xác minh danh tính, bằng cấp hoặc lý lịch |
 | Thanh toán | Chưa thu tiền qua website; hai bên tự thống nhất |
 

@@ -4,9 +4,11 @@ import { MessageCircle, Video } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { lessonMessageHref } from "@/lib/message-context";
+import { canReportTutorAbsent } from "@/lib/lessons";
 import type { Booking } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Person, State } from "@/components/common";
+import { LessonRatingDialog } from "@/components/trust";
 
 const START_OPENS_BEFORE = 15 * 60000;
 const VN_OFFSET = 7 * 3600000;
@@ -24,7 +26,7 @@ const byTime = (a: Booking, b: Booking) => startOf(a) - startOf(b) || a.id - b.i
 // yet, buttons from 15 minutes before the start.
 export function lessonsToHandle(lessons: Booking[], now = Date.now()) {
   return lessons
-    .filter(b => ["accepted", "completed", "missed"].includes(b.status)
+    .filter(b => ["accepted", "completed", "missed", "tutor_missed"].includes(b.status)
       && (dayKey(startOf(b)) === dayKey(now) || (b.status === "accepted" && endOf(b) <= now)))
     .sort(byTime)
     .slice(0, 8);
@@ -36,6 +38,8 @@ export function TodayLessons({ lessons, role, onChanged }: {
   const [now, setNow] = useState(Date.now()),
     [busy, setBusy] = useState<number | null>(null),
     [confirmAbsent, setConfirmAbsent] = useState<number | null>(null),
+    [confirmTutorAbsent, setConfirmTutorAbsent] = useState<number | null>(null),
+    [rating, setRating] = useState<Booking | null>(null),
     [error, setError] = useState("");
   // Re-evaluate every 30 seconds so buttons unlock without a reload.
   useEffect(() => {
@@ -50,6 +54,7 @@ export function TodayLessons({ lessons, role, onChanged }: {
     try {
       await request();
       setConfirmAbsent(null);
+      setConfirmTutorAbsent(null);
       toast.success(message);
       onChanged();
     } catch (e) {
@@ -87,13 +92,32 @@ export function TodayLessons({ lessons, role, onChanged }: {
       </>
       : <Button variant="ghost" onClick={() => setConfirmAbsent(b.id)}>Học sinh vắng</Button>;
   }
+  function tutorAbsent(b: Booking) {
+    if (!canReportTutorAbsent(b, now)) return null;
+    return confirmTutorAbsent === b.id
+      ? <>
+        <Button variant="destructive" disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}`, "PATCH", { status: "tutor_missed" }), "Đã ghi nhận gia sư không đến")}>Xác nhận gia sư không đến</Button>
+        <Button variant="ghost" onClick={() => setConfirmTutorAbsent(null)}>Hủy</Button>
+      </>
+      : <Button variant="ghost" onClick={() => setConfirmTutorAbsent(b.id)}>Gia sư không đến</Button>;
+  }
   function studentActions(b: Booking) {
     if (b.status === "accepted" && opensAt(b) > now)
       return <span className="today-hint">Chưa đến giờ học</span>;
     if (b.status === "accepted" && endOf(b) <= now)
-      return <Button disabled={busy === b.id} onClick={() => complete(b)}>Đã học xong</Button>;
-    if (b.status === "completed" && !b.reviewed)
+      return <><Button disabled={busy === b.id} onClick={() => complete(b)}>Đã học xong</Button>{tutorAbsent(b)}</>;
+    if (b.status === "accepted" && canReportTutorAbsent(b, now))
+      return tutorAbsent(b);
+    if (b.status === "completed" && !b.offer_id && !b.reviewed)
       return <Button asChild variant="outline"><Link to="/bookings?status=completed">Đánh giá gia sư</Link></Button>;
+    if (b.status === "completed" && b.offer_id) {
+      if (b.my_rating != null)
+        return <>
+          <span className="today-hint">Bạn chấm {b.my_rating}★</span>
+          {b.rating_editable && <Button variant="ghost" onClick={() => setRating(b)}>Sửa</Button>}
+        </>;
+      if (b.rating_editable) return <Button variant="outline" onClick={() => setRating(b)}>Chấm buổi học</Button>;
+    }
     return null;
   }
   return (
@@ -134,6 +158,7 @@ export function TodayLessons({ lessons, role, onChanged }: {
           );
         })}
       </ul>
+      <LessonRatingDialog booking={rating} onClose={() => setRating(null)} onDone={onChanged} />
     </section>
   );
 }

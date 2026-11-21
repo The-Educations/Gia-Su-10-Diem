@@ -163,6 +163,7 @@ export const statusNames: Record<string, string> = {
   cancelled: "Đã hủy",
   completed: "Đã hoàn thành",
   missed: "Học sinh vắng",
+  tutor_missed: "Gia sư không đến",
   approved: "Đã công bố",
   rejected: "Cần bổ sung",
   withdrawn: "Đã gỡ hồ sơ",

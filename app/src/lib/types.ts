@@ -83,10 +83,18 @@ export type Tutor = {
   goals: string[];
   status: string;
   moderation_note: string;
-  rating: number;
   review_count: number;
+  trust: Trust;
   slots: Slot[];
   reviews: { author: string; rating: number; body: string; created_at: string; lessons: number }[];
+};
+export type Trust = {
+  score: number | null;
+  is_new: boolean;
+  sort_score: number;
+  review_count: number;
+  punctuality: number | null;
+  tags: { code: string; label: string; count: number }[];
 };
 export type Booking = {
   offer_id?: number | null;
@@ -108,6 +116,11 @@ export type Booking = {
   started_at?: string | null;
   reviewed: number | null;
   review_body?: string | null;
+  my_rating?: number | null;
+  my_tags?: string[];
+  rating_open_until?: string | null;
+  rating_edit_until?: string | null;
+  rating_editable?: boolean;
 };
 export type Resource = {
   id: number;
