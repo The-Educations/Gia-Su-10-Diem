@@ -2248,3 +2248,101 @@ test("tutor credentials need proof, stay private and show only approved labels p
   assert.equal((await tutor.request(`/tutor/credentials/${cert.data.id}`, "DELETE")).status, 200);
   assert.equal((await fetch(base + withPdf.files[0].url.replace("/api", ""), { headers: { Cookie: admin.cookie } })).status, 404);
 });
+test("wallet deposits, SePay webhook verdicts, offers holding money and tutor credits", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const secret = "test-sepay-secret";
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", ready: true } });
+  const student = client(), tutor = client(), admin = client();
+  const s = await student.login("student"), u = await tutor.login("chau"); await admin.login("admin");
+  const hook = (payload, key = secret, stamp = Math.floor(Date.now() / 1000)) => {
+    const body = JSON.stringify(payload);
+    return fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", key).update(`${stamp}.${body}`).digest("hex") }, body });
+  };
+  // Deposit: a unique code, a VietQR image, and no simulation when SePay is live.
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 2000000 });
+  assert.equal(dep.status, 201);
+  assert.match(dep.data.code, /^GSD[A-Z0-9]{8}$/);
+  assert.ok(dep.data.qr_url.startsWith("https://vietqr.app/img?"));
+  assert.equal((await student.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST")).status, 404);
+  const event = { id: 9001, gateway: "MBBank", transactionDate: "2026-11-22 10:00:00", accountNumber: "0123456789", subAccount: "", code: dep.data.code, content: `${dep.data.code} nap tien`, transferType: "in", description: "", transferAmount: 2000000, accumulated: 0, referenceCode: "FT1" };
+  assert.equal((await hook(event, "wrong")).status, 401);
+  assert.equal((await hook(event, secret, Math.floor(Date.now() / 1000) - 900)).status, 401);
+  assert.deepEqual(await (await hook(event)).json(), { success: true });
+  assert.deepEqual(await (await hook(event)).json(), { success: true });
+  assert.deepEqual(await (await hook({ ...event, id: 9002, code: "GSDUNKNOWN1" })).json(), { success: false });
+  assert.deepEqual(await (await hook({ ...event, id: 9003, transferType: "out" })).json(), { success: false });
+  let w = (await student.request("/wallet")).data;
+  assert.equal(w.available, 2000000);
+  assert.equal(w.payments, "live");
+
+  // A student's offer holds the whole package; a decline releases it.
+  const start = new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10);
+  const offer = { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 8, minutes: 90, rate: 200000, schedule: [{ weekday: 1, hour: 19, minute: 0 }], start_date: start, message: "Em cần ôn thi vào 10" };
+  assert.equal((await student.request("/proposals", "POST", { ...offer, sessions: 20 })).status, 402);
+  const sent = await student.request("/proposals", "POST", offer);
+  assert.equal(sent.status, 201);
+  assert.equal(sent.data.total, 1600000);
+  assert.equal(sent.data.payout, 1520000);
+  w = (await student.request("/wallet")).data;
+  assert.deepEqual([w.available, w.held], [400000, 1600000]);
+  assert.equal((await student.request("/proposals", "POST", offer)).status, 409);
+  assert.equal((await student.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" })).status, 403);
+  assert.equal((await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "decline" })).data.status, "declined");
+  w = (await student.request("/wallet")).data;
+  assert.deepEqual([w.available, w.held], [2000000, 0]);
+  assert.ok((await student.request("/notifications")).data.some(n => n.kind === "proposal_declined"));
+
+  // Expired offers release their hold on the next read.
+  const again = await student.request("/proposals", "POST", offer);
+  db.prepare("UPDATE proposals SET expires_at=? WHERE id=?").run(new Date(Date.now() - 1000).toISOString(), again.data.id);
+  assert.equal((await student.request("/proposals")).data.find(p => p.id === again.data.id).status, "expired");
+  assert.equal((await student.request("/wallet")).data.available, 2000000);
+
+  // A tutor's offer costs 2 of the 10 monthly credits; the student pays on accepting.
+  assert.equal((await tutor.request("/wallet")).data.credits_free, 10);
+  const pitch = await tutor.request("/proposals", "POST", { ...offer, tutor_id: undefined, student_id: s.id, sessions: 12 });
+  assert.equal(pitch.status, 201);
+  assert.equal((await tutor.request("/wallet")).data.credits_free, 8);
+  const short = await student.request(`/proposals/${pitch.data.id}`, "PATCH", { action: "accept" });
+  assert.equal(short.status, 402);
+  assert.match(short.data.error, /400\.000đ/);
+  assert.equal((await student.request("/proposals")).data.find(p => p.id === pitch.data.id).status, "pending");
+  const top = await student.request("/wallet/deposits", "POST", { amount: 400000 });
+  assert.deepEqual(await (await hook({ ...event, id: 9004, code: top.data.code.toLowerCase(), transferAmount: 400000 })).json(), { success: true });
+  assert.equal((await student.request(`/proposals/${pitch.data.id}`, "PATCH", { action: "accept" })).data.status, "accepted");
+  w = (await student.request("/wallet")).data;
+  assert.deepEqual([w.available, w.held], [0, 2400000]);
+
+  // Credits: buying a pack spends the tutor's balance; tutors cannot overdraw.
+  assert.equal((await tutor.request("/credits/purchase", "POST", { credits: 10 })).status, 402);
+  assert.equal((await admin.request(`/admin/wallets/${u.id}/adjust`, "POST", { amount: 60000, note: "Thưởng giới thiệu" })).status, 200);
+  const bought = (await tutor.request("/credits/purchase", "POST", { credits: 10 })).data;
+  assert.deepEqual([bought.available, bought.credits_paid], [10000, 10]);
+
+  // Withdrawals hold the amount, post a card to admin support, and settle by hand.
+  assert.equal((await tutor.request("/wallet/withdrawals", "POST", { amount: 50000, bank_name: "MB", account_number: "123", account_name: "A" })).status, 400);
+  await admin.request(`/admin/wallets/${u.id}/adjust`, "POST", { amount: 90000, note: "Thanh toán thử" });
+  const wd = await tutor.request("/wallet/withdrawals", "POST", { amount: 100000, bank_name: "MB Bank", account_number: "0987654321", account_name: "Nguyen Minh Chau" });
+  assert.equal(wd.status, 201);
+  assert.deepEqual([wd.data.available, wd.data.held], [0, 100000]);
+  const support = (await tutor.request("/support")).data[0];
+  assert.match((await tutor.request(`/support/${support.id}/messages`)).data.at(-1).body, /Yêu cầu rút tiền #\d+: 100\.000đ về MB Bank \*\*\*\*4321/);
+  assert.equal((await tutor.request(`/admin/withdrawals/${wd.data.id}`, "PATCH", { status: "paid" })).status, 403);
+  assert.equal((await admin.request(`/admin/withdrawals/${wd.data.id}`, "PATCH", { status: "paid" })).status, 200);
+  assert.equal((await admin.request(`/admin/withdrawals/${wd.data.id}`, "PATCH", { status: "paid" })).status, 409);
+  assert.deepEqual((({ available, held }) => [available, held])((await tutor.request("/wallet")).data), [0, 0]);
+  const finance = (await admin.request("/admin/finance")).data;
+  assert.equal(finance.totals.deposited, 2400000);
+  assert.equal(finance.totals.credit_revenue, 50000);
+  assert.equal(finance.unmatched.length, 2);
+});
+test("SePay webhook fails closed without a secret and deposits are simulated only in development", async (t) => {
+  const { client, base } = await fixture(t, { sepay: { secret: "", account: "", bank: "", holder: "", prefix: "GSD", ready: false } });
+  const student = client(); await student.login("student");
+  assert.equal((await fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: 1, transferType: "in", transferAmount: 1, code: "GSD" }) })).status, 503);
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 100000 });
+  assert.equal(dep.data.simulated, true);
+  assert.equal(dep.data.qr_url, null);
+  assert.equal((await student.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST")).data.status, "paid");
+  assert.equal((await student.request("/wallet")).data.available, 100000);
+});

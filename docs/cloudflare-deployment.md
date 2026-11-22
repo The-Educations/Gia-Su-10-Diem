@@ -174,3 +174,21 @@ Cancellation cancels future pending/accepted lessons only, retaining completed l
 Set `MAILFLARE_ADMIN_MAILBOX_ID` to the Mailflare mailbox for `admin@giasudiem10.online`, and `MAILFLARE_ADMIN_API_KEY` to a send-only API key scoped to that mailbox. Enter the key with `wrangler secret put MAILFLARE_ADMIN_API_KEY` through stdin; set the mailbox ID with `wrangler secret put MAILFLARE_ADMIN_MAILBOX_ID` or a Worker var. Node uses the same environment names. The contact key remains scoped to verification mail. Never use the contact mailbox to impersonate admin.
 
 Profile removals, hidden/rejected posts, and removed comments enqueue an email in the same database transaction, then attempt delivery after commit. Mail includes the affected item, reason, time, community/profile link and logo, with replies directed to admin. Failed or unconfigured delivery does not undo moderation: the admin sees a warning and the persisted “Email chưa gửi” list in community management. Retry is admin-only and throttled to once per minute; already-sent entries do not send again. Mailflare accepting a send request is not proof of inbox delivery. An ambiguous network failure can require checking Mailflare before retrying to avoid duplicate delivery. Deleting an account clears these mail records.
+
+## SePay: Số dư học phí
+
+Nạp tiền chỉ bật trên production khi có đủ `SEPAY_WEBHOOK_SECRET`, `SEPAY_BANK_ACCOUNT` và `SEPAY_BANK_CODE`. Thiếu một trong ba thì nút Nạp tiền tắt và webhook trả 503 (fail closed). Local không có khóa thì nạp tiền được giả lập bằng nút "Giả lập tiền đã về".
+
+1. my.sepay.vn → **Công ty → Cấu hình chung → Cấu trúc mã thanh toán**: tiền tố `GSD` (hoặc giá trị của `SEPAY_CODE_PREFIX`), kiểu **Số và chữ**, độ dài hậu tố tối thiểu và tối đa đều là **8**.
+2. my.sepay.vn → **Webhooks → Thêm webhook**: sự kiện **Tiền vào**, chỉ tài khoản nhận học phí, URL `https://giasudiem10.online/api/sepay/webhook`, xác thực **HMAC-SHA256**, bật **Dùng để xác thực thanh toán**, tắt **Chỉ gửi khi có mã thanh toán** và **Lọc theo mã thanh toán**.
+3. Lưu bí mật HMAC và thông tin tài khoản vào Worker (không commit):
+
+```bash
+npx wrangler secret put SEPAY_WEBHOOK_SECRET
+npx wrangler secret put SEPAY_BANK_ACCOUNT     # số tài khoản nhận
+npx wrangler secret put SEPAY_BANK_CODE        # mã ngân hàng VietQR, ví dụ MB, VCB, TCB
+npx wrangler secret put SEPAY_ACCOUNT_NAME     # tên chủ tài khoản, hiện cho người nạp
+```
+
+4. Thử bằng **Test mode → Mô phỏng giao dịch** với nội dung là một mã `GSD…` vừa tạo trên trang Số dư, rồi một lần chuyển khoản thật nhỏ. Webhook trả `{"success": true}` khi đã cộng số dư; mã không khớp được ghi vào "Tiền về chưa khớp mã" ở Quản trị → Tài chính.
+5. Sau khi chạy thật: bật **Tự động gửi lại khi server trả lỗi** và cảnh báo lỗi liên tiếp trong cấu hình webhook.

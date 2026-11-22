@@ -4,6 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import { createServer } from "node:http";
 import { createApi } from "../server/api.js";
+import { sepayConfig } from "../server/wallet.js";
 import { migrateDatabase } from "../server/db.js";
 import { seedCatalog } from "../server/seed-catalog.js";
 
@@ -42,6 +43,7 @@ export class Marketplace extends DurableObject {
       sendEmail: createMailflareSender({ url: env.MAILFLARE_URL, key: env.MAILFLARE_API_KEY, mailboxId: env.MAILFLARE_MAILBOX_ID }),
       sendAdminEmail: createMailflareSender({ url: env.MAILFLARE_URL, key: env.MAILFLARE_ADMIN_API_KEY, mailboxId: env.MAILFLARE_ADMIN_MAILBOX_ID, from: "admin@giasudiem10.online" }),
       clientIp: (req) => req.headers["x-giasu-client-ip"] || "unknown",
+      sepay: sepayConfig(env),
       wakeCalendar: async () => { if (!await ctx.storage.getAlarm()) await ctx.storage.setAlarm(Date.now() + 1000); },
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
