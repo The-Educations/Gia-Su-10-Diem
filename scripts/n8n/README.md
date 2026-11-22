@@ -16,7 +16,9 @@ Phiên bản đã dùng: n8n **2.48.7** (cache `npx`), Node 24 (`brew node@24`).
 
 ## Sơ đồ
 
-`Hẹn giờ (3 giờ)` → `Cài đặt` → `Đọc trạng thái` → `Danh sách nguồn` → `Đọc RSS` → `Chọn tin mới` → `Claude viết bài` → `Kiểm tra bài` → `Ghi nhận kiểm tra` → `Lưu trạng thái 1` → `Bài sẵn sàng` → `Đăng nhập web` → `Chuẩn bị đăng` → `Tạo bài nháp` → `Tổng kết` → `Lưu trạng thái 2`. Ô `Chạy tay` nối vào `Cài đặt` để bấm chạy thử.
+`Hẹn giờ (3 giờ)` → `Cài đặt` → `Đọc trạng thái` → `Danh sách nguồn` → `Đọc RSS` → `Chọn tin mới` → `Đăng nhập web` → `Lấy cookie` → `Claude viết bài` → `Kiểm tra bài` → `Ghi nhận kiểm tra` → `Lưu trạng thái 1` → `Bài sẵn sàng` → `Tạo bài nháp` → `Tổng kết` → `Lưu trạng thái 2`. Ô `Chạy tay` nối vào `Cài đặt` để bấm chạy thử.
+
+Đăng nhập nằm TRƯỚC bước Claude: login hỏng thì dừng ngay, không tốn lượt Claude nào.
 
 Quy tắc: bài luôn là nháp (`published: false`); tối đa 5 tin mỗi lần, 10 bài nháp mỗi ngày (giờ Việt Nam); lần chạy đầu chỉ lấy 5 tin mới nhất; lỗi đăng nhập hoặc lỗi Claude thì tin **không** bị đánh dấu nên lần sau thử lại.
 
@@ -42,6 +44,7 @@ Quy tắc: bài luôn là nháp (`published: false`); tối đa 5 tin mỗi lầ
 - **Bài nháp không xuất hiện, execution lỗi ở `Đăng nhập web`**: mật khẩu bot sai hoặc tài khoản chưa được nâng quyền admin. Tin chưa bị đánh dấu nên lần sau tự thử lại.
 - **Execution lỗi ở `Claude viết bài` hoặc bài toàn `error`**: thường là phiên đăng nhập `claude` hết hạn. Chạy `claude auth login` trong Terminal.
 - **`invalid syntax` ở ô Execute Command**: biểu thức có chuỗi `}}` bên trong. Giữ `{"mcpServers":{} }` có khoảng trắng.
+- **Báo "Đang có lần chạy khác…" ở ô Danh sách nguồn**: workflow dùng khoá `~/.n8n/news.lock` để hai lần chạy không đăng trùng bài (web không xoá được bài tin tức). Nếu một lần chạy bị dừng giữa chừng (ví dụ login hỏng) khoá tự gỡ sau 2 giờ; muốn chạy ngay thì `rmdir ~/.n8n/news.lock`. Mỗi lần gọi `claude` có giới hạn 5 phút.
 - **Muốn chạy lại từ đầu**: xoá `~/.n8n/news-state.json` (lần sau sẽ coi là lần chạy đầu: chỉ lấy 5 tin mới nhất).
 - **Xem log n8n**: `~/Library/Logs/n8n-news.log`.
 - **Chạy thử bằng dòng lệnh khi n8n đang chạy**: đặt thêm `N8N_RUNNERS_BROKER_PORT=5680` để không đụng cổng của n8n đang chạy, rồi `n8n execute --id=<id workflow>`.

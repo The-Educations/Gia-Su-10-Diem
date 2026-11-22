@@ -84,7 +84,7 @@
       ],
       "parameters": {
         "executeOnce": true,
-        "command": "cat \"$HOME/.n8n/news-state.json\" 2>/dev/null || true"
+        "command": "if mkdir \"$HOME/.n8n/news.lock\" 2>/dev/null || { find \"$HOME/.n8n/news.lock\" -maxdepth 0 -mmin +120 -exec rmdir {} \\; 2>/dev/null; mkdir \"$HOME/.n8n/news.lock\" 2>/dev/null; }; then cat \"$HOME/.n8n/news-state.json\" 2>/dev/null || true; else echo __LOCKED__; fi"
       }
     },
     {
@@ -97,7 +97,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const urls = String($('Cài đặt').first().json.feeds).split(\"\\n\").map((s) => s.trim()).filter(Boolean);\nreturn urls.map((url) => ({ json: { url } }));"
+        "jsCode": "if (String($('Đọc trạng thái').first().json.stdout).trim() === \"__LOCKED__\") {\n  throw new Error(\"Đang có lần chạy khác, hoặc lần chạy trước bị dừng giữa chừng. Nếu chắc chắn không có, xoá thư mục ~/.n8n/news.lock rồi chạy lại.\");\n}\nconst urls = String($('Cài đặt').first().json.feeds).split(\"\\n\").map((s) => s.trim()).filter(Boolean);\nreturn urls.map((url) => ({ json: { url } }));"
       }
     },
     {
@@ -130,80 +130,12 @@
     },
     {
       "id": "00000000-0000-4000-8000-000000000012",
-      "name": "Claude viết bài",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [
-        0,
-        300
-      ],
-      "parameters": {
-        "executeOnce": false,
-        "command": "={{ $json.none ? \"true\" : \"mkdir -p \\\"$HOME/.n8n/news-work\\\" && cd \\\"$HOME/.n8n/news-work\\\" && claude -p \\\"$(echo \" + $json.promptB64 + \" | base64 -d)\\\" --tools WebFetch --allowedTools WebFetch --output-format json --no-session-persistence --max-turns 4 --strict-mcp-config --mcp-config '{\\\"mcpServers\\\":{} }' --disable-slash-commands --setting-sources project\" }}"
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000013",
-      "name": "Kiểm tra bài",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        240,
-        300
-      ],
-      "parameters": {
-        "jsCode": "function parseClaudeOutput(raw) {\n  const objectsIn = (text) => {\n    const found = [];\n    for (let start = text.indexOf(\"{\"); start >= 0; start = text.indexOf(\"{\", start + 1)) {\n      let depth = 0;\n      let inString = false;\n      let escaped = false;\n      for (let i = start; i < text.length; i++) {\n        const c = text[i];\n        if (inString) {\n          if (escaped) escaped = false;\n          else if (c === \"\\\\\") escaped = true;\n          else if (c === '\"') inString = false;\n          continue;\n        }\n        if (c === '\"') inString = true;\n        else if (c === \"{\") depth += 1;\n        else if (c === \"}\") {\n          depth -= 1;\n          if (depth === 0) {\n            try {\n              found.push(JSON.parse(text.slice(start, i + 1)));\n            } catch {\n              // không phải JSON hợp lệ, thử vị trí { kế tiếp\n            }\n            break;\n          }\n        }\n      }\n    }\n    return found;\n  };\n\n  let text = String(raw ?? \"\");\n  try {\n    const outer = JSON.parse(text);\n    if (outer && typeof outer === \"object\" && typeof outer.result === \"string\" && !(\"skip\" in outer)) {\n      if (outer.is_error) return null;\n      text = outer.result;\n    }\n  } catch {\n    // không phải bao JSON của claude -p, coi là chữ thường\n  }\n\n  for (const o of objectsIn(text)) {\n    if (!o || typeof o !== \"object\" || typeof o.skip !== \"boolean\") continue;\n    if (o.skip) return { skip: true, reason: String(o.reason ?? \"\") };\n    if ([o.title, o.summary, o.body].every((v) => typeof v === \"string\")) {\n      return { skip: false, title: o.title, summary: o.summary, body: o.body };\n    }\n  }\n  return null;\n}\n\nfunction normalizeDraft(d) {\n  const clean = (s) =>\n    String(s)\n      .replace(/\\*\\*/g, \"\")\n      .replace(/`/g, \"\")\n      .replace(/^#{1,6}[ \\t]*/gm, \"\")\n      .replace(/\\n{3,}/g, \"\\n\\n\")\n      .trim();\n  return { title: clean(d.title), summary: clean(d.summary), body: clean(d.body) };\n}\n\nfunction validateDraft(d, item) {\n  const reasons = [];\n  if (d.title.length < 1 || d.title.length > 160) reasons.push(\"title phải từ 1 đến 160 ký tự\");\n  if (d.summary.length < 1 || d.summary.length > 500) reasons.push(\"summary phải từ 1 đến 500 ký tự\");\n  if (d.body.length < 600) reasons.push(\"body ngắn hơn 600 ký tự\");\n  if (d.body.length > 30000) reasons.push(\"body dài hơn 30000 ký tự\");\n  const lastLine = d.body.trim().split(\"\\n\").at(-1).trim();\n  if (!lastLine.startsWith(\"Nguồn:\") || !lastLine.includes(item.link)) {\n    reasons.push(\"dòng cuối phải bắt đầu bằng Nguồn: và chứa link bài gốc\");\n  }\n  return { ok: reasons.length === 0, reasons };\n}\n\nfunction buildPostBody(d) {\n  return { title: d.title, summary: d.summary, body: d.body, published: false };\n}\n\nconst picks = $('Chọn tin mới').all().map((i) => i.json);\nconst results = $input.all().map((i) => i.json);\nreturn picks.map((p, i) => {\n  if (p.none) return { json: { kind: \"none\", markSeen: p.markSeen, today: p.today } };\n  const base = { link: p.link, title: p.title, source: p.source, markSeen: p.markSeen, today: p.today };\n  const r = results[i] || {};\n  if (r.error || typeof r.stdout !== \"string\") return { json: { ...base, kind: \"error\", reason: String(r.error || \"không có kết quả\") } };\n  const parsed = parseClaudeOutput(r.stdout);\n  if (!parsed) return { json: { ...base, kind: \"error\", reason: \"không đọc được đầu ra của Claude\" } };\n  if (parsed.skip) return { json: { ...base, kind: \"skipped\", reason: parsed.reason } };\n  const draft = normalizeDraft(parsed);\n  const check = validateDraft(draft, p);\n  if (!check.ok) return { json: { ...base, kind: \"rejected\", reason: check.reasons.join(\"; \") } };\n  return { json: { ...base, kind: \"ready\", postBody: buildPostBody(draft) } };\n});"
-      }
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000014",
-      "name": "Ghi nhận kiểm tra",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        480,
-        300
-      ],
-      "parameters": {
-        "jsCode": "function parseState(text) {\n  const empty = { seen: [], daily: { date: \"\", count: 0 } };\n  if (!text) return empty;\n  let raw;\n  try {\n    raw = JSON.parse(text);\n  } catch {\n    return empty;\n  }\n  if (!raw || typeof raw !== \"object\") return empty;\n  const seen = Array.isArray(raw.seen) ? raw.seen.filter((l) => typeof l === \"string\") : [];\n  const daily = raw.daily && typeof raw.daily === \"object\" ? raw.daily : {};\n  return {\n    seen,\n    daily: {\n      date: typeof daily.date === \"string\" ? daily.date : \"\",\n      count: Number.isFinite(daily.count) ? daily.count : 0,\n    },\n  };\n}\n\nfunction settle(state, outcomes, today) {\n  const done = new Set(state.seen);\n  const seen = [...state.seen];\n  let posted = 0;\n  for (const o of outcomes) {\n    if (o.kind === \"posted\") posted += 1;\n    if (o.kind === \"error\") continue;\n    if (!done.has(o.link)) {\n      done.add(o.link);\n      seen.push(o.link);\n    }\n  }\n  const base = state.daily.date === today ? state.daily.count : 0;\n  return { seen: seen.slice(-2000), daily: { date: today, count: base + posted } };\n}\n\nconst writeCommand = (state) =>\n  'mkdir -p \"$HOME/.n8n\" && echo ' + Buffer.from(JSON.stringify(state), \"utf8\").toString(\"base64\") +\n  ' | base64 -d > \"$HOME/.n8n/news-state.json\"';\n\nconst state0 = parseState($('Đọc trạng thái').first().json.stdout);\nconst rows = $input.all().map((i) => i.json);\nconst markSeen = rows.flatMap((r) => r.markSeen || []);\nconst outcomes = [\n  ...markSeen.map((link) => ({ link, kind: \"skipped\" })),\n  ...rows.filter((r) => r.link && r.kind !== \"ready\").map((r) => ({ link: r.link, kind: r.kind })),\n];\nconst state = settle(state0, outcomes, rows[0].today);\nconst log = rows.filter((r) => r.reason).map((r) => r.kind + \": \" + r.link + \" — \" + r.reason);\nreturn [{ json: { state, command: writeCommand(state), log } }];"
-      }
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000015",
-      "name": "Lưu trạng thái 1",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [
-        720,
-        300
-      ],
-      "parameters": {
-        "executeOnce": true,
-        "command": "={{ $json.command }}"
-      }
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000016",
-      "name": "Bài sẵn sàng",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        960,
-        300
-      ],
-      "parameters": {
-        "jsCode": "return $('Kiểm tra bài').all().filter((i) => i.json.kind === \"ready\");"
-      }
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000017",
       "name": "Đăng nhập web",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         0,
-        600
+        300
       ],
       "parameters": {
         "method": "POST",
@@ -235,16 +167,84 @@
       }
     },
     {
-      "id": "00000000-0000-4000-8000-000000000018",
-      "name": "Chuẩn bị đăng",
+      "id": "00000000-0000-4000-8000-000000000013",
+      "name": "Lấy cookie",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         240,
+        300
+      ],
+      "parameters": {
+        "jsCode": "function extractSessionCookie(setCookie) {\n  const text = Array.isArray(setCookie) ? setCookie.join(\"\\n\") : String(setCookie ?? \"\");\n  const match = text.match(/giasu_session=([^;,\\s]+)/);\n  return match ? `giasu_session=${match[1]}` : null;\n}\n\nconst login = $input.first().json;\nconst cookie = extractSessionCookie(login.headers && login.headers[\"set-cookie\"]);\nif (!cookie) throw new Error(\"Đăng nhập web không trả cookie phiên (kiểm tra credential News Bot Login)\");\nreturn $('Chọn tin mới').all().map((i) => ({ json: { ...i.json, cookie } }));"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000014",
+      "name": "Claude viết bài",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "executeOnce": false,
+        "command": "={{ $json.none ? \"true\" : \"mkdir -p \\\"$HOME/.n8n/news-work\\\" && cd \\\"$HOME/.n8n/news-work\\\" && perl -e 'alarm 300; exec @ARGV' claude -p \\\"$(echo \" + $json.promptB64 + \" | base64 -d)\\\" --tools WebFetch --allowedTools WebFetch --output-format json --no-session-persistence --max-turns 4 --strict-mcp-config --mcp-config '{\\\"mcpServers\\\":{} }' --disable-slash-commands --setting-sources project\" }}"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000015",
+      "name": "Kiểm tra bài",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "jsCode": "function parseClaudeOutput(raw) {\n  const objectsIn = (text) => {\n    const found = [];\n    for (let start = text.indexOf(\"{\"); start >= 0; start = text.indexOf(\"{\", start + 1)) {\n      let depth = 0;\n      let inString = false;\n      let escaped = false;\n      for (let i = start; i < text.length; i++) {\n        const c = text[i];\n        if (inString) {\n          if (escaped) escaped = false;\n          else if (c === \"\\\\\") escaped = true;\n          else if (c === '\"') inString = false;\n          continue;\n        }\n        if (c === '\"') inString = true;\n        else if (c === \"{\") depth += 1;\n        else if (c === \"}\") {\n          depth -= 1;\n          if (depth === 0) {\n            try {\n              found.push(JSON.parse(text.slice(start, i + 1)));\n            } catch {\n              // không phải JSON hợp lệ, thử vị trí { kế tiếp\n            }\n            break;\n          }\n        }\n      }\n    }\n    return found;\n  };\n\n  let text = String(raw ?? \"\");\n  try {\n    const outer = JSON.parse(text);\n    if (outer && typeof outer === \"object\" && typeof outer.result === \"string\" && !(\"skip\" in outer)) {\n      if (outer.is_error) return null;\n      text = outer.result;\n    }\n  } catch {\n    // không phải bao JSON của claude -p, coi là chữ thường\n  }\n\n  for (const o of objectsIn(text)) {\n    if (!o || typeof o !== \"object\" || typeof o.skip !== \"boolean\") continue;\n    if (o.skip) return { skip: true, reason: String(o.reason ?? \"\") };\n    if ([o.title, o.summary, o.body].every((v) => typeof v === \"string\")) {\n      return { skip: false, title: o.title, summary: o.summary, body: o.body };\n    }\n  }\n  return null;\n}\n\nfunction normalizeDraft(d) {\n  const clean = (s) =>\n    String(s)\n      .replace(/\\*\\*/g, \"\")\n      .replace(/`/g, \"\")\n      .replace(/^#{1,6}[ \\t]*/gm, \"\")\n      .replace(/\\n{3,}/g, \"\\n\\n\")\n      .trim();\n  return { title: clean(d.title), summary: clean(d.summary), body: clean(d.body) };\n}\n\nfunction validateDraft(d, item) {\n  const reasons = [];\n  if (d.title.length < 1 || d.title.length > 160) reasons.push(\"title phải từ 1 đến 160 ký tự\");\n  if (d.summary.length < 1 || d.summary.length > 500) reasons.push(\"summary phải từ 1 đến 500 ký tự\");\n  if (d.body.length < 600) reasons.push(\"body ngắn hơn 600 ký tự\");\n  if (d.body.length > 30000) reasons.push(\"body dài hơn 30000 ký tự\");\n  const lastLine = d.body.trim().split(\"\\n\").at(-1).trim();\n  if (!lastLine.startsWith(\"Nguồn:\") || !lastLine.includes(item.link)) {\n    reasons.push(\"dòng cuối phải bắt đầu bằng Nguồn: và chứa link bài gốc\");\n  }\n  return { ok: reasons.length === 0, reasons };\n}\n\nfunction buildPostBody(d) {\n  return { title: d.title, summary: d.summary, body: d.body, published: false };\n}\n\nconst picks = $('Lấy cookie').all().map((i) => i.json);\nconst results = $input.all().map((i) => i.json);\nreturn picks.map((p, i) => {\n  if (p.none) return { json: { kind: \"none\", markSeen: p.markSeen, today: p.today } };\n  const base = { link: p.link, title: p.title, source: p.source, markSeen: p.markSeen, today: p.today, cookie: p.cookie };\n  const r = results[i] || {};\n  if (r.error || typeof r.stdout !== \"string\") return { json: { ...base, kind: \"error\", reason: String(r.error || \"không có kết quả\") } };\n  const parsed = parseClaudeOutput(r.stdout);\n  if (!parsed) return { json: { ...base, kind: \"error\", reason: \"không đọc được đầu ra của Claude\" } };\n  if (parsed.skip) return { json: { ...base, kind: \"skipped\", reason: parsed.reason } };\n  const draft = normalizeDraft(parsed);\n  const check = validateDraft(draft, p);\n  if (!check.ok) return { json: { ...base, kind: \"rejected\", reason: check.reasons.join(\"; \") } };\n  return { json: { ...base, kind: \"ready\", postBody: buildPostBody(draft) } };\n});"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000016",
+      "name": "Ghi nhận kiểm tra",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "jsCode": "function parseState(text) {\n  const empty = { seen: [], daily: { date: \"\", count: 0 } };\n  if (!text) return empty;\n  let raw;\n  try {\n    raw = JSON.parse(text);\n  } catch {\n    return empty;\n  }\n  if (!raw || typeof raw !== \"object\") return empty;\n  const seen = Array.isArray(raw.seen) ? raw.seen.filter((l) => typeof l === \"string\") : [];\n  const daily = raw.daily && typeof raw.daily === \"object\" ? raw.daily : {};\n  return {\n    seen,\n    daily: {\n      date: typeof daily.date === \"string\" ? daily.date : \"\",\n      count: Number.isFinite(daily.count) ? daily.count : 0,\n    },\n  };\n}\n\nfunction settle(state, outcomes, today) {\n  const done = new Set(state.seen);\n  const seen = [...state.seen];\n  let posted = 0;\n  for (const o of outcomes) {\n    if (o.kind === \"posted\") posted += 1;\n    if (o.kind === \"error\") continue;\n    if (!done.has(o.link)) {\n      done.add(o.link);\n      seen.push(o.link);\n    }\n  }\n  const base = state.daily.date === today ? state.daily.count : 0;\n  return { seen: seen.slice(-2000), daily: { date: today, count: base + posted } };\n}\n\nconst writeCommand = (state, release) =>\n  'mkdir -p \"$HOME/.n8n\" && echo ' + Buffer.from(JSON.stringify(state), \"utf8\").toString(\"base64\") +\n  ' | base64 -d > \"$HOME/.n8n/news-state.json\"' + (release ? '; rmdir \"$HOME/.n8n/news.lock\" 2>/dev/null || true' : '');\n\nconst state0 = parseState($('Đọc trạng thái').first().json.stdout);\nconst rows = $input.all().map((i) => i.json);\nconst markSeen = rows.flatMap((r) => r.markSeen || []);\nconst outcomes = [\n  ...markSeen.map((link) => ({ link, kind: \"skipped\" })),\n  ...rows.filter((r) => r.link && r.kind !== \"ready\").map((r) => ({ link: r.link, kind: r.kind })),\n];\nconst state = settle(state0, outcomes, rows[0].today);\nconst log = rows.filter((r) => r.reason).map((r) => r.kind + \": \" + r.link + \" — \" + r.reason);\nconst hasReady = rows.some((r) => r.kind === \"ready\");\nreturn [{ json: { state, command: writeCommand(state, !hasReady), log } }];"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000017",
+      "name": "Lưu trạng thái 1",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "executeOnce": true,
+        "command": "={{ $json.command }}"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000018",
+      "name": "Bài sẵn sàng",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
         600
       ],
       "parameters": {
-        "jsCode": "function extractSessionCookie(setCookie) {\n  const text = Array.isArray(setCookie) ? setCookie.join(\"\\n\") : String(setCookie ?? \"\");\n  const match = text.match(/giasu_session=([^;,\\s]+)/);\n  return match ? `giasu_session=${match[1]}` : null;\n}\n\nconst login = $input.first().json;\nconst cookie = extractSessionCookie(login.headers && login.headers[\"set-cookie\"]);\nif (!cookie) throw new Error(\"Đăng nhập web không trả cookie phiên (kiểm tra credential News Bot Login)\");\nreturn $('Bài sẵn sàng').all().map((i) => ({ json: { link: i.json.link, postBody: i.json.postBody, cookie, today: i.json.today } }));"
+        "jsCode": "return $('Kiểm tra bài').all().filter((i) => i.json.kind === \"ready\")\n  .map((i) => ({ json: { link: i.json.link, postBody: i.json.postBody, cookie: i.json.cookie, today: i.json.today } }));"
       }
     },
     {
@@ -253,7 +253,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        480,
+        240,
         600
       ],
       "parameters": {
@@ -285,11 +285,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        720,
+        480,
         600
       ],
       "parameters": {
-        "jsCode": "function settle(state, outcomes, today) {\n  const done = new Set(state.seen);\n  const seen = [...state.seen];\n  let posted = 0;\n  for (const o of outcomes) {\n    if (o.kind === \"posted\") posted += 1;\n    if (o.kind === \"error\") continue;\n    if (!done.has(o.link)) {\n      done.add(o.link);\n      seen.push(o.link);\n    }\n  }\n  const base = state.daily.date === today ? state.daily.count : 0;\n  return { seen: seen.slice(-2000), daily: { date: today, count: base + posted } };\n}\n\nconst writeCommand = (state) =>\n  'mkdir -p \"$HOME/.n8n\" && echo ' + Buffer.from(JSON.stringify(state), \"utf8\").toString(\"base64\") +\n  ' | base64 -d > \"$HOME/.n8n/news-state.json\"';\n\nconst state1 = $('Ghi nhận kiểm tra').first().json.state;\nconst prepared = $('Chuẩn bị đăng').all().map((i) => i.json);\nconst results = $input.all().map((i) => i.json);\nconst outcomes = prepared.map((p, i) => ({ link: p.link, kind: results[i] && !results[i].error && results[i].id ? \"posted\" : \"error\" }));\nconst state = settle(state1, outcomes, prepared[0].today);\nreturn [{ json: { state, command: writeCommand(state), posted: outcomes.filter((o) => o.kind === \"posted\").length } }];"
+        "jsCode": "function settle(state, outcomes, today) {\n  const done = new Set(state.seen);\n  const seen = [...state.seen];\n  let posted = 0;\n  for (const o of outcomes) {\n    if (o.kind === \"posted\") posted += 1;\n    if (o.kind === \"error\") continue;\n    if (!done.has(o.link)) {\n      done.add(o.link);\n      seen.push(o.link);\n    }\n  }\n  const base = state.daily.date === today ? state.daily.count : 0;\n  return { seen: seen.slice(-2000), daily: { date: today, count: base + posted } };\n}\n\nconst writeCommand = (state, release) =>\n  'mkdir -p \"$HOME/.n8n\" && echo ' + Buffer.from(JSON.stringify(state), \"utf8\").toString(\"base64\") +\n  ' | base64 -d > \"$HOME/.n8n/news-state.json\"' + (release ? '; rmdir \"$HOME/.n8n/news.lock\" 2>/dev/null || true' : '');\n\nconst state1 = $('Ghi nhận kiểm tra').first().json.state;\nconst prepared = $('Bài sẵn sàng').all().map((i) => i.json);\nconst results = $input.all().map((i) => i.json);\nconst outcomes = prepared.map((p, i) => ({ link: p.link, kind: results[i] && !results[i].error && results[i].id ? \"posted\" : \"error\" }));\nconst state = settle(state1, outcomes, prepared[0].today);\nreturn [{ json: { state, command: writeCommand(state, true), posted: outcomes.filter((o) => o.kind === \"posted\").length } }];"
       }
     },
     {
@@ -298,7 +298,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        960,
+        720,
         600
       ],
       "parameters": {
@@ -324,7 +324,7 @@
     },
     {
       "id": "00000000-0000-4000-8000-000000000023",
-      "name": "Ghi chú 4–5. Claude viết bài và kiểm tra",
+      "name": "Ghi chú 4–5. Đăng nhập, Claude viết bài và kiểm tra",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -332,15 +332,15 @@
         130
       ],
       "parameters": {
-        "content": "4–5. Claude viết bài và kiểm tra\nClaude viết lại bằng lời mới (lệnh claude -p). Bài sai độ dài hoặc thiếu dòng Nguồn bị bỏ.",
-        "width": 1240,
+        "content": "4–5. Đăng nhập, Claude viết bài và kiểm tra\nĐăng nhập bằng tài khoản bot trước (hỏng thì dừng, không tốn lượt Claude). Claude viết lại bằng lời mới; bài sai độ dài hoặc thiếu dòng Nguồn bị bỏ.",
+        "width": 1480,
         "height": 140,
         "color": 6
       }
     },
     {
       "id": "00000000-0000-4000-8000-000000000024",
-      "name": "Ghi chú 6–7. Đăng nháp lên web",
+      "name": "Ghi chú 6–7. Tạo bài nháp trên web",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -348,8 +348,8 @@
         430
       ],
       "parameters": {
-        "content": "6–7. Đăng nháp lên web\nĐăng nhập bằng tài khoản bot rồi tạo bài NHÁP. 8–9: bạn mở Admin → Tin tức duyệt và bấm đăng.",
-        "width": 1240,
+        "content": "6–7. Tạo bài nháp trên web\nChỉ tạo bài NHÁP. 8–9: bạn mở Admin → Tin tức duyệt và bấm đăng.",
+        "width": 960,
         "height": 140,
         "color": 4
       }
@@ -415,6 +415,28 @@
       "main": [
         [
           {
+            "node": "Đăng nhập web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đăng nhập web": {
+      "main": [
+        [
+          {
+            "node": "Lấy cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy cookie": {
+      "main": [
+        [
+          {
             "node": "Claude viết bài",
             "type": "main",
             "index": 0
@@ -467,28 +489,6 @@
       ]
     },
     "Bài sẵn sàng": {
-      "main": [
-        [
-          {
-            "node": "Đăng nhập web",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Đăng nhập web": {
-      "main": [
-        [
-          {
-            "node": "Chuẩn bị đăng",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Chuẩn bị đăng": {
       "main": [
         [
           {

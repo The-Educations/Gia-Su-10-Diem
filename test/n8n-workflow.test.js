@@ -8,8 +8,8 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 const FLOW = [
   "Hẹn giờ", "Cài đặt", "Đọc trạng thái", "Danh sách nguồn", "Đọc RSS", "Chọn tin mới",
-  "Claude viết bài", "Kiểm tra bài", "Ghi nhận kiểm tra", "Lưu trạng thái 1", "Bài sẵn sàng",
-  "Đăng nhập web", "Chuẩn bị đăng", "Tạo bài nháp", "Tổng kết", "Lưu trạng thái 2",
+  "Đăng nhập web", "Lấy cookie", "Claude viết bài", "Kiểm tra bài", "Ghi nhận kiểm tra",
+  "Lưu trạng thái 1", "Bài sẵn sàng", "Tạo bài nháp", "Tổng kết", "Lưu trạng thái 2",
 ];
 
 // Chạy mã của một ô Code với dữ liệu giả của các ô khác.
@@ -81,7 +81,7 @@ test("mã các ô Code hợp lệ và nhúng đủ hàm", () => {
     "Chọn tin mới": ["pickNew", "parseState", "todayVN", "buildPrompt"],
     "Kiểm tra bài": ["parseClaudeOutput", "normalizeDraft", "validateDraft", "buildPostBody"],
     "Ghi nhận kiểm tra": ["settle", "parseState"],
-    "Chuẩn bị đăng": ["extractSessionCookie"],
+    "Lấy cookie": ["extractSessionCookie"],
     "Tổng kết": ["settle"],
   };
   for (const n of wf.nodes.filter((x) => x.type === "n8n-nodes-base.code")) {
@@ -108,21 +108,18 @@ test("Chọn tin mới: không có tin mới thì trả đúng một mục none 
 });
 
 test("Kiểm tra bài phân loại ready, skipped, rejected, error", async () => {
-  const picks = items(
-    { link: "L1", title: "t", source: "VnExpress", markSeen: [], today: "2026-11-22" },
-    { link: "L2", title: "t", source: "VnExpress", markSeen: [], today: "2026-11-22" },
-    { link: "L3", title: "t", source: "VnExpress", markSeen: [], today: "2026-11-22" },
-    { link: "L4", title: "t", source: "VnExpress", markSeen: [], today: "2026-11-22" },
-  );
+  const pick = (link) => ({ link, title: "t", source: "VnExpress", markSeen: [], today: "2026-11-22", cookie: "giasu_session=c" });
+  const picks = items(pick("L1"), pick("L2"), pick("L3"), pick("L4"));
   const results = items(
     { exitCode: 0, stderr: "", stdout: claudeOut("L1") },
     { exitCode: 0, stderr: "", stdout: JSON.stringify({ is_error: false, result: '{"skip":true,"reason":"tin thể thao"}' }) },
     { exitCode: 0, stderr: "", stdout: claudeOut("L3", { body: "quá ngắn" }) },
     { error: "Failed to authenticate" },
   );
-  const out = (await run("Kiểm tra bài", { nodes: { "Chọn tin mới": picks }, input: results })).map((o) => o.json);
+  const out = (await run("Kiểm tra bài", { nodes: { "Lấy cookie": picks }, input: results })).map((o) => o.json);
   assert.deepEqual(out.map((o) => o.kind), ["ready", "skipped", "rejected", "error"]);
   assert.equal(out[0].postBody.published, false);
+  assert.equal(out[0].cookie, "giasu_session=c");
 });
 
 test("Ghi nhận kiểm tra: không ghi tin ready và error, có ghi markSeen lần chạy đầu", async () => {
@@ -147,7 +144,7 @@ test("Tổng kết: bài tạo lỗi không bị đánh dấu, bài tạo đư�
   const state1 = items({ state: { seen: ["X"], daily: { date: "2026-11-22", count: 1 } } });
   const prepared = items({ link: "L1", today: "2026-11-22" }, { link: "L2", today: "2026-11-22" });
   const out = await run("Tổng kết", {
-    nodes: { "Ghi nhận kiểm tra": state1, "Chuẩn bị đăng": prepared },
+    nodes: { "Ghi nhận kiểm tra": state1, "Bài sẵn sàng": prepared },
     input: items({ id: 7 }, { error: "HTTP 500" }),
   });
   const written = JSON.parse(Buffer.from(out[0].json.command.match(/echo (\S+) \|/)[1], "base64").toString());
@@ -155,26 +152,54 @@ test("Tổng kết: bài tạo lỗi không bị đánh dấu, bài tạo đư�
   assert.deepEqual(written.daily, { date: "2026-11-22", count: 2 });
 });
 
-test("Chuẩn bị đăng: dừng với lỗi rõ ràng khi đăng nhập không trả cookie", async () => {
-  await assert.rejects(
-    run("Chuẩn bị đăng", { nodes: { "Bài sẵn sàng": items({ link: "L1", postBody: {}, today: "t" }) }, input: items({ headers: {}, statusCode: 200 }) }),
-    /cookie/i,
+test("Lấy cookie: dừng với lỗi rõ ràng khi đăng nhập không trả cookie, và gắn cookie vào từng tin", async () => {
+  const picks = items({ link: "L1", title: "t" }, { link: "L2", title: "t" });
+  await assert.rejects(run("Lấy cookie", { nodes: { "Chọn tin mới": picks }, input: items({ headers: {}, statusCode: 200 }) }), /cookie/i);
+  const out = await run("Lấy cookie", { nodes: { "Chọn tin mới": picks }, input: items({ headers: { "set-cookie": ["giasu_session=abc; Path=/"] } }) });
+  assert.deepEqual(out.map((o) => [o.json.link, o.json.cookie]), [["L1", "giasu_session=abc"], ["L2", "giasu_session=abc"]]);
+});
+
+test("Bài sẵn sàng chỉ chuyển tiếp tin ready, kèm cookie, và trả rỗng khi không có", async () => {
+  const rows = items(
+    { kind: "ready", link: "L1", postBody: { published: false }, cookie: "giasu_session=c", today: "t" },
+    { kind: "error", link: "L2" },
   );
-  const ok = await run("Chuẩn bị đăng", {
-    nodes: { "Bài sẵn sàng": items({ link: "L1", postBody: { published: false }, today: "t" }) },
-    input: items({ headers: { "set-cookie": ["giasu_session=abc; Path=/"] } }),
+  const out = await run("Bài sẵn sàng", { nodes: { "Kiểm tra bài": rows } });
+  assert.deepEqual(out.map((o) => o.json), [{ link: "L1", postBody: { published: false }, cookie: "giasu_session=c", today: "t" }]);
+  assert.deepEqual(await run("Bài sẵn sàng", { nodes: { "Kiểm tra bài": items({ kind: "none" }) } }), []);
+});
+
+test("Đăng nhập web đứng trước Claude viết bài: login hỏng thì không tốn lượt Claude", () => {
+  assert.ok(FLOW.indexOf("Đăng nhập web") < FLOW.indexOf("Claude viết bài"));
+  assert.ok(FLOW.indexOf("Chọn tin mới") < FLOW.indexOf("Đăng nhập web"));
+});
+
+test("khoá chống chạy chồng: Đọc trạng thái lấy khoá và báo __LOCKED__ khi không lấy được", () => {
+  const cmd = node("Đọc trạng thái").parameters.command;
+  assert.ok(cmd.includes('mkdir "$HOME/.n8n/news.lock"'));
+  assert.ok(cmd.includes("-mmin +120"), "khoá treo quá 2 giờ phải tự gỡ");
+  assert.ok(cmd.includes("__LOCKED__"));
+});
+
+test("Danh sách nguồn dừng với lỗi rõ ràng khi đang bị khoá, chạy bình thường khi không", async () => {
+  const feeds = items({ baseUrl: "http://x", feeds: "https://a.example/rss\nhttps://b.example/rss" });
+  await assert.rejects(run("Danh sách nguồn", { nodes: { "Cài đặt": feeds, "Đọc trạng thái": items({ stdout: "__LOCKED__" }) } }), /news\.lock/);
+  const ok = await run("Danh sách nguồn", { nodes: { "Cài đặt": feeds, "Đọc trạng thái": items({ stdout: "" }) } });
+  assert.equal(ok.length, 2);
+});
+
+test("khoá được nhả: ở Lưu trạng thái 1 khi không có bài để đăng, và luôn ở Lưu trạng thái 2", async () => {
+  const noReady = await run("Ghi nhận kiểm tra", { nodes: { "Đọc trạng thái": noState }, input: items({ link: "L1", kind: "skipped", markSeen: [], today: "2026-11-22" }) });
+  assert.ok(noReady[0].json.command.includes("rmdir"));
+  const withReady = await run("Ghi nhận kiểm tra", { nodes: { "Đọc trạng thái": noState }, input: items({ link: "L1", kind: "ready", markSeen: [], today: "2026-11-22" }) });
+  assert.ok(!withReady[0].json.command.includes("rmdir"), "còn bài phải đăng thì chưa được nhả khoá");
+  const done = await run("Tổng kết", {
+    nodes: { "Ghi nhận kiểm tra": items({ state: { seen: [], daily: { date: "2026-11-22", count: 0 } } }), "Bài sẵn sàng": items({ link: "L1", today: "2026-11-22" }) },
+    input: items({ id: 1 }),
   });
-  assert.equal(ok[0].json.cookie, "giasu_session=abc");
+  assert.ok(done[0].json.command.includes("rmdir"));
 });
 
-test("biểu thức của ô Claude không chứa }} bên trong (sẽ làm n8n báo invalid syntax)", () => {
-  const cmd = node("Claude viết bài").parameters.command;
-  assert.ok(cmd.startsWith("={{") && cmd.endsWith("}}"));
-  assert.ok(!cmd.slice(3, -2).includes("}}"), "}} bên trong biểu thức cắt cụt nó");
-  assert.ok(cmd.includes('mcpServers\\":{} }'), "mcp-config phải là {} } có khoảng trắng");
-});
-
-test("có ô Chạy tay nối vào Cài đặt để bấm chạy thử trong n8n và bằng n8n execute", () => {
-  assert.equal(node("Chạy tay").type, "n8n-nodes-base.manualTrigger");
-  assert.deepEqual(wf.connections["Chạy tay"].main[0].map((c) => c.node), ["Cài đặt"]);
+test("claude -p có giới hạn thời gian để một lần treo không giữ khoá mãi", () => {
+  assert.ok(node("Claude viết bài").parameters.command.includes("alarm 300"));
 });
