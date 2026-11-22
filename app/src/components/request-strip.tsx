@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
 import { useLoad } from "@/lib/api";
 import type { CommunityRequest, CommunityRequests } from "@/lib/types";
 import { Person } from "@/components/common";
 import { memberImageUrl } from "@/components/community/shared";
 
-const SPEED = 30; // px per second
-const MARQUEE_MIN = 4; // fewer cards than this stay still
+const SPEED = 45; // px per second, slow enough to read
 const STILL = "(prefers-reduced-motion: reduce), (hover: none)";
 
 // Reduced motion and touch screens: no hover to pause on, so show a swipeable row.
@@ -28,35 +26,36 @@ function useStill() {
 
 const roleLabel = (tier: string) => (tier === "parent" ? "Phụ huynh" : "Học sinh");
 
-function Card({ item, hidden }: { item: CommunityRequest; hidden?: boolean }) {
+function Item({ item, hidden }: { item: CommunityRequest; hidden?: boolean }) {
   const { author } = item,
     topic = [item.subject, item.level].filter(Boolean).join(" · ");
   return (
     <li>
       <Link
-        className="request-card"
+        className="ticker-item"
         to={`/community/${item.id}`}
         tabIndex={hidden ? -1 : undefined}
-        aria-label={`${author.name_part}${topic ? `, ${topic}` : ""}: ${item.title}`}
+        aria-label={`${author.name_part}, ${roleLabel(author.tier)}${topic ? `, ${topic}` : ""}: ${item.title}${item.summary ? `. ${item.summary}` : ""}`}
       >
-        <span className="request-card-author">
-          <Person
-            name={author.name_part}
-            src={author.has_avatar ? memberImageUrl(author, "avatar") : undefined}
-          />
-          <span>
-            <strong>{author.name_part}</strong> · {roleLabel(author.tier)}
-          </span>
+        <Person
+          name={author.name_part}
+          src={author.has_avatar ? memberImageUrl(author, "avatar") : undefined}
+        />
+        <strong>{author.name_part}</strong>
+        {topic && <span className="ticker-topic">{topic}</span>}
+        <span className="ticker-text">
+          {item.title}
+          {item.summary && <span className="ticker-summary"> — {item.summary}</span>}
         </span>
-        {topic && <span className="request-card-topic">{topic}</span>}
-        <span className="request-card-title">{item.title}</span>
       </Link>
     </li>
   );
 }
 
-// Strip of recent "looking for a tutor" posts on the tutor dashboard. It is an
-// extra: while loading, on error or with nothing to show it renders nothing.
+// Ticker in the top bar of a tutor's workspace: recent "looking for a tutor" posts
+// scroll from right to left, each as an avatar plus a short summary; a click opens
+// the whole post in the community. It is an extra: while loading, on error or with
+// nothing to show it renders nothing.
 export function RequestStrip() {
   const { data, error } = useLoad<CommunityRequests>("/community/requests"),
     items = data?.items ?? [],
@@ -77,41 +76,38 @@ export function RequestStrip() {
     return () => observer.disconnect();
   }, [items.length]);
   if (error || !items.length) return null;
-  const marquee =
-    !still && items.length >= MARQUEE_MIN && width.list > width.frame;
+  // Even one long summary does not fit the bar, so it runs whenever it overflows.
+  const marquee = !still && width.list > width.frame;
   return (
-    <section className="request-strip" aria-labelledby="request-strip-title">
-      <header>
-        <h2 id="request-strip-title">Đang tìm gia sư</h2>
-        <Link
-          className="text-link"
-          to={`/community?q=${encodeURIComponent("tìm gia sư")}`}
-        >
-          Xem tất cả <ArrowRight size={14} aria-hidden="true" />
-        </Link>
-      </header>
+    <section className="topbar-ticker" aria-label="Đang tìm gia sư">
+      <Link
+        className="ticker-label"
+        to={`/community?q=${encodeURIComponent("tìm gia sư")}`}
+      >
+        Đang tìm gia sư
+      </Link>
       <div
-        className="request-strip-frame"
+        className="ticker-frame"
         data-mode={marquee ? "marquee" : "static"}
         ref={frame}
       >
         <div
-          className="request-strip-track"
+          className="ticker-track"
           style={
             marquee
-              ? ({ "--request-strip-duration": `${Math.max(width.list / SPEED, 1)}s` } as React.CSSProperties)
+              ? ({ "--ticker-duration": `${Math.max(width.list / SPEED, 1)}s` } as React.CSSProperties)
               : undefined
           }
         >
           <ul ref={list}>
             {items.map((item) => (
-              <Card key={item.id} item={item} />
+              <Item key={item.id} item={item} />
             ))}
           </ul>
           {marquee && (
             <ul aria-hidden="true">
               {items.map((item) => (
-                <Card key={item.id} item={item} hidden />
+                <Item key={item.id} item={item} hidden />
               ))}
             </ul>
           )}

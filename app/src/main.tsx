@@ -43,6 +43,7 @@ import {
 import { Loading, ErrorState } from "./components/common";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { LanguageSwitch } from "./components/language-switch";
+import { RequestStrip } from "./components/request-strip";
 import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
@@ -272,6 +273,7 @@ function Shell() {
             {t(loc.pathname.startsWith("/community") ? "Cộng đồng" : nav.find((n) => n.to === loc.pathname)?.label || "Gia Sư 10 Điểm")}
           </span>
           </div>
+          {user?.role === "tutor" && <RequestStrip />}
           <div className="topbar-right">
             {user?.demo && (
               <span className="demo-indicator">{t("Tài khoản mẫu")}</span>

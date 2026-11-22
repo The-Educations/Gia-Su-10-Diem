@@ -34,7 +34,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { TodayLessons } from "@/components/today-lessons";
-import { RequestStrip } from "@/components/request-strip";
 import { CoursesToReview, CourseReviewDialog } from "@/components/trust";
 export default function Dashboard() {
   const [reviewing, setReviewing] = useState<StudyOffer | null>(null);
@@ -121,7 +120,6 @@ export default function Dashboard() {
         ]}
       />
       <TodayLessons lessons={rows} role={isTutor ? "tutor" : "student"} onChanged={bookings.reload} />
-      {isTutor && <RequestStrip />}
       {!isTutor && <CoursesToReview offers={offers.data || []} onReview={setReviewing} />}
       <CourseReviewDialog offer={reviewing} onClose={() => setReviewing(null)} onDone={() => { offers.reload(); bookings.reload(); }} />
       <div className="workspace-overview">

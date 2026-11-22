@@ -17,7 +17,7 @@ import {
 import { registerCommunityDrafts, consumeDraft } from "./community-drafts.js";
 import { attachPostImages } from "./community-images.js";
 import { registerCommunityAdmin } from "./community-admin.js";
-import { classifyRequest, requestTopic } from "./community-requests.js";
+import { classifyRequest, requestTopic, summarize } from "./community-requests.js";
 
 export const publicPosts = "p.status='approved' AND u.status='active'";
 const joins = "FROM community_posts p JOIN users u ON u.id=p.author_id";
@@ -278,6 +278,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
       items.push({
         id: p.id,
         title: p.title,
+        summary: summarize(p.title, p.body),
         ...requestTopic(`${p.title}\n${p.body}`),
         published_at: p.published_at,
         author: author(p.author_id, req.user),
