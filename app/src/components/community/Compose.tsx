@@ -1,3 +1,4 @@
+import { TOPICS, looksLikeFindTutor } from "./Pitches";
 import { useEffect, useId, useRef, useState } from "react";
 import { useBlocker, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export default function Compose({
 }) {
   const { user, refresh } = useApp(),
     id = useId();
+  const [topic, setTopic] = useState<string>((post as { topic?: string } | undefined)?.topic || "");
   const [title, setTitle] = useState(
       draft?.title || post?.revision_title || post?.title || "",
     ),
@@ -129,6 +131,10 @@ export default function Compose({
         onSubmit={async (e) => {
           e.preventDefault();
           if (uploading || busy) return;
+          if (!endpoint && !topic) { setError("Chọn chủ đề cho bài viết."); return; }
+          // Ask again when the text and the chosen topic do not seem to match.
+          const seeks = looksLikeFindTutor(`${title} ${body}`);
+          if (!endpoint && seeks !== (topic === "find_tutor") && !confirm(seeks ? "Bài này có vẻ đang tìm gia sư. Vẫn đăng vào chủ đề đã chọn?" : "Bài này chưa thấy nhu cầu tìm gia sư rõ ràng. Vẫn đăng vào chủ đề Tìm gia sư?")) return;
           gate.run(async () => {
             setBusy(true);
             setError("");
@@ -140,6 +146,7 @@ export default function Compose({
                 post || endpoint?.endsWith("rules") ? "PUT" : "POST",
                 {
                   title,
+                  topic,
                   body,
                   body_html: html,
                   ...(savedDraft
@@ -176,6 +183,15 @@ export default function Compose({
         }}
       >
         <FieldGroup>
+          {!endpoint && (
+            <Field>
+              <FieldLabel htmlFor={`${id}-topic`}>Chủ đề</FieldLabel>
+              <select id={`${id}-topic`} className="native-select" value={topic} onChange={(e) => setTopic(e.target.value)} required>
+                <option value="">Chọn chủ đề</option>
+                {TOPICS.filter(([v]) => v !== "announcement").map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+              </select>
+            </Field>
+          )}
           <Field data-invalid={!!fields.title}>
             <FieldLabel htmlFor={`${id}-title`}>Tiêu đề</FieldLabel>
             <Input

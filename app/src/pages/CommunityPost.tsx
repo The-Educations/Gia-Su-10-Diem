@@ -15,6 +15,7 @@ import {
 } from "@/components/community/shared";
 import Compose from "@/components/community/Compose";
 import CommentThread from "@/components/community/CommentThread";
+import { PitchPanel, PostReactions } from "@/components/community/Pitches";
 import ActionDialog, {
   type CommunityAction,
 } from "@/components/community/ActionDialog";
@@ -224,7 +225,8 @@ export default function CommunityPost() {
             </details>
           )}
         </article>
-        {live && <CommentThread post={p} />}
+        {live && <PostReactions post={p} />}
+        {live && ((p as { topic?: string }).topic === "find_tutor" ? <PitchPanel post={p} /> : <CommentThread post={p} />)}
         {edit && (
           <Compose
             post={p}
