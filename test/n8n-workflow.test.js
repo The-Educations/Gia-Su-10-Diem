@@ -16,7 +16,8 @@ const FLOW = [
 const run = (name, { nodes = {}, input = [] } = {}) => {
   const ref = (n) => ({ first: () => nodes[n][0], all: () => nodes[n] });
   const $input = { first: () => input[0], all: () => input };
-  return new AsyncFunction("$", "$input", "Buffer", node(name).parameters.jsCode)(ref, $input, Buffer);
+  // URL bị che (undefined) để mô phỏng sandbox của n8n không có URL toàn cục.
+  return new AsyncFunction("$", "$input", "Buffer", "URL", node(name).parameters.jsCode)(ref, $input, Buffer, undefined);
 };
 const items = (...rows) => rows.map((json) => ({ json }));
 const cfg = items({ baseUrl: "http://x", perRun: 5, perDay: 10, feeds: "a" });
@@ -164,4 +165,16 @@ test("Chuẩn bị đăng: dừng với lỗi rõ ràng khi đăng nhập không
     input: items({ headers: { "set-cookie": ["giasu_session=abc; Path=/"] } }),
   });
   assert.equal(ok[0].json.cookie, "giasu_session=abc");
+});
+
+test("biểu thức của ô Claude không chứa }} bên trong (sẽ làm n8n báo invalid syntax)", () => {
+  const cmd = node("Claude viết bài").parameters.command;
+  assert.ok(cmd.startsWith("={{") && cmd.endsWith("}}"));
+  assert.ok(!cmd.slice(3, -2).includes("}}"), "}} bên trong biểu thức cắt cụt nó");
+  assert.ok(cmd.includes('mcpServers\\":{} }'), "mcp-config phải là {} } có khoảng trắng");
+});
+
+test("có ô Chạy tay nối vào Cài đặt để bấm chạy thử trong n8n và bằng n8n execute", () => {
+  assert.equal(node("Chạy tay").type, "n8n-nodes-base.manualTrigger");
+  assert.deepEqual(wf.connections["Chạy tay"].main[0].map((c) => c.node), ["Cài đặt"]);
 });

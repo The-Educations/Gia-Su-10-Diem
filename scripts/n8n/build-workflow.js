@@ -15,7 +15,8 @@ const FEEDS = [
 const STATE_FILE = '"$HOME/.n8n/news-state.json"';
 const CLAUDE_FLAGS =
   "--tools WebFetch --allowedTools WebFetch --output-format json --no-session-persistence --max-turns 4 " +
-  "--strict-mcp-config --mcp-config '{\"mcpServers\":{}}' --disable-slash-commands --setting-sources project";
+  "--strict-mcp-config --mcp-config '{\"mcpServers\":{} }' --disable-slash-commands --setting-sources project";
+// Lưu ý: cố ý có khoảng trắng trong {} } vì "}}" bên trong biểu thức n8n sẽ cắt cụt biểu thức ("invalid syntax").
 
 const inline = (...fns) => fns.map((f) => f.toString()).join("\n\n");
 const BASE_URL = "={{ $('Cài đặt').first().json.baseUrl }}";
@@ -38,12 +39,8 @@ return urls.map((url) => ({ json: { url } }));
 
 const SOURCES = { "vnexpress.net": "VnExpress", "tuoitre.vn": "Tuổi Trẻ", "dantri.com.vn": "Dân Trí", "thanhnien.vn": "Thanh Niên" };
 const sourceName = (link) => {
-  try {
-    const host = new URL(link).hostname.replace(/^www\\./, "");
-    return SOURCES[host] || host;
-  } catch {
-    return "Nguồn khác";
-  }
+  const m = String(link).match(/^https?:\\/\\/(?:www\\.)?([^\\/:?#]+)/);
+  return m ? SOURCES[m[1]] || m[1] : "Nguồn khác";
 };
 const cfg = $('Cài đặt').first().json;
 const state = parseState($('Đọc trạng thái').first().json.stdout);
@@ -131,6 +128,7 @@ export function buildWorkflow() {
   const [R1, R2, R3] = [0, 300, 600];
 
   add("Hẹn giờ", "n8n-nodes-base.scheduleTrigger", 1.2, [col(0), R1], { rule: { interval: [{ field: "hours", hoursInterval: 3 }] } });
+  add("Chạy tay", "n8n-nodes-base.manualTrigger", 1, [col(0), R1 - 150], {});
   add("Cài đặt", "n8n-nodes-base.set", 3.4, [col(1), R1], {
     assignments: {
       assignments: [
@@ -196,6 +194,8 @@ export function buildWorkflow() {
   FLOW.slice(0, -1).forEach((from, i) => {
     connections[from] = { main: [[{ node: FLOW[i + 1], type: "main", index: 0 }]] };
   });
+
+  connections["Chạy tay"] = { main: [[{ node: "Cài đặt", type: "main", index: 0 }]] };
 
   return { name: "Tin tức tự động", nodes, connections, active: false, settings: { executionOrder: "v1" }, pinData: {} };
 }
