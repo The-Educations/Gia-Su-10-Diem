@@ -33,7 +33,7 @@ const LONG_BODY = "Con học lớp 9 đang yếu hình học không gian, cần 
 
 test("the ticker sits in the top bar of every tutor page; students and an empty list get nothing", async ({ page, request }) => {
   await login(page, "chau");
-  await expect(page.getByText("Buổi dạy tiếp theo")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Không gian gia sư" })).toBeVisible();
   await expect(ticker(page)).toHaveCount(0); // no posts: the region of posts is not there, only the ident
   await expect(page.locator(".topbar-ticker[data-alone] .ticker-ad")).toBeVisible();
   await add(request, { author: "profile-student", title: SEEKING[0], body: LONG_BODY });
@@ -54,14 +54,14 @@ test("the ticker sits in the top bar of every tutor page; students and an empty 
   expect(place).toEqual({ inBar: true, afterLocation: true, beforeSwitch: true, inMain: false });
   await expect(page.getByRole("heading", { name: "Đang tìm gia sư" })).toHaveCount(0);
   // The bar stays when the tutor moves to another page.
-  await page.getByRole("link", { name: "Lịch dạy của tôi" }).first().click();
-  await expect(page).toHaveURL(/\/app\/bookings/);
+  await page.getByRole("link", { name: "Lịch" }).first().click();
+  await expect(page).toHaveURL(/\/app\/schedule/);
   await expect(ticker(page)).toBeVisible();
 
   const student = await page.context().browser()!.newContext();
   const studentPage = await student.newPage();
   await login(studentPage, "profile-student");
-  await expect(studentPage.getByText("Buổi học tiếp theo")).toBeVisible();
+  await expect(studentPage.getByRole("heading", { name: "Góc học tập" })).toBeVisible();
   await expect(ticker(studentPage)).toHaveCount(0);
   await student.close();
 });
@@ -162,7 +162,7 @@ test("a failed request hides the ticker without breaking the page", async ({ pag
   await add(request, { author: "profile-student", title: SEEKING[0] });
   await page.route("**/api/community/requests", (route) => route.fulfill({ status: 500, json: { error: "x" } }));
   await login(page, "chau");
-  await expect(page.getByText("Buổi dạy tiếp theo")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Không gian gia sư" })).toBeVisible();
   await expect(ticker(page)).toHaveCount(0);
 });
 
@@ -192,7 +192,7 @@ test("students and parents get a ticker of tutors looking for students; tutors d
   }
   // The tutor's own bar shows posts from students and parents only, so with none it stays empty.
   await login(page, "chau");
-  await expect(page.getByText("Buổi dạy tiếp theo")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Không gian gia sư" })).toBeVisible();
   await expect(page.locator(".topbar-ticker:not([data-alone])")).toHaveCount(0); // no posts: only the ident
 });
 
