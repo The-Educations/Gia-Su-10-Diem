@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles.css";
 import { PageMetadata } from "./components/page-metadata";
+import { BackgroundMusic } from "./components/background-music";
 const Offers = lazy(() => import("./pages/Offers"));
 const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
@@ -236,6 +237,7 @@ function Shell() {
   return (
     <div className="app-shell" data-auth-page={loc.pathname === "/auth" || undefined} data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
       <PageMetadata />
+      {loc.pathname !== "/auth" && <BackgroundMusic />}
       <a href="#main" className="skip-link">
         {t("Đến nội dung")}
       </a>
