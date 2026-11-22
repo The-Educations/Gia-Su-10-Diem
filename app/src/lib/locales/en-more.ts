@@ -1377,4 +1377,12 @@ export const enMore: Record<string, string> = {
   "Hoàn credit": "Credits refunded",
   "Thanh toán buổi học": "Lesson payment",
   "Đến tin nhắn đầu tiên": "Go to first message",
+  "Việc cần làm": "To do",
+  "Chưa có buổi sắp tới": "No upcoming lessons",
+  "Nhận offer để mở lớp": "Accept an offer to open a class",
+  "Tìm gia sư và gửi offer": "Find a tutor and send an offer",
+  "Offer cần trả lời": "Offers to answer",
+  "Buổi cần xác nhận": "Lessons to confirm",
+  "Sắp hết gói": "Packages ending soon",
+  "Còn {n} buổi": "{n} lessons left",
 };

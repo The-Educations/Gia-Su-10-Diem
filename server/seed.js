@@ -77,6 +77,7 @@ export async function seedDemo(db, password, options = {}) {
       3,
     ],
   ];
+  people.push(["Phụ huynh Lan", "parent", "student"]);
   for (const [
     name,
     slug,

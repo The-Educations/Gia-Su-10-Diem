@@ -1,3 +1,4 @@
+import { TodayPanel } from "@/components/today-panel";
 import { lessonMessageHref } from "@/lib/message-context";
 import type { StudyOffer } from "@/lib/offers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,7 +25,6 @@ import {
   TextLink,
 } from "@/components/common";
 import {
-  WorkspaceStats,
   WorkspacePanel,
   WorkspacePanels,
   WeekAgenda,
@@ -95,25 +95,7 @@ export default function Dashboard() {
         }
       />
       {!isTutor && (!user.school || !user.ward_code) && <Alert><AlertDescription><Link to="/settings">Hoàn thiện hồ sơ: trường học & nơi sinh sống</Link></AlertDescription></Alert>}
-      <WorkspaceStats
-        items={[
-          {
-            label: isTutor ? "Buổi dạy sắp tới" : "Buổi học sắp tới",
-            value: upcoming.length,
-            to: "/bookings",
-          },
-          {
-            label: "Chờ phản hồi",
-            value: pending.length + pendingOffers.length,
-            to: pendingOffers.length ? "/offers" : "/bookings?status=pending",
-          },
-          {
-            label: "Đã hoàn thành",
-            value: rows.filter((b) => b.status === "completed").length,
-            to: "/bookings?status=completed",
-          },
-        ]}
-      />
+      <TodayPanel />
       <TodayLessons lessons={rows} role={isTutor ? "tutor" : "student"} onChanged={bookings.reload} />
       {!isTutor && <CoursesToReview offers={offers.data || []} onReview={setReviewing} />}
       <CourseReviewDialog offer={reviewing} onClose={() => setReviewing(null)} onDone={() => { offers.reload(); bookings.reload(); }} />
