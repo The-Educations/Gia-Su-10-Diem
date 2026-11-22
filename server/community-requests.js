@@ -73,13 +73,49 @@ export function requestTopic(text) {
   return { subject, level };
 }
 
+// Quy tắc mở rộng: trong CÙNG MỘT CÂU, từ nói về nhu cầu đứng TRƯỚC từ chỉ gia sư
+// và cách nhau không quá MAX_GAP từ ("cần tìm một gia sư", "nhờ giới thiệu gia sư").
+// Từ nhu cầu đứng sau, hoặc ở câu khác, không tính ("gia sư của em dạy tốt, em cần cố gắng").
+const NEED_WORDS = ["tim", "can", "kiem", "xin", "muon", "gioi thieu", "goi y", "ai biet", "ai day"];
+// "nhờ" / "thuê" chỉ nhận khi có dấu: bỏ dấu thì trùng "nhỏ", "nhớ", "thuế".
+const NEED_WORDS_ACCENTED = ["nhờ", "thuê"];
+const TUTOR_WORDS = ["gia su", "giao vien", "nguoi day kem", "nguoi day", "co giao"];
+// "thầy" chỉ nhận khi có dấu: bỏ dấu thì trùng "thay" (thay đổi).
+const TUTOR_WORDS_ACCENTED = ["thầy"];
+const MAX_GAP = 6;
+// Đứng ngay trước từ nhu cầu thì nghĩa là ngược lại: "không cần gia sư", "đã tìm gia sư".
+const NEGATING = new Set(["không", "khong", "khỏi", "khoi", "hết", "het", "đã"]);
+
+const sentences = (title, body) =>
+  `${title ?? ""}. ${body ?? ""}`.split(/[.!?;:]+|\n\s*\n/);
+const tokens = (s) => s.normalize("NFC").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+const phrase = (p) => p.split(" ");
+// Vị trí [bắt đầu, kết thúc) của mỗi lần một cụm xuất hiện trong mảng từ.
+const spans = (words, phrases) =>
+  phrases.flatMap((p) => {
+    const ps = phrase(p), found = [];
+    for (let i = 0; i + ps.length <= words.length; i++)
+      if (ps.every((w, k) => words[i + k] === w)) found.push([i, i + ps.length]);
+    return found;
+  });
+
+function seeksTutor(sentence) {
+  const accented = tokens(sentence), folded = accented.map(fold);
+  const allowed = ([start]) => !NEGATING.has(accented[start - 1]);
+  const exact = [
+    ...spans(folded, SEEKING_TUTOR_PHRASES),
+    ...spans(accented, SEEKING_TUTOR_ACCENTED_PHRASES),
+  ];
+  if (exact.some(allowed)) return true;
+  const needs = [...spans(folded, NEED_WORDS), ...spans(accented, NEED_WORDS_ACCENTED)].filter(allowed);
+  const tutors = [...spans(folded, TUTOR_WORDS), ...spans(accented, TUTOR_WORDS_ACCENTED)];
+  return needs.some(([, end]) => tutors.some(([start]) => start >= end && start - end <= MAX_GAP));
+}
+
 export function classifyRequest({ title, body, authorRole }) {
-  const { accented, folded } = normalize(`${title ?? ""}\n${body ?? ""}`);
+  const { folded } = normalize(`${title ?? ""}\n${body ?? ""}`);
   if (authorRole === "student")
-    return matchesAny(folded, SEEKING_TUTOR_PHRASES) ||
-      matchesAny(accented, SEEKING_TUTOR_ACCENTED_PHRASES)
-      ? "seeking_tutor"
-      : null;
+    return sentences(title, body).some(seeksTutor) ? "seeking_tutor" : null;
   if (authorRole === "tutor")
     return matchesAny(folded, SEEKING_STUDENT_PHRASES)
       ? "seeking_student"

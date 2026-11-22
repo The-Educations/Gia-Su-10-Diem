@@ -102,7 +102,17 @@ Lý do lọc theo vai trò người đăng [ĐỀ XUẤT, đã trình bày và �
 
 Chỉ cần **một** cụm khớp là bài được coi là tìm gia sư. Không có cụm loại trừ, vì việc lọc theo vai trò ở mục 3.1 đã thay thế.
 
-**Đã biết và chấp nhận** [CHỐT]: nhận bằng từ khóa sẽ có lúc nhầm hoặc sót, và chỉ người đăng sửa bài mới thay đổi được kết quả. Nếu sau này nhầm nhiều thì mới thêm bước admin sửa.
+**Quy tắc mở rộng (22/11/2026)** [CHỐT]: bảng trên chỉ bắt các cụm dính liền, nên đo thực tế bỏ sót 8/12 câu đăng bài bình thường ("Mình cần tìm **một** gia sư Toán", "Tìm **giúp mình** gia sư", "Nhờ mọi người giới thiệu gia sư"...). Vì vậy bài còn được nhận khi **trong cùng một câu** có:
+
+1. một **từ nhu cầu** đứng **trước**: `tìm`, `cần`, `kiếm`, `xin`, `muốn`, `giới thiệu`, `gợi ý`, `ai biết`, `ai dạy`, và (chỉ khi có dấu) `nhờ`, `thuê`;
+2. rồi một **từ chỉ gia sư**: `gia sư`, `giáo viên`, `người dạy kèm`, `người dạy`, `cô giáo`, và (chỉ khi có dấu) `thầy`;
+3. hai từ cách nhau **không quá 6 từ**.
+
+Câu được tách ở `. ! ? ; :` và dòng trống (xuống dòng đơn không tách). Tiêu đề và nội dung là các câu riêng.
+
+Không nhận khi từ nhu cầu đứng **ngay sau** `không`, `khỏi`, `hết` hoặc `đã` ("không cần gia sư nữa", "đã tìm gia sư rồi"). Quy tắc phủ định này áp dụng cho cả các cụm dính liền ở bảng trên. Từ nhu cầu đứng **sau** từ chỉ gia sư không tính ("gia sư của em dạy tốt, em cần cố gắng").
+
+**Đã biết và chấp nhận** [CHỐT]: nhận bằng từ khóa sẽ có lúc nhầm hoặc sót, và chỉ người đăng sửa bài mới thay đổi được kết quả. Ví dụ "không tìm được gia sư" (đang tìm mà chưa được) bị bỏ sót vì có `không` đứng trước. Nếu sau này nhầm nhiều thì mới thêm bước admin sửa.
 
 ### 3.3 Môn và cấp học hiển thị trên thẻ
 

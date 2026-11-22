@@ -26,6 +26,15 @@ Triển khai theo `docs/dai-tim-gia-su-dashboard.md` (Phần 1). Nhánh `feat/da
 - Chế độ "cuộn ngang" và "tĩnh" dùng chung một kiểu `overflow-x: auto`; lớp mờ hai mép chỉ bật khi đang chạy ngang.
 - Dashboard hiện không có chế độ tối riêng; dải dùng biến màu chung nên theo được nếu sau này có.
 
+## Mở rộng bộ nhận diện (22/11/2026)
+
+Sau khi dải lên site thật, chủ dự án ngồi canh mà không thấy bài nào chạy qua. Nguyên nhân: bộ nhận diện chỉ bắt cụm dính liền và bỏ sót 8/12 câu đăng bài thường gặp. Đã sửa trong `server/community-requests.js`:
+
+- Thêm quy tắc "từ nhu cầu đứng trước từ chỉ gia sư trong cùng một câu, cách nhau tối đa 6 từ" (chi tiết ở mục 3.2 của thiết kế).
+- Thêm phủ định: không nhận khi từ nhu cầu đứng ngay sau `không`, `khỏi`, `hết`, `đã`. Việc này cũng sửa một lỗi cũ: "Mình không cần gia sư nữa" trước đây vẫn được nhận.
+- Vai trò người đăng vẫn được lọc trước, nên bài của gia sư và admin không bao giờ vào dải 1.
+- Test mới trong `test/community-requests.test.js`: 15 câu phải nhận, 11 câu phải loại, và kiểm tra gia sư/admin không bị ảnh hưởng.
+
 ## Chưa làm
 
 - Bước 2 (dải ngược cho học sinh/phụ huynh). `classifyRequest` đã có nhánh `seeking_student` và test, chưa có giao diện.
