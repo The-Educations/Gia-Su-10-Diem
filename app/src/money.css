@@ -339,3 +339,12 @@
 .today-child-balance { font-variant-numeric: tabular-nums; font-weight: 600; }
 @media (max-width: 760px) { .today-panel { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .today-next { transition: none; } }
+
+.student-checks { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.student-checks li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+.student-check-files { display: flex; flex-wrap: wrap; gap: 8px; }
+.student-check-files img { width: 140px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.student-checks dl { display: grid; gap: 6px; margin: 0; font-size: 14px; }
+.student-checks dt { font-size: 12px; color: var(--muted-foreground); }
+.student-checks dd { margin: 0; }
+@media (max-width: 760px) { .student-checks li { grid-template-columns: 1fr; } }

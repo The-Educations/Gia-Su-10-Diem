@@ -109,7 +109,7 @@ function Shell() {
   const model = navigationFor(user),
     title = loc.pathname.startsWith("/community") ? "Cộng đồng" : (allItems(model).find((n) => n.to === loc.pathname) || allItems(model).find((n) => loc.pathname.startsWith(n.to + "/")))?.label || "Gia Sư 10 Điểm";
   return (
-    <div className="app-shell" data-auth-page={loc.pathname === "/auth" || undefined} data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
+    <div className="app-shell" data-auth-page={loc.pathname === "/auth" || undefined} data-setup={["/onboarding", "/verify-email"].includes(loc.pathname) || undefined} data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
       <PageMetadata />
       <a href="#main" className="skip-link">
         {t("Đến nội dung")}

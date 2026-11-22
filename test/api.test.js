@@ -2421,9 +2421,11 @@ test("parents link with a child's code, top up and follow the child; community t
   assert.equal((await child.request("/wallet")).data.available, 600000);
   assert.equal((await other.request("/wallet/deposits", "POST", { amount: 600000, student_id: c.id })).status, 403);
   const start = new Date(Date.now() + 7 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
-  const sent = await parent.request("/proposals", "POST", { tutor_id: u.id, student_id: c.id, subject_id: "toan", mode: "online", sessions: 2, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start });
+  // Parents follow; the child sends the offer from the student account.
+  const offerBody = { tutor_id: u.id, student_id: c.id, subject_id: "toan", mode: "online", sessions: 2, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start };
+  assert.equal((await parent.request("/proposals", "POST", offerBody)).status, 403);
+  const sent = await child.request("/proposals", "POST", offerBody);
   assert.equal(sent.status, 201);
-  assert.equal(sent.data.student_id, c.id);
   assert.ok((await parent.request("/proposals")).data.some(p => p.id === sent.data.id));
   const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
   assert.equal((await parent.request(`/classes/${accepted.data.class_id}`)).status, 200);
@@ -2458,4 +2460,40 @@ test("quick demo sign-in exists only outside production", async (t) => {
   assert.equal(me.data.user.role, "tutor");
   assert.equal((await b.request("/auth/demo")).data.enabled, false);
   assert.equal((await b.request("/auth/demo", "POST", { role: "admin" })).status, 404);
+});
+
+test("students verify with a school record; one record and one student code per account; tutors cannot share proof", async (t) => {
+  const { client, base, db } = await fixture(t), a = client(), b = client(), admin = client(), tutor = client(), other = client();
+  for (const [c, email] of [[a, "hs-a@example.test"], [b, "hs-b@example.test"]]) {
+    await c.request("/auth/register", "POST", { name: "Học sinh", email, password: "StudentStudy2026!" });
+    db.prepare("UPDATE users SET onboarding_step=3 WHERE email=?").run(email);
+  }
+  await admin.login("admin"); const u = await tutor.login("chau"); await other.login("nam");
+  const pdf = Buffer.from("%PDF-1.4 học bạ của bạn A");
+  const start = new Date(Date.now() + 7 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
+  const offer = { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 1, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start };
+  assert.equal((await a.request("/proposals", "POST", offer)).status, 403);
+  assert.equal((await a.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "HS 0001" })).status, 400);
+  const res = await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: a.cookie, "Content-Type": "application/pdf" }, body: pdf });
+  assert.equal(res.status, 201);
+  assert.equal((await a.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "hs 0001" })).data.status, "pending");
+  // The same file or the same student code cannot verify a second account.
+  assert.equal((await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: b.cookie, "Content-Type": "application/pdf" }, body: pdf })).status, 409);
+  await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: b.cookie, "Content-Type": "application/pdf" }, body: Buffer.from("%PDF-1.4 bạn B") });
+  assert.equal((await b.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "HS0001" })).status, 409);
+  const pending = (await admin.request("/admin/verifications")).data;
+  assert.equal(pending.length, 1);
+  assert.equal((await admin.request(`/admin/verifications/${pending[0].user_id}`, "PATCH", { status: "rejected" })).status, 400);
+  assert.equal((await admin.request(`/admin/verifications/${pending[0].user_id}`, "PATCH", { status: "approved" })).status, 200);
+  const dep = await a.request("/wallet/deposits", "POST", { amount: 200000 });
+  await a.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
+  assert.equal((await a.request("/proposals", "POST", offer)).status, 201);
+  // Tutors: one proof file and one candidate number per tutor.
+  const mine = (await tutor.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0", reference: "VN123456" } })).data;
+  const proof = Buffer.from("%PDF-1.4 IELTS của Châu");
+  assert.equal((await fetch(base + `/tutor/credentials/${mine.id}/files`, { method: "POST", headers: { Cookie: tutor.cookie, "Content-Type": "application/pdf" }, body: proof })).status, 201);
+  const theirs = (await other.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0" } })).data;
+  assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: proof })).status, 409);
+  assert.equal((await other.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "7.0", reference: "VN123456" } })).status, 409);
+  assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: pdf })).status, 409);
 });

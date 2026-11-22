@@ -699,3 +699,12 @@ main {
     transition: none;
   }
 }
+
+/* Account setup is a focused screen: no navigation until the role is chosen. */
+.app-shell[data-setup] > .sidebar,
+.app-shell[data-setup] > .mobile-bar,
+.app-shell[data-setup] .topbar-location,
+.app-shell[data-setup] .topbar-ticker,
+.app-shell[data-setup] .notification-bell { display: none; }
+.app-shell[data-setup] > .app-body { margin-left: 0; padding-bottom: 0; }
+.app-shell[data-setup] .mobile-brand { display: inline-flex; }

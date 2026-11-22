@@ -335,6 +335,7 @@ export function registerClasses(app, db, auth, audit) {
   app.get("/api/admin/today", auth("admin"), (req, res) => {
     upkeep(db);
     res.json({
+      students: one(db, "SELECT COUNT(*) n FROM student_verifications WHERE status='pending'").n,
       tutors: one(db, "SELECT COUNT(*) n FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.status='pending' AND u.status='active'").n,
       credentials: one(db, "SELECT COUNT(*) n FROM tutor_credentials c WHERE c.status='pending' AND EXISTS(SELECT 1 FROM credential_files f WHERE f.credential_id=c.id)").n,
       withdrawals: one(db, "SELECT COUNT(*) n FROM withdrawals WHERE status='requested'").n,

@@ -11,6 +11,7 @@ import { registerProposals } from "./proposals.js";
 import { registerClasses, classRatings } from "./classes.js";
 import { registerCommunityTopics } from "./community-topics.js";
 import { registerFamily } from "./family.js";
+import { registerStudentVerification } from "./student-verification.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -95,7 +96,7 @@ export function createApi(
         !(
           (req.method === "PUT" && /^\/community\/me\/(avatar|cover)$/.test(req.path)) ||
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path)))
+          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path) || req.path === "/account/verification/files"))
         ) &&
         !req.is("application/json")
       )
@@ -258,6 +259,7 @@ export function createApi(
   registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
   registerCredentials(app, db, auth, audit, processPhoto);
+  registerStudentVerification(app, db, auth, audit, processPhoto);
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);

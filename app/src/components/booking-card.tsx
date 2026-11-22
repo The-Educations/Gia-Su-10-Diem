@@ -6,6 +6,7 @@ import { api, money, useApp } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { Subject, Tutor } from "@/lib/types";
 import { ProposalComposer } from "./proposal-composer";
+import { VerifyFirst, useVerification } from "./student-verification";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 
@@ -15,6 +16,7 @@ type Rating = { average: number | null; count: number };
 // to start — an offer (pays into a held package) or a free message first.
 export function BookingCard({ tutor, subjects }: { tutor: Tutor & { rating?: Rating }; subjects: Subject[] }) {
   const { user } = useApp(), { t } = useI18n(), navigate = useNavigate(),
+    verification = useVerification(),
     [asking, setAsking] = useState(false), [body, setBody] = useState(""), [busy, setBusy] = useState(false);
   const r = tutor.rating;
   async function ask() {
@@ -33,7 +35,7 @@ export function BookingCard({ tutor, subjects }: { tutor: Tutor & { rating?: Rat
         {r?.average ? <span><Star aria-hidden="true" className="star-filled" />{r.average.toFixed(1)} · {t("{n} đánh giá", { n: r.count })}</span> : <span className="muted">{t("Chưa có đánh giá")}</span>}
         {!!tutor.verified?.length && <span><BadgeCheck aria-hidden="true" />{t("{n} mục đã xác minh", { n: tutor.verified.length })}</span>}
       </div>
-      {(!user || user.role === "student") && <ProposalComposer tutor={tutor} subjects={subjects} />}
+      {(!user || (user.role === "student" && user.learner_type !== "parent")) && (verification.data && verification.data.status !== "approved" ? <VerifyFirst /> : <ProposalComposer tutor={tutor} subjects={subjects} />)}
       {(!user || user.role === "student") && (asking ? (
         <div className="booking-ask">
           <Textarea aria-label={t("Câu hỏi cho gia sư")} rows={3} maxLength={1000} value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("Hỏi về lịch, cách dạy, mục tiêu…")} />

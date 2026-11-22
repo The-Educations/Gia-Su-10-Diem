@@ -2,6 +2,7 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import catalog from "../shared/credential-catalog.json" with { type: "json" };
 import { all, one, run, transaction } from "./db.js";
+import { assertUnusedProof, fingerprint } from "./student-verification.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 
@@ -107,10 +108,16 @@ export function registerCredentials(app, db, auth, audit, processPhoto) {
   };
   const reopen = (id) => run(db, "UPDATE tutor_credentials SET status='pending',review_note='',reviewed_at=NULL WHERE id=?", id);
 
+  // A candidate number or certificate ID proves one tutor only.
+  const uniqueReference = (d, userId) => {
+    if (d.detail.reference && one(db, "SELECT 1 FROM tutor_credentials WHERE catalog_id=? AND catalog_id<>'' AND json_extract(detail,'$.reference')=? AND tutor_id<>? AND status<>'rejected'", d.catalog_id, d.detail.reference, userId))
+      fail(409, "Số báo danh / mã chứng chỉ này đã được một gia sư khác khai báo.");
+  };
   app.get("/api/credentials/catalog", (req, res) => res.json(catalog));
   app.get("/api/tutor/credentials", auth("tutor"), (req, res) => res.json(rows(db, req.user.id)));
   app.post("/api/tutor/credentials", auth("tutor"), (req, res) => {
     const d = normalizeCredential(req.body);
+    uniqueReference(d, req.user.id);
     const id = transaction(db, () => {
       if (one(db, "SELECT COUNT(*) n FROM tutor_credentials WHERE tutor_id=?", req.user.id).n >= MAX_CREDENTIALS) fail(409, `Tối đa ${MAX_CREDENTIALS} mục.`);
       return Number(run(db, "INSERT INTO tutor_credentials(tutor_id,kind,catalog_id,name,detail) VALUES (?,?,?,?,?)", req.user.id, d.kind, d.catalog_id, d.name, JSON.stringify(d.detail)).lastInsertRowid);
@@ -121,6 +128,7 @@ export function registerCredentials(app, db, auth, audit, processPhoto) {
   app.put("/api/tutor/credentials/:id", auth("tutor"), (req, res) => {
     const c = owned(req), d = normalizeCredential(req.body);
     if (d.kind !== c.kind) fail(400, "Không đổi được loại mục. Hãy xóa và thêm mới.");
+    uniqueReference(d, req.user.id);
     run(db, "UPDATE tutor_credentials SET catalog_id=?,name=?,detail=? WHERE id=?", d.catalog_id, d.name, JSON.stringify(d.detail), c.id);
     reopen(c.id);
     res.json(rows(db, req.user.id).find((r) => r.id === c.id));
@@ -134,6 +142,8 @@ export function registerCredentials(app, db, auth, audit, processPhoto) {
   app.post("/api/tutor/credentials/:id/files", auth("tutor"), express.raw({ type: () => true, limit: PROOF_LIMIT }), async (req, res) => {
     const c = owned(req);
     if (!Buffer.isBuffer(req.body) || !req.body.length) fail(400, "Chọn một tệp minh chứng.");
+    const hash = fingerprint(req.body);
+    assertUnusedProof(db, hash, req.user.id);
     let data = req.body, mime = proofMime(data, req.get("Content-Type")?.split(";")[0].toLowerCase() || "");
     if (mime === "image") {
       try { data = await processPhoto(data, true); mime = "image/webp"; }
@@ -145,7 +155,7 @@ export function registerCredentials(app, db, auth, audit, processPhoto) {
     const id = randomUUID();
     transaction(db, () => {
       if (one(db, "SELECT COUNT(*) n FROM credential_files WHERE credential_id=?", c.id).n >= MAX_FILES) fail(409, `Tối đa ${MAX_FILES} tệp cho một mục.`);
-      run(db, "INSERT INTO credential_files(id,credential_id,mime,name,size) VALUES (?,?,?,?,?)", id, c.id, mime, name, data.length);
+      run(db, "INSERT INTO credential_files(id,credential_id,mime,name,size,sha256) VALUES (?,?,?,?,?,?)", id, c.id, mime, name, data.length, hash);
       for (let offset = 0, part = 0; offset < data.length; offset += 100000, part++)
         run(db, "INSERT INTO credential_file_chunks VALUES (?,?,?)", id, part, data.subarray(offset, offset + 100000));
       reopen(c.id);

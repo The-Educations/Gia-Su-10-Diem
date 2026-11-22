@@ -3291,3 +3291,6 @@
 
 .demo-login { display: grid; gap: 8px; margin-top: 16px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 12px; font-size: 13px; color: var(--muted-foreground); }
 .demo-login > div { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Headings focused by script for screen readers do not show a ring. */
+[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
