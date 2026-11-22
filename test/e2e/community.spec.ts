@@ -615,8 +615,15 @@ test("dedicated composer saves private drafts, reopens them and submits for each
     for (const width of [360, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       expect(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= innerWidth,
+        await page.evaluate(() =>
+          document.documentElement.scrollWidth <= innerWidth
+            ? true
+            : `OVERFLOW sw=${document.documentElement.scrollWidth} iw=${innerWidth} ` +
+              Array.from(document.querySelectorAll("body *"))
+                .filter((e) => e.getBoundingClientRect().right > innerWidth + 0.5)
+                .slice(0, 8)
+                .map((e) => `${e.tagName}.${String(e.className).slice(0, 50)}@${Math.round(e.getBoundingClientRect().right)}`)
+                .join(" | "),
         ),
       ).toBe(true);
     }

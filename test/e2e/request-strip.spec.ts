@@ -241,7 +241,7 @@ test("after a pause the ident takes the strip's place between two posts, does no
   expect(await ident(page).evaluate((el) => getComputedStyle(el).cursor)).toBe("default");
   await expect(ident(page).locator("a, button")).toHaveCount(0);
   // The top bar keeps its height and the page does not scroll sideways.
-  expect(await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height)).toBe(80);
+  expect(await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height)).toBe(64);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // When the 8 s video ends the posts come back and run on (once the mouse is off them).
@@ -312,6 +312,6 @@ test("an account with no posts to scroll, like the admin, gets the ident alone: 
   await page.clock.fastForward(16_000);
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => !v.ended && v.currentTime < 7), { timeout: 5_000 }).toBe(true);
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.ended), { timeout: 15_000 }).toBe(true);
-  expect(await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height)).toBe(80);
+  expect(await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height)).toBe(64);
 });
 });
