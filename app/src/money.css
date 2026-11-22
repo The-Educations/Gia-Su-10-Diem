@@ -353,3 +353,7 @@
 .sepay-return[data-state="paid"] { background: var(--positive-soft); color: var(--positive); }
 .sepay-return[data-state="cancel"], .sepay-return[data-state="error"] { background: var(--muted); color: var(--muted-foreground); }
 .sepay-return svg { width: 18px; height: 18px; flex: none; }
+
+.free-hours { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.free-hours > span { width: 100%; font-size: 13px; color: var(--muted-foreground); }
+.free-hours .chip { min-height: 30px; padding: 0 10px; font-size: 13px; }

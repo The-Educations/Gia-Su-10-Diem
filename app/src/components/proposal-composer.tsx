@@ -39,6 +39,8 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  // The tutor's weekly free hours, earliest first in each day, as quick picks.
+  const free = (tutor.weekly_blocks || []).filter((b, i, a) => !a.some((x) => x.weekday === b.weekday && x.hour === b.hour - 1)).slice(0, 8);
   const total = sessions * rate,
     available = wallet.data?.available ?? 0,
     short = Math.max(0, total - available);
@@ -121,6 +123,17 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
                   ))}
                 </div>
               </FieldSet>
+              {free.length > 0 && (
+                <div className="free-hours" role="group" aria-label={t("Giờ gia sư rảnh")}>
+                  <span>{t("Giờ gia sư rảnh")}</span>
+                  {free.map((b) => {
+                    const label = `${t(WEEKDAYS[b.weekday])} ${timeLabel({ hour: b.hour, minute: 0 })}`;
+                    const on = days.includes(b.weekday) && time === timeLabel({ hour: b.hour, minute: 0 });
+                    return <button type="button" key={`${b.weekday}-${b.hour}`} className="chip" data-checked={on || undefined}
+                      onClick={() => { setTime(timeLabel({ hour: b.hour, minute: 0 })); setDays((v) => (v.includes(b.weekday) ? v : [...v, b.weekday].sort())); }}>{label}</button>;
+                  })}
+                </div>
+              )}
               <div className="form-two">
                 <Field>
                   <FieldLabel htmlFor="p-time">{t("Giờ bắt đầu")}</FieldLabel>
