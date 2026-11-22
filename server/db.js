@@ -1,6 +1,13 @@
 import { migrateGoogleCalendar } from "./google-calendar-schema.js";
 import { migrateCommunity } from "./community-schema.js";
 import { migrateTrust } from "./trust-schema.js";
+import { migrateNotifications } from "./notifications.js";
+import { migrateCredentials } from "./credentials.js";
+import { migrateWallet } from "./wallet.js";
+import { migrateClasses } from "./classes.js";
+import { migrateCommunityTopics } from "./community-topics.js";
+import { migrateFamily } from "./family.js";
+import { migrateStudentVerification } from "./student-verification.js";
 import {
   randomBytes,
   scrypt as scryptCallback,
@@ -214,6 +221,13 @@ export function migrateDatabase(db) {
   }
   migrateGoogleCalendar(db);
   migrateTrust(db);
+  migrateNotifications(db);
+  migrateCredentials(db);
+  migrateWallet(db);
+  migrateClasses(db);
+  migrateCommunityTopics(db);
+  migrateFamily(db);
+  migrateStudentVerification(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

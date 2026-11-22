@@ -48,8 +48,35 @@ export type PublishedProfile = Pick<
   Tutor,
   "headline" | "bio" | "education" | "experience" | "education_history" | "profile_sections" | "teaching_style" | "lesson_plan" | "subjects" | "levels" | "goals"
 >;
+export type TutorKind = "" | "student" | "teacher" | "professional";
+export type VerifiedCredential = { kind: CredentialKind; label: string };
+export type CredentialKind = "school" | "award" | "certificate";
+export type CredentialDetail = {
+  field: string;
+  start_year: number | null;
+  end_year: number | null;
+  current: boolean;
+  prize: string;
+  subject: string;
+  score: string;
+  reference: string;
+};
+export type Credential = {
+  id: number;
+  kind: CredentialKind;
+  catalog_id: string;
+  name: string;
+  detail: CredentialDetail;
+  label: string;
+  status: "pending" | "approved" | "rejected";
+  review_note: string;
+  files: { id: string; mime: string; name: string; size: number; url: string }[];
+};
 export type Tutor = {
   email?: string;
+  tutor_kind: TutorKind;
+  intro_video: string;
+  verified?: VerifiedCredential[];
   // Last approved content while an edited version awaits review.
   published?: PublishedProfile | null;
   theme_inventory: ProfileTheme[];
@@ -223,3 +250,62 @@ export type CommunityMember = CommunityAuthor & {
   stats: { posts: number; comments: number; helpful: number };
 };
 export type CommunityMemberResponse = { profile: CommunityMember; admin?: CommunityOwner & { status: string } };
+
+export type WalletEntry = { id: number; kind: string; amount: number; held: number; credits: number; ref: string; note: string; created_at: string };
+export type Wallet = {
+  available: number;
+  held: number;
+  credits_free: number;
+  credits_paid: number;
+  entries: WalletEntry[];
+  withdrawals: { id: number; amount: number; bank_name: string; account_last4: string; status: string; note: string; created_at: string }[];
+  settings: { offer_credits: number; credit_packs: { credits: number; price: number }[]; min_deposit: number; fee_percent: number };
+  payments: "live" | "simulated" | "off";
+};
+export type Deposit = { id: number; code: string; amount: number; received: number; status: string; qr_url: string | null; account: string; bank: string; holder: string; simulated?: boolean; checkout?: { action: string; fields: Record<string, string> } | null };
+export type Proposal = {
+  id: number;
+  sender: "student" | "tutor";
+  student_id: number;
+  tutor_id: number;
+  student_name: string;
+  tutor_name: string;
+  subject_id: string;
+  subject_name: string;
+  level: string;
+  mode: "online" | "offline";
+  area: string;
+  sessions: number;
+  minutes: number;
+  rate: number;
+  total: number;
+  payout: number;
+  fee_percent: number;
+  schedule: { weekday: number; hour: number; minute: number }[];
+  start_date: string;
+  message: string;
+  status: "pending" | "accepted" | "declined" | "expired" | "withdrawn";
+  expires_at: string;
+  created_at: string;
+  incoming: boolean;
+};
+
+export type ClassSession = {
+  id: number; class_id: number; starts_at: string; minutes: number; status: string; moved_from: string | null;
+  title: string; color: string; tutor_id: number; subject_id: string; mode: string; meeting_url: string;
+  member_id: number | null; tutor_confirmed_at: string | null; student_confirmed_at: string | null;
+  outcome: "pending" | "confirmed" | "charged" | "refunded" | "disputed" | null; rating: number | null;
+  student_id: number | null; student_name: string | null; tutor_name: string;
+};
+export type ClassMember = {
+  id: number; class_id: number; student_id: number; name: string; sessions_total: number; rate: number; held: number;
+  status: string; done: number; remaining: number; published_rating: number | null; review: string; reminded_at: string | null;
+};
+export type ClassInfo = {
+  id: number; tutor_id: number; tutor_name: string; title: string; subject_id: string; subject_name: string; mode: string; area: string;
+  color: string; minutes: number; schedule: { weekday: number; hour: number; minute: number }[]; meeting_url: string; status: string;
+  members: ClassMember[]; next_at?: string | null;
+  sessions?: ClassSession[];
+  materials?: { id: number; session_id: number | null; title: string; url: string; note: string; created_at: string }[];
+  moves?: { id: number; session_id: number; requested_by: number; starts_at: string }[];
+};

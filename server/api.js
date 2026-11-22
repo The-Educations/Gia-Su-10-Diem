@@ -4,6 +4,14 @@ import { registerChatMedia, withChatMedia, insertChatMessage } from "./chat-medi
 import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
+import { registerNotifications, notify } from "./notifications.js";
+import { registerCredentials, verifiedCredentials } from "./credentials.js";
+import { registerWallet, sepayConfig } from "./wallet.js";
+import { registerProposals } from "./proposals.js";
+import { registerClasses, classRatings } from "./classes.js";
+import { registerCommunityTopics } from "./community-topics.js";
+import { registerFamily } from "./family.js";
+import { registerStudentVerification } from "./student-verification.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -65,13 +73,18 @@ export function createApi(
     clientIp,
     sendEmail,
     sendAdminEmail,
+    sepay = sepayConfig(),
   } = {},
 ) {
   const app = express();
   app.disable("x-powered-by");
   app.use("/api", (req, res, next) => { res.set("X-Robots-Tag", "noindex, nofollow"); next(); });
   app.use("/api", helmet({ contentSecurityPolicy: false }));
-  app.use("/api", express.json({ limit: "300kb" }));
+  app.use("/api", express.json({
+    limit: "300kb",
+    // SePay signs the exact bytes it sent, so the webhook needs the raw body.
+    verify: (req, res, buf) => { if (req.originalUrl === "/api/sepay/webhook") req.rawBody = buf.toString("utf8"); },
+  }));
   app.use("/api", (req, res, next) => {
     res.set("Cache-Control", "no-store");
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
@@ -83,7 +96,7 @@ export function createApi(
         !(
           (req.method === "PUT" && /^\/community\/me\/(avatar|cover)$/.test(req.path)) ||
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path)))
+          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path) || req.path === "/account/verification/files"))
         ) &&
         !req.is("application/json")
       )
@@ -211,7 +224,7 @@ export function createApi(
     return b;
   };
   const tutorRows = (preview = false) => {
-    const trust = trustReader(db);
+    const trust = trustReader(db), verified = verifiedCredentials(db), ratings = classRatings(db);
     return all(
       db,
       `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks
@@ -226,6 +239,8 @@ export function createApi(
       ...t,
       trust: score,
       review_count: score.review_count,
+      verified: verified.get(t.user_id) || [],
+      rating: ratings(t.user_id),
       ...(preview && { published: publishedView(published) }),
       ...uploadMetadata(db, t.user_id),
       weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
@@ -243,6 +258,8 @@ export function createApi(
   registerGoogleAuth(app, db, { origin, production, session, google, signup });
   registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
+  registerCredentials(app, db, auth, audit, processPhoto);
+  registerStudentVerification(app, db, auth, audit, processPhoto);
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
@@ -253,6 +270,12 @@ export function createApi(
   registerAccountDeletion(app, db, auth, audit);
   registerWeeklyRequests(app, db, auth);
   registerOffers(app, db, auth);
+  registerNotifications(app, db, auth);
+  const walletApi = registerWallet(app, db, auth, audit, { production, sepay, origin });
+  registerProposals(app, db, auth, audit, walletApi);
+  registerClasses(app, db, auth, audit);
+  registerCommunityTopics(app, db, auth);
+  registerFamily(app, db, auth);
   registerTrust(app, db, auth, audit);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
@@ -282,6 +305,16 @@ export function createApi(
       );
     if (user.role === "admin" && isGoogleAdmin(user.email, google.adminEmail))
       fail(403, "Tài khoản này cần đăng nhập bằng Google.");
+    res.json({ user: session(res, user) });
+  });
+  // Local development only: one tap into a demo account of each role.
+  const DEMO = { student: "student", parent: "parent", tutor: "chau", admin: "admin" };
+  app.get("/api/auth/demo", (req, res) => res.json({ enabled: !production }));
+  app.post("/api/auth/demo", (req, res) => {
+    if (production) fail(404, "Không có chức năng này.");
+    const { role } = z.object({ role: z.enum(["student", "parent", "tutor", "admin"]) }).parse(req.body);
+    const user = one(db, "SELECT * FROM users WHERE email=? AND demo=1 AND status='active'", `${DEMO[role]}@demo.giasu.test`);
+    if (!user) fail(404, "Chưa có dữ liệu mẫu. Chạy npm run seed:demo.");
     res.json({ user: session(res, user) });
   });
   app.post("/api/auth/logout", (req, res) => {
@@ -498,11 +531,12 @@ export function createApi(
         reconcileAvailability(db, req.user.id);
       }
       if (d.accepts_trial !== undefined) run(db, "UPDATE tutors SET accepts_trial=? WHERE user_id=?", Number(d.accepts_trial), req.user.id);
+      if (d.tutor_kind) run(db, "UPDATE tutors SET tutor_kind=? WHERE user_id=?", d.tutor_kind, req.user.id);
       if (address) run(db, "UPDATE tutors SET province_code=?,ward_code=? WHERE user_id=?", address.province_code, address.ward_code, req.user.id);
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
@@ -515,6 +549,7 @@ export function createApi(
         JSON.stringify(d.goals),
         d.teaching_style,
         d.lesson_plan,
+        d.intro_video,
         d.profile_theme ?? null,
         d.education_history ? JSON.stringify(d.education_history) : null,
         d.profile_sections ? JSON.stringify(d.profile_sections) : null,
@@ -709,6 +744,10 @@ export function createApi(
     if (status === "cancelled") run(db, "UPDATE bookings SET status=?,cancelled_by=?,cancelled_at=? WHERE id=?", status, req.user.id, at, b.id);
     else if (status === "tutor_missed") run(db, "UPDATE bookings SET status=?,tutor_missed_at=? WHERE id=?", status, at, b.id);
     else run(db, "UPDATE bookings SET status=? WHERE id=?", status, b.id);
+    if (["accepted", "declined", "cancelled"].includes(status)) {
+      const other = req.user.id === b.tutor_id ? b.student_id : b.tutor_id;
+      notify(db, other, `lesson_${status}`, { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", b.subject_id)?.name || "", link: `/bookings?lesson=${b.id}` });
+    }
     audit(req.user.id, `booking.${status}`, b.id);
     res.json({ ok: true });
   });

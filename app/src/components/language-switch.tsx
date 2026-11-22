@@ -2,7 +2,7 @@ import { useI18n, type Lang } from "@/lib/i18n";
 
 const options: { lang: Lang; label: string; name: string }[] = [
   { lang: "vi", label: "VI", name: "Tiếng Việt" },
-  { lang: "en", label: "EN", name: "Tiếng Anh" },
+  { lang: "en", label: "EN", name: "English" },
 ];
 
 export function LanguageSwitch() {
@@ -15,8 +15,9 @@ export function LanguageSwitch() {
           type="button"
           lang={option.lang}
           aria-pressed={lang === option.lang}
-          title={t(option.name)}
-          aria-label={t(option.name)}
+          translate="no"
+          title={option.name}
+          aria-label={option.name}
           onClick={() => setLang(option.lang)}
         >
           {option.label}

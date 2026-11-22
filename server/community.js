@@ -1,3 +1,4 @@
+import { topicOf, reactionCounts, trendScore, TOPICS } from "./community-topics.js";
 import { liveTutorSql } from "./tutor-visibility.js";
 import { registerCommunityMail } from "./community-mail.js";
 import { registerCommunityProfile, setMemberProfile, memberByCode } from "./community-profile.js";
@@ -114,6 +115,8 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
       p.id,
     );
     return {
+      topic: p.topic || "experience",
+      ...reactionCounts(db, p.id, user),
       id: p.id,
       public:
         p.status === "approved" &&
@@ -216,7 +219,8 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
         q: z.string().trim().max(80).default(""),
         subject: z.string().max(80).default(""),
         level: z.string().max(80).default(""),
-        sort: z.enum(["new", "helpful"]).default("new"),
+        sort: z.enum(["new", "helpful", "trending", "relevant"]).default("new"),
+        topic: z.enum(["", ...TOPICS]).default(""),
         page: z.coerce.number().int().min(1).max(100000).default(1),
       })
       .parse(req.query);
@@ -234,6 +238,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
       );
     };
     if (query.q) match([query.q]);
+    if (query.topic) { where.push("p.topic=?"); args.push(query.topic); }
     if (query.subject) {
       const s = one(db, "SELECT name FROM subjects WHERE id=?", query.subject);
       if (!s) fail(400, "Môn học không hợp lệ.");
@@ -248,13 +253,30 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
       args.push(...levelAliases[query.level].map((w) => `% ${w} %`));
     }
     const helpful = `(SELECT COUNT(*) FROM community_helpful h JOIN community_comments c ON c.id=h.comment_id JOIN users cu ON cu.id=c.author_id JOIN users hu ON hu.id=h.user_id WHERE c.post_id=p.id AND ${visibleComments} AND hu.status='active')`;
-    const rows = all(
-      db,
-      `SELECT p.* ${joins} WHERE ${where.join(" AND ")} ORDER BY ${query.sort === "helpful" ? helpful + " DESC," : ""} p.published_at DESC,p.id DESC LIMIT ? OFFSET ?`,
-      ...args,
-      LIMITS.page + 1,
-      (query.page - 1) * LIMITS.page,
-    );
+    let rows;
+    if (query.sort === "trending" || query.sort === "relevant") {
+      // Scored in JavaScript over the 300 newest matching posts.
+      const pool = all(db, `SELECT p.*,
+        (SELECT COUNT(*) FROM community_reactions r WHERE r.post_id=p.id AND r.kind='like') likes,
+        (SELECT COUNT(*) FROM community_reactions r WHERE r.post_id=p.id AND r.kind='interest') interests,
+        (SELECT COUNT(*) FROM community_comments c WHERE c.post_id=p.id) + (SELECT COUNT(*) FROM proposals pr WHERE pr.post_id=p.id) replies
+        ${joins} WHERE ${where.join(" AND ")} ORDER BY p.published_at DESC LIMIT 300`, ...args);
+      let words = [];
+      if (query.sort === "relevant" && req.user) {
+        const t = one(db, "SELECT subjects FROM tutors WHERE user_id=?", req.user.id);
+        const ids = t ? JSON.parse(t.subjects) : [];
+        words = [...ids.flatMap((id) => subjectAliases[id] || [one(db, "SELECT name FROM subjects WHERE id=?", id)?.name || ""]), ...(req.user.goal ? [req.user.goal] : [])].filter(Boolean).map(fold);
+      }
+      const score = (p) => trendScore(p) * (1 + 2 * words.filter((w) => p.search_text.includes(w)).length);
+      rows = pool.sort((a, b) => score(b) - score(a)).slice((query.page - 1) * LIMITS.page, query.page * LIMITS.page + 1);
+    } else
+      rows = all(
+        db,
+        `SELECT p.* ${joins} WHERE ${where.join(" AND ")} ORDER BY ${query.sort === "helpful" ? helpful + " DESC," : ""} p.published_at DESC,p.id DESC LIMIT ? OFFSET ?`,
+        ...args,
+        LIMITS.page + 1,
+        (query.page - 1) * LIMITS.page,
+      );
     res.json({
       rules: query.page === 1 ? rules(req.user) : null,
       items: rows.slice(0, LIMITS.page).map((p) => serialize(p, req.user)),
@@ -338,8 +360,9 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
       );
       run(
         db,
-        "UPDATE community_posts SET body_html=? WHERE id=?",
+        "UPDATE community_posts SET body_html=?,topic=? WHERE id=?",
         d.body_html,
+        topicOf(req.body.topic, req.user),
         id,
       );
       attachPostImages(db, id, req.user.id, d.image_ids);

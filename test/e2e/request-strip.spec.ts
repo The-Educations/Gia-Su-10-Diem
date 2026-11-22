@@ -34,7 +34,8 @@ const LONG_BODY = "Con học lớp 9 đang yếu hình học không gian, cần 
 test("the ticker sits in the top bar of every tutor page; students and an empty list get nothing", async ({ page, request }) => {
   await login(page, "chau");
   await expect(page.getByText("Buổi dạy tiếp theo")).toBeVisible();
-  await expect(ticker(page)).toHaveCount(0); // nothing to show: no empty box
+  await expect(ticker(page)).toHaveCount(0); // no posts: the region of posts is not there, only the ident
+  await expect(page.locator(".topbar-ticker[data-alone] .ticker-ad")).toBeVisible();
   await add(request, { author: "profile-student", title: SEEKING[0], body: LONG_BODY });
   const loaded = page.waitForResponse((r) => r.url().endsWith("/api/community/requests"));
   await page.reload();
@@ -123,7 +124,7 @@ test("it runs from right to left when it does not fit, pauses on hover and keeps
   expect(await page.evaluate(() => !!document.activeElement?.closest("[aria-hidden='true']"))).toBe(false);
   // The top bar keeps its height and the page never scrolls sideways.
   const bar = await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height);
-  expect(bar).toBe(80);
+  expect(bar).toBe(64);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -192,5 +193,125 @@ test("students and parents get a ticker of tutors looking for students; tutors d
   // The tutor's own bar shows posts from students and parents only, so with none it stays empty.
   await login(page, "chau");
   await expect(page.getByText("Buổi dạy tiếp theo")).toBeVisible();
-  await expect(page.locator(".topbar-ticker")).toHaveCount(0);
+  await expect(page.locator(".topbar-ticker:not([data-alone])")).toHaveCount(0); // no posts: only the ident
+});
+
+// The The Educations ident (docs/quang-cao-dai-chay.md). The page clock is faked so the 45 s pause
+// can be skipped; the strip's CSS run and the video still play in real time.
+test.describe("the The Educations ident", () => {
+test.describe.configure({ timeout: 90_000 });
+const ident = (page: Page) => page.getByRole("img", { name: /The Educations.*Làm Giáo Dục, vì Giáo Dục.*Make EDU, for EDU/ });
+async function skipToIdent(page: Page) {
+  await page.clock.fastForward(46_000);
+  // The ident then waits, in real time, for the post at the left edge to scroll out.
+  await expect(ident(page)).toBeVisible({ timeout: 30_000 });
+}
+
+test("after a pause the ident takes the strip's place between two posts, does nothing on click and gives the strip back", async ({ page, request }) => {
+  for (const title of SEEKING) await add(request, { author: "profile-student", title, body: LONG_BODY });
+  await page.clock.install();
+  await login(page, "chau");
+  await expect(ticker(page)).toBeVisible();
+  expect(await animation(page)).toBe("ticker-scroll");
+  await page.clock.fastForward(30_000);
+  await expect(ident(page)).toHaveCount(0); // not before the pause is over
+  await page.mouse.move(5, 5);
+  await skipToIdent(page);
+
+  // It started between two posts: none is cut by the left edge of the strip.
+  const cut = await page.evaluate(() => {
+    const edge = document.querySelector(".ticker-frame")!.getBoundingClientRect().left;
+    return Array.from(document.querySelectorAll(".ticker-track li"), (li) => li.getBoundingClientRect())
+      .filter((r) => r.left < edge - 4 && r.right > edge + 4).length;
+  });
+  expect(cut).toBe(0);
+  // The posts are hidden and wait where they stopped; the video is the ident.
+  await expect(page.locator(".ticker-frame")).toBeHidden();
+  await expect(page.locator(".ticker-label")).toBeHidden();
+  expect(await page.locator(".ticker-track").evaluate((el) => getComputedStyle(el).animationPlayState)).toBe("paused");
+  const video = ident(page).locator("video");
+  await expect(video).toHaveAttribute("src", "/assets/video/the-educations-ident.mp4");
+  expect(await video.evaluate((v: HTMLVideoElement) => v.muted)).toBe(true);
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 5_000 }).toBeGreaterThan(0);
+
+  // Clicking it goes nowhere and it does not look clickable.
+  const url = page.url();
+  await ident(page).click();
+  expect(page.url()).toBe(url);
+  expect(await ident(page).evaluate((el) => getComputedStyle(el).cursor)).toBe("default");
+  await expect(ident(page).locator("a, button")).toHaveCount(0);
+  // The top bar keeps its height and the page does not scroll sideways.
+  expect(await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height)).toBe(64);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  // When the 8 s video ends the posts come back and run on (once the mouse is off them).
+  await page.mouse.move(5, 5);
+  await expect(ident(page)).toHaveCount(0, { timeout: 12_000 });
+  await expect(page.locator(".ticker-frame")).toBeVisible();
+  expect(await page.locator(".ticker-track").evaluate((el) => getComputedStyle(el).animationPlayState)).toBe("running");
+  // And it waits another full pause before the next showing.
+  await page.clock.fastForward(30_000);
+  await expect(ident(page)).toHaveCount(0);
+});
+
+test("the ident waits while the reader hovers the strip", async ({ page, request }) => {
+  for (const title of SEEKING) await add(request, { author: "profile-student", title, body: LONG_BODY });
+  await page.clock.install();
+  await login(page, "chau");
+  await expect(ticker(page)).toBeVisible();
+  await page.locator(".ticker-frame").hover();
+  await page.clock.fastForward(46_000);
+  await page.waitForTimeout(5_000); // it keeps asking every 2 s while the strip is hovered
+  await expect(ident(page)).toHaveCount(0);
+  await page.mouse.move(5, 5);
+  await skipToIdent(page);
+});
+
+test("with reduced motion the ident is its still last frame and never replays", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  await login(page, "chau");
+  await expect(ident(page)).toBeVisible(); // no posts: the ident is on its own
+  await expect(ident(page).locator("video")).toHaveCount(0);
+  const still = ident(page).locator("img");
+  await expect(still).toHaveAttribute("src", "/assets/video/the-educations-ident.png");
+  await expect.poll(() => still.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(1920);
+  await page.clock.fastForward(120_000);
+  await expect(ident(page).locator("img")).toBeVisible();
+});
+
+test("an account with no posts to scroll, like the admin, gets the ident alone: it plays, rests on its last frame and replays", async ({ page }) => {
+  const requests: string[] = [];
+  page.on("request", (r) => requests.push(r.url()));
+  await page.clock.install();
+  await page.goto("/app/auth?next=%2Fadmin");
+  await page.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
+  await page.getByRole("checkbox", { name: /Đồng ý/ }).check();
+  await page.getByLabel("Email", { exact: true }).fill("admin@demo.giasu.test");
+  await page.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
+  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/admin/);
+  await expect(ident(page)).toBeVisible();
+  await expect(page.locator(".topbar-ticker:not([data-alone])")).toHaveCount(0);
+  expect(requests.some((u) => u.endsWith("/api/community/requests"))).toBe(false); // nothing to fetch for an admin
+  const video = ident(page).locator("video");
+  const time = () => video.evaluate((v: HTMLVideoElement) => v.currentTime);
+  // It plays on arrival, then the last frame stays on screen.
+  await expect.poll(time, { timeout: 5_000 }).toBeGreaterThan(0.5);
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.ended), { timeout: 15_000 }).toBe(true);
+  expect(await time()).toBeGreaterThan(7.5);
+  await expect(ident(page)).toBeVisible();
+  // Clicking does nothing, and it does not look clickable.
+  const url = page.url();
+  await ident(page).click();
+  expect(page.url()).toBe(url);
+  expect(await ident(page).evaluate((el) => getComputedStyle(el).cursor)).toBe("default");
+  // After the pause it plays again from the start.
+  await page.clock.fastForward(30_000);
+  expect(await video.evaluate((v: HTMLVideoElement) => v.ended)).toBe(true);
+  await page.clock.fastForward(16_000);
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => !v.ended && v.currentTime < 7), { timeout: 5_000 }).toBe(true);
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.ended), { timeout: 15_000 }).toBe(true);
+  expect(await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height)).toBe(64);
+});
 });

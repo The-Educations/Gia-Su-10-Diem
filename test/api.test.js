@@ -2171,3 +2171,352 @@ test("migration for ratings is repeatable on an existing database", async t => {
   migrateDatabase(db); migrateDatabase(db);
   assert.equal(one(db, "SELECT COUNT(*) n FROM bookings").n, before);
 });
+test("notifications reach the other party, collapse per conversation and stay private", async (t) => {
+  const { client } = await fixture(t),
+    student = client(),
+    tutor = client(),
+    outsider = client();
+  await student.login("student");
+  const u = await tutor.login("chau");
+  await outsider.login("nam");
+  const { data: { id } } = await student.request("/inquiries", "POST", { tutor_id: u.id, body: "Em chào cô." });
+  await student.request(`/inquiries/${id}/messages`, "POST", { body: "Cô còn lịch tối thứ Ba không ạ?" });
+  const list = (await tutor.request("/notifications")).data;
+  const messages = list.filter(n => n.kind === "message_new");
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].link, `/messages?inquiry=${id}`);
+  assert.equal(messages[0].actor_name, "Minh Anh");
+  assert.equal((await tutor.request("/notifications/unread-count")).data.count, list.filter(n => !n.read_at).length);
+  assert.equal((await outsider.request("/notifications")).data.some(n => n.id === messages[0].id), false);
+  assert.equal((await outsider.request("/notifications/read", "POST", { id: messages[0].id })).status, 200);
+  assert.equal((await tutor.request("/notifications")).data.find(n => n.id === messages[0].id).read_at, null);
+  assert.equal((await tutor.request("/notifications/read", "POST", { id: messages[0].id })).status, 200);
+  assert.ok((await tutor.request("/notifications")).data.find(n => n.id === messages[0].id).read_at);
+  await tutor.request("/notifications/read", "POST", { all: true });
+  assert.equal((await tutor.request("/notifications/unread-count")).data.count, 0);
+  assert.equal((await tutor.request("/notifications/read", "POST", {})).status, 400);
+  assert.equal((await client().request("/notifications")).status, 401);
+});
+test("tutor credentials need proof, stay private and show only approved labels publicly", async (t) => {
+  const { client, base } = await fixture(t), tutor = client(), other = client(), student = client(), admin = client();
+  const u = await tutor.login("chau"); await other.login("nam"); await student.login("student"); await admin.login("admin");
+  const seeded = (await tutor.request("/tutor/credentials")).data.length;
+  const label = "Trường Đại học Sư phạm Hà Nội · Sư phạm Toán · lớp chất lượng cao";
+  const { default: sharp } = await import("sharp");
+  const picture = await sharp({ create: { width: 200, height: 120, channels: 3, background: "#ddd" } }).png().toBuffer();
+  const pdf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF");
+  const send = (id, body, type) => fetch(base + `/tutor/credentials/${id}/files`, { method: "POST", headers: { Cookie: tutor.cookie, "Content-Type": type, "X-File-Name": encodeURIComponent("thẻ sinh viên.png") }, body });
+
+  assert.equal((await tutor.request("/tutor/credentials", "POST", { kind: "school", catalog_id: "khong-co", detail: { start_year: 2020 } })).status, 400);
+  assert.equal((await tutor.request("/tutor/credentials", "POST", { kind: "award", catalog_id: "hoc-sinh-gioi-quoc-gia", detail: {} })).status, 400);
+  const school = await tutor.request("/tutor/credentials", "POST", { kind: "school", catalog_id: "hnue", detail: { field: "Sư phạm Toán · lớp chất lượng cao", start_year: 2021, current: true } });
+  assert.equal(school.status, 201);
+  assert.equal(school.data.name, "Trường Đại học Sư phạm Hà Nội");
+  assert.equal(school.data.status, "pending");
+  const cert = await tutor.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0" } });
+
+  // Approval needs a proof file; rejection needs a reason.
+  assert.equal((await admin.request(`/admin/credentials/${school.data.id}`, "PATCH", { status: "approved" })).status, 409);
+  assert.equal((await send(school.data.id, Buffer.from("not an image"), "text/plain")).status, 400);
+  const withImage = await (await send(school.data.id, picture, "image/png")).json();
+  assert.equal(withImage.files.length, 1);
+  assert.equal(withImage.files[0].mime, "image/webp");
+  const withPdf = await (await send(cert.data.id, pdf, "application/pdf")).json();
+  const fileUrl = withImage.files[0].url.replace("/api", "");
+
+  // Only the owner and administrators can open proof files.
+  for (const [c, status] of [[tutor, 200], [admin, 200], [other, 404], [student, 404], [client(), 401]])
+    assert.equal((await fetch(base + fileUrl, { headers: { Cookie: c.cookie } })).status, status);
+  assert.equal((await other.request(`/tutor/credentials/${school.data.id}`, "DELETE")).status, 404);
+  assert.equal((await student.request(`/admin/tutors/${u.id}/credentials`)).status, 403);
+  assert.equal((await admin.request(`/admin/tutors/${u.id}/credentials`)).data.length, seeded + 2);
+
+  assert.equal((await admin.request(`/admin/credentials/${cert.data.id}`, "PATCH", { status: "rejected" })).status, 400);
+  assert.equal((await admin.request(`/admin/credentials/${cert.data.id}`, "PATCH", { status: "rejected", note: "Ảnh mờ, chụp lại số báo danh." })).status, 200);
+  assert.equal((await admin.request(`/admin/credentials/${school.data.id}`, "PATCH", { status: "approved" })).status, 200);
+  let profile = (await student.request(`/tutors/${u.id}`)).data;
+  assert.ok(profile.verified.some(v => v.kind === "school" && v.label === label));
+  assert.equal(profile.verified.some(v => v.label.startsWith("IELTS")), false);
+  assert.equal(JSON.stringify(profile).includes(withImage.files[0].id), false);
+  assert.ok((await tutor.request("/notifications")).data.some(n => n.kind === "credential_rejected"));
+
+  // Editing an approved entry sends it back for review and hides it publicly.
+  assert.equal((await tutor.request(`/tutor/credentials/${school.data.id}`, "PUT", { kind: "school", catalog_id: "hnue", detail: { field: "Toán học", start_year: 2021 } })).data.status, "pending");
+  profile = (await student.request(`/tutors/${u.id}`)).data;
+  assert.equal(profile.verified.some(v => v.label === label), false);
+  assert.equal(withPdf.files[0].mime, "application/pdf");
+  assert.equal((await tutor.request(`/tutor/credentials/${cert.data.id}`, "DELETE")).status, 200);
+  assert.equal((await fetch(base + withPdf.files[0].url.replace("/api", ""), { headers: { Cookie: admin.cookie } })).status, 404);
+});
+test("wallet deposits, SePay webhook verdicts, offers holding money and tutor credits", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const secret = "test-sepay-secret";
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
+  const student = client(), tutor = client(), admin = client();
+  const s = await student.login("student"), u = await tutor.login("chau"); await admin.login("admin");
+  const hook = (payload, key = secret, stamp = Math.floor(Date.now() / 1000)) => {
+    const body = JSON.stringify(payload);
+    return fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", key).update(`${stamp}.${body}`).digest("hex") }, body });
+  };
+  // Deposit: a unique code, a VietQR image, and no simulation when SePay is live.
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 2000000 });
+  assert.equal(dep.status, 201);
+  assert.match(dep.data.code, /^GSD[A-Z0-9]{8}$/);
+  assert.ok(dep.data.qr_url.startsWith("https://vietqr.app/img?"));
+  assert.equal((await student.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST")).status, 404);
+  const event = { id: 9001, gateway: "MBBank", transactionDate: "2026-11-22 10:00:00", accountNumber: "0123456789", subAccount: "", code: dep.data.code, content: `${dep.data.code} nap tien`, transferType: "in", description: "", transferAmount: 2000000, accumulated: 0, referenceCode: "FT1" };
+  assert.equal((await hook(event, "wrong")).status, 401);
+  assert.equal((await hook(event, secret, Math.floor(Date.now() / 1000) - 900)).status, 401);
+  assert.deepEqual(await (await hook(event)).json(), { success: true });
+  assert.deepEqual(await (await hook(event)).json(), { success: true });
+  assert.deepEqual(await (await hook({ ...event, id: 9002, code: "GSDUNKNOWN1" })).json(), { success: false });
+  assert.deepEqual(await (await hook({ ...event, id: 9003, transferType: "out" })).json(), { success: false });
+  let w = (await student.request("/wallet")).data;
+  assert.equal(w.available, 2000000);
+  assert.equal(w.payments, "live");
+
+  // A student's offer holds the whole package; a decline releases it.
+  const start = new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10);
+  const offer = { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 8, minutes: 90, rate: 200000, schedule: [{ weekday: 1, hour: 19, minute: 0 }], start_date: start, message: "Em cần ôn thi vào 10" };
+  assert.equal((await student.request("/proposals", "POST", { ...offer, sessions: 20 })).status, 402);
+  const sent = await student.request("/proposals", "POST", offer);
+  assert.equal(sent.status, 201);
+  assert.equal(sent.data.total, 1600000);
+  assert.equal(sent.data.payout, 1520000);
+  w = (await student.request("/wallet")).data;
+  assert.deepEqual([w.available, w.held], [400000, 1600000]);
+  assert.equal((await student.request("/proposals", "POST", offer)).status, 409);
+  assert.equal((await student.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" })).status, 403);
+  assert.equal((await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "decline" })).data.status, "declined");
+  w = (await student.request("/wallet")).data;
+  assert.deepEqual([w.available, w.held], [2000000, 0]);
+  assert.ok((await student.request("/notifications")).data.some(n => n.kind === "proposal_declined"));
+
+  // Expired offers release their hold on the next read.
+  const again = await student.request("/proposals", "POST", offer);
+  db.prepare("UPDATE proposals SET expires_at=? WHERE id=?").run(new Date(Date.now() - 1000).toISOString(), again.data.id);
+  assert.equal((await student.request("/proposals")).data.find(p => p.id === again.data.id).status, "expired");
+  assert.equal((await student.request("/wallet")).data.available, 2000000);
+
+  // A tutor's offer costs 2 of the 10 monthly credits; the student pays on accepting.
+  assert.equal((await tutor.request("/wallet")).data.credits_free, 10);
+  const pitch = await tutor.request("/proposals", "POST", { ...offer, tutor_id: undefined, student_id: s.id, sessions: 12 });
+  assert.equal(pitch.status, 201);
+  assert.equal((await tutor.request("/wallet")).data.credits_free, 8);
+  const short = await student.request(`/proposals/${pitch.data.id}`, "PATCH", { action: "accept" });
+  assert.equal(short.status, 402);
+  assert.match(short.data.error, /400\.000đ/);
+  assert.equal((await student.request("/proposals")).data.find(p => p.id === pitch.data.id).status, "pending");
+  const top = await student.request("/wallet/deposits", "POST", { amount: 400000 });
+  assert.deepEqual(await (await hook({ ...event, id: 9004, code: top.data.code.toLowerCase(), transferAmount: 400000 })).json(), { success: true });
+  assert.equal((await student.request(`/proposals/${pitch.data.id}`, "PATCH", { action: "accept" })).data.status, "accepted");
+  w = (await student.request("/wallet")).data;
+  assert.deepEqual([w.available, w.held], [0, 2400000]);
+
+  // Credits: buying a pack spends the tutor's balance; tutors cannot overdraw.
+  assert.equal((await tutor.request("/credits/purchase", "POST", { credits: 10 })).status, 402);
+  assert.equal((await admin.request(`/admin/wallets/${u.id}/adjust`, "POST", { amount: 60000, note: "Thưởng giới thiệu" })).status, 200);
+  const bought = (await tutor.request("/credits/purchase", "POST", { credits: 10 })).data;
+  assert.deepEqual([bought.available, bought.credits_paid], [10000, 10]);
+
+  // Withdrawals hold the amount, post a card to admin support, and settle by hand.
+  assert.equal((await tutor.request("/wallet/withdrawals", "POST", { amount: 50000, bank_name: "MB", account_number: "123", account_name: "A" })).status, 400);
+  await admin.request(`/admin/wallets/${u.id}/adjust`, "POST", { amount: 90000, note: "Thanh toán thử" });
+  const wd = await tutor.request("/wallet/withdrawals", "POST", { amount: 100000, bank_name: "MB Bank", account_number: "0987654321", account_name: "Nguyen Minh Chau" });
+  assert.equal(wd.status, 201);
+  assert.deepEqual([wd.data.available, wd.data.held], [0, 100000]);
+  const support = (await tutor.request("/support")).data[0];
+  assert.match((await tutor.request(`/support/${support.id}/messages`)).data.at(-1).body, /Yêu cầu rút tiền #\d+: 100\.000đ về MB Bank \*\*\*\*4321/);
+  assert.equal((await tutor.request(`/admin/withdrawals/${wd.data.id}`, "PATCH", { status: "paid" })).status, 403);
+  assert.equal((await admin.request(`/admin/withdrawals/${wd.data.id}`, "PATCH", { status: "paid" })).status, 200);
+  assert.equal((await admin.request(`/admin/withdrawals/${wd.data.id}`, "PATCH", { status: "paid" })).status, 409);
+  assert.deepEqual((({ available, held }) => [available, held])((await tutor.request("/wallet")).data), [0, 0]);
+  const finance = (await admin.request("/admin/finance")).data;
+  assert.equal(finance.totals.deposited, 2400000);
+  assert.equal(finance.totals.credit_revenue, 50000);
+  assert.equal(finance.unmatched.length, 2);
+});
+test("SePay webhook fails closed without a secret and deposits are simulated only in development", async (t) => {
+  const { client, base } = await fixture(t, { sepay: { secret: "", account: "", bank: "", holder: "", prefix: "GSD", ready: false } });
+  const student = client(); await student.login("student");
+  assert.equal((await fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: 1, transferType: "in", transferAmount: 1, code: "GSD" }) })).status, 503);
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 100000 });
+  assert.equal(dep.data.simulated, true);
+  assert.equal(dep.data.qr_url, null);
+  assert.equal((await student.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST")).data.status, "paid");
+  assert.equal((await student.request("/wallet")).data.available, 100000);
+});
+test("accepted offers become classes; lessons confirm, cancel, move, settle with the fee and publish stars", async (t) => {
+  const { client, db } = await fixture(t), student = client(), tutor = client(), outsider = client();
+  const s = await student.login("student"), u = await tutor.login("chau"); await outsider.login("nam");
+  const grant = (id, amount) => db.prepare("INSERT INTO wallets(user_id,available) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET available=available+excluded.available").run(id, amount);
+  grant(s.id, 1000000);
+  const start = new Date(Date.now() + 7 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
+  const sent = await student.request("/proposals", "POST", { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 4, minutes: 60, rate: 200000, schedule: [{ weekday: 0, hour: 18, minute: 0 }, { weekday: 3, hour: 18, minute: 0 }], start_date: start });
+  const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
+  assert.ok(accepted.data.class_id);
+  const cid = accepted.data.class_id;
+  let cls = (await student.request(`/classes/${cid}`)).data;
+  assert.equal(cls.sessions.length, 4);
+  assert.equal((await outsider.request(`/classes/${cid}`)).status, 404);
+  assert.equal((await student.request("/classes")).data[0].id, cid);
+
+  // Make the first two lessons already finished.
+  const [a, b, c, d] = cls.sessions;
+  const past = (id, hours) => db.prepare("UPDATE class_sessions SET starts_at=? WHERE id=?").run(new Date(Date.now() - hours * 3600000).toISOString(), id);
+  past(a.id, 3); past(b.id, 60);
+  assert.equal((await student.request(`/sessions/${c.id}/confirm`, "POST")).status, 409);
+  await student.request(`/sessions/${a.id}/confirm`, "POST");
+  await tutor.request(`/sessions/${a.id}/confirm`, "POST");
+  await student.request(`/sessions/${a.id}/rating`, "PUT", { rating: 5 });
+  // One side confirmed more than 48 hours ago: the lesson confirms itself.
+  await tutor.request(`/sessions/${b.id}/confirm`, "POST");
+  await student.request(`/sessions/${b.id}/rating`, "PUT", { rating: 4 });
+  cls = (await tutor.request(`/classes/${cid}`)).data;
+  assert.deepEqual(cls.sessions.slice(0, 2).map(x => x.outcome), ["confirmed", "confirmed"]);
+
+  // The student cancels lesson c early (refunded) and asks to move lesson d; the tutor agrees.
+  assert.equal((await student.request(`/sessions/${c.id}/cancel`, "POST")).data.outcome, "refunded");
+  const newTime = new Date(Date.now() + 5 * 86400000).toISOString();
+  assert.equal((await student.request(`/sessions/${d.id}/move`, "POST", { starts_at: newTime })).status, 201);
+  const move = (await tutor.request(`/classes/${cid}`)).data.moves[0];
+  assert.equal((await student.request(`/moves/${move.id}`, "PATCH", { accept: true })).status, 403);
+  await tutor.request(`/moves/${move.id}`, "PATCH", { accept: true });
+  assert.equal((await tutor.request(`/classes/${cid}`)).data.sessions.find(x => x.id === d.id).starts_at, newTime);
+
+  // A late cancellation by the tutor refunds the lesson and counts a violation.
+  db.prepare("UPDATE class_sessions SET starts_at=? WHERE id=?").run(new Date(Date.now() + 2 * 3600000).toISOString(), d.id);
+  assert.deepEqual((await tutor.request(`/sessions/${d.id}/cancel`, "POST")).data, { outcome: "refunded", late: true });
+  assert.equal(db.prepare("SELECT violations FROM tutors WHERE user_id=?").get(u.id).violations, 1);
+
+  // Every lesson is resolved: 2 confirmed lessons pay the tutor minus 5%, the rest goes back.
+  const sw = (await student.request("/wallet")).data, tw = (await tutor.request("/wallet")).data;
+  assert.deepEqual([sw.available, sw.held], [600000, 0]);
+  assert.equal(tw.available, 380000);
+  cls = (await student.request(`/classes/${cid}`)).data;
+  assert.equal(cls.members[0].status, "ended");
+  assert.equal(cls.members[0].published_rating, 4.5);
+  await student.request(`/members/${cls.members[0].id}/review`, "PUT", { body: "Cô giảng dễ hiểu" });
+  const profile = (await outsider.request(`/tutors/${u.id}`)).data;
+  assert.deepEqual([profile.rating.average, profile.rating.count, profile.rating.reviews[0].body], [4.5, 1, "Cô giảng dễ hiểu"]);
+  assert.equal(JSON.stringify(profile.rating).includes("Minh Anh"), false);
+});
+test("parents link with a child's code, top up and follow the child; community topics, reactions and boosted pitches", async (t) => {
+  const { client, db } = await fixture(t), child = client(), parent = client(), tutor = client(), other = client();
+  const c = await child.login("student"), u = await tutor.login("chau"); await other.login("nam");
+  await parent.request("/auth/register", "POST", { name: "Phụ huynh Lan", email: "lan@example.test", password: "ParentStudy2026!" });
+  await parent.request("/account/onboarding", "PUT", { step: 0, role: "parent" });
+  await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh Lan", display_name: "Mẹ Lan", school: "THCS A", province_code: "", ward_code: "" });
+  db.prepare("UPDATE users SET onboarding_step=3 WHERE email='lan@example.test'").run();
+  const { code } = (await child.request("/family")).data;
+  assert.match(code, /^[A-Z0-9]{6}$/);
+  assert.equal((await child.request("/family/link", "POST", { code })).status, 403);
+  assert.equal((await parent.request("/family/link", "POST", { code: "ZZZZZZ" })).status, 404);
+  assert.equal((await parent.request("/family/link", "POST", { code: code.toLowerCase() })).status, 201);
+  const fam = (await parent.request("/family")).data;
+  assert.equal(fam.children[0].id, c.id);
+  // The parent tops up the child's balance and sends an offer for the child.
+  const dep = await parent.request("/wallet/deposits", "POST", { amount: 600000, student_id: c.id });
+  await parent.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
+  assert.equal((await child.request("/wallet")).data.available, 600000);
+  assert.equal((await other.request("/wallet/deposits", "POST", { amount: 600000, student_id: c.id })).status, 403);
+  const start = new Date(Date.now() + 7 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
+  // Parents follow; the child sends the offer from the student account.
+  const offerBody = { tutor_id: u.id, student_id: c.id, subject_id: "toan", mode: "online", sessions: 2, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start };
+  assert.equal((await parent.request("/proposals", "POST", offerBody)).status, 403);
+  const sent = await child.request("/proposals", "POST", offerBody);
+  assert.equal(sent.status, 201);
+  assert.ok((await parent.request("/proposals")).data.some(p => p.id === sent.data.id));
+  const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
+  assert.equal((await parent.request(`/classes/${accepted.data.class_id}`)).status, 200);
+  assert.equal((await other.request(`/classes/${accepted.data.class_id}`)).status, 404);
+
+  // A "Tìm gia sư" post: tutors pitch with credits; extra credits rank them; closing refunds those outside the top three.
+  db.prepare("UPDATE users SET display_name='Minh Anh' WHERE id=?").run(c.id);
+  const created = await child.request("/community/posts", "POST", { title: "Cần tìm gia sư Toán lớp 9", body: "Em cần gia sư Toán ôn thi vào 10, học online tối thứ 3.", topic: "find_tutor" });
+  db.prepare("UPDATE community_posts SET status='approved',published_at=CURRENT_TIMESTAMP WHERE id=?").run(created.data.id);
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+  const pid = created.data.id;
+  assert.equal((await child.request(`/community/posts?topic=find_tutor`)).data.items[0].topic, "find_tutor");
+  await other.request(`/community/posts/${pid}/react`, "POST", { kind: "interest", on: true });
+  assert.equal((await child.request(`/community/posts?sort=trending`)).data.items.find(p => p.id === pid).interests, 1);
+  const pitch = { subject_id: "toan", mode: "online", sessions: 4, minutes: 90, rate: 180000, schedule: [{ weekday: 1, hour: 19, minute: 0 }], start_date: start, message: "Cô có kinh nghiệm luyện thi vào 10." };
+  assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", { ...pitch, boost: 3 })).status, 201);
+  assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 409);
+  assert.equal((await tutor.request("/wallet")).data.credits_free, 5);
+  assert.equal((await other.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 201);
+  const view = (await child.request(`/community/posts/${pid}/pitches`)).data;
+  assert.deepEqual([view.count, view.pitches[0].tutor_id, view.pitches[0].featured], [2, u.id, true]);
+  assert.deepEqual((await other.request(`/community/posts/${pid}/pitches`)).data.mine.rank, 2);
+  assert.equal((await other.request(`/community/posts/${pid}/pitches`)).data.pitches, undefined);
+  assert.equal((await child.request(`/community/posts/${pid}/close`, "POST")).status, 200);
+  assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 409);
+});
+test("quick demo sign-in exists only outside production", async (t) => {
+  const local = await fixture(t), live = await fixture(t, { production: true });
+  const a = local.client(), b = live.client();
+  assert.equal((await a.request("/auth/demo")).data.enabled, true);
+  const me = await a.request("/auth/demo", "POST", { role: "tutor" });
+  assert.equal(me.data.user.role, "tutor");
+  assert.equal((await b.request("/auth/demo")).data.enabled, false);
+  assert.equal((await b.request("/auth/demo", "POST", { role: "admin" })).status, 404);
+});
+
+test("students verify with a school record; one record and one student code per account; tutors cannot share proof", async (t) => {
+  const { client, base, db } = await fixture(t), a = client(), b = client(), admin = client(), tutor = client(), other = client();
+  for (const [c, email] of [[a, "hs-a@example.test"], [b, "hs-b@example.test"]]) {
+    await c.request("/auth/register", "POST", { name: "Học sinh", email, password: "StudentStudy2026!" });
+    db.prepare("UPDATE users SET onboarding_step=3 WHERE email=?").run(email);
+  }
+  await admin.login("admin"); const u = await tutor.login("chau"); await other.login("nam");
+  const pdf = Buffer.from("%PDF-1.4 học bạ của bạn A");
+  const start = new Date(Date.now() + 7 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
+  const offer = { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 1, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start };
+  assert.equal((await a.request("/proposals", "POST", offer)).status, 403);
+  assert.equal((await a.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "HS 0001" })).status, 400);
+  const res = await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: a.cookie, "Content-Type": "application/pdf" }, body: pdf });
+  assert.equal(res.status, 201);
+  assert.equal((await a.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "hs 0001" })).data.status, "pending");
+  // The same file or the same student code cannot verify a second account.
+  assert.equal((await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: b.cookie, "Content-Type": "application/pdf" }, body: pdf })).status, 409);
+  await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: b.cookie, "Content-Type": "application/pdf" }, body: Buffer.from("%PDF-1.4 bạn B") });
+  assert.equal((await b.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "HS0001" })).status, 409);
+  const pending = (await admin.request("/admin/verifications")).data;
+  assert.equal(pending.length, 1);
+  assert.equal((await admin.request(`/admin/verifications/${pending[0].user_id}`, "PATCH", { status: "rejected" })).status, 400);
+  assert.equal((await admin.request(`/admin/verifications/${pending[0].user_id}`, "PATCH", { status: "approved" })).status, 200);
+  const dep = await a.request("/wallet/deposits", "POST", { amount: 200000 });
+  await a.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
+  assert.equal((await a.request("/proposals", "POST", offer)).status, 201);
+  // Tutors: one proof file and one candidate number per tutor.
+  const mine = (await tutor.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0", reference: "VN123456" } })).data;
+  const proof = Buffer.from("%PDF-1.4 IELTS của Châu");
+  assert.equal((await fetch(base + `/tutor/credentials/${mine.id}/files`, { method: "POST", headers: { Cookie: tutor.cookie, "Content-Type": "application/pdf" }, body: proof })).status, 201);
+  const theirs = (await other.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0" } })).data;
+  assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: proof })).status, 409);
+  assert.equal((await other.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "7.0", reference: "VN123456" } })).status, 409);
+  assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: pdf })).status, 409);
+});
+test("SePay payment gateway: signed checkout form and IPN credits a top-up once", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const sepay = { secret: "", account: "", bank: "", holder: "", prefix: "GSD", merchant: "SP-TEST-1", merchantSecret: "spsk_test_x", ipnSecret: "ipn-secret-1234567890", sandbox: true, webhook: false, gateway: true, ready: true };
+  const { client, base } = await fixture(t, { sepay, origin: "https://giasu.example" });
+  const s = client(); await s.login("student");
+  const dep = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  assert.equal(dep.checkout.action, "https://pay-sandbox.sepay.vn/v1/checkout/init");
+  const f = dep.checkout.fields;
+  assert.deepEqual(Object.keys(f), ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url", "lang", "signature"]);
+  const signed = ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url"].map(k => `${k}=${f[k]}`).join(",");
+  assert.equal(f.signature, createHmac("sha256", "spsk_test_x").update(signed).digest("base64"));
+  assert.equal(f.order_invoice_number, dep.code);
+  assert.ok(f.success_url.startsWith("https://giasu.example/app/wallet?deposit="));
+  const ipn = (body, key = sepay.ipnSecret) => fetch(base + "/sepay/ipn", { method: "POST", headers: { "Content-Type": "application/json", "X-Secret-Key": key }, body: JSON.stringify(body) });
+  const paid = { timestamp: 1, notification_type: "ORDER_PAID", order: { id: "o-1", order_status: "CAPTURED", order_amount: "300000.00", order_invoice_number: dep.code }, transaction: { id: "tx-1", transaction_status: "APPROVED", transaction_type: "PAYMENT", payment_method: "BANK_TRANSFER" } };
+  assert.equal((await ipn(paid, "wrong-secret-1234567")).status, 401);
+  assert.deepEqual(await (await ipn({ ...paid, transaction: { ...paid.transaction, id: "tx-0" }, order: { ...paid.order, order_amount: "100000" } })).json(), { success: false });
+  assert.deepEqual(await (await ipn(paid)).json(), { success: true });
+  assert.deepEqual(await (await ipn(paid)).json(), { success: true });
+  assert.deepEqual(await (await ipn({ ...paid, transaction: { ...paid.transaction, id: "tx-2" } })).json(), { success: false });
+  assert.equal((await s.request("/wallet")).data.available, 300000);
+  assert.equal((await s.request(`/wallet/deposits/${dep.id}`)).data.checkout, null);
+});

@@ -51,6 +51,7 @@ test("community submission, rejection, revisions, tutor comments and moderation"
   await page.getByLabel("Tên hiển thị", { exact: true }).fill("Minh học tập");
   await page.getByRole("button", { name: "Lưu tên và tiếp tục" }).click();
   const title = `Kinh nghiệm học Anh văn ${Date.now()}`;
+  await page.getByLabel("Chủ đề", { exact: true }).selectOption("experience");
   await page.getByLabel("Tiêu đề", { exact: true }).fill(title);
   await page
     .getByLabel("Nội dung", { exact: true })
@@ -447,6 +448,7 @@ test("rich editor publishes formatting, links and uploaded images only after rev
     await page.getByRole("button", { name: "Lưu tên và tiếp tục" }).click();
   }
   const title = `Chia sẻ tài liệu học tập ${Date.now()}`;
+  await page.getByLabel("Chủ đề", { exact: true }).selectOption("experience");
   await page.getByLabel("Tiêu đề", { exact: true }).fill(title);
   const editor = page.getByRole("textbox", { name: "Nội dung", exact: true });
   await editor.fill("Cùng học hình học");
@@ -581,6 +583,7 @@ test("dedicated composer saves private drafts, reopens them and submits for each
       "Ý tưởng học tập còn đang viết",
     );
     const title = `Nháp học tập ${slug} ${Date.now()}`;
+    if (slug !== "admin") await page.getByLabel("Chủ đề", { exact: true }).selectOption("experience");
     await page.getByLabel("Tiêu đề", { exact: true }).fill(title);
     await page.goBack();
     await expect(
@@ -614,12 +617,22 @@ test("dedicated composer saves private drafts, reopens them and submits for each
     expect(await seo.text()).toContain("noindex");
     for (const width of [360, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      // The media queries of the new width are applied on the next frame, so measure after two
+      // frames: right after the resize the page can still mix the old and the new layout.
       expect(
         await page.evaluate(
-          () => document.documentElement.scrollWidth <= innerWidth,
+          () =>
+            new Promise<boolean>((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() =>
+                  resolve(document.documentElement.scrollWidth <= innerWidth),
+                ),
+              ),
+            ),
         ),
       ).toBe(true);
     }
+    if (slug !== "admin") await page.getByLabel("Chủ đề", { exact: true }).selectOption("experience");
     await page
       .getByRole("button", {
         name: slug === "admin" ? "Lưu và công khai" : "Gửi bài chờ duyệt",

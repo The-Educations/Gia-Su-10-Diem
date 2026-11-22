@@ -10,10 +10,7 @@ import {
   Trash2,
   Search,
   ArrowUpRight,
-  Users,
-  Clock,
   ShieldCheck,
-  Library,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, dateTime, money } from "@/lib/api";
@@ -43,15 +40,19 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import ResourceEditor from "./ResourceEditor";
+import { AdminFinance } from "@/components/admin-finance";
+import { AdminToday } from "@/components/admin-today";
+import { AdminClasses, AdminUserOverview } from "@/components/admin-classes";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts", "community"].includes(
+  const tab = ["today", "classes", "tutors", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
-      : "tutors",
+      : "today",
     status = params.get("status") || "";
   const communityQueue = useLoad<unknown[]>("/admin/community/queue");
+  const pendingProofs = useLoad<{ tutor_id: number; count: number }[]>("/admin/credentials/pending");
   const { refresh } = useApp(),
     result = useLoad<AdminData>("/admin"),
     subjects = useLoad<Subject[]>("/subjects"),
@@ -66,6 +67,7 @@ export default function Admin() {
     [accountAction, setAccountAction] = useState<"status" | "admin" | "delete">("status"),
     [deleteEmail, setDeleteEmail] = useState(""),
     [busy, setBusy] = useState(false),
+    [overview, setOverview] = useState<number | null>(null),
     [error, setError] = useState("");
   const reviewTrigger = useRef<HTMLButtonElement | null>(null);
   const withdrawTrigger = useRef<HTMLButtonElement | null>(null);
@@ -128,29 +130,25 @@ export default function Admin() {
       />
       <WorkspaceStats
         items={[
-          { label: "Bài cộng đồng chờ duyệt", value: communityQueue.data?.length || 0, icon: Clock, to: "/admin?tab=community" },
+          { label: "Bài cộng đồng chờ duyệt", value: communityQueue.data?.length || 0, to: "/admin?tab=community" },
           {
             label: "Hồ sơ chờ duyệt",
             value: pending.length,
-            icon: Clock,
             to: "/admin?tab=tutors&status=pending",
           },
           {
             label: "Hồ sơ đã duyệt",
             value: d.tutors.filter((t) => t.status === "approved").length,
-            icon: ShieldCheck,
             to: "/admin?tab=tutors&status=approved",
           },
           {
             label: "Tài khoản",
             value: d.users.length,
-            icon: Users,
             to: "/admin?tab=users",
           },
           {
             label: "Mục kỳ thi",
             value: d.resources.length,
-            icon: Library,
             to: "/admin?tab=resources",
           },
         ]}
@@ -164,12 +162,15 @@ export default function Admin() {
           }}
         >
           <TabsList className="admin-tabs">
+            <TabsTrigger value="today">Hôm nay</TabsTrigger>
+            <TabsTrigger value="classes">Lớp học</TabsTrigger>
             <TabsTrigger value="tutors">Gia sư ({d.tutors.length})</TabsTrigger>
             <TabsTrigger value="users">Tài khoản</TabsTrigger>
             <TabsTrigger value="resources">Kỳ thi</TabsTrigger>
             <TabsTrigger value="subjects">Môn học</TabsTrigger>
             <TabsTrigger value="posts">Tin tức</TabsTrigger>
             <TabsTrigger value="community">Cộng đồng ({communityQueue.data?.length || 0})</TabsTrigger>
+            <TabsTrigger value="finance">Tài chính</TabsTrigger>
             <TabsTrigger value="audit">Nhật ký</TabsTrigger>
           </TabsList>
           {tab !== "posts" && tab !== "community" && <div className="admin-toolbar">
@@ -204,7 +205,10 @@ export default function Admin() {
               />
             )}
           </div>}
+          <TabsContent value="today"><AdminToday /></TabsContent>
+          <TabsContent value="classes"><AdminClasses /></TabsContent>
           <TabsContent value="community"><AdminCommunity /></TabsContent>
+          <TabsContent value="finance"><AdminFinance /></TabsContent>
           <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="tutors">
             {!matchingTutors.length && (
@@ -237,6 +241,9 @@ export default function Admin() {
                     <span>
                       {money(t.rate)} / buổi{t.demo ? " · Hồ sơ mẫu" : ""}{t.published ? " · Chỉnh sửa chờ duyệt" : ""}
                     </span>
+                    {!!pendingProofs.data?.find((p) => p.tutor_id === t.user_id) && (
+                      <span className="proof-pending">{pendingProofs.data.find((p) => p.tutor_id === t.user_id)!.count} minh chứng chờ đối chiếu</span>
+                    )}
                   </div>
                   <State
                     value={
@@ -253,7 +260,7 @@ export default function Admin() {
                   >
                     Xem & duyệt
                   </Button>
-                  {t.status !== "withdrawn" && <Button variant="destructive" onClick={e => { withdrawTrigger.current = e.currentTarget; setError(""); setWithdraw(t); }}>Gỡ hồ sơ</Button>}
+                  {t.status !== "withdrawn" && <Button variant="ghost" className="danger-text" onClick={e => { withdrawTrigger.current = e.currentTarget; setError(""); setWithdraw(t); }}>Gỡ hồ sơ</Button>}
                 </article>
               ))}
             </div>
@@ -288,6 +295,7 @@ export default function Admin() {
                     </span>
                   </div>
                   <State value={u.status} />
+                  <Button variant="outline" size="sm" onClick={() => setOverview(u.id)}>Tổng quan</Button>
                   <CommunityLock owner={{...u,community_locked:Number(u.community_locked)}} />
                   {u.role !== "admin" && u.status === "active" && (
                     <Button
@@ -543,6 +551,7 @@ export default function Admin() {
           <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setWithdraw(null)}>Hủy</Button><Button variant="destructive" disabled={busy} onClick={() => withdraw && mutate(`/admin/tutors/${withdraw.user_id}`, "PATCH", { status: "withdrawn", revision: withdraw.review_revision })}>{busy ? "Đang gỡ…" : "Xác nhận gỡ hồ sơ"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      <AdminUserOverview userId={overview} onClose={() => setOverview(null)} />
       <TutorReviewDialog tutor={tutor} catalog={d.theme_catalog} subjects={subjects.data || []} open={reviewOpen} onOpenChange={setReviewOpen} onSaved={refresh} returnFocus={() => {
         if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus();
         else document.getElementById("admin-search")?.focus();

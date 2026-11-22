@@ -174,3 +174,36 @@ Cancellation cancels future pending/accepted lessons only, retaining completed l
 Set `MAILFLARE_ADMIN_MAILBOX_ID` to the Mailflare mailbox for `admin@giasudiem10.online`, and `MAILFLARE_ADMIN_API_KEY` to a send-only API key scoped to that mailbox. Enter the key with `wrangler secret put MAILFLARE_ADMIN_API_KEY` through stdin; set the mailbox ID with `wrangler secret put MAILFLARE_ADMIN_MAILBOX_ID` or a Worker var. Node uses the same environment names. The contact key remains scoped to verification mail. Never use the contact mailbox to impersonate admin.
 
 Profile removals, hidden/rejected posts, and removed comments enqueue an email in the same database transaction, then attempt delivery after commit. Mail includes the affected item, reason, time, community/profile link and logo, with replies directed to admin. Failed or unconfigured delivery does not undo moderation: the admin sees a warning and the persisted “Email chưa gửi” list in community management. Retry is admin-only and throttled to once per minute; already-sent entries do not send again. Mailflare accepting a send request is not proof of inbox delivery. An ambiguous network failure can require checking Mailflare before retrying to avoid duplicate delivery. Deleting an account clears these mail records.
+
+## SePay: Số dư học phí
+
+Nạp tiền dùng **Cổng thanh toán SePay** (chuyển khoản QR, NAPAS, thẻ). Website ký form thanh toán bằng HMAC-SHA256, người dùng thanh toán trên trang của SePay, rồi SePay gọi **IPN** về website. Số dư chỉ được cộng khi IPN báo `ORDER_PAID`, đơn `CAPTURED`, giao dịch `APPROVED` và đúng số tiền của lệnh nạp. Mỗi giao dịch chỉ được cộng một lần.
+
+Ba secret của Worker (không commit):
+
+| Secret | Lấy ở đâu |
+|---|---|
+| `SEPAY_MERCHANT_ID` | Cổng thanh toán → Cấu hình → Thông tin đơn vị (Mã đơn vị, ví dụ `SP-LIVE-…`) |
+| `SEPAY_SECRET_KEY` | Cùng trang, Secret Key của đơn vị (`spsk_live_…`) |
+| `SEPAY_IPN_SECRET` | Chuỗi bạn tự đặt, nhập giống hệt ở tab IPN |
+
+```bash
+npx wrangler secret put SEPAY_MERCHANT_ID
+npx wrangler secret put SEPAY_SECRET_KEY
+npx wrangler secret put SEPAY_IPN_SECRET
+```
+
+Cấu hình tab **IPN** trong my.sepay.vn:
+
+- IPN URL: `https://giasudiem10.online/api/sepay/ipn`
+- Auth Type: **Secret Key**, giá trị = `SEPAY_IPN_SECRET`
+- Content Type: `application/json`
+- Trạng thái: Kích hoạt IPN
+
+Thiếu một trong ba secret thì nút Nạp tiền tắt trên production và IPN trả 503. Ở máy local không có secret thì nạp tiền được giả lập. Thử sandbox: thêm `SEPAY_ENV=sandbox` và dùng khóa `spsk_test_…`.
+
+Sau khi chạy: nạp thử 50.000đ, kiểm tra **Nhật ký IPN** trên SePay trả 200 và số dư tăng. Giao dịch không khớp hiện ở Quản trị → Tài chính → "Tiền về chưa khớp mã".
+
+Secret Key của đơn vị chỉ hiện một lần. Nếu key bị lộ (gửi qua chat, commit lên Git), tạo lại ở trang Thông tin đơn vị rồi chạy lại `npx wrangler secret put SEPAY_SECRET_KEY`.
+
+Webhook chuyển khoản ngân hàng (`/api/sepay/webhook`, `SEPAY_WEBHOOK_SECRET`, `SEPAY_BANK_ACCOUNT`, `SEPAY_BANK_CODE`) vẫn được hỗ trợ nếu sau này cần nhận chuyển khoản thẳng vào tài khoản ngân hàng.

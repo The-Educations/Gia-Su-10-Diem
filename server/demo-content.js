@@ -2,6 +2,9 @@ import sharp from "sharp";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { all, one, run } from "./db.js";
 import { saveUpload } from "./uploads.js";
+import { normalizeCredential } from "./credentials.js";
+import { startClass } from "./classes.js";
+import { move, wallet } from "./wallet.js";
 
 const profiles = [
   [
@@ -94,6 +97,111 @@ async function portrait(index) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 320 320"><rect width="320" height="320" fill="${bg}"/><circle cx="260" cy="68" r="82" fill="#fff" opacity=".2"/><path d="M40 320c0-82 46-121 120-121s120 39 120 121" fill="${shirt}"/><path d="M${long ? "99 191Q76 59 159 53q89 0 67 138" : "103 125Q85 48 161 50q84 0 61 84"}" fill="#35302b"/><rect x="141" y="174" width="38" height="44" rx="16" fill="#dba984"/><ellipse cx="160" cy="132" rx="53" ry="65" fill="#ebc09c"/><path d="M106 119Q96 58 157 58q65-9 59 64-38-8-65-41-16 31-45 38" fill="#35302b"/><path d="M131 133h10m39 0h10" stroke="#45382e" stroke-width="4" stroke-linecap="round"/><path d="M149 164q12 10 23-1" fill="none" stroke="#a66c55" stroke-width="3" stroke-linecap="round"/><path d="M132 203l28 37 29-37 12 16-41 47-40-47" fill="#faf5ea"/><path d="M73 283h39m-20-19v39" stroke="#fff" opacity=".45" stroke-width="2"/><text x="230" y="290" fill="#fff" opacity=".7" font-family="sans-serif" font-size="14">10đ</text></svg>`;
   return sharp(Buffer.from(svg)).webp({ quality: 88 }).toBuffer();
 }
+// Approved credentials with a labelled sample proof, so the verified lines and
+// the administrator's review screen have something real to show locally.
+const credentials = {
+  chau: ["teacher", [
+    { kind: "school", catalog_id: "hnue", detail: { field: "Sư phạm Toán", start_year: 2014, end_year: 2018 } },
+    { kind: "award", catalog_id: "hoc-sinh-gioi-quoc-gia", detail: { prize: "Giải Nhì", subject: "Toán", end_year: 2013 } },
+    { kind: "certificate", catalog_id: "chung-chi-nghiep-vu-su-pham", detail: { end_year: 2018 } },
+  ]],
+  nam: ["professional", [
+    { kind: "school", catalog_id: "hcmut", detail: { field: "Kỹ thuật Cơ khí", start_year: 2016, end_year: 2020 } },
+    { kind: "award", catalog_id: "olympic-truyen-thong-30-4", detail: { prize: "Huy chương Vàng", subject: "Vật lí", end_year: 2015 } },
+  ]],
+  linh: ["teacher", [
+    { kind: "school", catalog_id: "ulis", detail: { field: "Sư phạm Tiếng Anh", start_year: 2013, end_year: 2017 } },
+    { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0", reference: "VN-2023-118842", end_year: 2023 } },
+    { kind: "certificate", catalog_id: "tesol-tefl-celta", detail: { score: "TESOL", end_year: 2019 } },
+  ]],
+  an: ["student", [
+    { kind: "school", catalog_id: "ussh", detail: { field: "Văn học", start_year: 2022, current: true } },
+  ]],
+  huy: ["student", [
+    { kind: "school", catalog_id: "hus", detail: { field: "Hóa học", start_year: 2021, current: true } },
+    { kind: "award", catalog_id: "hoc-sinh-gioi-quoc-gia", detail: { prize: "Giải Ba", subject: "Hóa học", end_year: 2020 } },
+  ]],
+  ha: ["teacher", [
+    { kind: "school", catalog_id: "hnue", detail: { field: "Giáo dục Tiểu học", start_year: 2012, end_year: 2016 } },
+  ]],
+};
+async function sampleProof(title) {
+  const pdf = await PDFDocument.create(), page = pdf.addPage([420, 300]), font = await pdf.embedFont(StandardFonts.Helvetica);
+  const ascii = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+  page.drawText("BAN MINH HOA - DEMO PROOF", { x: 32, y: 240, size: 14, font, color: rgb(0.52, 0.18, 0.21) });
+  page.drawText(ascii.slice(0, 60), { x: 32, y: 200, size: 11, font });
+  return Buffer.from(await pdf.save());
+}
+async function seedCredentials(db, tutor, slug) {
+  const [kind, items] = credentials[slug] || [];
+  const key = `credentials-v1-${tutor.id}`;
+  if (!items || one(db, "SELECT key FROM demo_seeds WHERE key=?", key)) return;
+  const proofs = await Promise.all(items.map((item) => sampleProof(normalizeCredential(item).name)));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    run(db, "UPDATE tutors SET tutor_kind=? WHERE user_id=? AND tutor_kind=''", kind, tutor.id);
+    items.forEach((item, i) => {
+      const d = normalizeCredential(item);
+      const id = Number(run(db, "INSERT INTO tutor_credentials(tutor_id,kind,catalog_id,name,detail,status,reviewed_at) VALUES (?,?,?,?,?,'approved',CURRENT_TIMESTAMP)", tutor.id, d.kind, d.catalog_id, d.name, JSON.stringify(d.detail)).lastInsertRowid);
+      const file = `demo-proof-${tutor.id}-${i}`;
+      run(db, "INSERT INTO credential_files(id,credential_id,mime,name,size) VALUES (?,?,?,?,?)", file, id, "application/pdf", "minh-chung-mau.pdf", proofs[i].length);
+      run(db, "INSERT INTO credential_file_chunks VALUES (?,?,?)", file, 0, proofs[i]);
+    });
+    run(db, "INSERT INTO demo_seeds VALUES (?)", key);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+// Money, offers and classes so every role sees a lived-in workspace locally.
+function seedClasses(db) {
+  if (one(db, "SELECT key FROM demo_seeds WHERE key='classes-v1'")) return;
+  const id = (slug) => one(db, "SELECT id FROM users WHERE email=? AND demo=1", `${slug}@demo.giasu.test`)?.id;
+  const student = id("student"), chau = id("chau"), linh = id("linh"), nam = id("nam");
+  if (!student || !chau || !linh || !nam) return;
+  const day = (offset) => new Date(Date.now() + 7 * 3600000 + offset * 86400000).toISOString().slice(0, 10);
+  const proposal = (sender, tutor, subject, sessions, rate, schedule, start, status, message) => Number(run(db,
+    `INSERT INTO proposals(sender,student_id,tutor_id,subject_id,mode,sessions,minutes,rate,total,schedule,start_date,message,status,held,credits,expires_at,decided_at)
+     VALUES (?,?,?,?,'online',?,90,?,?,?,?,?,?,?,?,?,?)`, sender, student, tutor, subject, sessions, rate, sessions * rate, JSON.stringify(schedule), start, message, status,
+    sender === "student" && status !== "declined" ? sessions * rate : 0, sender === "tutor" ? 2 : 0, new Date(Date.now() + 40 * 3600000).toISOString(), status === "pending" ? null : new Date().toISOString()).lastInsertRowid);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    move(db, student, "deposit", { amount: 5000000, ref: "demo", note: "Nạp mẫu" });
+    for (const t of [chau, linh, nam]) wallet(db, t);
+    // An ongoing maths class with two lessons already confirmed and one waiting for the student.
+    const p1 = proposal("student", chau, "toan", 8, 180000, [{ weekday: 1, hour: 18, minute: 0 }, { weekday: 4, hour: 18, minute: 0 }], day(-12), "accepted", "Em cần ôn thi vào lớp 10.");
+    move(db, student, "offer_hold", { amount: -1440000, held: 1440000, ref: `proposal:${p1}` });
+    const c1 = startClass(db, one(db, "SELECT * FROM proposals WHERE id=?", p1));
+    const sessions = all(db, "SELECT id FROM class_sessions WHERE class_id=? ORDER BY starts_at", c1);
+    const ago = (h) => new Date(Date.now() - h * 3600000).toISOString();
+    [[sessions[0].id, ago(24 * 9), "confirmed", 5], [sessions[1].id, ago(24 * 5), "confirmed", 4], [sessions[2].id, ago(26), "pending", null]].forEach(([sid, at, outcome, rating], i) => {
+      run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", at, sid);
+      run(db, "UPDATE session_members SET outcome=?,rating=?,tutor_confirmed_at=CURRENT_TIMESTAMP,student_confirmed_at=CASE WHEN ?='confirmed' THEN CURRENT_TIMESTAMP END WHERE session_id=?", outcome, rating, outcome, sid);
+    });
+    run(db, "UPDATE classes SET meeting_url='https://meet.google.com/abc-defg-hij' WHERE id=?", c1);
+    run(db, "INSERT INTO class_materials(class_id,title,url,note) VALUES (?,?,?,?),(?,?,?,?)",
+      c1, "Phương trình bậc hai: công thức nghiệm", "https://www.youtube.com/watch?v=8v6jS0g3gqY", "Xem lại trước buổi thứ 3.",
+      c1, "Đề luyện tập tuần 2", "https://drive.google.com/file/d/1demoFile/view", "Làm câu 1–8, buổi sau chữa.");
+    // A waiting offer to another tutor, and a tutor's offer waiting for the student.
+    const p2 = proposal("student", linh, "tieng-anh", 10, 220000, [{ weekday: 2, hour: 19, minute: 30 }], day(5), "pending", "Em muốn luyện nói tiếng Anh giao tiếp.");
+    move(db, student, "offer_hold", { amount: -2200000, held: 2200000, ref: `proposal:${p2}` });
+    proposal("tutor", nam, "vat-li", 6, 200000, [{ weekday: 5, hour: 9, minute: 0 }], day(3), "pending", "Thầy thấy em cần củng cố phần điện học, mình học 6 buổi nhé.");
+    run(db, "UPDATE wallets SET credits_free=8 WHERE user_id=?", nam);
+    // A parent linked to the demo student, following the same class.
+    const parent = id("parent");
+    if (parent) {
+      run(db, "UPDATE users SET learner_type='parent',display_name='Mẹ Minh Anh' WHERE id=?", parent);
+      run(db, "INSERT OR IGNORE INTO family_links(parent_id,student_id) VALUES (?,?)", parent, student);
+      move(db, parent, "deposit", { amount: 1000000, ref: "demo", note: "Nạp mẫu" });
+    }
+    run(db, "INSERT INTO demo_seeds VALUES ('classes-v1')");
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
 export async function enrichDemo(db, { activity = false } = {}) {
   for (const [i, [slug, , , bio]] of profiles.entries()) {
     const tutor = one(
@@ -102,6 +210,7 @@ export async function enrichDemo(db, { activity = false } = {}) {
       `${slug}@demo.giasu.test`,
     );
     if (!tutor) continue;
+    await seedCredentials(db, tutor, slug);
     const key = `profile-media-v1-${tutor.id}`;
     if (one(db, "SELECT key FROM demo_seeds WHERE key=?", key)) continue;
     const photo = await portrait(i);
@@ -128,6 +237,7 @@ export async function enrichDemo(db, { activity = false } = {}) {
       throw e;
     }
   }
+  if (activity) seedClasses(db);
   if (
     !activity ||
     one(db, "SELECT key FROM demo_seeds WHERE key='activity-v1'")

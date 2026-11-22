@@ -1,5 +1,6 @@
 import { one, run } from "./db.js";
 import { z, tutorSchema } from "./validation.js";
+import { notify } from "./notifications.js";
 
 export function registerTutorReview(app, db, auth, audit, { sendEmail, origin }) {
   const sending = new Set();
@@ -29,6 +30,7 @@ export function registerTutorReview(app, db, auth, audit, { sendEmail, origin })
     // entirely, so the previous version must not stay public either.
     run(db, "UPDATE tutors SET status=?,published=CASE WHEN ? IN ('approved','withdrawn') THEN NULL ELSE published END,moderation_note='',review_revision=review_revision+1 WHERE user_id=?", d.status, d.status, id);
     audit(req.user.id, `tutor.${d.status}`, id);
+    if (["approved", "rejected"].includes(d.status)) notify(db, id, `profile_${d.status}`, { link: "/studio" });
     res.json({ ok: true });
   });
 }
