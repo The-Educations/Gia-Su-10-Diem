@@ -740,6 +740,8 @@ test("administrator confirms or cancels promotion and the new administrator sign
   expect(signup.status()).toBe(202);
   await user.goto("/app/verify-email");
   await verifyEmail(user, email);
+  // Wait for the signed-in page before reading the session.
+  await expect(user).not.toHaveURL(/verify-email/);
   const target = (await (await uc.request.get("/api/auth/me")).json()).user;
   await login(admin, "admin");
   await admin.goto("/app/admin?tab=users");
