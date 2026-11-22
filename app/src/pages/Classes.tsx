@@ -117,7 +117,7 @@ export function ClassDetail() {
     [renewing, setRenewing] = useState(4);
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
-  const c = result.data, tutor = user?.id === c.tutor_id, me = c.members.find((m) => m.student_id === user?.id);
+  const c = result.data, tutor = user?.id === c.tutor_id || user?.role === "admin", me = c.members.find((m) => m.student_id === user?.id);
   const tab = params.get("tab") || "schedule";
   const sessions = (c.sessions || []).filter((s) => tutor || s.student_id === user?.id);
   const lessons = sessions.filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
@@ -205,6 +205,23 @@ export function ClassDetail() {
 }
 
 function SessionRow({ s, tutor, onChanged }: { s: ClassSession; tutor: boolean; onChanged: () => void }) {
+  const { user } = useApp();
+  if (user?.role === "admin")
+    return (
+      <li className="session-row" data-color={s.color}>
+        <time dateTime={s.starts_at}><strong>{dayOf(s.starts_at)}</strong><span>{timeOf(s.starts_at)}</span></time>
+        <div>
+          <span>{s.student_name} · {s.outcome || s.status}</span>
+          {s.status === "scheduled" && (
+            <Button size="sm" variant="ghost" className="danger-text" onClick={async () => {
+              const note = prompt("Lý do hủy buổi (gửi cho hai bên)");
+              if (!note) return;
+              try { await api(`/admin/sessions/${s.id}/cancel`, "POST", { note }); onChanged(); } catch (e) { toast.error((e as Error).message); }
+            }}>Hủy buổi (quản trị)</Button>
+          )}
+        </div>
+      </li>
+    );
   return (
     <li className="session-row" data-color={s.color}>
       <time dateTime={s.starts_at}><strong>{dayOf(s.starts_at)}</strong><span>{timeOf(s.starts_at)}</span></time>
