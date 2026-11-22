@@ -84,7 +84,7 @@ export default function Compose({
         ? "Viết bài"
         : "Đăng bài";
   const blocker = useBlocker(() => page && dirtyRef.current);
-  const saveDraft = async () => {
+  const saveDraft = async (quiet = false) => {
     if (busy || uploading) return;
     setBusy(true);
     setError("");
@@ -98,7 +98,7 @@ export default function Compose({
       setSavedDraft(d);
       setDirty(false);
       dirtyRef.current = false;
-      toast.success("Đã lưu bản nháp");
+      if (!quiet) toast.success("Đã lưu bản nháp");
       navigate(`/community/write?draft=${d.id}`, { replace: true });
     } catch (e) {
       setError((e as Error).message);
@@ -106,6 +106,12 @@ export default function Compose({
       setBusy(false);
     }
   };
+  // The dedicated composer saves a draft by itself a few seconds after typing stops.
+  useEffect(() => {
+    if (!page || !dirty || !title.trim() || endpoint) return;
+    const timer = setTimeout(() => { void saveDraft(true); }, 4000);
+    return () => clearTimeout(timer);
+  }, [page, dirty, title, html]);
   const notice = (
     <Alert>
       <AlertDescription>
@@ -196,6 +202,8 @@ export default function Compose({
           <Field data-invalid={!!fields.title}>
             <FieldLabel htmlFor={`${id}-title`}>Tiêu đề</FieldLabel>
             <Input
+              className={page ? "compose-title" : undefined}
+              placeholder={page ? "Tiêu đề bài viết" : undefined}
               aria-invalid={!!fields.title}
               aria-describedby={fields.title ? `${id}-title-error` : undefined}
               id={`${id}-title`}
@@ -257,7 +265,7 @@ export default function Compose({
                 type="button"
                 variant="outline"
                 disabled={busy || uploading}
-                onClick={saveDraft}
+                onClick={() => saveDraft()}
               >
                 Lưu nháp
               </Button>

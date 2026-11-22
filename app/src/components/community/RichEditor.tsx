@@ -7,6 +7,9 @@ import {
   Italic,
   Underline,
   Heading2,
+  Heading3,
+  Strikethrough,
+  SquareCode,
   List,
   ListOrdered,
   Quote,
@@ -107,6 +110,10 @@ export default function RichEditor({
             italic: editor.isActive("italic"),
             underline: editor.isActive("underline"),
             heading: editor.isActive("heading", { level: 2 }),
+            heading3: editor.isActive("heading", { level: 3 }),
+            strike: editor.isActive("strike"),
+            code: editor.isActive("codeBlock"),
+            words: editor.state.doc.textContent.trim().split(/\s+/).filter(Boolean).length,
             bullet: editor.isActive("bulletList"),
             ordered: editor.isActive("orderedList"),
             quote: editor.isActive("blockquote"),
@@ -118,50 +125,26 @@ export default function RichEditor({
         : null,
   });
   if (!editor || !state) return null;
-  const tools = [
-    {
-      title: "In đậm",
-      icon: Bold,
-      active: state.bold,
-      run: () => editor.chain().focus().toggleBold().run(),
-    },
-    {
-      title: "In nghiêng",
-      icon: Italic,
-      active: state.italic,
-      run: () => editor.chain().focus().toggleItalic().run(),
-    },
-    {
-      title: "Gạch chân",
-      icon: Underline,
-      active: state.underline,
-      run: () => editor.chain().focus().toggleUnderline().run(),
-    },
-    {
-      title: "Tiêu đề phụ",
-      icon: Heading2,
-      active: state.heading,
-      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
-    },
-    {
-      title: "Danh sách",
-      icon: List,
-      active: state.bullet,
-      run: () => editor.chain().focus().toggleBulletList().run(),
-    },
-    {
-      title: "Danh sách đánh số",
-      icon: ListOrdered,
-      active: state.ordered,
-      run: () => editor.chain().focus().toggleOrderedList().run(),
-    },
-    {
-      title: "Trích dẫn",
-      icon: Quote,
-      active: state.quote,
-      run: () => editor.chain().focus().toggleBlockquote().run(),
-    },
+  // Grouped like a blog editor; each title shows its keyboard shortcut.
+  const groups = [
+    [
+      { title: "In đậm", keys: "Ctrl+B", icon: Bold, active: state.bold, run: () => editor.chain().focus().toggleBold().run() },
+      { title: "In nghiêng", keys: "Ctrl+I", icon: Italic, active: state.italic, run: () => editor.chain().focus().toggleItalic().run() },
+      { title: "Gạch chân", keys: "Ctrl+U", icon: Underline, active: state.underline, run: () => editor.chain().focus().toggleUnderline().run() },
+      { title: "Gạch ngang", keys: "Ctrl+Shift+S", icon: Strikethrough, active: state.strike, run: () => editor.chain().focus().toggleStrike().run() },
+    ],
+    [
+      { title: "Tiêu đề lớn", keys: "## ", icon: Heading2, active: state.heading, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+      { title: "Tiêu đề nhỏ", keys: "### ", icon: Heading3, active: state.heading3, run: () => editor.chain().focus().toggleHeading({ level: 3 }).run() },
+      { title: "Trích dẫn", keys: "> ", icon: Quote, active: state.quote, run: () => editor.chain().focus().toggleBlockquote().run() },
+      { title: "Khối mã", keys: "```", icon: SquareCode, active: state.code, run: () => editor.chain().focus().toggleCodeBlock().run() },
+    ],
+    [
+      { title: "Danh sách", keys: "- ", icon: List, active: state.bullet, run: () => editor.chain().focus().toggleBulletList().run() },
+      { title: "Danh sách đánh số", keys: "1. ", icon: ListOrdered, active: state.ordered, run: () => editor.chain().focus().toggleOrderedList().run() },
+    ],
   ];
+  const tools = groups.flat();
   return (
     <div
       className="community-editor"
@@ -173,14 +156,15 @@ export default function RichEditor({
         role="group"
         aria-label="Định dạng bài viết"
       >
-        {tools.map(({ title, icon: Icon, active, run }) => (
+        {tools.map(({ title, keys, icon: Icon, active, run }) => (
           <Button
+            data-group-start={groups.some((g, gi) => gi > 0 && g[0].title === title) || undefined}
             key={title}
             type="button"
             variant={active ? "secondary" : "ghost"}
             size="icon"
             aria-label={title}
-            title={title}
+            title={`${title} · ${keys}`}
             aria-pressed={active}
             onClick={run}
           >
@@ -397,6 +381,10 @@ export default function RichEditor({
       )}
       {error && <ErrorState error={error} />}
       <EditorContent editor={editor} />
+      <footer className="community-editor-foot" aria-live="polite">
+        <span>{state.words} chữ · {Math.max(1, Math.round(state.words / 200))} phút đọc</span>
+        <span className="community-editor-hint">Gõ ## để tạo tiêu đề, - để tạo danh sách, &gt; để trích dẫn</span>
+      </footer>
     </div>
   );
 }
