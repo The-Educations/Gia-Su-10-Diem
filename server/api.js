@@ -5,6 +5,7 @@ import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
 import { registerNotifications, notify } from "./notifications.js";
+import { registerCredentials, verifiedCredentials } from "./credentials.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -84,7 +85,7 @@ export function createApi(
         !(
           (req.method === "PUT" && /^\/community\/me\/(avatar|cover)$/.test(req.path)) ||
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path)))
+          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path)))
         ) &&
         !req.is("application/json")
       )
@@ -212,7 +213,7 @@ export function createApi(
     return b;
   };
   const tutorRows = (preview = false) => {
-    const trust = trustReader(db);
+    const trust = trustReader(db), verified = verifiedCredentials(db);
     return all(
       db,
       `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks
@@ -227,6 +228,7 @@ export function createApi(
       ...t,
       trust: score,
       review_count: score.review_count,
+      verified: verified.get(t.user_id) || [],
       ...(preview && { published: publishedView(published) }),
       ...uploadMetadata(db, t.user_id),
       weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
@@ -244,6 +246,7 @@ export function createApi(
   registerGoogleAuth(app, db, { origin, production, session, google, signup });
   registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
+  registerCredentials(app, db, auth, audit, processPhoto);
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
@@ -500,11 +503,12 @@ export function createApi(
         reconcileAvailability(db, req.user.id);
       }
       if (d.accepts_trial !== undefined) run(db, "UPDATE tutors SET accepts_trial=? WHERE user_id=?", Number(d.accepts_trial), req.user.id);
+      if (d.tutor_kind) run(db, "UPDATE tutors SET tutor_kind=? WHERE user_id=?", d.tutor_kind, req.user.id);
       if (address) run(db, "UPDATE tutors SET province_code=?,ward_code=? WHERE user_id=?", address.province_code, address.ward_code, req.user.id);
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
@@ -517,6 +521,7 @@ export function createApi(
         JSON.stringify(d.goals),
         d.teaching_style,
         d.lesson_plan,
+        d.intro_video,
         d.profile_theme ?? null,
         d.education_history ? JSON.stringify(d.education_history) : null,
         d.profile_sections ? JSON.stringify(d.profile_sections) : null,

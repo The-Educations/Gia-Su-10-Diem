@@ -1,0 +1,400 @@
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--muted);
+}
+.segmented a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+.segmented a[aria-current="page"] {
+  background: var(--card);
+  color: var(--foreground);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(40 40 32 / 8%);
+}
+/* Tutor profile wizard: steps on the left, the form in the middle, a live preview on the right. */
+.wizard {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) minmax(280px, 360px);
+  gap: 24px;
+  align-items: start;
+}
+.wizard-steps {
+  position: sticky;
+  top: calc(var(--topbar-height) + 20px);
+}
+.wizard-steps ol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wizard-steps button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--muted-foreground);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) ease-out, color var(--duration-fast) ease-out;
+}
+.wizard-steps button:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+.wizard-steps button[aria-current="step"] {
+  background: var(--surface-active);
+  color: var(--foreground);
+  font-weight: 600;
+}
+.wizard-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--muted);
+  transition: background-color var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out);
+}
+.wizard-dot svg {
+  width: 16px;
+  height: 16px;
+}
+[data-done] > .wizard-dot {
+  background: var(--pastel-sage);
+  color: var(--pastel-sage-ink);
+}
+[aria-current="step"] > .wizard-dot {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transform: scale(1.06);
+}
+.wizard-progress {
+  height: 4px;
+  margin: 0 10px 14px;
+  border-radius: 999px;
+  background: var(--muted);
+  overflow: hidden;
+}
+.wizard-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--positive);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+.wizard-main {
+  min-width: 0;
+}
+.wizard-panel {
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+}
+.wizard-heading {
+  margin-bottom: 24px;
+}
+.wizard-heading span {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.wizard-heading h2 {
+  font-size: 22px;
+  outline: none;
+}
+.wizard-block {
+  margin-bottom: 20px;
+}
+.wizard-block + form,
+form + .wizard-block {
+  margin-top: 20px;
+}
+.wizard-panel .profile-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.wizard .studio-preview {
+  top: calc(var(--topbar-height) + 20px);
+  max-height: calc(100dvh - var(--topbar-height) - 40px);
+}
+.narrow-field {
+  max-width: 240px;
+}
+.field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.studio-note {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 14px;
+}
+
+/* Choice cards and chips */
+.choice-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.choice-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  min-height: 104px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--background);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease-out, background-color var(--duration-fast) ease-out, transform var(--duration-fast) ease-out;
+}
+.choice-card svg {
+  width: 24px;
+  height: 24px;
+  color: var(--muted-foreground);
+}
+.choice-card:hover {
+  border-color: var(--input);
+}
+.choice-card:active {
+  transform: scale(0.98);
+}
+.choice-card[data-checked] {
+  border-color: var(--primary);
+  background: var(--pastel-rose);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.choice-card[data-checked] svg {
+  color: var(--primary);
+}
+.choice-card:has(:focus-visible),
+.chip:has(:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.chip-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip-set.compact {
+  margin-top: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out, color var(--duration-fast) ease-out;
+}
+.chip svg {
+  width: 15px;
+  height: 15px;
+}
+.chip:hover {
+  border-color: var(--input);
+}
+.chip[data-checked] {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}
+.subject-picker {
+  display: grid;
+  gap: 14px;
+}
+.search-input {
+  position: relative;
+  max-width: 360px;
+}
+.search-input svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  transform: translateY(-50%);
+}
+.search-input input {
+  padding-left: 36px;
+}
+
+/* Review */
+.review-checklist {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.review-checklist li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 4px 4px 14px;
+  border-radius: 12px;
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.review-checklist li[data-done] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.review-checklist li > svg {
+  width: 20px;
+  height: 20px;
+}
+.review-checklist li[data-done] > svg {
+  color: var(--positive);
+}
+
+@media (max-width: 1280px) {
+  .wizard {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .wizard .studio-preview {
+    grid-column: 2;
+    position: static;
+    max-height: none;
+  }
+}
+/* Tablets and phones: the steps become a scrolling row of dots above the form. */
+@media (max-width: 860px) {
+  .wizard {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .wizard .studio-preview {
+    grid-column: auto;
+  }
+  .wizard-steps {
+    position: sticky;
+    top: var(--topbar-height);
+    z-index: 5;
+    margin: 0 calc(var(--gutter) * -1);
+    padding: 10px var(--gutter) 0;
+    background: var(--background);
+  }
+  .wizard-steps,
+  .wizard-main,
+  .wizard .studio-preview {
+    min-width: 0;
+  }
+  .wizard-steps ol {
+    min-width: 0;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .wizard-steps button {
+    position: relative;
+    width: auto;
+    padding: 6px;
+  }
+  .wizard-steps button:not([aria-current="step"]) .wizard-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .wizard-steps button[aria-current="step"] {
+    padding-right: 12px;
+    white-space: nowrap;
+  }
+  .wizard-progress {
+    margin: 0 0 8px;
+  }
+  .wizard-panel {
+    padding: 20px 16px;
+  }
+  .wizard-actions {
+    position: sticky;
+    bottom: calc(var(--mobile-bar-height) + 8px);
+    z-index: 4;
+    margin: 24px -8px 0;
+    padding: 12px 8px;
+    border-top: 0;
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: 0 -1px 0 var(--border), 0 8px 24px rgb(40 40 32 / 8%);
+  }
+  .wizard-actions > * {
+    flex: 1;
+  }
+  .wizard .upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wizard-dot,
+  .wizard-progress span,
+  .choice-card,
+  .chip {
+    transition: none;
+  }
+}
+/* The real input covers its card or chip, so it stays clickable and focusable. */
+.choice-card,
+.chip {
+  position: relative;
+}
+.cover-input {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}

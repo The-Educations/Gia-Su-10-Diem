@@ -2197,3 +2197,54 @@ test("notifications reach the other party, collapse per conversation and stay pr
   assert.equal((await tutor.request("/notifications/read", "POST", {})).status, 400);
   assert.equal((await client().request("/notifications")).status, 401);
 });
+test("tutor credentials need proof, stay private and show only approved labels publicly", async (t) => {
+  const { client, base } = await fixture(t), tutor = client(), other = client(), student = client(), admin = client();
+  const u = await tutor.login("chau"); await other.login("nam"); await student.login("student"); await admin.login("admin");
+  const seeded = (await tutor.request("/tutor/credentials")).data.length;
+  const label = "Trường Đại học Sư phạm Hà Nội · Sư phạm Toán · lớp chất lượng cao";
+  const { default: sharp } = await import("sharp");
+  const picture = await sharp({ create: { width: 200, height: 120, channels: 3, background: "#ddd" } }).png().toBuffer();
+  const pdf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF");
+  const send = (id, body, type) => fetch(base + `/tutor/credentials/${id}/files`, { method: "POST", headers: { Cookie: tutor.cookie, "Content-Type": type, "X-File-Name": encodeURIComponent("thẻ sinh viên.png") }, body });
+
+  assert.equal((await tutor.request("/tutor/credentials", "POST", { kind: "school", catalog_id: "khong-co", detail: { start_year: 2020 } })).status, 400);
+  assert.equal((await tutor.request("/tutor/credentials", "POST", { kind: "award", catalog_id: "hoc-sinh-gioi-quoc-gia", detail: {} })).status, 400);
+  const school = await tutor.request("/tutor/credentials", "POST", { kind: "school", catalog_id: "hnue", detail: { field: "Sư phạm Toán · lớp chất lượng cao", start_year: 2021, current: true } });
+  assert.equal(school.status, 201);
+  assert.equal(school.data.name, "Trường Đại học Sư phạm Hà Nội");
+  assert.equal(school.data.status, "pending");
+  const cert = await tutor.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0" } });
+
+  // Approval needs a proof file; rejection needs a reason.
+  assert.equal((await admin.request(`/admin/credentials/${school.data.id}`, "PATCH", { status: "approved" })).status, 409);
+  assert.equal((await send(school.data.id, Buffer.from("not an image"), "text/plain")).status, 400);
+  const withImage = await (await send(school.data.id, picture, "image/png")).json();
+  assert.equal(withImage.files.length, 1);
+  assert.equal(withImage.files[0].mime, "image/webp");
+  const withPdf = await (await send(cert.data.id, pdf, "application/pdf")).json();
+  const fileUrl = withImage.files[0].url.replace("/api", "");
+
+  // Only the owner and administrators can open proof files.
+  for (const [c, status] of [[tutor, 200], [admin, 200], [other, 404], [student, 404], [client(), 401]])
+    assert.equal((await fetch(base + fileUrl, { headers: { Cookie: c.cookie } })).status, status);
+  assert.equal((await other.request(`/tutor/credentials/${school.data.id}`, "DELETE")).status, 404);
+  assert.equal((await student.request(`/admin/tutors/${u.id}/credentials`)).status, 403);
+  assert.equal((await admin.request(`/admin/tutors/${u.id}/credentials`)).data.length, seeded + 2);
+
+  assert.equal((await admin.request(`/admin/credentials/${cert.data.id}`, "PATCH", { status: "rejected" })).status, 400);
+  assert.equal((await admin.request(`/admin/credentials/${cert.data.id}`, "PATCH", { status: "rejected", note: "Ảnh mờ, chụp lại số báo danh." })).status, 200);
+  assert.equal((await admin.request(`/admin/credentials/${school.data.id}`, "PATCH", { status: "approved" })).status, 200);
+  let profile = (await student.request(`/tutors/${u.id}`)).data;
+  assert.ok(profile.verified.some(v => v.kind === "school" && v.label === label));
+  assert.equal(profile.verified.some(v => v.label.startsWith("IELTS")), false);
+  assert.equal(JSON.stringify(profile).includes(withImage.files[0].id), false);
+  assert.ok((await tutor.request("/notifications")).data.some(n => n.kind === "credential_rejected"));
+
+  // Editing an approved entry sends it back for review and hides it publicly.
+  assert.equal((await tutor.request(`/tutor/credentials/${school.data.id}`, "PUT", { kind: "school", catalog_id: "hnue", detail: { field: "Toán học", start_year: 2021 } })).data.status, "pending");
+  profile = (await student.request(`/tutors/${u.id}`)).data;
+  assert.equal(profile.verified.some(v => v.label === label), false);
+  assert.equal(withPdf.files[0].mime, "application/pdf");
+  assert.equal((await tutor.request(`/tutor/credentials/${cert.data.id}`, "DELETE")).status, 200);
+  assert.equal((await fetch(base + withPdf.files[0].url.replace("/api", ""), { headers: { Cookie: admin.cookie } })).status, 404);
+});
