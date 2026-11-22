@@ -107,7 +107,7 @@ function MessageScrollerButton({
         <>
           <ArrowDownIcon />
           <span className="sr-only">
-            {direction === "end" ? "Scroll to end" : "Scroll to start"}
+            {direction === "end" ? "Đến tin nhắn mới nhất" : "Đến tin nhắn đầu tiên"}
           </span>
         </>
       )}

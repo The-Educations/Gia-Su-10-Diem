@@ -1,3 +1,5 @@
+import { enMore } from "./en-more";
+
 // Vietnamese is the source language. Each key is the Vietnamese text used in
 // the interface and the value is its English version. A string without an
 // entry stays Vietnamese.
@@ -412,3 +414,4 @@ export const en: Record<string, string> = {
   "Tiếng Việt": "Vietnamese",
   "Tiếng Anh": "English",
 };
+for (const [vi, text] of Object.entries(enMore)) en[vi] ??= text;

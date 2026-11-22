@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { en } from "./locales/en";
+import { startTranslating, stopTranslating } from "./page-translator";
 
 export type Lang = "vi" | "en";
 const STORAGE_KEY = "giasu.lang";
@@ -55,6 +56,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(storedLang);
   useEffect(() => {
     document.documentElement.lang = lang;
+    if (lang === "en") startTranslating();
+    else stopTranslating();
   }, [lang]);
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
