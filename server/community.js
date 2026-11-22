@@ -17,7 +17,7 @@ import {
 import { registerCommunityDrafts, consumeDraft } from "./community-drafts.js";
 import { attachPostImages } from "./community-images.js";
 import { registerCommunityAdmin } from "./community-admin.js";
-import { classifyRequest, requestTopic } from "./community-requests.js";
+import { classifyRequest, requestTopic, summarize } from "./community-requests.js";
 
 export const publicPosts = "p.status='approved' AND u.status='active'";
 const joins = "FROM community_posts p JOIN users u ON u.id=p.author_id";
@@ -261,23 +261,27 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
       more: rows.length > LIMITS.page,
     });
   });
-  // Dải "Đang tìm gia sư" trên dashboard gia sư: bài công khai, còn hiệu lực
-  // của học sinh/phụ huynh trong 14 ngày gần nhất, tối đa 10 bài.
-  app.get("/api/community/requests", auth("tutor"), (req, res) => {
+  // Dải chạy ở thanh trên cùng: bài công khai, còn hiệu lực trong 14 ngày gần nhất,
+  // tối đa 10 bài.
+  // Gia sư thấy bài của học sinh/phụ huynh; học sinh/phụ huynh thấy bài của gia sư
+  // đang tìm học sinh. Admin không có dải.
+  app.get("/api/community/requests", auth("tutor", "student"), (req, res) => {
+    const forTutor = req.user.role === "tutor";
+    const authorRole = forTutor ? "student" : "tutor",
+      wanted = forTutor ? "seeking_tutor" : "seeking_student";
     const rows = all(
       db,
-      `SELECT p.id,p.author_id,p.title,p.body,p.published_at ${joins} WHERE ${publicPosts} AND p.kind='user' AND u.role='student' AND p.solved=0 AND p.published_at>=datetime('now','-14 days') ORDER BY p.published_at DESC,p.id DESC`,
+      `SELECT p.id,p.author_id,p.title,p.body,p.published_at ${joins} WHERE ${publicPosts} AND p.kind='user' AND u.role=? AND p.solved=0 AND p.published_at>=datetime('now','-14 days') ORDER BY p.published_at DESC,p.id DESC`,
+      authorRole,
     );
     const items = [];
     for (const p of rows) {
-      if (
-        classifyRequest({ title: p.title, body: p.body, authorRole: "student" }) !==
-        "seeking_tutor"
-      )
+      if (classifyRequest({ title: p.title, body: p.body, authorRole }) !== wanted)
         continue;
       items.push({
         id: p.id,
         title: p.title,
+        summary: summarize(p.title, p.body),
         ...requestTopic(`${p.title}\n${p.body}`),
         published_at: p.published_at,
         author: author(p.author_id, req.user),

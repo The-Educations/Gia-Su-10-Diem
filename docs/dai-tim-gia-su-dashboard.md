@@ -2,6 +2,8 @@
 
 Bản thảo ngày 21/11/2026. Gồm hai phần: **Phần 1** mô tả logic và thiết kế, **Phần 2** là prompt giao cho người (hoặc agent) triển khai.
 
+> **Cập nhật 22/11/2026 — đổi vị trí và hình thức.** Bản đầu đặt dải thành các thẻ lớn nằm trong thân dashboard, dưới "Buổi học hôm nay". Chủ dự án muốn khác: dải là **một dòng chữ chạy từ phải sang trái nằm ở thanh trên cùng**, chỗ trống giữa tên trang ("Tổng quan") và nút VI/EN, mỗi mục là avatar kèm phần tóm ý ngắn của bài. Mục 4, 5 và 6 bên dưới đã viết lại theo hướng này. Phần 2 (prompt triển khai) là bản gốc, nơi nào nói về vị trí hoặc thẻ thì **mục 5 ghi đè**.
+
 Nhãn dùng trong tài liệu:
 
 - **[CHỐT]**: chủ dự án đã đồng ý trong buổi bàn.
@@ -102,7 +104,17 @@ Lý do lọc theo vai trò người đăng [ĐỀ XUẤT, đã trình bày và �
 
 Chỉ cần **một** cụm khớp là bài được coi là tìm gia sư. Không có cụm loại trừ, vì việc lọc theo vai trò ở mục 3.1 đã thay thế.
 
-**Đã biết và chấp nhận** [CHỐT]: nhận bằng từ khóa sẽ có lúc nhầm hoặc sót, và chỉ người đăng sửa bài mới thay đổi được kết quả. Nếu sau này nhầm nhiều thì mới thêm bước admin sửa.
+**Quy tắc mở rộng (22/11/2026)** [CHỐT]: bảng trên chỉ bắt các cụm dính liền, nên đo thực tế bỏ sót 8/12 câu đăng bài bình thường ("Mình cần tìm **một** gia sư Toán", "Tìm **giúp mình** gia sư", "Nhờ mọi người giới thiệu gia sư"...). Vì vậy bài còn được nhận khi **trong cùng một câu** có:
+
+1. một **từ nhu cầu** đứng **trước**: `tìm`, `cần`, `kiếm`, `xin`, `muốn`, `giới thiệu`, `gợi ý`, `ai biết`, `ai dạy`, và (chỉ khi có dấu) `nhờ`, `thuê`;
+2. rồi một **từ chỉ gia sư**: `gia sư`, `giáo viên`, `người dạy kèm`, `người dạy`, `cô giáo`, và (chỉ khi có dấu) `thầy`;
+3. hai từ cách nhau **không quá 6 từ**.
+
+Câu được tách ở `. ! ? ; :` và dòng trống (xuống dòng đơn không tách). Tiêu đề và nội dung là các câu riêng.
+
+Không nhận khi từ nhu cầu đứng **ngay sau** `không`, `khỏi`, `hết` hoặc `đã` ("không cần gia sư nữa", "đã tìm gia sư rồi"). Quy tắc phủ định này áp dụng cho cả các cụm dính liền ở bảng trên. Từ nhu cầu đứng **sau** từ chỉ gia sư không tính ("gia sư của em dạy tốt, em cần cố gắng").
+
+**Đã biết và chấp nhận** [CHỐT]: nhận bằng từ khóa sẽ có lúc nhầm hoặc sót, và chỉ người đăng sửa bài mới thay đổi được kết quả. Ví dụ "không tìm được gia sư" (đang tìm mà chưa được) bị bỏ sót vì có `không` đứng trước. Nếu sau này nhầm nhiều thì mới thêm bước admin sửa.
 
 ### 3.3 Môn và cấp học hiển thị trên thẻ
 
@@ -139,7 +151,7 @@ Hàm trích môn và cấp cũng là hàm thuần riêng, ví dụ `requestTopic
 
 ## 4. Ai thấy dải [CHỐT]
 
-- **Chỉ tài khoản gia sư** (`role = 'tutor'`), ở dashboard `/app/workspace`.
+- **Chỉ tài khoản gia sư** (`role = 'tutor'`), ở thanh trên cùng của **mọi trang trong không gian làm việc** (thanh này là phần dùng chung nên dải đi theo gia sư khi chuyển trang). [CHỐT vị trí thanh trên, ĐỀ XUẤT hiện ở mọi trang]
 - Mọi gia sư đều thấy, kể cả hồ sơ chưa được duyệt, vì họ vốn đã đọc và bình luận được trong Cộng đồng.
 - Gia sư bị khóa quyền Cộng đồng vẫn thấy, vì khóa chỉ chặn đăng bài.
 - Học sinh, phụ huynh và admin không thấy, và API trả lỗi 403 nếu họ gọi.
@@ -148,62 +160,63 @@ Hàm trích môn và cấp cũng là hàm thuần riêng, ví dụ `requestTopic
 
 ### 5.1 Vị trí [CHỐT]
 
-Dải nằm **ngay dưới khối "Buổi học hôm nay"** (`TodayLessons`) và **trên khối "Buổi tiếp theo"**. Việc gấp trong ngày vẫn ở trên cùng.
+Dải nằm ở **thanh trên cùng** (`.topbar` trong `app/src/main.tsx`), **giữa** tên trang bên trái ("Tổng quan") và nút đổi ngôn ngữ VI/EN bên phải. Đây là khoảng trống của thanh. Dải không nằm trong thân trang và dashboard không còn khối nào cho nó.
 
 ### 5.2 Bố cục
 
 ```
-┌ Đang tìm gia sư ─────────────────────────────────────── Xem tất cả → ┐
-│ ┌──────────────────────┐ ┌──────────────────────┐ ┌────────────────── │ →→
-│ │ (●) Mẹ Bin · Phụ huynh│ │ (H) Hà My · Học sinh │ │ (●) Thành viên …  │
-│ │ Toán · THCS           │ │ Tiếng Anh            │ │ Hóa học · THPT    │
-│ │ Cần gia sư Toán lớp 9…│ │ Tìm gia sư IELTS 6.5…│ │ Cần tìm thầy dạy… │
-│ └──────────────────────┘ └──────────────────────┘ └────────────────── │
-└──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Tổng quan  (Đang tìm gia sư) (○) Mẹ Bin Toán·THCS Cần gia sư Toán… ←←←  │ VI | EN │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Tiêu đề khối:** "Đang tìm gia sư". Bên phải là liên kết **"Xem tất cả"** dẫn tới `/community?q=tìm gia sư`. [CHỐT]
+Cố định ở đầu dải là nhãn **"Đang tìm gia sư"** (một liên kết dạng nút nhỏ dẫn tới `/community?q=tìm gia sư`). Sau nhãn là phần chạy. Mỗi mục là một liên kết tới `/community/:id` (mở cùng tab), trên **một dòng**, gồm [CHỐT]:
 
-**Mỗi thẻ là một liên kết** tới `/community/:id` (mở cùng tab). Thẻ gồm [CHỐT]:
+1. **Avatar** nhỏ qua `Person` (26 px). Không có ảnh thì hiện chữ cái đầu.
+2. **Tên hiển thị** in đậm.
+3. **Môn · cấp** nếu nhận ra (mục 3.3), màu nhấn.
+4. **Tiêu đề** của bài, rồi dấu "—" và **phần tóm ý** (mục 5.6) bằng chữ nhạt hơn.
 
-1. **Avatar** qua `Person`. Không có ảnh thì hiện chữ cái đầu.
-2. **Tên hiển thị · vai trò**, ví dụ "Hà My · Học sinh" hoặc "Mẹ Bin · Phụ huynh". Dùng `name_part` và nhãn theo `tier`.
-3. **Môn · cấp** nếu nhận ra (mục 3.3).
-4. **Tiêu đề** một dòng, cắt bằng dấu "…".
+Các mục cách nhau khoảng 36 px. Vai trò (Học sinh hoặc Phụ huynh) không in ra vì khung nhỏ, nhưng có trong tên đọc của liên kết cho trình đọc màn hình.
 
-Thẻ có chiều rộng cố định, khoảng 240 px trên máy tính và 220 px trên điện thoại [ĐỀ XUẤT]. Kiểu dáng (viền, bo góc, màu) theo các thẻ đang có trên dashboard, có cả chế độ tối nếu dashboard đang hỗ trợ.
+Bấm vào mục thì mở **đúng bài** trong Cộng đồng để xem đủ nội dung. [CHỐT]
 
-Cho trình đọc màn hình [ĐỀ XUẤT]:
-
-- Khối là `<section aria-labelledby>` với tiêu đề trên, và danh sách thẻ là `<ul>`.
-- Tên liên kết của mỗi thẻ đọc đủ: tên người đăng, môn, tiêu đề.
+Cho trình đọc màn hình [ĐỀ XUẤT]: khối là `<section aria-label="Đang tìm gia sư">`; tên liên kết của mỗi mục đọc đủ tên người đăng, vai trò, môn, tiêu đề và phần tóm ý.
 
 ### 5.3 Khi nào chạy, khi nào đứng yên
 
 | Tình huống | Hành vi |
 | --- | --- |
-| 0 bài | **Ẩn toàn bộ khối**, kể cả tiêu đề. Không hiện khung trống. [CHỐT] |
-| 1–3 bài | Xếp **tĩnh** thành một hàng, không chạy. [CHỐT] |
-| Từ 4 bài, và tổng chiều rộng các thẻ **lớn hơn** chiều rộng khung | **Chạy** ngang liên tục. [CHỐT ngưỡng 4, ĐỀ XUẤT điều kiện tràn khung] |
-| Từ 4 bài nhưng các thẻ **vừa** trong khung (màn hình rất rộng) | Đứng yên. Tránh vòng lặp trông lạ khi không có gì bị che. [ĐỀ XUẤT] |
-| Đang tải | Không hiện gì. Dải chỉ là phần phụ, không chen khung chờ vào dashboard. [ĐỀ XUẤT] |
-| API lỗi | Ẩn khối, không hiện thông báo lỗi. Dashboard không bị ảnh hưởng. [ĐỀ XUẤT] |
+| 0 bài | **Ẩn toàn bộ dải**, kể cả nhãn. Thanh trên cùng như cũ. [CHỐT] |
+| Các mục **vừa** trong khung | Đứng yên, xếp từ trái. [ĐỀ XUẤT] |
+| Các mục **dài hơn** khung (kể cả chỉ một bài có tóm ý dài) | **Chạy** từ phải sang trái liên tục. Bỏ ngưỡng "từ 4 bài" của bản đầu, vì khung thanh trên cùng hẹp. [ĐỀ XUẤT] |
+| Đang tải hoặc API lỗi | Không hiện gì, không chen khung chờ hay thông báo lỗi. [ĐỀ XUẤT] |
+| Điện thoại (≤ 640 px) | Thanh trên cùng không đủ chỗ ngang, nên dải xuống **một hàng riêng ngay dưới** nút menu và nút VI/EN, rộng hết chiều ngang. [ĐỀ XUẤT] |
 
-### 5.4 Chuyển động [ĐỀ XUẤT]
+### 5.4 Chuyển động [CHỐT chiều chạy, ĐỀ XUẤT phần còn lại]
 
-- **Cách chạy:** danh sách thẻ được nhân đôi nối tiếp nhau. Bản thứ hai có `aria-hidden="true"` và các liên kết trong đó `tabIndex={-1}`. Dùng CSS `@keyframes` dịch `translateX` từ `0` đến `-50%`, lặp vô hạn, tốc độ đều `linear`.
-- **Tốc độ** khoảng **30 px/giây**. Thời lượng một vòng = chiều rộng một bản danh sách ÷ 30, tính lại khi khung đổi kích thước (`ResizeObserver`).
-- **Dừng** (`animation-play-state: paused`) khi:
-  - chuột đang ở trên dải (`:hover`);
-  - có thẻ đang được focus bằng bàn phím (`:focus-within`).
-- **Chế độ giảm chuyển động** (`prefers-reduced-motion: reduce`): không chạy. Hiện một hàng tĩnh **cuộn ngang được** (`overflow-x: auto`), chỉ một bản danh sách.
-- **Thiết bị cảm ứng** (`(hover: none)`): không chạy, hiện hàng tĩnh vuốt ngang được như trên, vì không có "đưa chuột vào" để dừng lại đọc.
-- Hai mép trái và phải có lớp mờ dần (mask hoặc gradient) để thẻ trượt vào và ra mềm mại.
-- Theo quy ước ở `docs/ui-motion.md`: chỉ animate `transform`, không làm mờ (blur) hay nghiêng chữ, không làm đổi kích thước khung.
+- **Chiều chạy:** từ **phải sang trái**.
+- **Cách chạy:** danh sách mục được nhân đôi nối tiếp nhau. Bản thứ hai có `aria-hidden="true"` và các liên kết trong đó `tabIndex={-1}`. CSS `@keyframes` dịch `translateX` từ `0` đến `-50%`, lặp vô hạn, `linear`.
+- **Tốc độ** khoảng **45 px/giây** (chữ phải đọc được). Thời lượng một vòng = chiều rộng một bản danh sách ÷ 45, tính lại khi khung đổi kích thước (`ResizeObserver`).
+- **Dừng** khi chuột ở trên phần chạy (`:hover`) hoặc có mục đang được focus bằng bàn phím (`:focus-within`).
+- **Giảm chuyển động** (`prefers-reduced-motion: reduce`) và **thiết bị cảm ứng** (`(hover: none)`): không chạy; hiện một hàng tĩnh **vuốt ngang được** (`overflow-x: auto`, ẩn thanh cuộn), chỉ một bản danh sách.
+- Hai mép trái và phải mờ dần để chữ trượt vào ra mềm mại.
+- Theo `docs/ui-motion.md`: chỉ animate `transform`, không blur, không đổi kích thước khung; chiều cao thanh trên cùng giữ nguyên 80 px trên máy tính.
 
 ### 5.5 Làm mới dữ liệu [CHỐT]
 
-Tải **một lần** khi dashboard mở. Không tự tải lại theo chu kỳ. Gia sư thấy bài mới ở lần mở dashboard sau.
+Tải **một lần** khi vào web, không tự tải lại theo chu kỳ. Thanh trên cùng ở lại khi gia sư đổi trang nên không tải lại mỗi trang. Gia sư thấy bài mới ở lần tải trang sau.
+
+### 5.6 Phần tóm ý của bài [ĐỀ XUẤT]
+
+Khung nhỏ nên mỗi mục chỉ hiện phần đầu của bài, tạo **bằng cách cắt chữ, không dùng AI**. Hàm `summarize(title, body)` trong `server/community-requests.js`:
+
+1. Lấy nội dung bài, gộp mọi khoảng trắng và xuống dòng thành một dấu cách.
+2. Nếu nội dung bắt đầu bằng đúng tiêu đề thì bỏ phần lặp đó.
+3. Dài tối đa **100 ký tự**. Dài hơn thì cắt ở ranh giới từ gần nhất và thêm "…".
+4. Nội dung rỗng thì không có phần tóm ý, mục chỉ hiện tiêu đề.
+
+Muốn xem đủ thì bấm vào mục (mục 5.2).
 
 ## 6. API
 
@@ -219,6 +232,7 @@ Tải **một lần** khi dashboard mở. Không tự tải lại theo chu kỳ.
     {
       "id": 42,
       "title": "Cần gia sư Toán lớp 9 ở Quận 7",
+      "summary": "Con học lớp 9 đang yếu hình học không gian, cần ôn thi vào lớp 10 trường chuyên trong sáu…",
       "subject": "Toán",
       "level": "THCS",
       "published_at": "2026-11-20 08:15:00",
@@ -230,7 +244,8 @@ Tải **một lần** khi dashboard mở. Không tự tải lại theo chu kỳ.
 
 - `subject` và `level` là `null` khi không nhận ra.
 - `author` là đúng đối tượng `authorLabel(u, req.user)`, cùng hình dạng `CommunityAuthor` mà giao diện đang dùng.
-- **Không trả** `body`, số bình luận, hay bất kỳ dữ liệu riêng nào của người đăng (tên thật, email, `id` tài khoản).
+- `summary` là phần tóm ý tối đa 100 ký tự (mục 5.6), có thể là chuỗi rỗng.
+- **Không trả** toàn bộ `body`, số bình luận, hay bất kỳ dữ liệu riêng nào của người đăng (tên thật, email, `id` tài khoản).
 
 **Cách lấy dữ liệu** [ĐỀ XUẤT]:
 
@@ -391,3 +406,24 @@ Kiểm tra thêm bằng trình duyệt thật (dev server ở `http://127.0.0.1:
 3. Các quyết định tự đưa ra ngoài tài liệu.
 4. Những gì chưa làm hoặc chưa kiểm được.
 5. Xác nhận: chưa commit, chưa push. Hỏi chủ dự án có muốn commit và mở PR không.
+
+---
+
+## Bước 2 — dải cho học sinh/phụ huynh (2026-11-22)
+
+Đối xứng với bước 1, cùng một dải ở thanh trên cùng, cùng API `GET /api/community/requests`; nội dung phụ thuộc vai trò người xem:
+
+| Người xem | Thấy | Nhãn | Bấm nhãn |
+| --- | --- | --- | --- |
+| Gia sư | bài của học sinh/phụ huynh đang tìm gia sư | Đang tìm gia sư | `/community?q=tìm gia sư` |
+| Học sinh, phụ huynh | bài của **gia sư** đang tìm học sinh | Gia sư đang tìm học sinh | `/community?q=tìm học sinh` |
+| Admin | không có dải (API trả 403) | | |
+
+- Cùng bộ lọc: đã duyệt, công khai, chưa "đã giải quyết", trong 14 ngày, mới nhất trước, tối đa 10 bài, tác giả đang hoạt động. Chỉ bài do đúng vai trò đăng mới được xét (gia sư không thấy bài của gia sư khác).
+- Bộ nhận diện bài gia sư (`seeks(sentence, "student")` trong `server/community-requests.js`) **chặt hơn** bước 1 vì gia sư hay bàn về học sinh ("tìm cách dạy học sinh yếu", "nhận thấy học sinh hay sai"):
+  - Cụm cố định: `tìm học sinh`, `tìm học viên`, `nhận dạy`, `nhận kèm`, `nhận học sinh`, `nhận thêm học sinh`, `mở lớp`, `tuyển học sinh`.
+  - Từ nhu cầu `tìm / kiếm / tuyển` + từ chỉ đối tượng `học sinh / học viên / học trò`, cách nhau tối đa 2 từ, và không có từ chặn ở giữa (`cách, hiểu, phương, bí, quyết, sao, nào`).
+  - Cùng phép phủ định ("không nhận dạy", "đã tìm học sinh đủ rồi").
+  - Đã đo trên 16 câu mẫu (9 nên nhận, 7 không): 16/16.
+- Giao diện: `RequestStrip` nhận prop `role`; `main.tsx` gắn cho `tutor` và `student` (phụ huynh cũng là `role = student`). Vai trò hiển thị trong nhãn đọc màn hình ("Gia sư", "Phụ huynh", "Học sinh").
+- Kiểm thử: `test/community-requests.test.js` (API theo vai trò + bộ nhận diện hai chiều), `test/e2e/request-strip.spec.ts` (học sinh và phụ huynh thấy dải, gia sư không thấy bài của đồng nghiệp).

@@ -128,4 +128,4 @@ Không mở hồ sơ hoặc ảnh tài khoản cho khách; không thêm danh sá
 
 ## Dải "Đang tìm gia sư" trên dashboard gia sư — 21/11/2026
 
-Dashboard gia sư có thêm một dải thẻ nhỏ chạy ngang, ngay dưới "Buổi học hôm nay", lấy các bài tìm gia sư mới và còn hiệu lực của học sinh/phụ huynh trong Cộng đồng. API `GET /api/community/requests` (chỉ gia sư), bộ nhận diện bằng từ khóa ở `server/community-requests.js`, giao diện ở `app/src/components/request-strip.tsx`. Chức năng chỉ đọc, không thêm cột hay bảng. Thiết kế và quyết định chi tiết: `docs/dai-tim-gia-su-dashboard.md` và `docs/dai-tim-gia-su-dashboard-implementation.md`.
+Thanh trên cùng của gia sư (giữa tên trang và nút VI/EN) có thêm một dòng chữ chạy từ phải sang trái, lấy các bài tìm gia sư mới và còn hiệu lực của học sinh/phụ huynh trong Cộng đồng. API `GET /api/community/requests` (chỉ gia sư), bộ nhận diện bằng từ khóa ở `server/community-requests.js`, giao diện ở `app/src/components/request-strip.tsx`. Chức năng chỉ đọc, không thêm cột hay bảng. Thiết kế và quyết định chi tiết: `docs/dai-tim-gia-su-dashboard.md` và `docs/dai-tim-gia-su-dashboard-implementation.md`.

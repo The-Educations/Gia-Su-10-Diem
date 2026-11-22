@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyRequest, requestTopic } from "../server/community-requests.js";
+import { classifyRequest, requestTopic, summarize } from "../server/community-requests.js";
 import { fixture } from "./community-fixture.js";
 import { run } from "../server/db.js";
 
@@ -58,6 +58,78 @@ test("only student posts are seeking_tutor; tutors and admins are not", () => {
   assert.equal(seek("Nhận dạy kèm Toán", "", "student"), null);
 });
 
+test("a need word before a tutor word in one sentence is recognised, however it is phrased", () => {
+  for (const s of [
+    "Mình cần tìm một gia sư Toán lớp 9",
+    "Cần tìm 1 gia sư dạy Toán cho con",
+    "Em muốn tìm gia sư tiếng Anh",
+    "Nhờ mọi người giới thiệu gia sư Lý lớp 11",
+    "Có ai biết gia sư Hóa dạy tốt không?",
+    "Tìm giúp mình gia sư",
+    "Cần thầy dạy Toán lớp 8",
+    "Em đang tìm thầy cô dạy kèm môn Văn",
+    "Xin gia sư dạy IELTS",
+    "Gợi ý giúp em gia sư Văn lớp 12",
+    "Mình muốn thuê gia sư dạy Toán",
+    "Dạ chào mọi người, em cần tìm một giáo viên dạy Anh",
+    "Em xin một thầy dạy Lý",
+    "toi can tim mot gia su toan",
+    "nho moi nguoi gioi thieu gia su ly",
+  ])
+    assert.equal(seek(s), "seeking_tutor", s);
+  // Title and body are read together, each sentence on its own.
+  assert.equal(seek("Nhờ giúp", "Con học lớp 6. Em đang cần một gia sư Toán."), "seeking_tutor");
+});
+
+test("talking about a tutor, or no longer needing one, is not seeking", () => {
+  for (const s of [
+    "Gia sư của em dạy rất tốt, em cần cố gắng thêm",
+    "Mình không cần gia sư nữa",
+    "Nhà em khỏi cần gia sư rồi",
+    "Em đã tìm được gia sư rồi, cảm ơn mọi người",
+    "Cần tìm cơ hội việc làm",
+    "Nhờ mọi người góp ý cách học",
+    "Em nhớ gia sư cũ lắm",
+    "Review gia sư: cô giáo A dạy rất tốt. Xin cảm ơn cô.",
+    "Cần Gia sưu tầm tem",
+    "Tìm trường cho con. Gia sư của bé học rất tốt",
+  ])
+    assert.equal(seek(s), null, s);
+  // A need word that is too far from the tutor word does not count.
+  assert.equal(
+    seek("Mình cần mua rất nhiều loại sách vở bút và đồ dùng học tập cho gia sư"),
+    null,
+  );
+});
+
+test("the widened rule still never reaches tutors or admins", () => {
+  for (const s of ["Mình cần tìm một gia sư Toán", "Nhờ mọi người giới thiệu gia sư"]) {
+    assert.equal(seek(s, "", "tutor"), null, s);
+    assert.equal(seek(s, "", "admin"), null, s);
+  }
+});
+
+test("summary: short, plain, cut at a word, never the title again", () => {
+  assert.equal(summarize("Cần gia sư Toán", "Con học lớp 9, yếu hình."), "Con học lớp 9, yếu hình.");
+  assert.equal(summarize("Cần gia sư Toán", ""), "");
+  assert.equal(summarize("Cần gia sư Toán", null), "");
+  // Whitespace and line breaks collapse into single spaces.
+  assert.equal(summarize("T", "Học   thứ 3\n\nvà thứ 5\t tối"), "Học thứ 3 và thứ 5 tối");
+  // The title repeated at the start of the body is dropped.
+  assert.equal(
+    summarize("Cần gia sư Toán lớp 9", "Cần gia sư Toán lớp 9. Học ở Quận 7, tối thứ 3 và thứ 5."),
+    "Học ở Quận 7, tối thứ 3 và thứ 5.",
+  );
+  // Long text is cut at a word boundary within 100 characters and marked.
+  const long = "Con em học lớp 9 đang yếu phần hình học không gian và cần ôn thi vào lớp 10 trường chuyên trong sáu tháng tới nên rất mong tìm được thầy cô tận tâm";
+  const out = summarize("Tiêu đề khác", long);
+  assert.ok(out.endsWith("…"));
+  assert.ok(out.length <= 101, out.length);
+  assert.ok(long.startsWith(out.slice(0, -1)));
+  assert.ok(!/\s…$/.test(out));
+  assert.equal(summarize("T", "x".repeat(300)).length, 101);
+});
+
 test("topic: subject and level", () => {
   assert.deepEqual(requestTopic("Cần tìm gia sư Toán lớp 9 ở Quận 7"), {
     subject: "Toán",
@@ -108,9 +180,9 @@ test("GET /community/requests: access, filters, order and privacy", async (t) =>
 
   // Access control.
   assert.equal((await call(null, "/community/requests")).status, 401);
-  for (const u of ["student", "parent", "admin"])
-    assert.equal((await call(u, "/community/requests")).status, 403, u);
+  assert.equal((await call("admin", "/community/requests")).status, 403);
   assert.deepEqual((await call("tutor", "/community/requests")).data.items, []);
+  assert.deepEqual((await call("student", "/community/requests")).data.items, []);
 
   const good = add("student", "Cần gia sư Toán lớp 9 ở Quận 7", { at: ago(1) });
   const parent = add("parent", "Tìm gia sư Anh văn cho con", { at: ago(0, -30) });
@@ -145,7 +217,11 @@ test("GET /community/requests: access, filters, order and privacy", async (t) =>
   assert.equal(first.author.name_part, "Public parent");
   assert.equal(second.author.tier, "student");
 
-  // No body, account ids, or private details.
+  // A short summary of the post, but never the whole body, account ids or private details.
+  for (const i of r.data.items) {
+    assert.equal(typeof i.summary, "string");
+    assert.ok(i.summary.length <= 101);
+  }
   const raw = JSON.stringify(r.data);
   assert.ok(!raw.includes("Private"));
   assert.ok(!raw.includes("@private"));
@@ -188,4 +264,79 @@ test("GET /community/requests: newest first, at most 10, ties by id", async (t) 
     r.data.items.map((i) => i.id),
     made.slice().reverse().slice(0, 10),
   );
+});
+
+test("GET /community/requests as student or parent: only tutors' 'tìm học sinh' posts", async (t) => {
+  const { call, db, ids } = await fixture(t);
+  const stamp = (days = 0) =>
+    new Date(Date.now() - days * 864e5 - 60e3).toISOString().slice(0, 19).replace("T", " ");
+  const add = (author, title, o = {}) =>
+    Number(
+      run(
+        db,
+        "INSERT INTO community_posts(author_id,kind,status,title,body,search_text,solved,published_at) VALUES (?,?,?,?,?,?,?,?)",
+        ids[author],
+        o.kind ?? "user",
+        o.status ?? "approved",
+        title,
+        o.body ?? "Dạy online, tối các ngày trong tuần.",
+        title.toLowerCase(),
+        o.solved ?? 0,
+        o.at ?? stamp(),
+      ).lastInsertRowid,
+    );
+  const good = add("tutor", "Nhận dạy kèm Toán lớp 9", { at: stamp(1) });
+  const newest = add("tutor", "Đang tìm học sinh Tiếng Anh tiểu học");
+  const excluded = [
+    add("tutor", "Tìm học sinh nhưng chưa duyệt", { status: "pending" }),
+    add("tutor", "Nhận dạy kèm đã đủ chỗ", { solved: 1 }),
+    add("tutor", "Nhận dạy kèm quá 14 ngày", { at: stamp(15) }),
+    add("tutor", "Tìm cách dạy học sinh yếu Toán", { body: "Mọi người chia sẻ giúp mình" }),
+    add("student", "Nhận dạy kèm của học sinh"),
+    add("student", "Cần gia sư Toán lớp 9"),
+  ];
+  for (const viewer of ["student", "parent"]) {
+    const r = await call(viewer, "/community/requests");
+    assert.equal(r.status, 200, viewer);
+    assert.deepEqual(r.data.items.map((i) => i.id), [newest, good], viewer);
+    for (const i of r.data.items) {
+      assert.equal(i.author.tier, "tutor");
+      assert.equal(i.body, undefined);
+      assert.equal(i.author_id, undefined);
+      assert.ok(!excluded.includes(i.id));
+    }
+    assert.equal(r.data.items[1].subject, "Toán");
+  }
+  // Tutors still see the students' strip, not their own colleagues' posts.
+  assert.deepEqual((await call("tutor", "/community/requests")).data.items.map((i) => i.id), [excluded[5]]);
+  assert.equal((await call(null, "/community/requests")).status, 401);
+  assert.equal((await call("admin", "/community/requests")).status, 403);
+});
+
+test("tutor posts seeking students: recognised, and tutors' talk about students is not", () => {
+  const seekStudent = (title, body = "") => classifyRequest({ title, body, authorRole: "tutor" });
+  for (const s of [
+    "Mình đang tìm học sinh lớp 9 học Toán",
+    "Gia sư Toán nhận dạy kèm lớp 10, 11, 12",
+    "Cô nhận học sinh cấp 2 môn Văn, học online",
+    "Mình còn trống lịch tối, đang tìm thêm 2 học sinh lớp 8",
+    "Mở lớp luyện thi vào 10 môn Toán, còn 3 chỗ",
+    "Em đang tìm học viên IELTS",
+    "Nhận thêm học sinh lớp 12 ôn thi đại học",
+    "Cần kiếm vài học sinh lớp 6 học Lý",
+  ])
+    assert.equal(seekStudent(s), "seeking_student", s);
+  for (const s of [
+    "Tìm cách dạy học sinh yếu Toán thế nào?",
+    "Mình nhận thấy học sinh hay sai phần phân số",
+    "Làm sao để tìm hiểu học sinh hơn?",
+    "Hôm nay mình đã nhận học sinh mới rồi",
+    "Mình không nhận dạy thêm nữa",
+    "Chia sẻ kinh nghiệm dạy học sinh lớp 9",
+    "Em đã tìm học sinh đủ rồi, cảm ơn mọi người",
+  ])
+    assert.equal(seekStudent(s), null, s);
+  // Only tutors' posts can seek students; students' posts never do.
+  assert.equal(classifyRequest({ title: "Nhận dạy kèm Toán", body: "", authorRole: "student" }), null);
+  assert.equal(classifyRequest({ title: "Nhận dạy kèm Toán", body: "", authorRole: "admin" }), null);
 });

@@ -17,13 +17,16 @@ export const SEEKING_TUTOR_PHRASES = [
 ];
 // "cần tìm cô" khớp trên bản CÒN dấu để không nhầm với "cần tìm cơ hội".
 export const SEEKING_TUTOR_ACCENTED_PHRASES = ["cần tìm cô"];
-// Cụm nhận diện bài của gia sư đang tìm học sinh (dành cho bước 2, chưa có giao diện).
+// Cụm nhận diện bài của gia sư đang tìm học sinh (dải trên thanh đầu của học sinh/phụ huynh).
 export const SEEKING_STUDENT_PHRASES = [
   "tim hoc sinh",
   "tim hoc vien",
   "nhan day",
   "nhan kem",
   "nhan hoc sinh",
+  "nhan them hoc sinh",
+  "mo lop",
+  "tuyen hoc sinh",
 ];
 // Cụm môn ngắn hơn ngưỡng này bị bỏ qua ("van" cũng là "vẫn").
 const MIN_SUBJECT_PHRASE = 4;
@@ -73,16 +76,103 @@ export function requestTopic(text) {
   return { subject, level };
 }
 
+// Quy tắc mở rộng: trong CÙNG MỘT CÂU, từ nói về nhu cầu đứng TRƯỚC từ chỉ gia sư
+// và cách nhau không quá MAX_GAP từ ("cần tìm một gia sư", "nhờ giới thiệu gia sư").
+// Từ nhu cầu đứng sau, hoặc ở câu khác, không tính ("gia sư của em dạy tốt, em cần cố gắng").
+const NEED_WORDS = ["tim", "can", "kiem", "xin", "muon", "gioi thieu", "goi y", "ai biet", "ai day"];
+// "nhờ" / "thuê" chỉ nhận khi có dấu: bỏ dấu thì trùng "nhỏ", "nhớ", "thuế".
+const NEED_WORDS_ACCENTED = ["nhờ", "thuê"];
+const TUTOR_WORDS = ["gia su", "giao vien", "nguoi day kem", "nguoi day", "co giao"];
+// "thầy" chỉ nhận khi có dấu: bỏ dấu thì trùng "thay" (thay đổi).
+const TUTOR_WORDS_ACCENTED = ["thầy"];
+const MAX_GAP = 6;
+// Đứng ngay trước từ nhu cầu thì nghĩa là ngược lại: "không cần gia sư", "đã tìm gia sư".
+const NEGATING = new Set(["không", "khong", "khỏi", "khoi", "hết", "het", "đã"]);
+
+const sentences = (title, body) =>
+  `${title ?? ""}. ${body ?? ""}`.split(/[.!?;:]+|\n\s*\n/);
+const tokens = (s) => s.normalize("NFC").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+const phrase = (p) => p.split(" ");
+// Vị trí [bắt đầu, kết thúc) của mỗi lần một cụm xuất hiện trong mảng từ.
+const spans = (words, phrases) =>
+  phrases.flatMap((p) => {
+    const ps = phrase(p), found = [];
+    for (let i = 0; i + ps.length <= words.length; i++)
+      if (ps.every((w, k) => words[i + k] === w)) found.push([i, i + ps.length]);
+    return found;
+  });
+
+// Gia sư đăng tìm học sinh: cùng quy tắc nhưng chặt hơn, vì gia sư hay bàn về học
+// sinh ("tìm cách dạy học sinh yếu", "cần chú ý với học sinh"). Từ nhu cầu ít hơn,
+// khoảng cách ngắn hơn và có từ chặn ở giữa. Cụm "nhận dạy / nhận kèm / nhận học
+// sinh" đã nằm trong SEEKING_STUDENT_PHRASES.
+const STUDENT_NEED_WORDS = ["tim", "kiem", "tuyen"];
+const STUDENT_WORDS = ["hoc sinh", "hoc vien", "hoc tro"];
+const STUDENT_GAP = 2;
+const STUDENT_BLOCKERS = new Set(["cach", "hieu", "phuong", "bi", "quyet", "sao", "nao"]);
+
+const seekers = {
+  tutor: {
+    exact: SEEKING_TUTOR_PHRASES,
+    exactAccented: SEEKING_TUTOR_ACCENTED_PHRASES,
+    needs: NEED_WORDS,
+    needsAccented: NEED_WORDS_ACCENTED,
+    targets: TUTOR_WORDS,
+    targetsAccented: TUTOR_WORDS_ACCENTED,
+    gap: MAX_GAP,
+    blockers: new Set(),
+  },
+  student: {
+    exact: SEEKING_STUDENT_PHRASES,
+    exactAccented: [],
+    needs: STUDENT_NEED_WORDS,
+    needsAccented: [],
+    targets: STUDENT_WORDS,
+    targetsAccented: [],
+    gap: STUDENT_GAP,
+    blockers: STUDENT_BLOCKERS,
+  },
+};
+
+function seeks(sentence, kind) {
+  const rule = seekers[kind];
+  const accented = tokens(sentence), folded = accented.map(fold);
+  const allowed = ([start]) => !NEGATING.has(accented[start - 1]);
+  const exact = [
+    ...spans(folded, rule.exact),
+    ...spans(accented, rule.exactAccented),
+  ];
+  if (exact.some(allowed)) return true;
+  const needs = [...spans(folded, rule.needs), ...spans(accented, rule.needsAccented)].filter(allowed);
+  const targets = [...spans(folded, rule.targets), ...spans(accented, rule.targetsAccented)];
+  return needs.some(([, end]) =>
+    targets.some(
+      ([start]) =>
+        start >= end &&
+        start - end <= rule.gap &&
+        !folded.slice(end, start).some((w) => rule.blockers.has(w)),
+    ),
+  );
+}
+
+// Đoạn tóm ý ngắn của bài cho dải chạy ở thanh trên cùng: phần đầu nội dung, đã
+// gộp khoảng trắng, bỏ phần lặp lại tiêu đề, cắt ở ranh giới từ. Không dùng AI.
+export const SUMMARY_MAX = 100;
+export function summarize(title, body, max = SUMMARY_MAX) {
+  let text = String(body ?? "").replace(/\s+/g, " ").trim();
+  const head = String(title ?? "").replace(/\s+/g, " ").trim();
+  if (head && text.toLowerCase().startsWith(head.toLowerCase()))
+    text = text.slice(head.length).replace(/^[\s.,;:!?\-–—]+/, "");
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max + 1),
+    space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut.slice(0, max)).replace(/[\s.,;:!?\-–—]+$/, "")}…`;
+}
+
 export function classifyRequest({ title, body, authorRole }) {
-  const { accented, folded } = normalize(`${title ?? ""}\n${body ?? ""}`);
-  if (authorRole === "student")
-    return matchesAny(folded, SEEKING_TUTOR_PHRASES) ||
-      matchesAny(accented, SEEKING_TUTOR_ACCENTED_PHRASES)
-      ? "seeking_tutor"
-      : null;
-  if (authorRole === "tutor")
-    return matchesAny(folded, SEEKING_STUDENT_PHRASES)
-      ? "seeking_student"
-      : null;
-  return null;
+  const kind = authorRole === "student" ? "tutor" : authorRole === "tutor" ? "student" : null;
+  if (!kind) return null;
+  return sentences(title, body).some((sentence) => seeks(sentence, kind))
+    ? kind === "tutor" ? "seeking_tutor" : "seeking_student"
+    : null;
 }
