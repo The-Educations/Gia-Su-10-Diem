@@ -40,6 +40,7 @@ export const en: Record<string, string> = {
   "Quyền riêng tư": "Privacy",
   "Điều khoản dịch vụ": "Terms of service",
   "Thông tin pháp lý": "Legal information",
+  "Mạng xã hội": "Social media",
   // Account menu and roles
   "Xem hồ sơ của tôi": "View my profile",
   "Cài đặt tài khoản": "Account settings",
