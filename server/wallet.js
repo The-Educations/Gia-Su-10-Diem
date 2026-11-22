@@ -56,6 +56,8 @@ export function migrateWallet(db) {
     status TEXT NOT NULL DEFAULT 'pending', held INTEGER NOT NULL DEFAULT 0, credits INTEGER NOT NULL DEFAULT 0,
     expires_at TEXT NOT NULL, decided_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE INDEX IF NOT EXISTS proposals_people ON proposals(student_id, tutor_id, status);`);
+  if (!db.prepare("PRAGMA table_info(proposals)").all().some((c) => c.name === "trial"))
+    db.exec("ALTER TABLE proposals ADD COLUMN trial INTEGER NOT NULL DEFAULT 0");
 }
 
 export function settings(db) {

@@ -538,7 +538,7 @@ export function createApi(
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,sample_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
@@ -552,6 +552,7 @@ export function createApi(
         d.teaching_style,
         d.lesson_plan,
         d.intro_video,
+        d.sample_video,
         d.profile_theme ?? null,
         d.education_history ? JSON.stringify(d.education_history) : null,
         d.profile_sections ? JSON.stringify(d.profile_sections) : null,

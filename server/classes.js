@@ -43,6 +43,9 @@ export function migrateClasses(db) {
   CREATE TABLE IF NOT EXISTS session_moves (
     id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES class_sessions(id), requested_by INTEGER NOT NULL,
     starts_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`);
+  const sm = db.prepare("PRAGMA table_info(session_members)").all().map((c) => c.name);
+  if (!sm.includes("survey")) db.exec("ALTER TABLE session_members ADD COLUMN survey TEXT NOT NULL DEFAULT '{}'");
+  if (!sm.includes("comment")) db.exec("ALTER TABLE session_members ADD COLUMN comment TEXT NOT NULL DEFAULT ''");
   if (!db.prepare("PRAGMA table_info(tutors)").all().some((c) => c.name === "violations"))
     db.exec("ALTER TABLE tutors ADD COLUMN violations INTEGER NOT NULL DEFAULT 0");
 }
@@ -138,7 +141,7 @@ export function upkeep(db) {
   });
 }
 
-const sessionSql = `SELECT cs.*, c.title, c.color, c.tutor_id, c.subject_id, c.mode, c.meeting_url, sm.member_id, sm.tutor_confirmed_at, sm.student_confirmed_at, sm.outcome, sm.rating,
+const sessionSql = `SELECT cs.*, c.title, c.color, c.tutor_id, c.subject_id, c.mode, c.meeting_url, sm.member_id, sm.tutor_confirmed_at, sm.student_confirmed_at, sm.outcome, sm.rating, sm.survey, sm.comment,
   m.student_id, u.name AS student_name, t.name AS tutor_name
   FROM class_sessions cs JOIN classes c ON c.id=cs.class_id LEFT JOIN session_members sm ON sm.session_id=cs.id
   LEFT JOIN class_members m ON m.id=sm.member_id LEFT JOIN users u ON u.id=m.student_id JOIN users t ON t.id=c.tutor_id`;
@@ -268,10 +271,15 @@ export function registerClasses(app, db, auth, audit) {
   });
   app.put("/api/sessions/:id/rating", auth("student"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
-    const { rating } = z.object({ rating: z.number().int().min(1).max(5) }).parse(req.body);
+    // A short private survey: stars, three quick questions and an optional note.
+    const d = z.object({
+      rating: z.number().int().min(1).max(5),
+      answers: z.object({ on_time: z.boolean().optional(), clear: z.boolean().optional(), homework: z.boolean().optional() }).default({}),
+      comment: z.string().trim().max(1000).default(""),
+    }).parse(req.body);
     const { mine, session } = member(id, req.user);
     if (!ended(session)) fail(409, "Chấm sau khi buổi học kết thúc.");
-    for (const r of mine) run(db, "UPDATE session_members SET rating=? WHERE session_id=? AND member_id=?", rating, id, r.member_id);
+    for (const r of mine) run(db, "UPDATE session_members SET rating=?,survey=?,comment=? WHERE session_id=? AND member_id=?", d.rating, JSON.stringify(d.answers), d.comment, id, r.member_id);
     res.json({ ok: true });
   });
 

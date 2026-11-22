@@ -2534,3 +2534,21 @@ test("personal calendar events belong to their owner and validate times", async 
   assert.equal((await b.request(`/calendar-events/${e.id}`, "DELETE")).status, 404);
   assert.equal((await a.request(`/calendar-events/${e.id}`, "DELETE")).status, 200);
 });
+test("free trials: one 60-minute lesson per student and tutor, only when the tutor offers trials; lesson surveys stay private", async (t) => {
+  const { client, db } = await fixture(t), s = client(), tu = client();
+  await s.login("student"); const u = await tu.login("chau");
+  const start = new Date(Date.now() + 7 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
+  const trial = { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 5, minutes: 90, rate: 0, trial: true, schedule: [{ weekday: 1, hour: 18, minute: 0 }], start_date: start };
+  assert.equal((await s.request("/proposals", "POST", trial)).status, 409);
+  db.prepare("UPDATE tutors SET accepts_trial=1 WHERE user_id=?").run(u.id);
+  const sent = await s.request("/proposals", "POST", trial);
+  assert.deepEqual([sent.status, sent.data.sessions, sent.data.minutes, sent.data.total], [201, 1, 60, 0]);
+  assert.equal((await s.request("/proposals", "POST", { ...trial, tutor_id: u.id })).status, 409);
+  assert.equal((await s.request("/proposals", "POST", { ...trial, trial: false, rate: 10000 })).status, 400);
+  const accepted = await tu.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
+  const cls = (await s.request(`/classes/${accepted.data.class_id}`)).data;
+  db.prepare("UPDATE class_sessions SET starts_at=? WHERE id=?").run(new Date(Date.now() - 3 * 3600000).toISOString(), cls.sessions[0].id);
+  assert.equal((await s.request(`/sessions/${cls.sessions[0].id}/rating`, "PUT", { rating: 4, answers: { on_time: true, clear: true, homework: false }, comment: "Cô giảng dễ hiểu" })).status, 200);
+  const row = db.prepare("SELECT rating,survey,comment FROM session_members WHERE session_id=?").get(cls.sessions[0].id);
+  assert.deepEqual([row.rating, JSON.parse(row.survey).clear, row.comment], [4, true, "Cô giảng dễ hiểu"]);
+});
