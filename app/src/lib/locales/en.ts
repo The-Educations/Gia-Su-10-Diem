@@ -393,6 +393,14 @@ export const en: Record<string, string> = {
   "{actor} đã kết thúc gói học sớm": "{actor} ended the package early",
   "Gói học đã kết thúc. Bạn có thể để lại nhận xét": "Your package ended. You can leave a comment",
   "Đã chuyển {money} học phí vào số dư": "{money} in lesson fees added to your balance",
+  // Family
+  "Con của tôi": "My children", "Con": "Children", "Gia đình": "Family", "Tìm gia sư cho con": "Find a tutor for your child",
+  "Chưa liên kết với tài khoản của con": "No child account linked yet", "{n} offer chờ": "{n} offers waiting",
+  "Nạp cho con": "Top up for your child", "Con chưa có lớp học.": "No classes yet.", "Thêm tài khoản của con": "Add your child's account",
+  "Mã mời của con (6 ký tự, xem trong Cài đặt của con)": "Your child's invite code (6 characters, in their Settings)",
+  "Liên kết": "Link", "Đã liên kết với con": "Linked to your child", "Liên kết với phụ huynh": "Link with a parent",
+  "Phụ huynh nhập mã này để theo dõi lịch học, nạp tiền và gửi offer giúp bạn.": "A parent enters this code to follow your lessons, top up and send offers for you.",
+  "Chép mã": "Copy code", "Đổi mã": "New code", "Đã liên kết: {names}": "Linked: {names}",
   // Language switch
   "Ngôn ngữ": "Language",
   "Tiếng Việt": "Vietnamese",

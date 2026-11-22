@@ -256,3 +256,21 @@
 @media (prefers-reduced-motion: reduce) {
   .credit-pack, .proposal-card { transition: none; }
 }
+
+/* Family */
+.family-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.family-child { display: grid; gap: 12px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
+.family-child header { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.family-child header div { display: flex; flex-direction: column; }
+.family-child header small { font-size: 12px; color: var(--muted-foreground); }
+.family-balance { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--muted); font-size: 14px; }
+.family-balance svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+.family-classes { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.family-classes a { display: grid; gap: 4px; padding: 10px 12px; border-left: 3px solid var(--c-ink); border-radius: 10px; background: color-mix(in srgb, var(--c-bg) 55%, transparent); font-size: 14px; }
+.family-classes span { font-size: 13px; color: var(--muted-foreground); }
+.family-link { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.family-link [data-slot="field"] { flex: 1 1 260px; }
+.family-code-card { display: grid; gap: 8px; margin: 20px 0; padding: 18px 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
+.family-code-card p { font-size: 14px; color: var(--muted-foreground); }
+.family-code { display: flex; align-items: center; gap: 4px; }
+.family-code strong { padding: 6px 14px; border-radius: 10px; background: var(--pastel-butter); color: var(--pastel-butter-ink); font: 600 22px/1.2 "Be Vietnam Pro", sans-serif; letter-spacing: 0.18em; }

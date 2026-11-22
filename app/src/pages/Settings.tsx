@@ -1,3 +1,4 @@
+import { StudentCode } from "@/pages/Family";
 import { Link } from "react-router-dom";
 import { AddressFields } from "@/components/address-fields";
 import { TimezoneField } from "@/components/tutor-timezone";
@@ -56,6 +57,7 @@ export default function Settings() {
       <Heading title="Tài khoản của tôi" />
       <Link className="text-link" to={`/community/members/${user?.profile_code}`}>Hồ sơ cộng đồng của tôi</Link>
       {error && <ErrorState error={error} />}
+      {user?.role === "student" && user.learner_type !== "parent" && <StudentCode />}
       <section className="settings-section">
         <div>
           <h2>Thông tin cá nhân</h2>
