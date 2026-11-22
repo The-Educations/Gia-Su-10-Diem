@@ -26,6 +26,17 @@ Triển khai theo `docs/dai-tim-gia-su-dashboard.md` (Phần 1). Nhánh `feat/da
 - Chế độ "cuộn ngang" và "tĩnh" dùng chung một kiểu `overflow-x: auto`; lớp mờ hai mép chỉ bật khi đang chạy ngang.
 - Dashboard hiện không có chế độ tối riêng; dải dùng biến màu chung nên theo được nếu sau này có.
 
+## Đổi vị trí lên thanh trên cùng (22/11/2026)
+
+Bản đầu hiểu sai ý chủ dự án: dải là các thẻ lớn trong thân dashboard. Ý đúng là một dòng chữ chạy từ phải sang trái **ở thanh trên cùng**, chỗ trống giữa "Tổng quan" và nút VI/EN. Đã làm lại:
+
+- `app/src/main.tsx`: `<RequestStrip />` đặt trong `.topbar`, giữa `.topbar-leading` và `.topbar-right`, chỉ với `role === "tutor"`. Dashboard không còn dùng dải.
+- `app/src/components/request-strip.tsx` viết lại: nhãn "Đang tìm gia sư", mỗi mục một dòng gồm avatar, tên, môn · cấp, tiêu đề và phần tóm ý. Chạy khi nội dung dài hơn khung (bỏ ngưỡng 4 bài), 45 px/giây, dừng khi hover hoặc focus.
+- `server/community-requests.js`: hàm `summarize` (cắt 100 ký tự ở ranh giới từ, bỏ phần lặp tiêu đề). `GET /api/community/requests` có thêm `summary`, vẫn không trả toàn bộ nội dung bài.
+- CSS: khối `.topbar-ticker` thay cho `.request-strip`. Từ 640 px trở xuống dải xuống một hàng riêng dưới nút menu và nút VI/EN.
+- Test: `test/e2e/request-strip.spec.ts` viết lại (vị trí trong thanh, tóm ý, chiều chạy từ phải sang trái, dừng khi hover, một điểm dừng Tab mỗi mục, 360 px, giảm chuyển động, API lỗi); thêm test `summarize` và `summary` trong API.
+- Đã chọn: dải hiện ở **mọi trang** của gia sư (thanh trên cùng là phần dùng chung). Muốn chỉ hiện ở Tổng quan thì thêm điều kiện đường dẫn ở `main.tsx`.
+
 ## Mở rộng bộ nhận diện (22/11/2026)
 
 Sau khi dải lên site thật, chủ dự án ngồi canh mà không thấy bài nào chạy qua. Nguyên nhân: bộ nhận diện chỉ bắt cụm dính liền và bỏ sót 8/12 câu đăng bài thường gặp. Đã sửa trong `server/community-requests.js`:

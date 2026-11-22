@@ -112,6 +112,20 @@ function seeksTutor(sentence) {
   return needs.some(([, end]) => tutors.some(([start]) => start >= end && start - end <= MAX_GAP));
 }
 
+// Đoạn tóm ý ngắn của bài cho dải chạy ở thanh trên cùng: phần đầu nội dung, đã
+// gộp khoảng trắng, bỏ phần lặp lại tiêu đề, cắt ở ranh giới từ. Không dùng AI.
+export const SUMMARY_MAX = 100;
+export function summarize(title, body, max = SUMMARY_MAX) {
+  let text = String(body ?? "").replace(/\s+/g, " ").trim();
+  const head = String(title ?? "").replace(/\s+/g, " ").trim();
+  if (head && text.toLowerCase().startsWith(head.toLowerCase()))
+    text = text.slice(head.length).replace(/^[\s.,;:!?\-–—]+/, "");
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max + 1),
+    space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut.slice(0, max)).replace(/[\s.,;:!?\-–—]+$/, "")}…`;
+}
+
 export function classifyRequest({ title, body, authorRole }) {
   const { folded } = normalize(`${title ?? ""}\n${body ?? ""}`);
   if (authorRole === "student")

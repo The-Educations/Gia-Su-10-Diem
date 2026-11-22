@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyRequest, requestTopic } from "../server/community-requests.js";
+import { classifyRequest, requestTopic, summarize } from "../server/community-requests.js";
 import { fixture } from "./community-fixture.js";
 import { run } from "../server/db.js";
 
@@ -109,6 +109,27 @@ test("the widened rule still never reaches tutors or admins", () => {
   }
 });
 
+test("summary: short, plain, cut at a word, never the title again", () => {
+  assert.equal(summarize("Cần gia sư Toán", "Con học lớp 9, yếu hình."), "Con học lớp 9, yếu hình.");
+  assert.equal(summarize("Cần gia sư Toán", ""), "");
+  assert.equal(summarize("Cần gia sư Toán", null), "");
+  // Whitespace and line breaks collapse into single spaces.
+  assert.equal(summarize("T", "Học   thứ 3\n\nvà thứ 5\t tối"), "Học thứ 3 và thứ 5 tối");
+  // The title repeated at the start of the body is dropped.
+  assert.equal(
+    summarize("Cần gia sư Toán lớp 9", "Cần gia sư Toán lớp 9. Học ở Quận 7, tối thứ 3 và thứ 5."),
+    "Học ở Quận 7, tối thứ 3 và thứ 5.",
+  );
+  // Long text is cut at a word boundary within 100 characters and marked.
+  const long = "Con em học lớp 9 đang yếu phần hình học không gian và cần ôn thi vào lớp 10 trường chuyên trong sáu tháng tới nên rất mong tìm được thầy cô tận tâm";
+  const out = summarize("Tiêu đề khác", long);
+  assert.ok(out.endsWith("…"));
+  assert.ok(out.length <= 101, out.length);
+  assert.ok(long.startsWith(out.slice(0, -1)));
+  assert.ok(!/\s…$/.test(out));
+  assert.equal(summarize("T", "x".repeat(300)).length, 101);
+});
+
 test("topic: subject and level", () => {
   assert.deepEqual(requestTopic("Cần tìm gia sư Toán lớp 9 ở Quận 7"), {
     subject: "Toán",
@@ -196,7 +217,11 @@ test("GET /community/requests: access, filters, order and privacy", async (t) =>
   assert.equal(first.author.name_part, "Public parent");
   assert.equal(second.author.tier, "student");
 
-  // No body, account ids, or private details.
+  // A short summary of the post, but never the whole body, account ids or private details.
+  for (const i of r.data.items) {
+    assert.equal(typeof i.summary, "string");
+    assert.ok(i.summary.length <= 101);
+  }
   const raw = JSON.stringify(r.data);
   assert.ok(!raw.includes("Private"));
   assert.ok(!raw.includes("@private"));
