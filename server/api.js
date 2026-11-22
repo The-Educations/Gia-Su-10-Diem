@@ -271,7 +271,7 @@ export function createApi(
   registerWeeklyRequests(app, db, auth);
   registerOffers(app, db, auth);
   registerNotifications(app, db, auth);
-  const walletApi = registerWallet(app, db, auth, audit, { production, sepay });
+  const walletApi = registerWallet(app, db, auth, audit, { production, sepay, origin });
   registerProposals(app, db, auth, audit, walletApi);
   registerClasses(app, db, auth, audit);
   registerCommunityTopics(app, db, auth);

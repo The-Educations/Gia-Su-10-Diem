@@ -1435,4 +1435,7 @@ export const enMore: Record<string, string> = {
   "Hoàn tất thiết lập để dùng tính năng này": "Finish setup to use this",
   "Chọn vai trò và điền thông tin cơ bản, chỉ mất một phút.": "Choose your role and add the basics. It takes a minute.",
   "Thiết lập tài khoản": "Set up account",
+  "Đang chờ SePay xác nhận thanh toán…": "Waiting for SePay to confirm the payment…",
+  "Bạn đã hủy thanh toán. Số dư chưa thay đổi.": "You cancelled the payment. Your balance has not changed.",
+  "Thanh toán chưa thành công. Bạn có thể thử lại.": "The payment did not go through. You can try again.",
 };

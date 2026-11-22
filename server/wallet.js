@@ -38,6 +38,9 @@ export function migrateWallet(db) {
   CREATE TABLE IF NOT EXISTS sepay_events (
     id INTEGER PRIMARY KEY, code TEXT, amount INTEGER NOT NULL, reference TEXT NOT NULL DEFAULT '',
     verdict INTEGER NOT NULL, status TEXT NOT NULL, deposit_id INTEGER, payload TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+  CREATE TABLE IF NOT EXISTS gateway_events (
+    id TEXT PRIMARY KEY, invoice TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL DEFAULT 0, verdict INTEGER NOT NULL,
+    status TEXT NOT NULL, deposit_id INTEGER, payload TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE IF NOT EXISTS withdrawals (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), amount INTEGER NOT NULL,
     bank_name TEXT NOT NULL, account_number TEXT NOT NULL, account_name TEXT NOT NULL,
@@ -95,16 +98,30 @@ export function spendCredits(db, userId, count, ref) {
 
 export function sepayConfig(env = process.env) {
   const c = {
+    // Bank-transfer webhook (SePay Webhooks).
     secret: env.SEPAY_WEBHOOK_SECRET || "",
     account: env.SEPAY_BANK_ACCOUNT || "",
     bank: env.SEPAY_BANK_CODE || "",
     holder: env.SEPAY_ACCOUNT_NAME || "",
     prefix: (env.SEPAY_CODE_PREFIX || "GSD").toUpperCase(),
+    // Payment gateway (Cổng thanh toán): hosted checkout and IPN.
+    merchant: env.SEPAY_MERCHANT_ID || "",
+    merchantSecret: env.SEPAY_SECRET_KEY || "",
+    ipnSecret: env.SEPAY_IPN_SECRET || "",
+    sandbox: env.SEPAY_ENV === "sandbox",
   };
-  return { ...c, ready: !!(c.secret && c.account && c.bank) };
+  const webhook = !!(c.secret && c.account && c.bank), gateway = !!(c.merchant && c.merchantSecret && c.ipnSecret);
+  return { ...c, webhook, gateway, ready: webhook || gateway };
 }
 
-export function registerWallet(app, db, auth, audit, { production, sepay }) {
+// The checkout form's signature: allowed fields in SePay's order, empty ones left out.
+const SIGNED = ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "payment_method", "success_url", "error_url", "cancel_url"];
+export function signCheckout(fields, secret) {
+  const text = SIGNED.filter((k) => fields[k] && fields[k] !== "0").map((k) => `${k}=${fields[k]}`).join(",");
+  return createHmac("sha256", secret).update(text).digest("base64");
+}
+
+export function registerWallet(app, db, auth, audit, { production, sepay, origin = "" }) {
   const simulate = !production && !sepay.ready;
   const expireProposals = () => {
     for (const p of all(db, "SELECT * FROM proposals WHERE status='pending' AND expires_at<?", new Date().toISOString()))
@@ -123,10 +140,21 @@ export function registerWallet(app, db, auth, audit, { production, sepay }) {
       payments: sepay.ready ? "live" : simulate ? "simulated" : "off",
     };
   };
-  const qr = (d) => sepay.ready
+  const qr = (d) => sepay.webhook
     ? `https://vietqr.app/img?${new URLSearchParams({ acc: sepay.account, bank: sepay.bank, amount: String(d.amount), des: d.code, template: "compact" })}`
     : null;
-  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), account: sepay.ready ? sepay.account : "", bank: sepay.bank, holder: sepay.holder });
+  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), account: sepay.webhook ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: checkout(d) });
+  // A signed form the browser posts to SePay's hosted checkout page.
+  const checkout = (d) => {
+    if (!sepay.gateway || d.status !== "pending") return null;
+    const back = `${origin}/app/wallet?deposit=${d.id}`;
+    const fields = {
+      order_amount: String(d.amount), merchant: sepay.merchant, currency: "VND", operation: "PURCHASE",
+      order_description: `Nap so du hoc phi ${d.code}`, order_invoice_number: d.code, customer_id: String(d.user_id),
+      success_url: `${back}&result=success`, error_url: `${back}&result=error`, cancel_url: `${back}&result=cancel`,
+    };
+    return { action: `https://${sepay.sandbox ? "pay-sandbox" : "pay"}.sepay.vn/v1/checkout/init`, fields: { ...fields, lang: "vi", signature: signCheckout(fields, sepay.merchantSecret) } };
+  };
 
   // Credits whatever amount arrives with a known code to that deposit's wallet.
   function credit(code, amount, eventRef) {
@@ -169,6 +197,35 @@ export function registerWallet(app, db, auth, audit, { production, sepay }) {
     if (!d) fail(404, "Không tìm thấy lệnh nạp.");
     credit(d.code, d.amount, "simulated");
     res.json(deposit(one(db, "SELECT * FROM deposits WHERE id=?", d.id)));
+  });
+
+  // Payment gateway IPN: SePay calls this once the buyer has paid on the hosted page.
+  app.post("/api/sepay/ipn", (req, res) => {
+    const key = req.get("X-Secret-Key") || "";
+    if (!sepay.ipnSecret) return res.status(503).json({ success: false });
+    if (key.length !== sepay.ipnSecret.length || !timingSafeEqual(Buffer.from(key), Buffer.from(sepay.ipnSecret))) return res.status(401).json({ success: false });
+    const e = req.body || {}, order = e.order || {}, tx = e.transaction || {};
+    const eventId = String(tx.id || order.id || "");
+    if (!eventId) return res.status(400).json({ success: false });
+    const seen = one(db, "SELECT verdict FROM gateway_events WHERE id=?", eventId);
+    if (seen) return res.json({ success: !!seen.verdict });
+    const amount = Math.round(Number(order.order_amount) || 0);
+    let verdict = false, depositId = null;
+    if (e.notification_type === "ORDER_PAID" && order.order_status === "CAPTURED" && tx.transaction_status === "APPROVED" && tx.transaction_type !== "REFUND")
+      transaction(db, () => {
+        const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", String(order.order_invoice_number || ""));
+        // One payment per top-up, for exactly the amount asked.
+        if (!d || d.amount !== amount || !run(db, "UPDATE deposits SET received=?,status='paid',paid_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", amount, d.id).changes) return;
+        move(db, d.user_id, "deposit", { amount, ref: `deposit:${d.id}`, note: `sepay-pg:${tx.payment_method || ""}` });
+        notify(db, d.user_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+        if (d.payer_id !== d.user_id) notify(db, d.payer_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+        verdict = true;
+        depositId = d.id;
+      });
+    run(db, "INSERT OR IGNORE INTO gateway_events(id,invoice,amount,verdict,status,deposit_id,payload) VALUES (?,?,?,?,?,?,?)",
+      eventId, String(order.order_invoice_number || ""), amount, Number(verdict), verdict ? "processed" : "unmatched", depositId, JSON.stringify(e));
+    // 200 tells SePay the notice arrived; unmatched ones wait in Admin → Finance.
+    res.json({ success: verdict });
   });
 
   // SePay webhook with "Dùng để xác thực thanh toán": the reply is the verdict.
@@ -233,7 +290,9 @@ export function registerWallet(app, db, auth, audit, { production, sepay }) {
     res.json({
       withdrawals: all(db, "SELECT w.*,u.name FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE w.status WHEN 'requested' THEN 0 ELSE 1 END, w.id DESC LIMIT 200"),
       deposits: all(db, "SELECT d.id,d.code,d.amount,d.received,d.status,d.created_at,d.paid_at,u.name FROM deposits d JOIN users u ON u.id=d.user_id ORDER BY d.id DESC LIMIT 200"),
-      unmatched: all(db, "SELECT id,code,amount,reference,created_at FROM sepay_events WHERE status='unmatched' ORDER BY id DESC LIMIT 100"),
+      unmatched: all(db, `SELECT id,code,amount,reference,created_at FROM (
+        SELECT CAST(id AS TEXT) id,code,amount,reference,created_at FROM sepay_events WHERE status='unmatched'
+        UNION ALL SELECT id,invoice AS code,amount,'' AS reference,created_at FROM gateway_events WHERE status='unmatched') ORDER BY created_at DESC LIMIT 100`),
       totals: one(db, `SELECT
         COALESCE((SELECT SUM(received) FROM deposits),0) AS deposited,
         COALESCE((SELECT SUM(available+held) FROM wallets),0) AS balances,

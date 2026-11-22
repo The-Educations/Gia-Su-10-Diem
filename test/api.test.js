@@ -2251,7 +2251,7 @@ test("tutor credentials need proof, stay private and show only approved labels p
 test("wallet deposits, SePay webhook verdicts, offers holding money and tutor credits", async (t) => {
   const { createHmac } = await import("node:crypto");
   const secret = "test-sepay-secret";
-  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", ready: true } });
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
   const student = client(), tutor = client(), admin = client();
   const s = await student.login("student"), u = await tutor.login("chau"); await admin.login("admin");
   const hook = (payload, key = secret, stamp = Math.floor(Date.now() / 1000)) => {
@@ -2496,4 +2496,27 @@ test("students verify with a school record; one record and one student code per 
   assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: proof })).status, 409);
   assert.equal((await other.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "7.0", reference: "VN123456" } })).status, 409);
   assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: pdf })).status, 409);
+});
+test("SePay payment gateway: signed checkout form and IPN credits a top-up once", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const sepay = { secret: "", account: "", bank: "", holder: "", prefix: "GSD", merchant: "SP-TEST-1", merchantSecret: "spsk_test_x", ipnSecret: "ipn-secret-1234567890", sandbox: true, webhook: false, gateway: true, ready: true };
+  const { client, base } = await fixture(t, { sepay, origin: "https://giasu.example" });
+  const s = client(); await s.login("student");
+  const dep = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  assert.equal(dep.checkout.action, "https://pay-sandbox.sepay.vn/v1/checkout/init");
+  const f = dep.checkout.fields;
+  assert.deepEqual(Object.keys(f), ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url", "lang", "signature"]);
+  const signed = ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url"].map(k => `${k}=${f[k]}`).join(",");
+  assert.equal(f.signature, createHmac("sha256", "spsk_test_x").update(signed).digest("base64"));
+  assert.equal(f.order_invoice_number, dep.code);
+  assert.ok(f.success_url.startsWith("https://giasu.example/app/wallet?deposit="));
+  const ipn = (body, key = sepay.ipnSecret) => fetch(base + "/sepay/ipn", { method: "POST", headers: { "Content-Type": "application/json", "X-Secret-Key": key }, body: JSON.stringify(body) });
+  const paid = { timestamp: 1, notification_type: "ORDER_PAID", order: { id: "o-1", order_status: "CAPTURED", order_amount: "300000.00", order_invoice_number: dep.code }, transaction: { id: "tx-1", transaction_status: "APPROVED", transaction_type: "PAYMENT", payment_method: "BANK_TRANSFER" } };
+  assert.equal((await ipn(paid, "wrong-secret-1234567")).status, 401);
+  assert.deepEqual(await (await ipn({ ...paid, transaction: { ...paid.transaction, id: "tx-0" }, order: { ...paid.order, order_amount: "100000" } })).json(), { success: false });
+  assert.deepEqual(await (await ipn(paid)).json(), { success: true });
+  assert.deepEqual(await (await ipn(paid)).json(), { success: true });
+  assert.deepEqual(await (await ipn({ ...paid, transaction: { ...paid.transaction, id: "tx-2" } })).json(), { success: false });
+  assert.equal((await s.request("/wallet")).data.available, 300000);
+  assert.equal((await s.request(`/wallet/deposits/${dep.id}`)).data.checkout, null);
 });

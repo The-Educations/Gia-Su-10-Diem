@@ -348,3 +348,8 @@
 .student-checks dt { font-size: 12px; color: var(--muted-foreground); }
 .student-checks dd { margin: 0; }
 @media (max-width: 760px) { .student-checks li { grid-template-columns: 1fr; } }
+
+.sepay-return { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; background: var(--pastel-butter); color: var(--pastel-butter-ink); font-size: 14px; }
+.sepay-return[data-state="paid"] { background: var(--positive-soft); color: var(--positive); }
+.sepay-return[data-state="cancel"], .sepay-return[data-state="error"] { background: var(--muted); color: var(--muted-foreground); }
+.sepay-return svg { width: 18px; height: 18px; flex: none; }
