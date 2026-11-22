@@ -17,13 +17,16 @@ export const SEEKING_TUTOR_PHRASES = [
 ];
 // "cần tìm cô" khớp trên bản CÒN dấu để không nhầm với "cần tìm cơ hội".
 export const SEEKING_TUTOR_ACCENTED_PHRASES = ["cần tìm cô"];
-// Cụm nhận diện bài của gia sư đang tìm học sinh (dành cho bước 2, chưa có giao diện).
+// Cụm nhận diện bài của gia sư đang tìm học sinh (dải trên thanh đầu của học sinh/phụ huynh).
 export const SEEKING_STUDENT_PHRASES = [
   "tim hoc sinh",
   "tim hoc vien",
   "nhan day",
   "nhan kem",
   "nhan hoc sinh",
+  "nhan them hoc sinh",
+  "mo lop",
+  "tuyen hoc sinh",
 ];
 // Cụm môn ngắn hơn ngưỡng này bị bỏ qua ("van" cũng là "vẫn").
 const MIN_SUBJECT_PHRASE = 4;
@@ -99,17 +102,57 @@ const spans = (words, phrases) =>
     return found;
   });
 
-function seeksTutor(sentence) {
+// Gia sư đăng tìm học sinh: cùng quy tắc nhưng chặt hơn, vì gia sư hay bàn về học
+// sinh ("tìm cách dạy học sinh yếu", "cần chú ý với học sinh"). Từ nhu cầu ít hơn,
+// khoảng cách ngắn hơn và có từ chặn ở giữa. Cụm "nhận dạy / nhận kèm / nhận học
+// sinh" đã nằm trong SEEKING_STUDENT_PHRASES.
+const STUDENT_NEED_WORDS = ["tim", "kiem", "tuyen"];
+const STUDENT_WORDS = ["hoc sinh", "hoc vien", "hoc tro"];
+const STUDENT_GAP = 2;
+const STUDENT_BLOCKERS = new Set(["cach", "hieu", "phuong", "bi", "quyet", "sao", "nao"]);
+
+const seekers = {
+  tutor: {
+    exact: SEEKING_TUTOR_PHRASES,
+    exactAccented: SEEKING_TUTOR_ACCENTED_PHRASES,
+    needs: NEED_WORDS,
+    needsAccented: NEED_WORDS_ACCENTED,
+    targets: TUTOR_WORDS,
+    targetsAccented: TUTOR_WORDS_ACCENTED,
+    gap: MAX_GAP,
+    blockers: new Set(),
+  },
+  student: {
+    exact: SEEKING_STUDENT_PHRASES,
+    exactAccented: [],
+    needs: STUDENT_NEED_WORDS,
+    needsAccented: [],
+    targets: STUDENT_WORDS,
+    targetsAccented: [],
+    gap: STUDENT_GAP,
+    blockers: STUDENT_BLOCKERS,
+  },
+};
+
+function seeks(sentence, kind) {
+  const rule = seekers[kind];
   const accented = tokens(sentence), folded = accented.map(fold);
   const allowed = ([start]) => !NEGATING.has(accented[start - 1]);
   const exact = [
-    ...spans(folded, SEEKING_TUTOR_PHRASES),
-    ...spans(accented, SEEKING_TUTOR_ACCENTED_PHRASES),
+    ...spans(folded, rule.exact),
+    ...spans(accented, rule.exactAccented),
   ];
   if (exact.some(allowed)) return true;
-  const needs = [...spans(folded, NEED_WORDS), ...spans(accented, NEED_WORDS_ACCENTED)].filter(allowed);
-  const tutors = [...spans(folded, TUTOR_WORDS), ...spans(accented, TUTOR_WORDS_ACCENTED)];
-  return needs.some(([, end]) => tutors.some(([start]) => start >= end && start - end <= MAX_GAP));
+  const needs = [...spans(folded, rule.needs), ...spans(accented, rule.needsAccented)].filter(allowed);
+  const targets = [...spans(folded, rule.targets), ...spans(accented, rule.targetsAccented)];
+  return needs.some(([, end]) =>
+    targets.some(
+      ([start]) =>
+        start >= end &&
+        start - end <= rule.gap &&
+        !folded.slice(end, start).some((w) => rule.blockers.has(w)),
+    ),
+  );
 }
 
 // Đoạn tóm ý ngắn của bài cho dải chạy ở thanh trên cùng: phần đầu nội dung, đã
@@ -127,12 +170,9 @@ export function summarize(title, body, max = SUMMARY_MAX) {
 }
 
 export function classifyRequest({ title, body, authorRole }) {
-  const { folded } = normalize(`${title ?? ""}\n${body ?? ""}`);
-  if (authorRole === "student")
-    return sentences(title, body).some(seeksTutor) ? "seeking_tutor" : null;
-  if (authorRole === "tutor")
-    return matchesAny(folded, SEEKING_STUDENT_PHRASES)
-      ? "seeking_student"
-      : null;
-  return null;
+  const kind = authorRole === "student" ? "tutor" : authorRole === "tutor" ? "student" : null;
+  if (!kind) return null;
+  return sentences(title, body).some((sentence) => seeks(sentence, kind))
+    ? kind === "tutor" ? "seeking_tutor" : "seeking_student"
+    : null;
 }

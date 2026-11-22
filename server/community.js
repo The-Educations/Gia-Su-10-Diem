@@ -261,19 +261,22 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
       more: rows.length > LIMITS.page,
     });
   });
-  // Dải "Đang tìm gia sư" trên dashboard gia sư: bài công khai, còn hiệu lực
-  // của học sinh/phụ huynh trong 14 ngày gần nhất, tối đa 10 bài.
-  app.get("/api/community/requests", auth("tutor"), (req, res) => {
+  // Dải chạy ở thanh trên cùng: bài công khai, còn hiệu lực trong 14 ngày gần nhất,
+  // tối đa 10 bài.
+  // Gia sư thấy bài của học sinh/phụ huynh; học sinh/phụ huynh thấy bài của gia sư
+  // đang tìm học sinh. Admin không có dải.
+  app.get("/api/community/requests", auth("tutor", "student"), (req, res) => {
+    const forTutor = req.user.role === "tutor";
+    const authorRole = forTutor ? "student" : "tutor",
+      wanted = forTutor ? "seeking_tutor" : "seeking_student";
     const rows = all(
       db,
-      `SELECT p.id,p.author_id,p.title,p.body,p.published_at ${joins} WHERE ${publicPosts} AND p.kind='user' AND u.role='student' AND p.solved=0 AND p.published_at>=datetime('now','-14 days') ORDER BY p.published_at DESC,p.id DESC`,
+      `SELECT p.id,p.author_id,p.title,p.body,p.published_at ${joins} WHERE ${publicPosts} AND p.kind='user' AND u.role=? AND p.solved=0 AND p.published_at>=datetime('now','-14 days') ORDER BY p.published_at DESC,p.id DESC`,
+      authorRole,
     );
     const items = [];
     for (const p of rows) {
-      if (
-        classifyRequest({ title: p.title, body: p.body, authorRole: "student" }) !==
-        "seeking_tutor"
-      )
+      if (classifyRequest({ title: p.title, body: p.body, authorRole }) !== wanted)
         continue;
       items.push({
         id: p.id,
