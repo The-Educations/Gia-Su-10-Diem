@@ -3488,3 +3488,64 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .ticker-frame[data-mode="marquee"] .ticker-track { animation: none; }
 }
+
+/* The Educations ident: now and then it takes the ticker's place for 8 s (docs/quang-cao-dai-chay.md).
+   It only shows itself, so it is not clickable and has no pointer cursor. */
+.topbar-ticker {
+  position: relative;
+  --ticker-ad-height: 52px;
+}
+.topbar-ticker[data-alone] { min-height: var(--ticker-ad-height); }
+.topbar-ticker > .ticker-label,
+.topbar-ticker > .ticker-frame {
+  transition: opacity 240ms ease, visibility 0s;
+}
+.topbar-ticker[data-ad="on"] > .ticker-label,
+.topbar-ticker[data-ad="on"] > .ticker-frame {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 240ms ease, visibility 0s 240ms;
+}
+/* The posts wait while the ident plays and carry on from the same place afterwards. */
+.topbar-ticker[data-ad] .ticker-track { animation-play-state: paused; }
+.ticker-ad {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--ticker-ad-height);
+  margin-top: calc(var(--ticker-ad-height) / -2);
+  overflow: hidden;
+  border-radius: var(--radius);
+  /* The video's background is the brand red (Chrome draws it as #862f36), so its edges disappear into the box. */
+  background: var(--primary);
+  cursor: default;
+  user-select: none;
+  animation: ticker-ad-in 240ms ease-out both;
+}
+.ticker-ad[data-leaving] { animation: ticker-ad-out 240ms ease-in both; }
+.ticker-ad video,
+.ticker-ad img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+}
+@keyframes ticker-ad-in { from { opacity: 0; } }
+@keyframes ticker-ad-out { to { opacity: 0; } }
+@media (max-width: 640px) {
+  .topbar-ticker { --ticker-ad-height: 40px; }
+  /* The row keeps 12px of padding under it, so centre the box in the space above that. */
+  .ticker-ad { margin-top: calc(var(--ticker-ad-height) / -2 - 6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .topbar-ticker > .ticker-label,
+  .topbar-ticker > .ticker-frame,
+  .topbar-ticker[data-ad="on"] > .ticker-label,
+  .topbar-ticker[data-ad="on"] > .ticker-frame { transition: none; }
+  .ticker-ad,
+  .ticker-ad[data-leaving] { animation: none; }
+}
