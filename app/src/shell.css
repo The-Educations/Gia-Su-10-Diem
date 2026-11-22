@@ -712,3 +712,8 @@ main {
 .setup-required { display: grid; justify-items: start; gap: 10px; max-width: 520px; margin: 48px auto; padding: 28px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); }
 .setup-required p { color: var(--muted-foreground); }
 .setup-later { margin-top: 8px; width: 100%; }
+
+.balance-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; transition: background-color var(--duration-fast) ease-out; }
+.balance-chip:hover { background: var(--muted); }
+.balance-chip svg { width: 15px; height: 15px; color: var(--positive); }
+@media (max-width: 420px) { .balance-chip span { font-size: 12px; } .balance-chip { padding: 0 9px; } }

@@ -1469,4 +1469,5 @@ export const enMore: Record<string, string> = {
   "Một sự kiện dài tối đa 14 ngày.": "An event can last up to 14 days.",
   "Không tìm thấy sự kiện.": "Event not found.",
   "Hồng": "Rose", "Xanh trời": "Sky", "Xanh lá": "Sage", "Vàng": "Butter", "Tím": "Lilac", "Cam đào": "Peach", "Bạc hà": "Mint", "Cát": "Sand",
+  "Số dư {amount}": "Balance {amount}",
 };
