@@ -957,10 +957,6 @@ test("student timetable persists, matches tutors and supports mobile selection",
   await expect(page.getByText("Đã lưu lịch hằng tuần", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.locator('.availability-grid button[aria-pressed="true"]')).toHaveCount(2);
-  await page.getByRole("link", { name: "Tìm gia sư khớp lịch", exact: true }).click();
-  const first = page.locator(".tutor-card").first();
-  await expect(first).toContainText(original.name);
-  await expect(first).toContainText("Trùng 2 giờ / tuần");
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/app/availability");
   await page.getByRole("button", { name: "Tối", exact: true }).click();

@@ -56,7 +56,9 @@ test("public app pages fit small phones, tablets and desktops", async ({ page })
         const menu = await page.getByRole("button", { name: "Thêm", exact: true }).boundingBox();
         expect(menu!.width).toBeGreaterThanOrEqual(44);
         expect(menu!.height).toBeGreaterThanOrEqual(44);
+        // On phones the filters open from the filter button.
         const subject = page.getByRole("combobox", { name: "Môn học", exact: true });
+        if (!(await subject.isVisible())) await page.getByRole("button", { name: "Bộ lọc", exact: true }).click();
         expect((await subject.boundingBox())!.width).toBeGreaterThan(240);
       }
     }

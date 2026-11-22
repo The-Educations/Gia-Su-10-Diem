@@ -3306,3 +3306,14 @@
 /* Headings focused by script for screen readers do not show a ring. */
 [tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
 h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
+
+/* Phones: the search box first; the three filters open with the filter button. */
+.filter-label-narrow { display: none; }
+@media (max-width: 640px) {
+  .search-panel > [data-state="closed"] > .filter-grid.three { display: none; }
+  .filter-label-wide { display: none; }
+  .filter-label-narrow { display: inline; }
+}
+
+.verified-badge { color: var(--positive); border-color: color-mix(in srgb, var(--positive) 35%, transparent); }
+.verified-badge svg { width: 12px; height: 12px; }

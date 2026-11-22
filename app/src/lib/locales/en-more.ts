@@ -1449,4 +1449,5 @@ export const enMore: Record<string, string> = {
   "Nhận offer, gửi hồ sơ vào bài Tìm gia sư, quản lý lịch, bài giảng và học phí.": "Receive offers, answer Find a tutor posts, and manage schedules, materials and fees.",
   "Tất cả gia sư": "All tutors",
   "Giờ gia sư rảnh": "Tutor's free hours",
+  "Bộ lọc": "Filters",
 };
