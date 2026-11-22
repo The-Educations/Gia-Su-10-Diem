@@ -7,6 +7,8 @@ async function admin(page: Page) {
   await page.getByLabel("Email", { exact: true }).fill("admin@demo.giasu.test");
   await page.getByLabel("Mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin/);
+  await page.goto("/app/admin?tab=tutors");
   await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill("Nguyễn Minh Châu");
 }
 
