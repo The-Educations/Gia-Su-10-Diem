@@ -2450,3 +2450,12 @@ test("parents link with a child's code, top up and follow the child; community t
   assert.equal((await child.request(`/community/posts/${pid}/close`, "POST")).status, 200);
   assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 409);
 });
+test("quick demo sign-in exists only outside production", async (t) => {
+  const local = await fixture(t), live = await fixture(t, { production: true });
+  const a = local.client(), b = live.client();
+  assert.equal((await a.request("/auth/demo")).data.enabled, true);
+  const me = await a.request("/auth/demo", "POST", { role: "tutor" });
+  assert.equal(me.data.user.role, "tutor");
+  assert.equal((await b.request("/auth/demo")).data.enabled, false);
+  assert.equal((await b.request("/auth/demo", "POST", { role: "admin" })).status, 404);
+});

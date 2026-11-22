@@ -1385,4 +1385,8 @@ export const enMore: Record<string, string> = {
   "Buổi cần xác nhận": "Lessons to confirm",
   "Sắp hết gói": "Packages ending soon",
   "Còn {n} buổi": "{n} lessons left",
+  "Đăng nhập nhanh tài khoản mẫu": "Quick sign-in to demo accounts",
+  "Đăng nhập nhanh (chỉ trên máy local)": "Quick sign-in (local only)",
+  "Quản trị": "Admin",
+  "Chưa có dữ liệu mẫu. Chạy npm run seed:demo.": "No demo data yet. Run npm run seed:demo.",
 };

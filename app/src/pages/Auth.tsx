@@ -2,13 +2,33 @@ import { GoogleSignIn, googleErrors } from "@/components/google-sign-in";
 import { useRef, useState } from "react";
 import { Link, useSearchParams, Navigate, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Mail } from "lucide-react";
-import { api, useApp, accountDestination } from "@/lib/api";
+import { api, useApp, useLoad, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { ErrorState, Submit, Loading } from "@/components/common";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+// Local development only: one tap into each demo role.
+function DemoLogin({ onUser }: { onUser: (user: User) => void }) {
+  const demo = useLoad<{ enabled: boolean }>("/auth/demo"), [busy, setBusy] = useState("");
+  if (!demo.data?.enabled) return null;
+  return (
+    <section className="demo-login" aria-label="Đăng nhập nhanh tài khoản mẫu">
+      <span>Đăng nhập nhanh (chỉ trên máy local)</span>
+      <div>
+        {([["student", "Học sinh"], ["parent", "Phụ huynh"], ["tutor", "Gia sư"], ["admin", "Quản trị"]] as const).map(([role, label]) => (
+          <Button key={role} variant="outline" size="sm" disabled={!!busy} onClick={async () => {
+            setBusy(role);
+            try { onUser((await api<{ user: User }>("/auth/demo", "POST", { role })).user); }
+            finally { setBusy(""); }
+          }}>{label}</Button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -82,6 +102,7 @@ export default function Auth() {
         <Mail aria-hidden="true" />Dùng email và mật khẩu
       </Button>
       {error && <ErrorState error={error} />}
+      <DemoLogin onUser={(u) => { setUser(u); refresh(); navigate(accountDestination(u, params.get("next"))); }} />
       {emailOpen && <div id="email-account">
         <Tabs value={register ? "register" : "login"} onValueChange={mode => {
           setError("");

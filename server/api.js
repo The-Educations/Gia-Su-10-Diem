@@ -305,6 +305,16 @@ export function createApi(
       fail(403, "Tài khoản này cần đăng nhập bằng Google.");
     res.json({ user: session(res, user) });
   });
+  // Local development only: one tap into a demo account of each role.
+  const DEMO = { student: "student", parent: "parent", tutor: "chau", admin: "admin" };
+  app.get("/api/auth/demo", (req, res) => res.json({ enabled: !production }));
+  app.post("/api/auth/demo", (req, res) => {
+    if (production) fail(404, "Không có chức năng này.");
+    const { role } = z.object({ role: z.enum(["student", "parent", "tutor", "admin"]) }).parse(req.body);
+    const user = one(db, "SELECT * FROM users WHERE email=? AND demo=1 AND status='active'", `${DEMO[role]}@demo.giasu.test`);
+    if (!user) fail(404, "Chưa có dữ liệu mẫu. Chạy npm run seed:demo.");
+    res.json({ user: session(res, user) });
+  });
   app.post("/api/auth/logout", (req, res) => {
     if (req.sessionToken)
       run(

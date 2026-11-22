@@ -3288,3 +3288,6 @@
 .booking-ask { display: grid; gap: 8px; }
 .booking-steps { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted-foreground); display: grid; gap: 4px; }
 @media (max-width: 640px) { .rating-summary { grid-template-columns: 1fr; } .booking-card { position: static; } }
+
+.demo-login { display: grid; gap: 8px; margin-top: 16px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 12px; font-size: 13px; color: var(--muted-foreground); }
+.demo-login > div { display: flex; flex-wrap: wrap; gap: 6px; }
