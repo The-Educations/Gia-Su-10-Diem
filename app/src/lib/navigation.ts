@@ -48,7 +48,7 @@ export function navigationFor(user: User | null): NavModel {
     };
   if (user.role === "admin") {
     const admin = item("/admin", "Quản trị", ShieldCheck),
-      lessons = item("/calendar", "Lịch dạy", CalendarDays);
+      lessons = item("/schedule", "Lịch", CalendarDays);
     return {
       home: "/admin",
       primary: [admin, lessons, messages],
