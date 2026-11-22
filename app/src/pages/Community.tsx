@@ -67,7 +67,7 @@ export default function Community() {
               <Search />
             </Button>
           </form>
-          <nav className="topic-chips chip-set" aria-label="Chủ đề">
+          <nav className="topic-chips chip-set" aria-label="Lọc theo chủ đề">
             <button type="button" className="chip" data-checked={!params.get("topic") || undefined} onClick={() => filter("topic", "")}>Tất cả</button>
             {TOPICS.map(([value, label]) => (
               <button type="button" key={value} className="chip" data-checked={params.get("topic") === value || undefined} onClick={() => filter("topic", value)}>{label}</button>

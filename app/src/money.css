@@ -296,3 +296,4 @@
 .pitch-mine { padding: 10px 12px; border-radius: 10px; background: var(--muted); font-size: 14px; }
 .pitch-form { display: grid; gap: 12px; }
 @media (max-width: 640px) { .pitch-list li { grid-template-columns: 40px minmax(0, 1fr); } .pitch-list .actions { grid-column: 1 / -1; } }
+.topic-chips { grid-column: 1 / -1; max-width: 100%; min-width: 0; margin: 0; }

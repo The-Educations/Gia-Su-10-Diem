@@ -131,10 +131,11 @@ export default function Compose({
         onSubmit={async (e) => {
           e.preventDefault();
           if (uploading || busy) return;
-          if (!endpoint && !topic) { setError("Chọn chủ đề cho bài viết."); return; }
+          const askTopic = !endpoint && user?.role !== "admin";
+          if (askTopic && !topic) { setError("Chọn chủ đề cho bài viết."); return; }
           // Ask again when the text and the chosen topic do not seem to match.
           const seeks = looksLikeFindTutor(`${title} ${body}`);
-          if (!endpoint && seeks !== (topic === "find_tutor") && !confirm(seeks ? "Bài này có vẻ đang tìm gia sư. Vẫn đăng vào chủ đề đã chọn?" : "Bài này chưa thấy nhu cầu tìm gia sư rõ ràng. Vẫn đăng vào chủ đề Tìm gia sư?")) return;
+          if (askTopic && seeks !== (topic === "find_tutor") && !confirm(seeks ? "Bài này có vẻ đang tìm gia sư. Vẫn đăng vào chủ đề đã chọn?" : "Bài này chưa thấy nhu cầu tìm gia sư rõ ràng. Vẫn đăng vào chủ đề Tìm gia sư?")) return;
           gate.run(async () => {
             setBusy(true);
             setError("");
@@ -183,7 +184,7 @@ export default function Compose({
         }}
       >
         <FieldGroup>
-          {!endpoint && (
+          {!endpoint && user?.role !== "admin" && (
             <Field>
               <FieldLabel htmlFor={`${id}-topic`}>Chủ đề</FieldLabel>
               <select id={`${id}-topic`} className="native-select" value={topic} onChange={(e) => setTopic(e.target.value)} required>
