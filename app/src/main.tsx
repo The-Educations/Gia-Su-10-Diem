@@ -115,7 +115,7 @@ function Shell() {
             <span className="mobile-brand"><Brand to={model.home} /></span>
             <span className="topbar-location">{t(title)}</span>
           </div>
-          {(user?.role === "tutor" || user?.role === "student") && <RequestStrip role={user.role} />}
+          {user && <RequestStrip role={user.role === "admin" ? null : user.role} />}
           <div className="topbar-right">
             {user?.demo && (
               <span className="demo-indicator">{t("Tài khoản mẫu")}</span>
