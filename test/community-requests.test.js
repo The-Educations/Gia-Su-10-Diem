@@ -58,6 +58,57 @@ test("only student posts are seeking_tutor; tutors and admins are not", () => {
   assert.equal(seek("Nhận dạy kèm Toán", "", "student"), null);
 });
 
+test("a need word before a tutor word in one sentence is recognised, however it is phrased", () => {
+  for (const s of [
+    "Mình cần tìm một gia sư Toán lớp 9",
+    "Cần tìm 1 gia sư dạy Toán cho con",
+    "Em muốn tìm gia sư tiếng Anh",
+    "Nhờ mọi người giới thiệu gia sư Lý lớp 11",
+    "Có ai biết gia sư Hóa dạy tốt không?",
+    "Tìm giúp mình gia sư",
+    "Cần thầy dạy Toán lớp 8",
+    "Em đang tìm thầy cô dạy kèm môn Văn",
+    "Xin gia sư dạy IELTS",
+    "Gợi ý giúp em gia sư Văn lớp 12",
+    "Mình muốn thuê gia sư dạy Toán",
+    "Dạ chào mọi người, em cần tìm một giáo viên dạy Anh",
+    "Em xin một thầy dạy Lý",
+    "toi can tim mot gia su toan",
+    "nho moi nguoi gioi thieu gia su ly",
+  ])
+    assert.equal(seek(s), "seeking_tutor", s);
+  // Title and body are read together, each sentence on its own.
+  assert.equal(seek("Nhờ giúp", "Con học lớp 6. Em đang cần một gia sư Toán."), "seeking_tutor");
+});
+
+test("talking about a tutor, or no longer needing one, is not seeking", () => {
+  for (const s of [
+    "Gia sư của em dạy rất tốt, em cần cố gắng thêm",
+    "Mình không cần gia sư nữa",
+    "Nhà em khỏi cần gia sư rồi",
+    "Em đã tìm được gia sư rồi, cảm ơn mọi người",
+    "Cần tìm cơ hội việc làm",
+    "Nhờ mọi người góp ý cách học",
+    "Em nhớ gia sư cũ lắm",
+    "Review gia sư: cô giáo A dạy rất tốt. Xin cảm ơn cô.",
+    "Cần Gia sưu tầm tem",
+    "Tìm trường cho con. Gia sư của bé học rất tốt",
+  ])
+    assert.equal(seek(s), null, s);
+  // A need word that is too far from the tutor word does not count.
+  assert.equal(
+    seek("Mình cần mua rất nhiều loại sách vở bút và đồ dùng học tập cho gia sư"),
+    null,
+  );
+});
+
+test("the widened rule still never reaches tutors or admins", () => {
+  for (const s of ["Mình cần tìm một gia sư Toán", "Nhờ mọi người giới thiệu gia sư"]) {
+    assert.equal(seek(s, "", "tutor"), null, s);
+    assert.equal(seek(s, "", "admin"), null, s);
+  }
+});
+
 test("topic: subject and level", () => {
   assert.deepEqual(requestTopic("Cần tìm gia sư Toán lớp 9 ở Quận 7"), {
     subject: "Toán",
