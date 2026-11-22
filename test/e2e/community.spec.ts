@@ -614,16 +614,18 @@ test("dedicated composer saves private drafts, reopens them and submits for each
     expect(await seo.text()).toContain("noindex");
     for (const width of [360, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      // The media queries of the new width are applied on the next frame, so measure after two
+      // frames: right after the resize the page can still mix the old and the new layout.
       expect(
-        await page.evaluate(() =>
-          document.documentElement.scrollWidth <= innerWidth
-            ? true
-            : `OVERFLOW sw=${document.documentElement.scrollWidth} iw=${innerWidth} ` +
-              Array.from(document.querySelectorAll("body *"))
-                .filter((e) => e.getBoundingClientRect().right > innerWidth + 0.5)
-                .slice(0, 8)
-                .map((e) => `${e.tagName}.${String(e.className).slice(0, 50)}@${Math.round(e.getBoundingClientRect().right)}`)
-                .join(" | "),
+        await page.evaluate(
+          () =>
+            new Promise<boolean>((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() =>
+                  resolve(document.documentElement.scrollWidth <= innerWidth),
+                ),
+              ),
+            ),
         ),
       ).toBe(true);
     }
