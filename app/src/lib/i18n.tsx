@@ -58,6 +58,9 @@ const en: Record<string, string> = {
   "Gia sư": "Tutor",
   "Phụ huynh": "Parent",
   "Học sinh": "Student",
+  // Background music
+  "Bật nhạc nền": "Turn on background music",
+  "Tắt nhạc nền": "Turn off background music",
   // Language switch
   "Ngôn ngữ": "Language",
   "Tiếng Việt": "Vietnamese",
