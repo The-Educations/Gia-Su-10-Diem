@@ -25,6 +25,8 @@ import "./styles.css";
 import "./shell.css";
 import { PageMetadata } from "./components/page-metadata";
 const Offers = lazy(() => import("./pages/Offers"));
+const Proposals = lazy(() => import("./pages/Proposals"));
+const WalletPage = lazy(() => import("./pages/Wallet"));
 const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
@@ -176,6 +178,8 @@ function Shell() {
                   }
                 />
                 <Route path="/offers" element={<Require><Offers /></Require>} />
+                <Route path="/proposals" element={<Require><Proposals /></Require>} />
+                <Route path="/wallet" element={<Require><WalletPage /></Require>} />
                 <Route path="/calendar" element={<Require><TutorCalendar /></Require>} />
                 <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route

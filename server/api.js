@@ -6,6 +6,8 @@ import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
 import { registerNotifications, notify } from "./notifications.js";
 import { registerCredentials, verifiedCredentials } from "./credentials.js";
+import { registerWallet, sepayConfig } from "./wallet.js";
+import { registerProposals } from "./proposals.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -67,13 +69,18 @@ export function createApi(
     clientIp,
     sendEmail,
     sendAdminEmail,
+    sepay = sepayConfig(),
   } = {},
 ) {
   const app = express();
   app.disable("x-powered-by");
   app.use("/api", (req, res, next) => { res.set("X-Robots-Tag", "noindex, nofollow"); next(); });
   app.use("/api", helmet({ contentSecurityPolicy: false }));
-  app.use("/api", express.json({ limit: "300kb" }));
+  app.use("/api", express.json({
+    limit: "300kb",
+    // SePay signs the exact bytes it sent, so the webhook needs the raw body.
+    verify: (req, res, buf) => { if (req.originalUrl === "/api/sepay/webhook") req.rawBody = buf.toString("utf8"); },
+  }));
   app.use("/api", (req, res, next) => {
     res.set("Cache-Control", "no-store");
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
@@ -258,6 +265,8 @@ export function createApi(
   registerWeeklyRequests(app, db, auth);
   registerOffers(app, db, auth);
   registerNotifications(app, db, auth);
+  const walletApi = registerWallet(app, db, auth, audit, { production, sepay });
+  registerProposals(app, db, auth, audit, walletApi);
   registerTrust(app, db, auth, audit);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>

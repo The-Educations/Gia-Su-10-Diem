@@ -40,9 +40,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import ResourceEditor from "./ResourceEditor";
+import { AdminFinance } from "@/components/admin-finance";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts", "community"].includes(
+  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
@@ -164,6 +165,7 @@ export default function Admin() {
             <TabsTrigger value="subjects">Môn học</TabsTrigger>
             <TabsTrigger value="posts">Tin tức</TabsTrigger>
             <TabsTrigger value="community">Cộng đồng ({communityQueue.data?.length || 0})</TabsTrigger>
+            <TabsTrigger value="finance">Tài chính</TabsTrigger>
             <TabsTrigger value="audit">Nhật ký</TabsTrigger>
           </TabsList>
           {tab !== "posts" && tab !== "community" && <div className="admin-toolbar">
@@ -199,6 +201,7 @@ export default function Admin() {
             )}
           </div>}
           <TabsContent value="community"><AdminCommunity /></TabsContent>
+          <TabsContent value="finance"><AdminFinance /></TabsContent>
           <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="tutors">
             {!matchingTutors.length && (

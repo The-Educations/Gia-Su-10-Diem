@@ -1,26 +1,3 @@
-.segmented {
-  display: inline-flex;
-  gap: 4px;
-  margin-bottom: 24px;
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--muted);
-}
-.segmented a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: 9px;
-  font-size: 14px;
-  color: var(--muted-foreground);
-}
-.segmented a[aria-current="page"] {
-  background: var(--card);
-  color: var(--foreground);
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgb(40 40 32 / 8%);
-}
 /* Tutor profile wizard: steps on the left, the form in the middle, a live preview on the right. */
 .wizard {
   display: grid;
@@ -210,41 +187,6 @@ form + .wizard-block {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-.chip-set {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.chip-set.compact {
-  margin-top: 8px;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--background);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out, color var(--duration-fast) ease-out;
-}
-.chip svg {
-  width: 15px;
-  height: 15px;
-}
-.chip:hover {
-  border-color: var(--input);
-}
-.chip[data-checked] {
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
-}
 .subject-picker {
   display: grid;
   gap: 14px;
@@ -383,18 +325,4 @@ form + .wizard-block {
   .chip {
     transition: none;
   }
-}
-/* The real input covers its card or chip, so it stays clickable and focusable. */
-.choice-card,
-.chip {
-  position: relative;
-}
-.cover-input {
-  position: absolute;
-  inset: 0;
-  width: 100% !important;
-  height: 100% !important;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
 }

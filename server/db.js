@@ -3,6 +3,7 @@ import { migrateCommunity } from "./community-schema.js";
 import { migrateTrust } from "./trust-schema.js";
 import { migrateNotifications } from "./notifications.js";
 import { migrateCredentials } from "./credentials.js";
+import { migrateWallet } from "./wallet.js";
 import {
   randomBytes,
   scrypt as scryptCallback,
@@ -218,6 +219,7 @@ export function migrateDatabase(db) {
   migrateTrust(db);
   migrateNotifications(db);
   migrateCredentials(db);
+  migrateWallet(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

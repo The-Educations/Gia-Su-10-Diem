@@ -10,6 +10,8 @@ import {
   Search,
   ShieldCheck,
   UserRoundPen,
+  Send,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { User } from "./types";
@@ -29,7 +31,8 @@ const subjects = item("/library", "Tìm môn học", BookOpen, "Môn học");
 const community = item("/community", "Cộng đồng", MessagesSquare);
 const news = item("/news", "Tin tức", Newspaper);
 const messages = item("/messages", "Tin nhắn", MessageCircle);
-const offers = item("/offers", "Đề nghị học", BookOpen, "Đề nghị");
+const offers = item("/proposals", "Offer", Send);
+const wallet = item("/wallet", "Số dư", Wallet);
 
 export function navigationFor(user: User | null): NavModel {
   if (!user)
@@ -59,6 +62,7 @@ export function navigationFor(user: User | null): NavModel {
         {
           label: "Hồ sơ",
           items: [
+            wallet,
             item("/studio", "Hồ sơ gia sư", UserRoundPen),
             item("/calendar", "Giờ trống hằng tuần", CalendarClock),
           ],
@@ -81,6 +85,7 @@ export function navigationFor(user: User | null): NavModel {
       {
         label: "Của tôi",
         items: [
+          wallet,
           item("/availability", "Lịch rảnh", CalendarClock),
           item("/favorites", "Gia sư đã lưu", Heart),
         ],

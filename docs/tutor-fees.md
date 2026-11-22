@@ -1,5 +1,7 @@
 # Phí nền tảng thu từ gia sư — Thiết kế và prompt xây dựng
 
+> **Đã được thay thế ngày 22/11/2026.** Chủ dự án chọn mô hình mới: học sinh nạp "Số dư học phí" qua SePay, offer tạm giữ tiền, nền tảng thu 5% trên các buổi đã xác nhận và bán credit cho gia sư. Xem [redesign-2026-11.md](redesign-2026-11.md). Tài liệu dưới đây chỉ còn giá trị lịch sử.
+
 Tài liệu gồm hai phần:
 
 - **Phần 1 — Kiến trúc, thiết kế và logic** của cơ chế thu phí gia sư.

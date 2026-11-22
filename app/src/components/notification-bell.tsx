@@ -8,6 +8,8 @@ import {
   CheckCheck,
   MessageCircle,
   MessagesSquare,
+  Send,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +52,16 @@ const templates: Record<string, [string, LucideIcon]> = {
   message_new: ["{actor} nhắn tin cho bạn", MessageCircle],
   profile_approved: ["Hồ sơ gia sư của bạn đã được công bố", BadgeCheck],
   profile_rejected: ["Hồ sơ gia sư của bạn cần bổ sung", BadgeCheck],
+  credential_approved: ["“{subject}” đã được xác minh", BadgeCheck],
+  credential_rejected: ["“{subject}” cần bổ sung minh chứng", BadgeCheck],
+  proposal_new: ["{actor} gửi bạn offer {subject}", Send],
+  proposal_accepted: ["{actor} đã nhận offer {subject}", Send],
+  proposal_declined: ["{actor} đã từ chối offer {subject}", Send],
+  proposal_withdrawn: ["{actor} đã rút offer {subject}", Send],
+  deposit_received: ["Đã nhận {money} vào số dư", Wallet],
+  withdrawal_requested: ["{actor} yêu cầu rút {money}", Wallet],
+  withdrawal_paid: ["Đã chuyển {money} bạn yêu cầu rút", Wallet],
+  withdrawal_rejected: ["Yêu cầu rút {money} chưa được duyệt", Wallet],
 };
 const communityTemplates: Record<string, string> = {
   profile_removed: "Nội dung hồ sơ cộng đồng đã được gỡ",
@@ -108,7 +120,7 @@ export function NotificationBell() {
               key: `a${n.id}`,
               source: "app" as const,
               id: n.id,
-              text: t(n.kind === "message_new" && !n.actor_name ? "Hỗ trợ Gia Sư 10 Điểm nhắn tin cho bạn" : template, { actor: n.actor_name, subject: n.subject }),
+              text: t(n.kind === "message_new" && !n.actor_name ? "Hỗ trợ Gia Sư 10 Điểm nhắn tin cho bạn" : template, { actor: n.actor_name, subject: n.subject, money: /^\d+$/.test(n.subject) ? new Intl.NumberFormat("vi-VN").format(Number(n.subject)) + "đ" : "" }),
               link: n.link,
               icon,
               created_at: n.created_at,

@@ -250,3 +250,42 @@ export type CommunityMember = CommunityAuthor & {
   stats: { posts: number; comments: number; helpful: number };
 };
 export type CommunityMemberResponse = { profile: CommunityMember; admin?: CommunityOwner & { status: string } };
+
+export type WalletEntry = { id: number; kind: string; amount: number; held: number; credits: number; ref: string; note: string; created_at: string };
+export type Wallet = {
+  available: number;
+  held: number;
+  credits_free: number;
+  credits_paid: number;
+  entries: WalletEntry[];
+  withdrawals: { id: number; amount: number; bank_name: string; account_last4: string; status: string; note: string; created_at: string }[];
+  settings: { offer_credits: number; credit_packs: { credits: number; price: number }[]; min_deposit: number; fee_percent: number };
+  payments: "live" | "simulated" | "off";
+};
+export type Deposit = { id: number; code: string; amount: number; received: number; status: string; qr_url: string | null; account: string; bank: string; holder: string; simulated?: boolean };
+export type Proposal = {
+  id: number;
+  sender: "student" | "tutor";
+  student_id: number;
+  tutor_id: number;
+  student_name: string;
+  tutor_name: string;
+  subject_id: string;
+  subject_name: string;
+  level: string;
+  mode: "online" | "offline";
+  area: string;
+  sessions: number;
+  minutes: number;
+  rate: number;
+  total: number;
+  payout: number;
+  fee_percent: number;
+  schedule: { weekday: number; hour: number; minute: number }[];
+  start_date: string;
+  message: string;
+  status: "pending" | "accepted" | "declined" | "expired" | "withdrawn";
+  expires_at: string;
+  created_at: string;
+  incoming: boolean;
+};
