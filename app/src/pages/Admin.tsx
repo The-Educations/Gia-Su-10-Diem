@@ -41,13 +41,15 @@ import {
 } from "@/components/ui/dialog";
 import ResourceEditor from "./ResourceEditor";
 import { AdminFinance } from "@/components/admin-finance";
+import { AdminToday } from "@/components/admin-today";
+import { AdminClasses, AdminUserOverview } from "@/components/admin-classes";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
+  const tab = ["today", "classes", "tutors", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
-      : "tutors",
+      : "today",
     status = params.get("status") || "";
   const communityQueue = useLoad<unknown[]>("/admin/community/queue");
   const pendingProofs = useLoad<{ tutor_id: number; count: number }[]>("/admin/credentials/pending");
@@ -65,6 +67,7 @@ export default function Admin() {
     [accountAction, setAccountAction] = useState<"status" | "admin" | "delete">("status"),
     [deleteEmail, setDeleteEmail] = useState(""),
     [busy, setBusy] = useState(false),
+    [overview, setOverview] = useState<number | null>(null),
     [error, setError] = useState("");
   const reviewTrigger = useRef<HTMLButtonElement | null>(null);
   const withdrawTrigger = useRef<HTMLButtonElement | null>(null);
@@ -159,6 +162,8 @@ export default function Admin() {
           }}
         >
           <TabsList className="admin-tabs">
+            <TabsTrigger value="today">Hôm nay</TabsTrigger>
+            <TabsTrigger value="classes">Lớp học</TabsTrigger>
             <TabsTrigger value="tutors">Gia sư ({d.tutors.length})</TabsTrigger>
             <TabsTrigger value="users">Tài khoản</TabsTrigger>
             <TabsTrigger value="resources">Kỳ thi</TabsTrigger>
@@ -200,6 +205,8 @@ export default function Admin() {
               />
             )}
           </div>}
+          <TabsContent value="today"><AdminToday /></TabsContent>
+          <TabsContent value="classes"><AdminClasses /></TabsContent>
           <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="finance"><AdminFinance /></TabsContent>
           <TabsContent value="posts"><AdminPosts /></TabsContent>
@@ -288,6 +295,7 @@ export default function Admin() {
                     </span>
                   </div>
                   <State value={u.status} />
+                  <Button variant="outline" size="sm" onClick={() => setOverview(u.id)}>Tổng quan</Button>
                   <CommunityLock owner={{...u,community_locked:Number(u.community_locked)}} />
                   {u.role !== "admin" && u.status === "active" && (
                     <Button
@@ -543,6 +551,7 @@ export default function Admin() {
           <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setWithdraw(null)}>Hủy</Button><Button variant="destructive" disabled={busy} onClick={() => withdraw && mutate(`/admin/tutors/${withdraw.user_id}`, "PATCH", { status: "withdrawn", revision: withdraw.review_revision })}>{busy ? "Đang gỡ…" : "Xác nhận gỡ hồ sơ"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      <AdminUserOverview userId={overview} onClose={() => setOverview(null)} />
       <TutorReviewDialog tutor={tutor} catalog={d.theme_catalog} subjects={subjects.data || []} open={reviewOpen} onOpenChange={setReviewOpen} onSaved={refresh} returnFocus={() => {
         if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus();
         else document.getElementById("admin-search")?.focus();

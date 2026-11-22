@@ -1,3 +1,4 @@
+import { TOPICS } from "@/components/community/Pitches";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PenLine, Search, ArrowLeft, ArrowRight } from "lucide-react";
@@ -66,6 +67,12 @@ export default function Community() {
               <Search />
             </Button>
           </form>
+          <nav className="topic-chips chip-set" aria-label="Lọc theo chủ đề">
+            <button type="button" className="chip" data-checked={!params.get("topic") || undefined} onClick={() => filter("topic", "")}>Tất cả</button>
+            {TOPICS.map(([value, label]) => (
+              <button type="button" key={value} className="chip" data-checked={params.get("topic") === value || undefined} onClick={() => filter("topic", value)}>{label}</button>
+            ))}
+          </nav>
           <div className="community-filters">
             <Choose
               label="Môn học"
@@ -91,7 +98,9 @@ export default function Community() {
               value={params.get("sort") || "new"}
               onChange={(v) => filter("sort", v)}
               options={[
+                { value: "trending", label: "Thịnh hành" },
                 { value: "new", label: "Mới nhất" },
+                { value: "relevant", label: "Liên quan đến bạn" },
                 { value: "helpful", label: "Hữu ích" },
               ]}
             />

@@ -2,6 +2,7 @@ import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { move, settings } from "./wallet.js";
+import { childrenOf } from "./family.js";
 
 // A class has one tutor, one or more students and a weekly rhythm. Each student
 // brings their own package (an accepted offer): a number of lessons paid in
@@ -159,9 +160,10 @@ export function registerClasses(app, db, auth, audit) {
       (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome IN ('confirmed','charged')) AS done,
       (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome='pending') AS remaining
       FROM class_members m JOIN users u ON u.id=m.student_id WHERE m.class_id=? ORDER BY m.status, m.id`, id);
-    const allowed = c.tutor_id === user.id || members.some((m) => m.student_id === user.id) || user.role === "admin";
+    const kids = childrenOf(db, user.id), mine = (m) => m.student_id === user.id || kids.includes(m.student_id);
+    const allowed = c.tutor_id === user.id || members.some(mine) || user.role === "admin";
     if (!allowed) fail(404, "Không tìm thấy lớp.");
-    return { ...c, schedule: JSON.parse(c.schedule), members: c.tutor_id === user.id || user.role === "admin" ? members : members.filter((m) => m.student_id === user.id) };
+    return { ...c, schedule: JSON.parse(c.schedule), members: c.tutor_id === user.id || user.role === "admin" ? members : members.filter(mine) };
   };
 
   app.get("/api/classes", auth("student", "tutor"), (req, res) => {
@@ -176,7 +178,8 @@ export function registerClasses(app, db, auth, audit) {
   app.get("/api/classes/:id", auth(), (req, res) => {
     upkeep(db);
     const id = z.coerce.number().int().positive().parse(req.params.id), c = classFor(id, req.user);
-    const sessions = all(db, `${sessionSql} WHERE cs.class_id=? ORDER BY cs.starts_at`, id).filter((s) => c.tutor_id === req.user.id || req.user.role === "admin" || s.student_id === req.user.id);
+    const own = new Set(c.members.map((m) => m.student_id));
+    const sessions = all(db, `${sessionSql} WHERE cs.class_id=? ORDER BY cs.starts_at`, id).filter((s) => c.tutor_id === req.user.id || req.user.role === "admin" || own.has(s.student_id));
     res.json({ ...c, sessions, materials: all(db, "SELECT * FROM class_materials WHERE class_id=? ORDER BY id DESC", id),
       moves: all(db, "SELECT mv.* FROM session_moves mv JOIN class_sessions cs ON cs.id=mv.session_id WHERE cs.class_id=? AND mv.status='pending'", id) });
   });
@@ -325,6 +328,83 @@ export function registerClasses(app, db, auth, audit) {
       run(db, `UPDATE session_members SET outcome='refunded' WHERE member_id=? AND outcome='pending' AND session_id IN (SELECT id FROM class_sessions WHERE starts_at>?)`, m.id, new Date().toISOString());
       notify(db, req.user.id === m.student_id ? m.tutor_id : m.student_id, "package_ending", { actor: req.user.name, link: `/classes/${m.class_id}` });
     });
+    upkeep(db);
+    res.json({ ok: true });
+  });
+  // Administrators settle a reported lesson: it happened (tutor paid) or not (refunded).
+  app.get("/api/admin/today", auth("admin"), (req, res) => {
+    upkeep(db);
+    res.json({
+      tutors: one(db, "SELECT COUNT(*) n FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.status='pending' AND u.status='active'").n,
+      credentials: one(db, "SELECT COUNT(*) n FROM tutor_credentials c WHERE c.status='pending' AND EXISTS(SELECT 1 FROM credential_files f WHERE f.credential_id=c.id)").n,
+      withdrawals: one(db, "SELECT COUNT(*) n FROM withdrawals WHERE status='requested'").n,
+      community: one(db, "SELECT COUNT(*) n FROM community_posts WHERE status='pending'").n,
+      violations: all(db, "SELECT t.user_id,u.name,t.violations FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.violations>=3 ORDER BY t.violations DESC"),
+      disputes: all(db, `SELECT sm.session_id,sm.member_id,sm.note,cs.starts_at,c.id AS class_id,c.title,u.name AS student_name,t.name AS tutor_name
+        FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN classes c ON c.id=cs.class_id
+        JOIN class_members m ON m.id=sm.member_id JOIN users u ON u.id=m.student_id JOIN users t ON t.id=c.tutor_id WHERE sm.outcome='disputed' ORDER BY cs.starts_at`),
+    });
+  });
+  // Administrators see every class, every lesson and one person's whole picture.
+  app.get("/api/admin/classes", auth("admin"), (req, res) => {
+    upkeep(db);
+    res.json(all(db, `SELECT c.id,c.title,c.color,c.status,c.tutor_id,t.name AS tutor_name,
+      (SELECT group_concat(u.name, ', ') FROM class_members m JOIN users u ON u.id=m.student_id WHERE m.class_id=c.id AND m.status='active') AS students,
+      (SELECT COUNT(*) FROM class_sessions WHERE class_id=c.id AND status='scheduled' AND starts_at>?) AS upcoming,
+      (SELECT COUNT(*) FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE m.class_id=c.id AND sm.outcome='disputed') AS disputes,
+      (SELECT MIN(starts_at) FROM class_sessions WHERE class_id=c.id AND status='scheduled' AND starts_at>?) AS next_at
+      FROM classes c JOIN users t ON t.id=c.tutor_id ORDER BY disputes DESC, next_at IS NULL, next_at`, new Date().toISOString(), new Date().toISOString()));
+  });
+  app.get("/api/admin/schedule", auth("admin"), (req, res) => {
+    const q = z.object({ from: z.string().max(30), to: z.string().max(30), user: z.coerce.number().int().positive().optional() }).parse(req.query);
+    res.json(all(db, `${sessionSql} WHERE cs.starts_at>=? AND cs.starts_at<? AND cs.status<>'cancelled' ${q.user ? "AND (c.tutor_id=? OR m.student_id=?)" : ""} ORDER BY cs.starts_at`, q.from, q.to, ...(q.user ? [q.user, q.user] : [])));
+  });
+  app.get("/api/admin/users/:id/overview", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const u = one(db, "SELECT id,name,email,role,learner_type,status,created_at FROM users WHERE id=?", id);
+    if (!u) fail(404, "Không tìm thấy tài khoản.");
+    upkeep(db);
+    res.json({
+      user: u,
+      wallet: one(db, "SELECT available,held,credits_free,credits_paid FROM wallets WHERE user_id=?", id) || { available: 0, held: 0, credits_free: 0, credits_paid: 0 },
+      entries: all(db, "SELECT id,kind,amount,held,credits,note,created_at FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 30", id),
+      classes: all(db, `SELECT DISTINCT c.id,c.title,c.color,c.status FROM classes c LEFT JOIN class_members m ON m.class_id=c.id WHERE c.tutor_id=? OR m.student_id=? ORDER BY c.id DESC`, id, id),
+      proposals: all(db, "SELECT p.id,p.status,p.total,p.sessions,p.created_at,s.name AS student_name,t.name AS tutor_name FROM proposals p JOIN users s ON s.id=p.student_id JOIN users t ON t.id=p.tutor_id WHERE p.student_id=? OR p.tutor_id=? ORDER BY p.id DESC LIMIT 30", id, id),
+      family: all(db, "SELECT u.id,u.name FROM family_links f JOIN users u ON u.id=CASE WHEN f.parent_id=? THEN f.student_id ELSE f.parent_id END WHERE f.parent_id=? OR f.student_id=?", id, id, id),
+      violations: one(db, "SELECT violations FROM tutors WHERE user_id=?", id)?.violations || 0,
+    });
+  });
+  // Admin actions on a lesson or a package, each audited.
+  app.post("/api/admin/sessions/:id/cancel", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const { note } = z.object({ note: z.string().trim().min(3).max(300) }).parse(req.body);
+    transaction(db, () => {
+      if (!run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=? AND status='scheduled'", id).changes) fail(409, "Buổi học không còn hoạt động.");
+      run(db, "UPDATE session_members SET outcome='refunded',note=? WHERE session_id=? AND outcome IN ('pending','disputed')", note, id);
+      for (const r of all(db, "SELECT DISTINCT m.student_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=?", id))
+        for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "session_cancelled", { actor: "Quản trị viên", subject: r.title, link: "/schedule" });
+      audit(req.user.id, "session.admin_cancel", id);
+    });
+    upkeep(db);
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/members/:id/end", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    transaction(db, () => {
+      run(db, "UPDATE session_members SET outcome='refunded' WHERE member_id=? AND outcome='pending' AND session_id IN (SELECT id FROM class_sessions WHERE starts_at>?)", id, new Date().toISOString());
+      audit(req.user.id, "member.admin_end", id);
+    });
+    upkeep(db);
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/sessions/:id/resolve", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const d = z.object({ member_id: z.number().int().positive(), outcome: z.enum(["confirmed", "refunded"]) }).parse(req.body);
+    const r = one(db, "SELECT sm.*,m.student_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
+    if (!r) fail(404, "Không tìm thấy báo cáo.");
+    run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
+    for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: "/classes" });
+    audit(req.user.id, `session.resolve.${d.outcome}`, id);
     upkeep(db);
     res.json({ ok: true });
   });

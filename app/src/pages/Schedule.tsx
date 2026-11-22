@@ -42,7 +42,9 @@ export default function Schedule() {
     [direction, setDirection] = useState(0);
   const days = range(view, anchor);
   const from = new Date(startOfDay(days[0])).toISOString(), to = new Date(startOfDay(days.at(-1)!) + DAY).toISOString();
-  const result = useLoad<ClassSession[]>(`/schedule?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  // Administrators see every lesson, or one person's with ?user=.
+  const only = new URLSearchParams(location.search).get("user");
+  const result = useLoad<ClassSession[]>(`${user?.role === "admin" ? "/admin/schedule" : "/schedule"}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${only ? `&user=${only}` : ""}`);
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id); }, []);
   const byDay = useMemo(() => {
     const map = new Map<string, ClassSession[]>();

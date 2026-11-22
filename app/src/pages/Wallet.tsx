@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ArrowDownLeft, ArrowUpRight, CircleCheck, Coins, Copy, Landmark, LoaderCircle, Wallet as WalletIcon } from "lucide-react";
 import { toast } from "sonner";
 import { api, dateTime, money, useApp, useLoad } from "@/lib/api";
@@ -30,7 +31,7 @@ const KIND: Record<string, string> = {
   lesson_refund: "Hoàn học phí",
 };
 
-function DepositDialog({ open, onOpenChange, min, onPaid }: { open: boolean; onOpenChange: (v: boolean) => void; min: number; onPaid: () => void }) {
+function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: boolean; onOpenChange: (v: boolean) => void; min: number; onPaid: () => void; forStudent?: number }) {
   const { t } = useI18n(),
     [amount, setAmount] = useState(500000),
     [deposit, setDeposit] = useState<Deposit | null>(null),
@@ -56,7 +57,7 @@ function DepositDialog({ open, onOpenChange, min, onPaid }: { open: boolean; onO
     e.preventDefault();
     setBusy(true);
     setError("");
-    try { setDeposit(await api<Deposit>("/wallet/deposits", "POST", { amount })); }
+    try { setDeposit(await api<Deposit>("/wallet/deposits", "POST", { amount, ...(forStudent ? { student_id: forStudent } : {}) })); }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   }
@@ -155,7 +156,10 @@ export default function WalletPage() {
     result = useLoad<Wallet>("/wallet"),
     [depositOpen, setDepositOpen] = useState(false),
     [withdrawOpen, setWithdrawOpen] = useState(false),
-    [buying, setBuying] = useState(0);
+    [buying, setBuying] = useState(0),
+    [params] = useSearchParams(),
+    forStudent = Number(params.get("for")) || undefined;
+  useEffect(() => { if (forStudent) setDepositOpen(true); }, [forStudent]);
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
   const w = result.data, tutor = user?.role === "tutor";
@@ -215,7 +219,7 @@ export default function WalletPage() {
           </ul>
         ) : <p className="credential-empty">{t("Chưa có giao dịch.")}</p>}
       </section>
-      <DepositDialog open={depositOpen} onOpenChange={setDepositOpen} min={w.settings.min_deposit} onPaid={refresh} />
+      <DepositDialog open={depositOpen} onOpenChange={setDepositOpen} min={w.settings.min_deposit} onPaid={refresh} forStudent={forStudent} />
       <WithdrawDialog open={withdrawOpen} onOpenChange={setWithdrawOpen} available={w.available} onDone={refresh} />
     </Page>
   );

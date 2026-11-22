@@ -280,6 +280,7 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt.", { exact: true })).toBeVisible();
   await expect(tutor).toHaveURL(/workspace/);
   await login(admin, "admin");
+  await admin.goto("/app/admin?tab=tutors");
   await admin.getByRole("textbox", { name: "Tìm trong danh sách" }).fill("Gia sư kiểm thử");
   await expect(admin.locator(".proof-pending")).toHaveText("1 minh chứng chờ đối chiếu");
   await admin.getByRole("button", { name: "Xem & duyệt" }).click();
@@ -487,6 +488,7 @@ test("role workspaces, studio drafts and admin tab persistence", async ({
       await expect(page.locator(".week-day").nth(1)).toBeFocused();
     } else {
       await expect(page).toHaveURL(/\/admin$/);
+      await page.getByRole("tab", { name: /^Gia sư/ }).click();
       await choose(page, "Trạng thái hồ sơ", "Chờ duyệt");
       await page
         .getByRole("textbox", { name: "Tìm trong danh sách" })
@@ -997,6 +999,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   await login(tutor, "linh");
   const profile = await (await tutor.request.get("/api/tutor/profile")).json();
   await login(page, "admin");
+  await page.goto("/app/admin?tab=tutors");
   await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
@@ -1035,6 +1038,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   await tutor.getByRole("button", { name: "Lưu & gửi duyệt", exact: true }).click();
   await expect(tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt.", { exact: true })).toBeVisible();
   await page.reload();
+  await page.goto("/app/admin?tab=tutors");
   await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
   await page.getByRole("button", { name: "Xem & duyệt", exact: true }).click();
   await dialog.getByRole("button", { name: "Duyệt & công bố", exact: true }).click();

@@ -13,6 +13,7 @@ import {
   Send,
   Wallet,
   GraduationCap,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import type { User } from "./types";
@@ -47,10 +48,11 @@ export function navigationFor(user: User | null): NavModel {
     };
   if (user.role === "admin") {
     const admin = item("/admin", "Quản trị", ShieldCheck),
-      lessons = item("/calendar", "Lịch dạy", CalendarDays);
+      lessons = item("/schedule", "Lịch", CalendarDays),
+      hours = item("/calendar", "Lịch dạy", CalendarClock);
     return {
       home: "/admin",
-      primary: [admin, lessons, messages],
+      primary: [admin, lessons, hours, messages],
       groups: [{ label: "Khám phá", items: [find, subjects, community, news] }],
       bar: [admin, lessons, messages, community],
     };
@@ -84,7 +86,9 @@ export function navigationFor(user: User | null): NavModel {
   );
   return {
     home: "/workspace",
-    primary: [overview, find, schedule, classes, offers, messages],
+    primary: user.learner_type === "parent"
+      ? [overview, item("/family", "Con của tôi", UsersRound, "Con"), find, schedule, offers, messages]
+      : [overview, find, schedule, classes, offers, messages],
     groups: [
       {
         label: "Của tôi",
@@ -97,7 +101,7 @@ export function navigationFor(user: User | null): NavModel {
       },
       { label: "Khám phá", items: [subjects, community, news] },
     ],
-    bar: [overview, find, schedule, classes],
+    bar: user.learner_type === "parent" ? [overview, item("/family", "Con của tôi", UsersRound, "Con"), schedule, find] : [overview, find, schedule, classes],
   };
 }
 
