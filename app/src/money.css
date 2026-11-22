@@ -332,7 +332,7 @@
 .today-list h2 svg { width: 17px; height: 17px; color: var(--primary); }
 .today-list ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .today-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-left: 3px solid var(--c-ink); border-radius: 10px; background: color-mix(in srgb, var(--c-bg) 45%, transparent); }
-.today-list li div { display: grid; }
+.today-list li > div:first-child { display: grid; }
 .today-list li small { font-size: 12px; color: var(--muted-foreground); }
 .today-list .text-link { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; }
 .today-list .text-link svg { width: 14px; height: 14px; }
@@ -357,3 +357,13 @@
 .free-hours { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .free-hours > span { width: 100%; font-size: 13px; color: var(--muted-foreground); }
 .free-hours .chip { min-height: 30px; padding: 0 10px; font-size: 13px; }
+
+.today-list li .session-actions { justify-content: flex-end; }
+.survey-dialog { max-width: 440px; }
+.survey-stars { justify-content: center; gap: 6px; }
+.survey-stars button { width: 44px; height: 44px; }
+.survey-stars svg { width: 28px; height: 28px; }
+.survey-questions { display: grid; gap: 8px; margin: 4px 0; padding: 0; list-style: none; }
+.survey-questions li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.survey-answer { display: inline-flex; gap: 6px; }
+.survey-answer .chip { min-height: 32px; padding: 0 12px; }

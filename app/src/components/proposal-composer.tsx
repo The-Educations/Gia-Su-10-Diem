@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Minus, Plus, Send, Wallet as WalletIcon } from "lucide-react";
 import { toast } from "sonner";
 import "@/money.css";
+import "@/wizard.css";
 import { api, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { Proposal, Subject, Tutor, Wallet } from "@/lib/types";
@@ -37,11 +38,12 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
     [time, setTime] = useState("19:00"),
     [start, setStart] = useState(tomorrow),
     [message, setMessage] = useState(""),
+    [trial, setTrial] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   // The tutor's weekly free hours, earliest first in each day, as quick picks.
   const free = (tutor.weekly_blocks || []).filter((b, i, a) => !a.some((x) => x.weekday === b.weekday && x.hour === b.hour - 1)).slice(0, 8);
-  const total = sessions * rate,
+  const total = trial ? 0 : sessions * rate,
     available = wallet.data?.available ?? 0,
     short = Math.max(0, total - available);
   if (user && user.role !== "student") return null;
@@ -53,7 +55,8 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
     try {
       const [hour, minute] = time.split(":").map(Number);
       const p = await api<Proposal>("/proposals", "POST", {
-        tutor_id: tutor.user_id, subject_id: subject, mode, sessions, minutes, rate, start_date: start, message,
+        tutor_id: tutor.user_id, subject_id: subject, mode, start_date: start, message, trial,
+        ...(trial ? { sessions: 1, minutes: 60, rate: 0 } : { sessions, minutes, rate }),
         schedule: days.map((weekday) => ({ weekday, hour, minute })),
       });
       celebrate(e.currentTarget as HTMLElement);
@@ -94,7 +97,13 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
                   </select>
                 </Field>
               </div>
-              <div className="proposal-package">
+              {!!tutor.accepts_trial && (
+                <label className="trial-toggle">
+                  <input type="checkbox" checked={trial} onChange={(e) => setTrial(e.target.checked)} />
+                  <span><strong>{t("Học thử miễn phí 1 buổi 60 phút")}</strong></span>
+                </label>
+              )}
+              {!trial && <div className="proposal-package">
                 <Field>
                   <FieldLabel htmlFor="p-sessions">{t("Số buổi")}</FieldLabel>
                   <div className="stepper">
@@ -113,7 +122,7 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
                   <FieldLabel htmlFor="p-rate">{t("Học phí / buổi")}</FieldLabel>
                   <Input id="p-rate" type="number" min={50000} max={3000000} step={1000} value={rate} onChange={(e) => setRate(Number(e.target.value))} required />
                 </Field>
-              </div>
+              </div>}
               <FieldSet>
                 <FieldLegend>{t("Lịch hằng tuần")}</FieldLegend>
                 <div className="chip-set">
@@ -163,7 +172,7 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
             {error && <ErrorState error={error} />}
             <div className="actions dialog-actions">
               <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>{t("Hủy")}</Button>
-              <Submit busy={busy} disabled={short > 0}>{t("Gửi offer {amount}", { amount: money(total) })}</Submit>
+              <Submit busy={busy} disabled={short > 0}>{trial ? t("Gửi yêu cầu học thử") : t("Gửi offer {amount}", { amount: money(total) })}</Submit>
             </div>
           </form>
         </DialogContent>

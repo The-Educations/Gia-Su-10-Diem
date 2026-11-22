@@ -7,6 +7,8 @@ import { celebrate } from "@/lib/celebrate";
 import type { ClassSession } from "@/lib/types";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
+import { Field, FieldLabel } from "./ui/field";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 
 export const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
 export const dayOf = (iso: string, lang = "vi") => new Date(iso).toLocaleDateString(lang === "en" ? "en-GB" : "vi-VN", { timeZone: "Asia/Ho_Chi_Minh", weekday: "short", day: "2-digit", month: "2-digit" });
@@ -81,17 +83,59 @@ export function SessionActions({ s, onChanged, compact = false }: { s: ClassSess
   );
 }
 
+const QUESTIONS = [
+  ["on_time", "Gia sư đúng giờ"],
+  ["clear", "Giảng dễ hiểu"],
+  ["homework", "Có bài tập / tài liệu"],
+] as const;
+
+// A short private survey after a lesson: stars, three quick questions and a note.
 function Stars({ s, onChanged }: { s: ClassSession; onChanged: () => void }) {
-  const { t } = useI18n(), [hover, setHover] = useState(0);
+  const { t } = useI18n(), [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
+  const saved = (() => { try { return JSON.parse(s.survey || "{}") as Record<string, boolean>; } catch { return {}; } })();
+  const [rating, setRating] = useState(s.rating || 0), [answers, setAnswers] = useState<Record<string, boolean>>(saved), [comment, setComment] = useState(s.comment || "");
+  async function save() {
+    setBusy(true);
+    try { await api(`/sessions/${s.id}/rating`, "PUT", { rating, answers, comment }); toast.success(t("Cảm ơn bạn đã chấm buổi học")); setOpen(false); onChanged(); }
+    catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(false); }
+  }
   return (
-    <div className="star-row" role="group" aria-label={t("Chấm buổi học (riêng tư)")} onMouseLeave={() => setHover(0)}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button type="button" key={n} aria-label={t("{n} sao", { n })} aria-pressed={s.rating === n} data-on={(hover || s.rating || 0) >= n || undefined}
-          onMouseEnter={() => setHover(n)}
-          onClick={async () => { try { await api(`/sessions/${s.id}/rating`, "PUT", { rating: n }); onChanged(); } catch (e) { toast.error((e as Error).message); } }}>
-          <Star aria-hidden="true" />
-        </button>
-      ))}
-    </div>
+    <>
+      <Button size="sm" variant={s.rating ? "ghost" : "outline"} onClick={() => setOpen(true)}>
+        <Star data-icon="inline-start" className={s.rating ? "star-filled" : undefined} />{s.rating ? t("Bạn chấm {n}★", { n: s.rating }) : t("Chấm buổi học")}
+      </Button>
+      <Dialog open={open} onOpenChange={(v) => !busy && setOpen(v)}>
+        <DialogContent className="survey-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("Buổi học thế nào?")}</DialogTitle>
+            <DialogDescription>{t("Chỉ bạn và quản trị viên thấy. Khi gói học kết thúc, số sao trung bình mới được công khai.")}</DialogDescription>
+          </DialogHeader>
+          <div className="star-row survey-stars" role="radiogroup" aria-label={t("Chấm buổi học (riêng tư)")}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button type="button" key={n} role="radio" aria-checked={rating === n} aria-label={t("{n} sao", { n })} data-on={rating >= n || undefined} onClick={() => setRating(n)}><Star aria-hidden="true" /></button>
+            ))}
+          </div>
+          <ul className="survey-questions">
+            {QUESTIONS.map(([key, label]) => (
+              <li key={key}>
+                <span>{t(label)}</span>
+                <span className="survey-answer" role="group" aria-label={t(label)}>
+                  {[true, false].map((v) => (
+                    <button type="button" key={String(v)} className="chip" aria-pressed={answers[key] === v} data-checked={answers[key] === v || undefined}
+                      onClick={() => setAnswers((a) => ({ ...a, [key]: v }))}>{t(v ? "Có" : "Chưa")}</button>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Field><FieldLabel htmlFor={`survey-${s.id}`}>{t("Góp ý thêm (không bắt buộc)")}</FieldLabel><Textarea id={`survey-${s.id}`} rows={3} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("Điều bạn thích hoặc muốn gia sư thay đổi…")} /></Field>
+          <div className="actions dialog-actions">
+            <Button variant="outline" disabled={busy} onClick={() => setOpen(false)}>{t("Để sau")}</Button>
+            <Button disabled={busy || !rating} onClick={save}>{t("Gửi đánh giá")}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
