@@ -1431,4 +1431,8 @@ export const enMore: Record<string, string> = {
   "{actor} đã liên kết với tài khoản của bạn": "{actor} linked to your account",
   "{actor} gửi hồ sơ vào bài “{subject}”": "{actor} sent an offer to “{subject}”",
   "Quản trị viên đã xử lý báo cáo ở lớp {subject}": "An administrator resolved the report in {subject}",
+  "Để sau, xem gia sư trước": "Later — look at tutors first",
+  "Hoàn tất thiết lập để dùng tính năng này": "Finish setup to use this",
+  "Chọn vai trò và điền thông tin cơ bản, chỉ mất một phút.": "Choose your role and add the basics. It takes a minute.",
+  "Thiết lập tài khoản": "Set up account",
 };

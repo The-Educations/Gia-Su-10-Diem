@@ -1,6 +1,6 @@
 import { AddressFields } from "@/components/address-fields";
 import { useRef, useEffect, useState } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { BookOpen, Users, GraduationCap, ArrowRight } from "lucide-react";
 import { api, useApp, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TimezoneField } from "@/components/tutor-timezone";
+import { Button } from "@/components/ui/button";
+import { skipSetup } from "@/lib/setup";
 
 export default function Onboarding() {
   const { user, setUser, refresh } = useApp();
-  const [params] = useSearchParams();
+  const [params] = useSearchParams(), navigate = useNavigate();
   const [role, setRole] = useState("");
   const [address, setAddress] = useState({ province_code: user?.province_code || "", ward_code: user?.ward_code || "" });
   const [timezone, setTimezone] = useState(user!.timezone || "Asia/Ho_Chi_Minh");
@@ -52,5 +54,7 @@ export default function Onboarding() {
       {error && <ErrorState error={error} />}
       <Submit busy={busy} disabled={step === 0 && !role}>{step === 0 ? "Tiếp tục" : "Bắt đầu"}<ArrowRight data-icon="inline-end" /></Submit>
     </FieldGroup></form>
+    {/* Browsing is open before setup; booking, messages and money wait for it. */}
+    <Button variant="ghost" className="setup-later" onClick={() => { skipSetup(); navigate("/tutors"); }}>Để sau, xem gia sư trước</Button>
   </section></Page>;
 }

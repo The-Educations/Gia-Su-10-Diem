@@ -12,8 +12,10 @@ import {
 import { AnimateUIProvider } from "@animate-ui/react/provider";
 import { AppProvider, useApp, accountDestination } from "./lib/api";
 import { Toaster } from "./components/ui/sonner";
-import { Loading, ErrorState } from "./components/common";
+import { Loading, ErrorState, Page } from "./components/common";
+import { Button } from "./components/ui/button";
 import { I18nProvider, useI18n } from "./lib/i18n";
+import { BROWSE, setupSkipped } from "./lib/setup";
 import { LanguageSwitch } from "./components/language-switch";
 import { RequestStrip } from "./components/request-strip";
 import { ErrorBoundary } from "./components/error-boundary";
@@ -72,10 +74,24 @@ function Require({
     );
   if (user.email_verification_required)
     return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
-  if (user.role !== "admin" && user.onboarding_step < 3 && loc.pathname !== "/onboarding")
-    return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
+  if (user.role !== "admin" && user.onboarding_step < 3 && loc.pathname !== "/onboarding") {
+    if (!setupSkipped()) return <Navigate to={accountDestination(user, loc.pathname + loc.search)} replace />;
+    if (!BROWSE.some((re) => re.test(loc.pathname))) return <SetupRequired />;
+  }
   if (role && user.role !== role) return <Navigate to="/workspace" replace />;
   return children;
+}
+function SetupRequired() {
+  const { t } = useI18n();
+  return (
+    <Page>
+      <section className="setup-required">
+        <h1>{t("Hoàn tất thiết lập để dùng tính năng này")}</h1>
+        <p>{t("Chọn vai trò và điền thông tin cơ bản, chỉ mất một phút.")}</p>
+        <Button asChild><Link to="/onboarding">{t("Thiết lập tài khoản")}</Link></Button>
+      </section>
+    </Page>
+  );
 }
 function Shell() {
   const { user } = useApp(),

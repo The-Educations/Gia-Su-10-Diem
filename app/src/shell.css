@@ -708,3 +708,7 @@ main {
 .app-shell[data-setup] .notification-bell { display: none; }
 .app-shell[data-setup] > .app-body { margin-left: 0; padding-bottom: 0; }
 .app-shell[data-setup] .mobile-brand { display: inline-flex; }
+
+.setup-required { display: grid; justify-items: start; gap: 10px; max-width: 520px; margin: 48px auto; padding: 28px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); }
+.setup-required p { color: var(--muted-foreground); }
+.setup-later { margin-top: 8px; width: 100%; }
