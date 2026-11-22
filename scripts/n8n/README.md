@@ -28,7 +28,7 @@ Quy tắc: bài luôn là nháp (`published: false`); tối đa 5 tin mỗi lầ
 2. Mở n8n (`http://localhost:5678`) → **Credentials** → mở credential **News Bot Login** (kiểu Custom Auth) → đặt JSON thành `{ "body": { "email": "<email bot>", "password": "<mật khẩu bot>" } }`. Mật khẩu chỉ nằm ở đây.
 3. Mở workflow **Tin tức tự động** → ô **Cài đặt** → đổi `baseUrl` thành `https://giasudiem10.online`, đặt tạm `perRun` = 1.
 4. Xoá file trạng thái để chạy sạch: `rm ~/.n8n/news-state.json`. Bấm **Execute workflow**. Kết quả mong đợi: đúng một bài nháp ở Admin → Tin tức, chưa hiện ở `/news`. Web không có chức năng xoá bài tin tức, nên bài này cứ để nháp hoặc đăng nếu hợp lý.
-5. Trả `perRun` về 5, rồi bật workflow (công tắc **Active**) để lịch 3 giờ hoạt động.
+5. Trả `perRun` về 5, rồi bật workflow để lịch 3 giờ hoạt động (n8n 2.x: nút **Publish** ở góc trên bên phải; bản cũ hơn là công tắc **Active**).
 
 ## Danh sách tự kiểm tra
 
@@ -36,7 +36,7 @@ Quy tắc: bài luôn là nháp (`published: false`); tối đa 5 tin mỗi lầ
 - [ ] Máy khác trong mạng không mở được `http://<IP-máy>:5678` (n8n chỉ nghe 127.0.0.1).
 - [ ] `launchctl print gui/$(id -u)/com.giasudiem10.n8n` báo `state = running`.
 - [ ] `claude auth status` báo `loggedIn: true` với gói Pro.
-- [ ] Workflow ở trạng thái **Active** và lần chạy gần nhất không lỗi (n8n → Executions).
+- [ ] Workflow đã **Publish** (đang hoạt động) và lần chạy gần nhất không lỗi (n8n → Executions).
 - [ ] Ô Cài đặt có `baseUrl` đúng (web thật), `perRun` = 5, `perDay` = 10.
 
 ## Khi có lỗi
