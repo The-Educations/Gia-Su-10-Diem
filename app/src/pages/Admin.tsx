@@ -49,6 +49,7 @@ export default function Admin() {
       : "tutors",
     status = params.get("status") || "";
   const communityQueue = useLoad<unknown[]>("/admin/community/queue");
+  const pendingProofs = useLoad<{ tutor_id: number; count: number }[]>("/admin/credentials/pending");
   const { refresh } = useApp(),
     result = useLoad<AdminData>("/admin"),
     subjects = useLoad<Subject[]>("/subjects"),
@@ -230,6 +231,9 @@ export default function Admin() {
                     <span>
                       {money(t.rate)} / buổi{t.demo ? " · Hồ sơ mẫu" : ""}{t.published ? " · Chỉnh sửa chờ duyệt" : ""}
                     </span>
+                    {!!pendingProofs.data?.find((p) => p.tutor_id === t.user_id) && (
+                      <span className="proof-pending">{pendingProofs.data.find((p) => p.tutor_id === t.user_id)!.count} minh chứng chờ đối chiếu</span>
+                    )}
                   </div>
                   <State
                     value={
@@ -246,7 +250,7 @@ export default function Admin() {
                   >
                     Xem & duyệt
                   </Button>
-                  {t.status !== "withdrawn" && <Button variant="destructive" onClick={e => { withdrawTrigger.current = e.currentTarget; setError(""); setWithdraw(t); }}>Gỡ hồ sơ</Button>}
+                  {t.status !== "withdrawn" && <Button variant="ghost" className="danger-text" onClick={e => { withdrawTrigger.current = e.currentTarget; setError(""); setWithdraw(t); }}>Gỡ hồ sơ</Button>}
                 </article>
               ))}
             </div>

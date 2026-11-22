@@ -17,12 +17,14 @@ export function registerAccountDeletion(app, db, auth, audit) {
       run(db, "DELETE FROM chat_attachments WHERE owner_id=?", id);
       run(db, "DELETE FROM oauth_states WHERE link_user_id=?", id);
       run(db, "DELETE FROM pending_signups WHERE email=?", user.email);
-      for (const table of ["tutor_uploads", "tutor_banners", "tutor_gallery", "tutor_theme_inventory", "weekly_availability"]) run(db, `DELETE FROM ${table} WHERE tutor_id=?`, id);
+      run(db, "DELETE FROM credential_file_chunks WHERE file_id IN (SELECT f.id FROM credential_files f JOIN tutor_credentials c ON c.id=f.credential_id WHERE c.tutor_id=?)", id);
+      run(db, "DELETE FROM credential_files WHERE credential_id IN (SELECT id FROM tutor_credentials WHERE tutor_id=?)", id);
+      for (const table of ["tutor_uploads", "tutor_banners", "tutor_gallery", "tutor_theme_inventory", "weekly_availability", "tutor_credentials"]) run(db, `DELETE FROM ${table} WHERE tutor_id=?`, id);
       for (const table of ["community_drafts", "community_images"]) run(db, `DELETE FROM ${table} WHERE author_id=?`, id);
       run(db, "DELETE FROM favorites WHERE student_id=? OR tutor_id=?", id, id);
       run(db, "UPDATE slots SET available=0 WHERE tutor_id=?", id);
       for (const table of ["bookings", "weekly_requests", "offers"]) run(db, `UPDATE ${table} SET status='cancelled' WHERE (student_id=? OR tutor_id=?) AND status IN ('pending','accepted')`, id, id);
-      run(db, `UPDATE tutors SET headline='',bio='',province_code='',ward_code='',location='',education='',education_history='[]',profile_sections='[]',subjects='[]',levels='[]',goals='[]',teaching_style='',lesson_plan='',moderation_note='',profile_theme='paper',status='rejected',published=NULL WHERE user_id=?`, id);
+      run(db, `UPDATE tutors SET headline='',bio='',province_code='',ward_code='',location='',education='',education_history='[]',profile_sections='[]',intro_video='',subjects='[]',levels='[]',goals='[]',teaching_style='',lesson_plan='',moderation_note='',profile_theme='paper',status='rejected',published=NULL WHERE user_id=?`, id);
       run(db, `UPDATE users SET name='Tài khoản đã xóa',email=?,password='',status='deleted',school='',province_code='',ward_code='',goal='',display_name='',bio='',timezone='Asia/Ho_Chi_Minh',community_lock_reason='',email_verified_at=NULL WHERE id=?`, `deleted-${id}@account.invalid`, id);
       audit(req.user.id, "user.deleted", id);
     });
