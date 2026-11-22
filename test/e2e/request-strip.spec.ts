@@ -164,3 +164,33 @@ test("a failed request hides the ticker without breaking the page", async ({ pag
   await expect(page.getByText("Buổi dạy tiếp theo")).toBeVisible();
   await expect(ticker(page)).toHaveCount(0);
 });
+
+test("students and parents get a ticker of tutors looking for students; tutors do not see their colleagues", async ({ page, request }) => {
+  const own = await add(request, { author: "chau", title: "Nhận dạy kèm Toán lớp 9", body: "Dạy online tối thứ 2, 4, 6. Mình có 5 năm kinh nghiệm luyện thi vào lớp 10." });
+  await add(request, { author: "chau", title: "Cần gia sư Tiếng Anh", body: "Chia sẻ tài liệu ôn tập cho các bạn." });
+  for (const slug of ["profile-student", "profile-parent"]) {
+    const context = await page.context().browser()!.newContext();
+    const p = await context.newPage();
+    await login(p, slug);
+    const strip = p.getByRole("region", { name: "Gia sư đang tìm học sinh" });
+    await expect(strip).toBeVisible();
+    await expect(p.getByRole("region", { name: "Đang tìm gia sư" })).toHaveCount(0);
+    const inBar = await p.evaluate(
+      () => document.querySelector(".topbar")!.contains(document.querySelector(".topbar-ticker")),
+    );
+    expect(inBar).toBe(true);
+    const links = strip.locator("ul:first-child a");
+    await expect(links).toHaveCount(1);
+    await expect(links.first()).toContainText("Nhận dạy kèm Toán lớp 9");
+    await expect(links.first()).toHaveAttribute("aria-label", /Gia sư, Toán/);
+    await expect(links.first()).toContainText("Toán");
+    await strip.locator(".ticker-frame").hover();
+    await links.first().click();
+    await expect(p).toHaveURL(new RegExp(`/app/community/${own}$`));
+    await context.close();
+  }
+  // The tutor's own bar shows posts from students and parents only, so with none it stays empty.
+  await login(page, "chau");
+  await expect(page.getByText("Buổi dạy tiếp theo")).toBeVisible();
+  await expect(page.locator(".topbar-ticker")).toHaveCount(0);
+});

@@ -406,3 +406,24 @@ Kiểm tra thêm bằng trình duyệt thật (dev server ở `http://127.0.0.1:
 3. Các quyết định tự đưa ra ngoài tài liệu.
 4. Những gì chưa làm hoặc chưa kiểm được.
 5. Xác nhận: chưa commit, chưa push. Hỏi chủ dự án có muốn commit và mở PR không.
+
+---
+
+## Bước 2 — dải cho học sinh/phụ huynh (2026-11-22)
+
+Đối xứng với bước 1, cùng một dải ở thanh trên cùng, cùng API `GET /api/community/requests`; nội dung phụ thuộc vai trò người xem:
+
+| Người xem | Thấy | Nhãn | Bấm nhãn |
+| --- | --- | --- | --- |
+| Gia sư | bài của học sinh/phụ huynh đang tìm gia sư | Đang tìm gia sư | `/community?q=tìm gia sư` |
+| Học sinh, phụ huynh | bài của **gia sư** đang tìm học sinh | Gia sư đang tìm học sinh | `/community?q=tìm học sinh` |
+| Admin | không có dải (API trả 403) | | |
+
+- Cùng bộ lọc: đã duyệt, công khai, chưa "đã giải quyết", trong 14 ngày, mới nhất trước, tối đa 10 bài, tác giả đang hoạt động. Chỉ bài do đúng vai trò đăng mới được xét (gia sư không thấy bài của gia sư khác).
+- Bộ nhận diện bài gia sư (`seeks(sentence, "student")` trong `server/community-requests.js`) **chặt hơn** bước 1 vì gia sư hay bàn về học sinh ("tìm cách dạy học sinh yếu", "nhận thấy học sinh hay sai"):
+  - Cụm cố định: `tìm học sinh`, `tìm học viên`, `nhận dạy`, `nhận kèm`, `nhận học sinh`, `nhận thêm học sinh`, `mở lớp`, `tuyển học sinh`.
+  - Từ nhu cầu `tìm / kiếm / tuyển` + từ chỉ đối tượng `học sinh / học viên / học trò`, cách nhau tối đa 2 từ, và không có từ chặn ở giữa (`cách, hiểu, phương, bí, quyết, sao, nào`).
+  - Cùng phép phủ định ("không nhận dạy", "đã tìm học sinh đủ rồi").
+  - Đã đo trên 16 câu mẫu (9 nên nhận, 7 không): 16/16.
+- Giao diện: `RequestStrip` nhận prop `role`; `main.tsx` gắn cho `tutor` và `student` (phụ huynh cũng là `role = student`). Vai trò hiển thị trong nhãn đọc màn hình ("Gia sư", "Phụ huynh", "Học sinh").
+- Kiểm thử: `test/community-requests.test.js` (API theo vai trò + bộ nhận diện hai chiều), `test/e2e/request-strip.spec.ts` (học sinh và phụ huynh thấy dải, gia sư không thấy bài của đồng nghiệp).

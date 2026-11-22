@@ -24,7 +24,15 @@ function useStill() {
   return still;
 }
 
-const roleLabel = (tier: string) => (tier === "parent" ? "Phụ huynh" : "Học sinh");
+const roleLabel = (tier: string) =>
+  tier === "parent" ? "Phụ huynh" : tier === "tutor" ? "Gia sư" : "Học sinh";
+
+// Gia sư thấy bài của học sinh/phụ huynh tìm gia sư; học sinh/phụ huynh thấy bài của
+// gia sư tìm học sinh.
+const STRIPS = {
+  tutor: { label: "Đang tìm gia sư", search: "tìm gia sư" },
+  student: { label: "Gia sư đang tìm học sinh", search: "tìm học sinh" },
+};
 
 function Item({ item, hidden }: { item: CommunityRequest; hidden?: boolean }) {
   const { author } = item,
@@ -52,11 +60,13 @@ function Item({ item, hidden }: { item: CommunityRequest; hidden?: boolean }) {
   );
 }
 
-// Ticker in the top bar of a tutor's workspace: recent "looking for a tutor" posts
-// scroll from right to left, each as an avatar plus a short summary; a click opens
-// the whole post in the community. It is an extra: while loading, on error or with
-// nothing to show it renders nothing.
-export function RequestStrip() {
+// Ticker in the top bar: recent community posts scroll from right to left, each as
+// an avatar plus a short summary; a click opens the whole post in the community. A
+// tutor sees students' and parents' "looking for a tutor" posts, a student or parent
+// sees tutors' "looking for students" posts. It is an extra: while loading, on error
+// or with nothing to show it renders nothing.
+export function RequestStrip({ role }: { role: "tutor" | "student" }) {
+  const strip = STRIPS[role];
   const { data, error } = useLoad<CommunityRequests>("/community/requests"),
     items = data?.items ?? [],
     still = useStill(),
@@ -79,12 +89,12 @@ export function RequestStrip() {
   // Even one long summary does not fit the bar, so it runs whenever it overflows.
   const marquee = !still && width.list > width.frame;
   return (
-    <section className="topbar-ticker" aria-label="Đang tìm gia sư">
+    <section className="topbar-ticker" aria-label={strip.label}>
       <Link
         className="ticker-label"
-        to={`/community?q=${encodeURIComponent("tìm gia sư")}`}
+        to={`/community?q=${encodeURIComponent(strip.search)}`}
       >
-        Đang tìm gia sư
+        {strip.label}
       </Link>
       <div
         className="ticker-frame"
