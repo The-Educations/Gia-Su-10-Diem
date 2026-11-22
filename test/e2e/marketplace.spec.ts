@@ -467,25 +467,8 @@ test("role workspaces, studio drafts and admin tab persistence", async ({
       page.getByRole("heading", { name: heading, exact: true }),
     ).toBeVisible();
     if (slug !== "admin") {
-      const firstDay = await page
-        .locator(".week-day")
-        .first()
-        .getAttribute("aria-label");
-      await page.getByRole("button", { name: "Tuần sau", exact: true }).click();
-      await expect(page.locator(".week-day").first()).not.toHaveAttribute(
-        "aria-label",
-        firstDay!,
-      );
-      await page
-        .getByRole("button", { name: "Tuần trước", exact: true })
-        .click();
-      await expect(page.locator(".week-day").first()).toHaveAttribute(
-        "aria-label",
-        firstDay!,
-      );
-      await page.locator(".week-day").first().focus();
-      await page.keyboard.press("ArrowRight");
-      await expect(page.locator(".week-day").nth(1)).toBeFocused();
+      // The overview opens with today's work.
+      await expect(page.getByRole("region", { name: "Việc cần làm" })).toBeVisible();
     } else {
       await expect(page).toHaveURL(/\/admin$/);
       await page.getByRole("tab", { name: /^Gia sư/ }).click();
@@ -801,7 +784,7 @@ test("parent chooses a separate setup and reaches shared booking tools", async (
   await expect(page).toHaveURL(/workspace/);
   await expect(page.locator(".sidebar").getByText("Phụ huynh", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Không gian phụ huynh", exact: true })).toBeVisible();
-  await expect(page.locator(".sidebar").getByRole("link", { name: "Lịch học của con", exact: true })).toBeVisible();
+  await expect(page.locator(".sidebar").getByRole("link", { name: "Con của tôi", exact: true })).toBeVisible();
   await expect(page.locator(".sidebar .brand")).toHaveAttribute("href", "/app/workspace");
   await page.goto("/app/bookings?view=list");
   await expect(page.locator("main h1")).toBeVisible();
