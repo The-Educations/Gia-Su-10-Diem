@@ -23,6 +23,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { statusNames } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 export function Page({ children }: { children: ReactNode }) {
   return (
     <div className="page">
@@ -74,9 +75,10 @@ export function Person({
   );
 }
 export function State({ value }: { value: string }) {
+  const { t } = useI18n();
   return (
     <Badge variant="secondary" className={`state state-${value}`}>
-      {statusNames[value] || value}
+      {t(statusNames[value] || value)}
     </Badge>
   );
 }
@@ -141,8 +143,9 @@ export function Blank({
   );
 }
 export function Loading() {
+  const { t } = useI18n();
   return (
-    <div aria-label="Đang tải" role="status" className="loading-stack">
+    <div aria-label={t("Đang tải")} role="status" className="loading-stack">
       <Skeleton className="h-10 w-1/2" />
       <Skeleton className="h-36 w-full" />
       <Skeleton className="h-36 w-full" />
@@ -156,13 +159,14 @@ export function ErrorState({
   error: string;
   retry?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Alert variant="destructive">
       <AlertDescription>
         {error}
         {retry && (
           <Button variant="outline" onClick={retry}>
-            Thử lại
+            {t("Thử lại")}
           </Button>
         )}
       </AlertDescription>

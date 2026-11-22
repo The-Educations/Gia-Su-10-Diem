@@ -96,7 +96,8 @@ Chính sách hủy sát giờ, xử lý tranh chấp, xác minh gia sư và hỗ
 
 - Giữ nhận diện có sẵn: nền giấy ấm, mực tối, đỏ sẫm; Be Vietnam Pro và Lora.
 - Danh sách gia sư và hành động tìm / đặt lịch là trọng tâm; tránh số liệu thành tích giả.
-- Điều hướng có nhãn, phiên bản điện thoại dùng menu thu gọn; nội dung giữ được tại 360–1440 px.
+- Điều hướng theo vai trò: máy tính có sidebar nhóm "chính / Của tôi hoặc Hồ sơ / Khám phá"; dưới 1024 px là thanh dưới 4 mục + "Thêm" mở ngăn kéo từ dưới lên. Chuông thông báo gộp thông báo ứng dụng và cộng đồng. Nội dung giữ được tại 320–1440 px.
+- Màn hình mở app ~1 giây: viết số 10, bút đỏ khoanh, đóng dấu "đ", rồi mở vào app; bỏ qua khi giảm chuyển động hoặc chạy test tự động.
 - Trạng thái loading, lỗi có thử lại, trống, chờ duyệt và không có quyền cần rõ ràng.
 - Cắt tagline, helper text và nhãn phụ không cần thiết. Học phí, thời gian, trạng thái và hành động phải tự rõ qua bố cục.
 - Animate UI cho dialog, chọn mục và phản hồi thao tác; chuyển động biểu cảm nhưng ngắn, có thể ngắt, tắt phần không thiết yếu khi giảm chuyển động.

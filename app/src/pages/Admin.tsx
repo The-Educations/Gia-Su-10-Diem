@@ -10,10 +10,7 @@ import {
   Trash2,
   Search,
   ArrowUpRight,
-  Users,
-  Clock,
   ShieldCheck,
-  Library,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, dateTime, money } from "@/lib/api";
@@ -128,29 +125,25 @@ export default function Admin() {
       />
       <WorkspaceStats
         items={[
-          { label: "Bài cộng đồng chờ duyệt", value: communityQueue.data?.length || 0, icon: Clock, to: "/admin?tab=community" },
+          { label: "Bài cộng đồng chờ duyệt", value: communityQueue.data?.length || 0, to: "/admin?tab=community" },
           {
             label: "Hồ sơ chờ duyệt",
             value: pending.length,
-            icon: Clock,
             to: "/admin?tab=tutors&status=pending",
           },
           {
             label: "Hồ sơ đã duyệt",
             value: d.tutors.filter((t) => t.status === "approved").length,
-            icon: ShieldCheck,
             to: "/admin?tab=tutors&status=approved",
           },
           {
             label: "Tài khoản",
             value: d.users.length,
-            icon: Users,
             to: "/admin?tab=users",
           },
           {
             label: "Mục kỳ thi",
             value: d.resources.length,
-            icon: Library,
             to: "/admin?tab=resources",
           },
         ]}
