@@ -1,6 +1,7 @@
 # Tự động hoá mục Tin tức bằng n8n (chạy trên máy cá nhân)
 
-Trạng thái: **bản thiết kế chờ duyệt**. Chưa cài đặt hay viết gì.
+Trạng thái: **đã triển khai và chạy thử đầu cuối trên web local** (nhánh `feat/tin-tuc-tu-dong`). Còn chờ chủ web tạo tài khoản bot trên web thật và bật workflow; xem [scripts/n8n/README.md](../scripts/n8n/README.md).
+Khác với bản thiết kế ban đầu: workflow có thêm ô `Chạy tay`, trạng thái được ghi hai lần (sau kiểm tra và sau đăng), n8n dùng Node 24 và bản 2.48.7 có sẵn trong cache `npx`.
 Ngày: 2026-11-22.
 
 ## 1. Mục đích
