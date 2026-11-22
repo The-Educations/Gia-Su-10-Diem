@@ -57,7 +57,7 @@ test("member account menu, profile editing, cropped media, author links and resp
   await expect(
     page.getByRole("link", { name: "Xem hồ sơ của tôi", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".account-menu a")).toHaveCount(2);
+  await expect(page.locator(".account-menu a")).toHaveCount(3);
   await page.keyboard.press("Escape");
   await expect(account).toBeFocused();
   await account.click();

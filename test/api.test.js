@@ -2171,3 +2171,29 @@ test("migration for ratings is repeatable on an existing database", async t => {
   migrateDatabase(db); migrateDatabase(db);
   assert.equal(one(db, "SELECT COUNT(*) n FROM bookings").n, before);
 });
+test("notifications reach the other party, collapse per conversation and stay private", async (t) => {
+  const { client } = await fixture(t),
+    student = client(),
+    tutor = client(),
+    outsider = client();
+  await student.login("student");
+  const u = await tutor.login("chau");
+  await outsider.login("nam");
+  const { data: { id } } = await student.request("/inquiries", "POST", { tutor_id: u.id, body: "Em chào cô." });
+  await student.request(`/inquiries/${id}/messages`, "POST", { body: "Cô còn lịch tối thứ Ba không ạ?" });
+  const list = (await tutor.request("/notifications")).data;
+  const messages = list.filter(n => n.kind === "message_new");
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].link, `/messages?inquiry=${id}`);
+  assert.equal(messages[0].actor_name, "Minh Anh");
+  assert.equal((await tutor.request("/notifications/unread-count")).data.count, list.filter(n => !n.read_at).length);
+  assert.equal((await outsider.request("/notifications")).data.some(n => n.id === messages[0].id), false);
+  assert.equal((await outsider.request("/notifications/read", "POST", { id: messages[0].id })).status, 200);
+  assert.equal((await tutor.request("/notifications")).data.find(n => n.id === messages[0].id).read_at, null);
+  assert.equal((await tutor.request("/notifications/read", "POST", { id: messages[0].id })).status, 200);
+  assert.ok((await tutor.request("/notifications")).data.find(n => n.id === messages[0].id).read_at);
+  await tutor.request("/notifications/read", "POST", { all: true });
+  assert.equal((await tutor.request("/notifications/unread-count")).data.count, 0);
+  assert.equal((await tutor.request("/notifications/read", "POST", {})).status, 400);
+  assert.equal((await client().request("/notifications")).status, 401);
+});

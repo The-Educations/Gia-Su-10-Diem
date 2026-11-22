@@ -4,6 +4,7 @@ import { registerChatMedia, withChatMedia, insertChatMessage } from "./chat-medi
 import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
+import { registerNotifications, notify } from "./notifications.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -253,6 +254,7 @@ export function createApi(
   registerAccountDeletion(app, db, auth, audit);
   registerWeeklyRequests(app, db, auth);
   registerOffers(app, db, auth);
+  registerNotifications(app, db, auth);
   registerTrust(app, db, auth, audit);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>
@@ -709,6 +711,10 @@ export function createApi(
     if (status === "cancelled") run(db, "UPDATE bookings SET status=?,cancelled_by=?,cancelled_at=? WHERE id=?", status, req.user.id, at, b.id);
     else if (status === "tutor_missed") run(db, "UPDATE bookings SET status=?,tutor_missed_at=? WHERE id=?", status, at, b.id);
     else run(db, "UPDATE bookings SET status=? WHERE id=?", status, b.id);
+    if (["accepted", "declined", "cancelled"].includes(status)) {
+      const other = req.user.id === b.tutor_id ? b.student_id : b.tutor_id;
+      notify(db, other, `lesson_${status}`, { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", b.subject_id)?.name || "", link: `/bookings?lesson=${b.id}` });
+    }
     audit(req.user.id, `booking.${status}`, b.id);
     res.json({ ok: true });
   });

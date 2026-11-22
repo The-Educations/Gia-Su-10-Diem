@@ -2,6 +2,7 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
+import { notify } from "./notifications.js";
 
 export const MEDIA_LIMIT = 8 * 1024 * 1024;
 const threads = { inquiry: ["inquiries", "inquiry_messages", "inquiry_id"], lesson: ["bookings", "messages", "booking_id"], support: ["support_threads", "support_messages", "thread_id"] };
@@ -34,6 +35,10 @@ export function insertChatMessage(db, kind, threadId, user, input, context = nul
       : run(db, `INSERT INTO ${table}(${column},sender_id,body) VALUES (?,?,?)`, threadId, user.id, body);
     const id = Number(result.lastInsertRowid);
     if (attachment_id) run(db, "UPDATE chat_attachments SET message_id=? WHERE id=?", id, attachment_id);
+    const thread = one(db, `SELECT * FROM ${threads[kind][0]} WHERE id=?`, threadId);
+    const recipients = kind !== "support" ? [user.id === thread.student_id ? thread.tutor_id : thread.student_id]
+      : user.id === thread.user_id ? all(db, "SELECT id FROM users WHERE role='admin' AND status='active'").map(u => u.id) : [thread.user_id];
+    for (const recipient of recipients) notify(db, recipient, "message_new", { actor: kind === "support" && user.role === "admin" ? "" : user.name, link: `/messages?${kind}=${threadId}` });
     return id;
   });
 }

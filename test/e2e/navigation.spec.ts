@@ -23,7 +23,7 @@ test("desktop collapse persists and mobile navigation stays expanded", async ({ 
   await expect(sidebar).toHaveCSS("width", "76px");
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(sidebar).not.toBeVisible();
-  const menu = page.getByRole("button", { name: "Mở điều hướng" });
+  const menu = page.getByRole("navigation", { name: "Điều hướng nhanh" }).getByRole("button", { name: "Thêm", exact: true });
   await menu.click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByText("Tìm môn học", { exact: true })).toBeVisible();
@@ -40,7 +40,7 @@ test("desktop collapse persists and mobile navigation stays expanded", async ({ 
   await expect(sidebar).toBeVisible();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.getByRole("button", { name: "Mở rộng thanh điều hướng" }).click();
-  await expect(sidebar).toHaveCSS("width", "216px");
+  await expect(sidebar).toHaveCSS("width", "248px");
   expect(await sidebar.evaluate(e => parseFloat(getComputedStyle(e).transitionDuration))).toBeLessThan(0.01);
 });
 
@@ -53,7 +53,7 @@ test("public app pages fit small phones, tablets and desktops", async ({ page })
       if (path === "/app/tutors") await expect(page.getByRole("combobox", { name: "Sắp xếp", exact: true })).toBeVisible();
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (path === "/app/tutors" && width <= 390) {
-        const menu = await page.getByRole("button", { name: "Mở điều hướng" }).boundingBox();
+        const menu = await page.getByRole("button", { name: "Thêm", exact: true }).boundingBox();
         expect(menu!.width).toBeGreaterThanOrEqual(44);
         expect(menu!.height).toBeGreaterThanOrEqual(44);
         const subject = page.getByRole("combobox", { name: "Môn học", exact: true });
@@ -63,21 +63,21 @@ test("public app pages fit small phones, tablets and desktops", async ({ page })
   }
 });
 
-// Sample the moving surface, not just its settled position: a tilted dialog can
-// look correct at rest while still being the wrong motion for edge navigation.
-test("mobile drawer slides flat, restores focus and respects reduced motion", async ({ page }) => {
+// Sample the moving surface, not just its settled position: the sheet rises
+// from the bottom edge without tilting, scaling or blurring.
+test("mobile sheet rises flat, restores focus and respects reduced motion", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app/tutors");
-  const menu = page.getByRole("button", { name: "Mở điều hướng" });
+  const menu = page.getByRole("button", { name: "Thêm", exact: true });
   const drawer = page.getByRole("dialog");
-  const record = () => page.evaluate(() => new Promise<{ x: number; flat: boolean; filter: string; state: string | null }[]>(resolve => {
-    const frames: { x: number; flat: boolean; filter: string; state: string | null }[] = [];
+  const record = () => page.evaluate(() => new Promise<{ y: number; flat: boolean; filter: string; state: string | null }[]>(resolve => {
+    const frames: { y: number; flat: boolean; filter: string; state: string | null }[] = [];
     const start = performance.now();
     function frame() {
       const el = document.querySelector('[data-slot="sheet-content"]');
       if (el) {
         const style = getComputedStyle(el), matrix = new DOMMatrixReadOnly(style.transform);
-        frames.push({ x: el.getBoundingClientRect().x, flat: matrix.is2D && matrix.a === 1 && matrix.d === 1, filter: style.filter, state: el.getAttribute("data-state") });
+        frames.push({ y: innerHeight - el.getBoundingClientRect().bottom, flat: matrix.is2D && matrix.a === 1 && matrix.d === 1, filter: style.filter, state: el.getAttribute("data-state") });
       }
       if (performance.now() - start < 650) requestAnimationFrame(frame); else resolve(frames);
     }
@@ -86,12 +86,12 @@ test("mobile drawer slides flat, restores focus and respects reduced motion", as
   const entering = record();
   await menu.click();
   const frames = await entering;
-  expect(frames.some(f => f.x < -1)).toBe(true);
-  expect(frames.every(f => f.flat && f.filter === "none" && f.x <= 0.1)).toBe(true);
+  expect(frames.some(f => f.y < -1)).toBe(true);
+  expect(frames.every(f => f.flat && f.filter === "none" && f.y <= 0.1)).toBe(true);
   const leaving = record();
   await page.keyboard.press("Escape");
   const exitFrames = (await leaving).filter(f => f.state === "closed");
-  expect(exitFrames.some(f => f.x < -1)).toBe(true);
+  expect(exitFrames.some(f => f.y < -1)).toBe(true);
   expect(exitFrames.every(f => f.flat && f.filter === "none")).toBe(true);
   await expect(drawer).toHaveCount(0);
   await expect(menu).toBeFocused();
@@ -105,9 +105,9 @@ test("mobile drawer slides flat, restores focus and respects reduced motion", as
   await page.emulateMedia({ reducedMotion: "reduce" });
   const reduced = record();
   await menu.click();
-  expect((await reduced).every(f => Math.abs(f.x) < 0.1 && f.flat)).toBe(true);
-  await drawer.getByRole("link", { name: "Tìm môn học" }).click();
-  await expect(page).toHaveURL(/library$/);
+  expect((await reduced).every(f => Math.abs(f.y) < 0.1 && f.flat)).toBe(true);
+  await drawer.getByRole("link", { name: "Tin tức" }).click();
+  await expect(page).toHaveURL(/news$/);
   await expect(drawer).toHaveCount(0);
   await expect(page.locator("main")).toBeFocused();
   await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");
@@ -133,22 +133,21 @@ for (const [slug, extra] of [
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
     await page.setViewportSize({ width: 667, height: 375 });
-    const menu = page.getByRole("button", { name: "Mở điều hướng" });
+    const menu = page.getByRole("button", { name: "Thêm", exact: true });
     await menu.tap();
     const drawer = page.getByRole("dialog");
-    const logo = drawer.getByRole("link", { name: "Gia Sư 10 Điểm", exact: true });
+    const logo = drawer.locator(".mobile-account");
     const close = drawer.getByRole("button", { name: "Đóng", exact: true });
     await expect(logo).toBeInViewport();
     await drawer.getByRole("button", { name: "Đăng xuất", exact: true }).scrollIntoViewIfNeeded();
     await expect(drawer.getByRole("button", { name: "Đăng xuất", exact: true })).toBeInViewport();
-    await expect(logo).toBeInViewport();
     await expect(close).toBeInViewport();
     await close.tap();
     await expect(drawer).toHaveCount(0);
     await expect(menu).toBeFocused();
     await menu.tap();
-    await expect.poll(() => drawer.evaluate(el => el.getBoundingClientRect().x)).toBe(0);
-    await page.touchscreen.tap(640, 150);
+    await expect.poll(() => drawer.evaluate(el => innerHeight - el.getBoundingClientRect().bottom)).toBe(0);
+    await page.touchscreen.tap(640, 10);
     await expect(drawer).toHaveCount(0);
     expect(errors).toEqual([]);
     await context.close();

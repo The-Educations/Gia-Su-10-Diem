@@ -124,7 +124,7 @@ test("it runs from right to left when it does not fit, pauses on hover and keeps
   expect(await page.evaluate(() => !!document.activeElement?.closest("[aria-hidden='true']"))).toBe(false);
   // The top bar keeps its height and the page never scrolls sideways.
   const bar = await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height);
-  expect(bar).toBe(80);
+  expect(bar).toBe(64);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

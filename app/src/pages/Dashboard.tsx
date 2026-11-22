@@ -5,8 +5,6 @@ import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   CalendarDays,
-  Clock,
-  CheckCheck,
   MessageCircle,
   ArrowUpRight,
   BookOpen,
@@ -102,19 +100,16 @@ export default function Dashboard() {
           {
             label: isTutor ? "Buổi dạy sắp tới" : "Buổi học sắp tới",
             value: upcoming.length,
-            icon: CalendarDays,
             to: "/bookings",
           },
           {
             label: "Chờ phản hồi",
             value: pending.length + pendingOffers.length,
-            icon: Clock,
             to: pendingOffers.length ? "/offers" : "/bookings?status=pending",
           },
           {
             label: "Đã hoàn thành",
             value: rows.filter((b) => b.status === "completed").length,
-            icon: CheckCheck,
             to: "/bookings?status=completed",
           },
         ]}

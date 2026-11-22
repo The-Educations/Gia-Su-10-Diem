@@ -1,7 +1,9 @@
 import PendingMail from "@/components/community/PendingMail";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Clock, Flag, FileText, EyeOff, RotateCw } from "lucide-react";
+import {
+  RotateCw,
+} from "lucide-react";
 import { WorkspaceStats } from "@/components/workspace";
 import { useLoad } from "@/lib/api";
 import type {
@@ -168,25 +170,21 @@ export default function AdminCommunity() {
             {
               label: "Chờ duyệt",
               value: summary.data.pending,
-              icon: Clock,
               to: "/admin?tab=community&section=queue",
             },
             {
               label: "Báo cáo chưa xử lý",
               value: summary.data.reports,
-              icon: Flag,
               to: "/admin?tab=community&section=reports",
             },
             {
               label: "Đã đăng",
               value: summary.data.approved,
-              icon: FileText,
               to: "/admin?tab=community&section=posts&postStatus=approved",
             },
             {
               label: "Đã ẩn",
               value: summary.data.hidden,
-              icon: EyeOff,
               to: "/admin?tab=community&section=posts&postStatus=hidden",
             },
           ]}
