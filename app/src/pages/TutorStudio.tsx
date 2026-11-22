@@ -245,10 +245,6 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
             ))}
           </div>
         </Field>
-        <Field orientation="horizontal">
-          <input type="checkbox" id="accepts-trial" checked={!!draft.accepts_trial} onChange={(e) => set({ accepts_trial: e.target.checked })} />
-          <FieldLabel htmlFor="accepts-trial">{t("Nhận học thử miễn phí · 60 phút")}</FieldLabel>
-        </Field>
       </FieldGroup>
     ),
     schedule: (

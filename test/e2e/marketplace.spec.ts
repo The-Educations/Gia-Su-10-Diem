@@ -1004,7 +1004,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Đề nghị học", exact: true })).toBeVisible();
+  await expect(dialog.locator(".tutor-presentation")).toBeVisible();
   await dialog.locator("summary").filter({ hasText: "Kho giao diện" }).click();
   await dialog.getByRole("button", { name: "Cấp Ngọc bích", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Đã cấp", exact: true })).toHaveCount(2);
