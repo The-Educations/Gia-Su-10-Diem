@@ -21,6 +21,7 @@ import { RequestStrip } from "./components/request-strip";
 import { ErrorBoundary } from "./components/error-boundary";
 import { NotificationBell } from "./components/notification-bell";
 import { Brand, MobileBar, Sidebar } from "./components/app-shell";
+import { SocialLinks } from "./components/social-links";
 import { allItems, navigationFor } from "./lib/navigation";
 import { finishBoot } from "./lib/boot";
 import "./styles.css";
@@ -246,6 +247,7 @@ function Shell() {
         </main>
         <footer className="app-footer">
           <span>Gia Sư 10 Điểm</span>
+          <SocialLinks />
           <nav aria-label={t("Thông tin pháp lý")}><a href="/privacy">{t("Quyền riêng tư")}</a><a href="/terms">{t("Điều khoản dịch vụ")}</a></nav>
         </footer>
       </div>

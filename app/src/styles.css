@@ -2314,6 +2314,18 @@
   align-items: center;
   min-height: 44px;
 }
+.app-footer .social-links {
+  gap: 0;
+}
+.app-footer .social-links a {
+  justify-content: center;
+  min-width: 44px;
+  border-radius: 8px;
+  transition: color var(--duration-base) var(--ease-out);
+}
+.app-footer .social-links a:hover {
+  color: var(--primary);
+}
 .auth-policy {
   font-size: 12px;
   line-height: 1.7;
