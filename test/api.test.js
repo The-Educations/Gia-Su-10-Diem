@@ -2520,3 +2520,17 @@ test("SePay payment gateway: signed checkout form and IPN credits a top-up once"
   assert.equal((await s.request("/wallet")).data.available, 300000);
   assert.equal((await s.request(`/wallet/deposits/${dep.id}`)).data.checkout, null);
 });
+test("personal calendar events belong to their owner and validate times", async (t) => {
+  const { client } = await fixture(t), a = client(), b = client();
+  await a.login("student"); await b.login("chau");
+  const start = new Date(Date.now() + 86400000), end = new Date(start.getTime() + 3600000);
+  assert.equal((await a.request("/calendar-events", "POST", { title: "Ôn thi", starts_at: end.toISOString(), ends_at: start.toISOString() })).status, 400);
+  const e = (await a.request("/calendar-events", "POST", { title: "Ôn thi Toán", starts_at: start.toISOString(), ends_at: end.toISOString(), color: "lilac" })).data;
+  const range = `?from=${encodeURIComponent(new Date().toISOString())}&to=${encodeURIComponent(new Date(Date.now() + 3 * 86400000).toISOString())}`;
+  assert.equal((await a.request("/calendar-events" + range)).data.length, 1);
+  assert.equal((await b.request("/calendar-events" + range)).data.length, 0);
+  assert.equal((await b.request(`/calendar-events/${e.id}`, "PUT", { title: "x", starts_at: start.toISOString(), ends_at: end.toISOString() })).status, 404);
+  assert.equal((await a.request(`/calendar-events/${e.id}`, "PUT", { title: "Ôn thi Lý", starts_at: start.toISOString(), ends_at: end.toISOString(), color: "sage" })).data.title, "Ôn thi Lý");
+  assert.equal((await b.request(`/calendar-events/${e.id}`, "DELETE")).status, 404);
+  assert.equal((await a.request(`/calendar-events/${e.id}`, "DELETE")).status, 200);
+});

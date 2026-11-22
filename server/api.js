@@ -12,6 +12,7 @@ import { registerClasses, classRatings } from "./classes.js";
 import { registerCommunityTopics } from "./community-topics.js";
 import { registerFamily } from "./family.js";
 import { registerStudentVerification } from "./student-verification.js";
+import { registerCalendarEvents } from "./calendar-events.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -260,6 +261,7 @@ export function createApi(
   registerUploads(app, db, auth, audit, processPhoto);
   registerCredentials(app, db, auth, audit, processPhoto);
   registerStudentVerification(app, db, auth, audit, processPhoto);
+  registerCalendarEvents(app, db, auth);
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);

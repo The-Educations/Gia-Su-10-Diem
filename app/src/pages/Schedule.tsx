@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import type { ClassSession } from "@/lib/types";
+import type { CalendarEvent, ClassSession } from "@/lib/types";
+import { EventDialog, type EventDraft } from "@/components/event-dialog";
 import { ErrorState, Heading, Page } from "@/components/common";
 import { SessionActions, timeOf } from "@/components/session-actions";
 import { Button } from "@/components/ui/button";
@@ -45,19 +46,28 @@ export default function Schedule() {
   // Administrators see every lesson, or one person's with ?user=.
   const only = new URLSearchParams(location.search).get("user");
   const result = useLoad<ClassSession[]>(`${user?.role === "admin" ? "/admin/schedule" : "/schedule"}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${only ? `&user=${only}` : ""}`);
+  const events = useLoad<CalendarEvent[]>(user && user.role !== "admin" ? `/calendar-events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : null),
+    [editing, setEditing] = useState<EventDraft | null>(null);
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id); }, []);
   const byDay = useMemo(() => {
-    const map = new Map<string, ClassSession[]>();
+    const map = new Map<string, Item[]>();
     // One block per lesson even when a group lesson has several students.
-    const seen = new Set<number>();
-    for (const s of result.data || []) {
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      const key = vnDate(Date.parse(s.starts_at));
-      map.set(key, [...(map.get(key) || []), s]);
+    const lessons = (result.data || []).filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
+    for (const item of asItems(lessons, events.data || []).sort((a, b) => a.starts_at.localeCompare(b.starts_at))) {
+      const key = vnDate(Date.parse(item.starts_at));
+      map.set(key, [...(map.get(key) || []), item]);
     }
     return map;
-  }, [result.data]);
+  }, [result.data, events.data]);
+  async function moveEvent(e: CalendarEvent, startsAt: number) {
+    const length = Date.parse(e.ends_at) - Date.parse(e.starts_at);
+    try { await api(`/calendar-events/${e.id}`, "PUT", { ...e, starts_at: new Date(startsAt).toISOString(), ends_at: new Date(startsAt + length).toISOString() }); events.reload(); }
+    catch (err) { toast.error((err as Error).message); }
+  }
+  const newEvent = () => {
+    const start = Math.ceil(Date.now() / 1800000) * 1800000;
+    setEditing({ starts_at: new Date(start).toISOString(), ends_at: new Date(start + 3600000).toISOString() });
+  };
   function shift(n: number) {
     setDirection(n);
     const step = view === "day" ? DAY : view === "week" ? 7 * DAY : 0;
@@ -73,7 +83,12 @@ export default function Schedule() {
   const title = new Date(startOfDay(anchor) + VN).toLocaleDateString(lang === "en" ? "en-GB" : "vi-VN", { month: "long", year: "numeric", timeZone: "UTC" });
   return (
     <Page>
-      <Heading title={t("Lịch")} action={<Button asChild variant="outline"><Link to="/classes">{t("Lớp học")}</Link></Button>} />
+      <Heading title={t("Lịch")} action={
+        <span className="actions">
+          {user?.role !== "admin" && <Button onClick={newEvent}><Plus data-icon="inline-start" />{t("Sự kiện mới")}</Button>}
+          <Button asChild variant="outline"><Link to="/classes">{t("Lớp học")}</Link></Button>
+        </span>
+      } />
       <div className="cal-toolbar">
         <div className="cal-nav">
           <Button variant="ghost" size="icon" aria-label={t("Trước")} onClick={() => shift(-1)}><ChevronLeft /></Button>
@@ -99,17 +114,20 @@ export default function Schedule() {
                 <button type="button" key={key} className="cal-month-cell" data-other={key.slice(0, 7) !== anchor.slice(0, 7) || undefined} data-today={key === today || undefined}
                   onClick={() => { setAnchor(key); setView("day"); }}>
                   <span className="cal-month-date">{Number(key.slice(8))}</span>
-                  {(byDay.get(key) || []).slice(0, 3).map((s) => <span key={s.id} className="cal-chip" data-color={s.color}>{timeOf(s.starts_at)} {s.title}</span>)}
+                  {(byDay.get(key) || []).slice(0, 3).map((s) => <span key={s.key} className="cal-chip" data-kind={s.kind} data-color={s.color}>{timeOf(s.starts_at)} {s.title}</span>)}
                   {(byDay.get(key) || []).length > 3 && <small>+{(byDay.get(key) || []).length - 3}</small>}
                 </button>
               ))}
             </div>
           ) : (
-            <TimeGrid days={days} byDay={byDay} today={today} now={now} lang={lang} onOpen={(s, el) => setOpen({ s, el })} onDrop={propose} canDrag={!!user} />
+            <TimeGrid days={days} byDay={byDay} today={today} now={now} lang={lang} onOpen={(s, el) => setOpen({ s, el })} onDrop={propose}
+              onOpenEvent={(e) => setEditing(e)} onMoveEvent={moveEvent}
+              onCreate={(a, b) => setEditing({ starts_at: new Date(a).toISOString(), ends_at: new Date(b).toISOString() })} canDrag={!!user && user.role !== "admin"} />
           )}
         </motion.div>
       </AnimatePresence>
-      {view !== "month" && !result.loading && !(result.data || []).length && <p className="cal-empty">{t("Không có buổi học trong khoảng này.")}</p>}
+      {view !== "month" && !result.loading && !byDay.size && <p className="cal-empty">{t("Chưa có gì trong khoảng này. Kéo trên lịch để thêm sự kiện.")}</p>}
+      <EventDialog draft={editing} onClose={() => setEditing(null)} onSaved={events.reload} />
       <Popover open={!!open} onOpenChange={(v) => !v && setOpen(null)}>
         {open && <PopoverAnchor virtualRef={{ current: open.el }} />}
         <PopoverContent className="cal-popover" side="right" align="start">
@@ -129,43 +147,81 @@ export default function Schedule() {
   );
 }
 
-function TimeGrid({ days, byDay, today, now, lang, onOpen, onDrop, canDrag }: {
-  days: string[]; byDay: Map<string, ClassSession[]>; today: string; now: number; lang: string;
-  onOpen: (s: ClassSession, el: HTMLElement) => void; onDrop: (s: ClassSession, startsAt: number) => void; canDrag: boolean;
+type Item = { key: string; kind: "lesson" | "event"; title: string; color: string; starts_at: string; minutes: number; lesson?: ClassSession; event?: CalendarEvent };
+export const asItems = (lessons: ClassSession[], events: CalendarEvent[]): Item[] => [
+  ...lessons.map((l) => ({ key: `l${l.id}`, kind: "lesson" as const, title: l.title, color: l.color, starts_at: l.starts_at, minutes: l.minutes, lesson: l })),
+  ...events.map((e) => ({ key: `e${e.id}`, kind: "event" as const, title: e.title, color: e.color, starts_at: e.starts_at, minutes: Math.round((Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60000), event: e })),
+];
+
+function TimeGrid({ days, byDay, today, now, lang, onOpen, onDrop, onOpenEvent, onMoveEvent, onCreate, canDrag }: {
+  days: string[]; byDay: Map<string, Item[]>; today: string; now: number; lang: string;
+  onOpen: (s: ClassSession, el: HTMLElement) => void; onDrop: (s: ClassSession, startsAt: number) => void;
+  onOpenEvent: (e: CalendarEvent) => void; onMoveEvent: (e: CalendarEvent, startsAt: number) => void; onCreate: (start: number, end: number) => void; canDrag: boolean;
 }) {
-  const { t } = useI18n(), body = useRef<HTMLDivElement>(null), drag = useRef<{ s: ClassSession; y: number; x: number; moved: boolean } | null>(null);
-  const [ghost, setGhost] = useState<{ id: number; day: number; top: number; height: number } | null>(null);
+  const { t } = useI18n(), body = useRef<HTMLDivElement>(null),
+    drag = useRef<{ item: Item; y: number; x: number; moved: boolean } | null>(null),
+    making = useRef<{ day: number; from: number } | null>(null);
+  const [ghost, setGhost] = useState<{ key: string; day: number; top: number; height: number } | null>(null);
+  const [draft, setDraft] = useState<{ day: number; from: number; to: number } | null>(null);
   useEffect(() => { body.current?.scrollTo({ top: Math.max(0, ((new Date(now + VN).getUTCHours() - 7) * ROW)) }); }, []);
   const nowTop = ((minutesInDay(new Date(now).toISOString()) - HOURS[0] * 60) / 60) * ROW;
-  function onPointerDown(e: React.PointerEvent, s: ClassSession) {
-    if (!canDrag || Date.parse(s.starts_at) <= Date.now() || e.button !== 0) return;
-    drag.current = { s, y: e.clientY, x: e.clientX, moved: false };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-  function geometry(e: React.PointerEvent) {
+  const topOf = (minutes: number) => ((minutes - HOURS[0] * 60) / 60) * ROW;
+  function geometry(e: React.PointerEvent, step = 30) {
     const grid = body.current!.querySelector(".cal-columns")!.getBoundingClientRect();
     const day = Math.max(0, Math.min(days.length - 1, Math.floor(((e.clientX - grid.left) / grid.width) * days.length)));
-    const minutes = Math.round((((e.clientY - grid.top) / ROW) * 60) / 30) * 30 + HOURS[0] * 60;
-    return { day, minutes: Math.max(HOURS[0] * 60, Math.min(22 * 60, minutes)) };
+    const minutes = Math.round((((e.clientY - grid.top) / ROW) * 60) / step) * step + HOURS[0] * 60;
+    return { day, minutes: Math.max(HOURS[0] * 60, Math.min(23 * 60, minutes)) };
+  }
+  function onPointerDown(e: React.PointerEvent, item: Item) {
+    e.stopPropagation();
+    const movable = item.kind === "event" || Date.parse(item.starts_at) > Date.now();
+    if (!canDrag || !movable || e.button !== 0) { drag.current = { item, y: e.clientY, x: e.clientX, moved: false }; return; }
+    drag.current = { item, y: e.clientY, x: e.clientX, moved: false };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
   function onPointerMove(e: React.PointerEvent) {
     const d = drag.current;
-    if (!d) return;
+    if (!d || (d.item.kind === "lesson" && Date.parse(d.item.starts_at) <= Date.now())) return;
     if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
     d.moved = true;
-    const { day, minutes } = geometry(e);
-    setGhost({ id: d.s.id, day, top: ((minutes - HOURS[0] * 60) / 60) * ROW, height: (d.s.minutes / 60) * ROW - 3 });
+    const { day, minutes } = geometry(e, d.item.kind === "event" ? 15 : 30);
+    setGhost({ key: d.item.key, day, top: topOf(minutes), height: (d.item.minutes / 60) * ROW - 3 });
   }
   function onPointerUp(e: React.PointerEvent) {
     const d = drag.current;
     drag.current = null;
     setGhost(null);
     if (!d) return;
-    if (!d.moved) return onOpen(d.s, e.currentTarget as HTMLElement);
-    const { day, minutes } = geometry(e);
+    if (!d.moved) return d.item.lesson ? onOpen(d.item.lesson, e.currentTarget as HTMLElement) : onOpenEvent(d.item.event!);
+    const { day, minutes } = geometry(e, d.item.kind === "event" ? 15 : 30);
     const at = startOfDay(days[day]) + minutes * 60000;
-    if (at !== Date.parse(d.s.starts_at)) onDrop(d.s, at);
+    if (at === Date.parse(d.item.starts_at)) return;
+    if (d.item.lesson) onDrop(d.item.lesson, at);
+    else onMoveEvent(d.item.event!, at);
   }
+  // Drag down an empty part of a day to block out a new event, like Apple Calendar.
+  function startMaking(e: React.PointerEvent, day: number) {
+    if (!canDrag || e.button !== 0 || e.target !== e.currentTarget) return;
+    const { minutes } = geometry(e, 15);
+    making.current = { day, from: minutes };
+    setDraft({ day, from: minutes, to: minutes + 60 });
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function moveMaking(e: React.PointerEvent) {
+    const m = making.current;
+    if (!m) return;
+    const { minutes } = geometry(e, 15);
+    setDraft({ day: m.day, from: Math.min(m.from, minutes), to: Math.max(m.from + 15, minutes, m.from + (minutes > m.from ? 0 : 60)) });
+  }
+  function endMaking() {
+    const m = making.current;
+    making.current = null;
+    if (!m || !draft) return setDraft(null);
+    const base = startOfDay(days[draft.day]);
+    onCreate(base + draft.from * 60000, base + Math.max(draft.to, draft.from + 15) * 60000);
+    setDraft(null);
+  }
+  const clock = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   return (
     <div className="cal-grid" style={{ "--cols": days.length } as React.CSSProperties}>
       <div className="cal-head">
@@ -181,23 +237,25 @@ function TimeGrid({ days, byDay, today, now, lang, onOpen, onDrop, canDrag }: {
         <div className="cal-hours">{HOURS.map((h) => <span key={h} style={{ height: ROW }}>{String(h).padStart(2, "0")}:00</span>)}</div>
         <div className="cal-columns" style={{ height: HOURS.length * ROW }}>
           {days.map((key, i) => (
-            <div key={key} className="cal-col" data-today={key === today || undefined} data-weekend={i >= 5 && days.length === 7 || undefined}>
-              {(byDay.get(key) || []).map((s) => {
-                const top = ((minutesInDay(s.starts_at) - HOURS[0] * 60) / 60) * ROW, height = Math.max(22, (s.minutes / 60) * ROW - 3);
-                const past = Date.parse(s.starts_at) + s.minutes * 60000 < now;
-                const pending = past && s.outcome === "pending";
+            <div key={key} className="cal-col" data-today={key === today || undefined} data-weekend={i >= 5 && days.length === 7 || undefined}
+              onPointerDown={(e) => startMaking(e, i)} onPointerMove={moveMaking} onPointerUp={endMaking} onPointerCancel={() => { making.current = null; setDraft(null); }}>
+              {(byDay.get(key) || []).map((item) => {
+                const top = topOf(minutesInDay(item.starts_at)), height = Math.max(22, (item.minutes / 60) * ROW - 3);
+                const past = Date.parse(item.starts_at) + item.minutes * 60000 < now;
+                const pending = past && item.lesson?.outcome === "pending";
                 return (
-                  <button type="button" key={s.id} className="cal-event" data-color={s.color} data-past={past || undefined} data-attention={pending || undefined}
-                    data-dragging={ghost?.id === s.id || undefined}
-                    style={{ top, height }} aria-label={`${s.title}, ${timeOf(s.starts_at)}${pending ? `, ${t("cần xác nhận")}` : ""}`}
-                    onPointerDown={(e) => onPointerDown(e, s)} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(s, e.currentTarget); } }}>
-                    <strong>{s.title}</strong>
-                    <span>{timeOf(s.starts_at)}</span>
+                  <button type="button" key={item.key} className="cal-event" data-kind={item.kind} data-color={item.color} data-past={past || undefined} data-attention={pending || undefined}
+                    data-dragging={ghost?.key === item.key || undefined}
+                    style={{ top, height }} aria-label={`${item.title}, ${timeOf(item.starts_at)}${pending ? `, ${t("cần xác nhận")}` : ""}`}
+                    onPointerDown={(e) => onPointerDown(e, item)} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.lesson ? onOpen(item.lesson, e.currentTarget) : onOpenEvent(item.event!); } }}>
+                    <strong>{item.title}</strong>
+                    <span>{timeOf(item.starts_at)}</span>
                   </button>
                 );
               })}
               {ghost && ghost.day === i && <span className="cal-ghost" style={{ top: ghost.top, height: ghost.height }} />}
+              {draft && draft.day === i && <span className="cal-draft" style={{ top: topOf(draft.from), height: Math.max(18, ((draft.to - draft.from) / 60) * ROW - 2) }}>{clock(draft.from)}–{clock(draft.to)}</span>}
               {key === today && nowTop >= 0 && nowTop <= HOURS.length * ROW && <span className="cal-now" style={{ top: nowTop }} aria-hidden="true" />}
             </div>
           ))}

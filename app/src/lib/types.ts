@@ -309,3 +309,5 @@ export type ClassInfo = {
   materials?: { id: number; session_id: number | null; title: string; url: string; note: string; created_at: string }[];
   moves?: { id: number; session_id: number; requested_by: number; starts_at: string }[];
 };
+
+export type CalendarEvent = { id: number; title: string; starts_at: string; ends_at: string; color: string; note: string };
