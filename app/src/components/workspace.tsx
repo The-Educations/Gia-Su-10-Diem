@@ -5,7 +5,6 @@ import {
   ChevronRight,
   CalendarDays,
   ArrowUpRight,
-  type LucideIcon,
 } from "lucide-react";
 import { CountingNumber } from "@animate-ui/react/primitives/texts/counting-number";
 import { Effects } from "@animate-ui/react/primitives/effects/effect";
@@ -17,16 +16,15 @@ import type { Booking } from "@/lib/types";
 export function WorkspaceStats({
   items,
 }: {
-  items: { label: string; value: number; icon: LucideIcon; to?: string }[];
+  items: { label: string; value: number; to?: string }[];
 }) {
   return (
     <div className="workspace-metrics">
-      {items.map(({ label, value, icon: Icon, to }) => {
+      {items.map(({ label, value, to }) => {
         const content = <>
-          <span className="metric-icon"><Icon size={20} aria-hidden="true" /></span>
           <span className="metric-label">{label}</span>
           <strong><CountingNumber number={value} inView /></strong>
-          {to && <span className="metric-open" aria-hidden="true"><ArrowUpRight size={18} /></span>}
+          {to && <span className="metric-open" aria-hidden="true"><ArrowUpRight size={16} /></span>}
         </>;
         return to ? <Link className="workspace-metric" to={to} aria-label={`Xem ${label.toLowerCase()}: ${value}`} key={label}>{content}</Link>
           : <div className="workspace-metric" key={label}>{content}</div>;

@@ -93,12 +93,12 @@ test("guest filters, subject navigation and responsive layouts", async ({
     ).toBe(true);
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Mở điều hướng" }).click();
+  await page.getByRole("button", { name: "Thêm", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Mở điều hướng" }),
+    page.getByRole("button", { name: "Thêm", exact: true }),
   ).toBeFocused();
   expect(errors).toEqual([]);
 });

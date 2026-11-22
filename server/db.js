@@ -1,6 +1,7 @@
 import { migrateGoogleCalendar } from "./google-calendar-schema.js";
 import { migrateCommunity } from "./community-schema.js";
 import { migrateTrust } from "./trust-schema.js";
+import { migrateNotifications } from "./notifications.js";
 import {
   randomBytes,
   scrypt as scryptCallback,
@@ -214,6 +215,7 @@ export function migrateDatabase(db) {
   }
   migrateGoogleCalendar(db);
   migrateTrust(db);
+  migrateNotifications(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

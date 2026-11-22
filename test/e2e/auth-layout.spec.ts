@@ -62,7 +62,7 @@ test("illustrated login stays usable across desktop, mobile, email and registrat
   await page.getByRole("link", { name: "Tìm gia sư", exact: true }).click();
   await expect(page).toHaveURL(/\/app\/tutors$/);
   await expect(
-    page.getByRole("button", { name: "Mở điều hướng" }),
+    page.getByRole("button", { name: "Thêm", exact: true }),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });

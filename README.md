@@ -50,7 +50,7 @@ npm run preview
 - **Gia sư:** tải ảnh đại diện và ảnh bìa, khai báo chuyên môn / mục tiêu, gửi duyệt hồ sơ, thêm giờ trống, nhận / từ chối / hủy / hoàn thành buổi, nhắn tin và ghi chú / liên kết phòng học.
 - **Quản trị:** duyệt hoặc yêu cầu bổ sung hồ sơ, khóa / mở tài khoản, chỉnh môn học và mục kỳ thi, xem lịch và nhật ký thao tác.
 - **Không gian theo vai trò:** lịch tuần và buổi tiếp theo cho học sinh; yêu cầu chờ và mức hoàn thiện hồ sơ cho gia sư; hàng đợi duyệt có bộ lọc cho admin. Studio chia tab Ảnh hồ sơ / Hồ sơ / Giờ trống, giữ bản nháp khi đổi tab.
-- **Giao diện:** nền giấy ấm, đỏ sẫm, Be Vietnam Pro / Lora, shadcn + Animate UI, menu di động, trạng thái tải / lỗi / trống và reduced motion.
+- **Giao diện:** nền giấy ấm, đỏ sẫm, Be Vietnam Pro / Lora, shadcn + Animate UI; sidebar theo vai trò, thanh dưới trên điện thoại/iPad, chuông thông báo, màn hình mở app ~1 giây, song ngữ VI/EN, trạng thái tải / lỗi / trống và reduced motion.
 
 ## Kiểm tra
 
