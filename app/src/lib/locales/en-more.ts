@@ -1450,4 +1450,5 @@ export const enMore: Record<string, string> = {
   "Tất cả gia sư": "All tutors",
   "Giờ gia sư rảnh": "Tutor's free hours",
   "Bộ lọc": "Filters",
+  "Phụ huynh nhập mã này để theo dõi lịch học và nạp tiền cho bạn.": "A parent enters this code to follow your lessons and top up your balance.",
 };

@@ -45,7 +45,7 @@ export function StudentCode() {
   return (
     <section className="family-code-card">
       <h2>{t("Liên kết với phụ huynh")}</h2>
-      <p>{t("Phụ huynh nhập mã này để theo dõi lịch học, nạp tiền và gửi offer giúp bạn.")}</p>
+      <p>{t("Phụ huynh nhập mã này để theo dõi lịch học và nạp tiền cho bạn.")}</p>
       <div className="family-code">
         <strong>{f.code}</strong>
         <Button variant="ghost" size="icon" aria-label={t("Chép mã")} onClick={() => navigator.clipboard?.writeText(f.code).then(() => toast.success(t("Đã chép")))}><Copy /></Button>
