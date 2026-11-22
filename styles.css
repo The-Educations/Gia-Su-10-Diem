@@ -1503,3 +1503,7 @@ footer {
     opacity: 1;
   }
 }
+.nav-inner > .lang-switch { margin-left: -12px; }
+.lang-switch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line, rgba(0,0,0,.12)); border-radius: 999px; }
+.lang-switch button { min-width: 34px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; color: inherit; }
+.lang-switch button[aria-pressed="true"] { background: #1f1d1a; color: #fbf7ef; }

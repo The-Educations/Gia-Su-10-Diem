@@ -3,6 +3,11 @@ import { renderSeo } from "../server/seo.js";
 const i = JSON.parse(fs.readFileSync("inputs.json", "utf8"));
 const css = fs.readFileSync("styles.css", "utf8");
 const script = fs.readFileSync("scripts/site.js", "utf8");
+// English for the landing comes from the app's dictionaries, limited to strings on this page.
+const dictionary = {};
+for (const file of ["app/src/lib/locales/en.ts", "app/src/lib/locales/en-more.ts"])
+  for (const m of fs.readFileSync(file, "utf8").matchAll(/^\s*("(?:[^"\\]|\\.)*"):\s*("(?:[^"\\]|\\.)*"),?$/gm))
+    dictionary[JSON.parse(m[1])] ??= JSON.parse(m[2]);
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -71,6 +76,7 @@ const html = `<!DOCTYPE html>
 <header class='nav'>
   <div class='container nav-inner'>
     <a href='/' class='brand' aria-label='Gia Sư 10 Điểm — Trang chủ'>${brand}</a>
+    <div class='lang-switch' role='group' aria-label='Ngôn ngữ' translate='no'><button type='button' data-lang='vi' aria-label='Tiếng Việt'>VI</button><button type='button' data-lang='en' aria-label='English'>EN</button></div>
     <a class='te-brand' href='#top' aria-label='The Educations, về đầu trang'>${teLogo}</a>
     <nav class='nav-links' aria-label='Điều hướng chính'>${navLinks}</nav>
     <a class='nav-login' href='/app/auth'>Tài khoản ${arrow}</a>
@@ -106,7 +112,7 @@ const html = `<!DOCTYPE html>
 </section>
 <section class='subjects section-space' id='labs' aria-labelledby='labs-title' data-od-id='labs'>
   <div class='container'>
-    <div class='section-head'><h2 id='labs-title' data-reveal>Hôm nay, em muốn<br><em>hiểu thêm điều gì?</em></h2><a class='text-link' href='/app/library'>Tất cả môn học & kỳ thi ${arrow}</a></div>
+    <div class='section-head'><h2 id='labs-title' data-reveal>Hôm nay, em muốn<br><em>hiểu thêm điều gì?</em></h2><a class='text-link' href='/app/tutors'>Tất cả gia sư ${arrow}</a></div>
     <div class='course-controls'><div class='pills' aria-label='Lọc môn học'>${i.labs.pills.map((p) => `<button class='pill${p.active ? " active" : ""}' type='button' data-filter='${p.key}' aria-pressed='${!!p.active}'>${escape(p.label)}</button>`).join("")}</div><input id='course-search' type='search' placeholder='Tìm môn học' aria-label='Tìm môn học'></div>
     <p id='course-count' class='sr-only' role='status' aria-live='polite'>5 chương trình</p>
     <div class='subject-list' id='labs-container'>${i.labs.cards
@@ -129,9 +135,9 @@ const html = `<!DOCTYPE html>
     <div class='journey-copy'>
       <h2 id='journey-title'>Từ lời chào đầu tiên.<br><em>Đến giờ học của em.</em></h2>
       <ol class='journey-steps'>
-        <li><span>01</span><div><h3>Chọn người phù hợp.</h3><p>Xem chuyên môn, cách dạy, học phí và CV của gia sư.</p><a href='/app/tutors'>Khám phá hồ sơ ${arrow}</a></div></li>
-        <li><span>02</span><div><h3>Cứ hỏi, trước khi học.</h3><p>Nhắn trực tiếp để trao đổi mục tiêu và những điều em còn băn khoăn.</p><a href='/app/tutors'>Tìm người để trò chuyện ${arrow}</a></div></li>
-        <li><span>03</span><div><h3>Hẹn một giờ tiến bộ.</h3><p>Chọn giờ trống, gửi yêu cầu và nhận xác nhận từ gia sư.</p><a href='/app/auth'>Tạo tài khoản ${arrow}</a></div></li>
+        <li><span>01</span><div><h3>Chọn người phù hợp.</h3><p>Trường học, giải thưởng và chứng chỉ của gia sư đều đã được đối chiếu minh chứng.</p><a href='/app/tutors'>Khám phá hồ sơ ${arrow}</a></div></li>
+        <li><span>02</span><div><h3>Gửi một offer.</h3><p>Chọn số buổi, lịch và học phí. Tiền được giữ an toàn đến khi gia sư nhận lớp.</p><a href='/app/tutors'>Tìm gia sư ${arrow}</a></div></li>
+        <li><span>03</span><div><h3>Học và cùng xác nhận.</h3><p>Sau mỗi buổi, cả hai bên bấm xác nhận. Buổi không diễn ra được hoàn tiền.</p><a href='/app/auth?mode=register'>Tạo tài khoản ${arrow}</a></div></li>
       </ol>
     </div>
     <div class='learning-desk' aria-hidden='true'>
@@ -147,8 +153,8 @@ const html = `<!DOCTYPE html>
   <div class='container tutor-grid'>
     <div class='tutor-art'>${art("desk", "", "0.12")}<span class='tutor-handwriting' data-parallax='-0.1'>Một góc học.<br>Mở nhiều chân trời.</span></div>
     <div class='tutor-copy'><h2 id='tutor-title' data-reveal>Giỏi một điều.<br><em>Truyền đi nhiều điều.</em></h2><p class='lead' data-reveal>Đưa chuyên môn và cách dạy của bạn đến với những học sinh đang cần.</p>
-      <ul class='tutor-features'><li data-reveal><h3>Hồ sơ mang dấu ấn của bạn</h3><p>Giới thiệu kinh nghiệm, môn nhận dạy, ảnh đại diện và CV.</p></li><li data-reveal><h3>Lịch dạy do bạn chủ động</h3><p>Mở giờ trống, nhận yêu cầu học và trao đổi ngay trong ứng dụng.</p></li></ul>
-      <a class='button primary' href='/app/auth'>Trở thành gia sư ${arrow}</a>
+      <ul class='tutor-features'><li data-reveal><h3>Hồ sơ đã xác minh</h3><p>Chọn trường, giải thưởng, chứng chỉ từ danh sách và kèm minh chứng. Học sinh thấy dấu Đã xác minh.</p></li><li data-reveal><h3>Lớp học trong một nơi</h3><p>Nhận offer, gửi hồ sơ vào bài Tìm gia sư, quản lý lịch, bài giảng và học phí.</p></li></ul>
+      <a class='button primary' href='/app/auth?mode=register'>Trở thành gia sư ${arrow}</a>
     </div>
   </div>
 </section>
@@ -165,11 +171,15 @@ const html = `<!DOCTYPE html>
   <div class='contact-orbit' aria-hidden='true'>${art("orbit", "", "-0.08")}</div>
 </section>
 </main>
-<footer><div class='container'><div class='footer-top'><div class='footer-brand'><a class='brand' href='/'>${brand}</a>${socialLinks}</div><nav aria-label='Điều hướng cuối trang'><a href='/app/tutors'>Tìm gia sư</a><a href='/app/library'>Tìm môn học</a><a href='/app/auth'>Tài khoản</a><a href='/privacy'>Quyền riêng tư</a><a href='/terms'>Điều khoản dịch vụ</a></nav></div><div class='footer-word' aria-hidden='true' data-parallax='0.05'>Học. <em>Hiểu.</em> Lớn lên.</div><div class='footer-bottom'><span>© ${i.brand.year} Gia Sư 10 Điểm</span><a href='#top'>Về đầu trang ↑</a></div></div></footer>
+<footer><div class='container'><div class='footer-top'><div class='footer-brand'><a class='brand' href='/'>${brand}</a>${socialLinks}</div><nav aria-label='Điều hướng cuối trang'><a href='/app/tutors'>Tìm gia sư</a><a href='/app/community'>Cộng đồng</a><a href='/app/auth'>Tài khoản</a><a href='/privacy'>Quyền riêng tư</a><a href='/terms'>Điều khoản dịch vụ</a></nav></div><div class='footer-word' aria-hidden='true' data-parallax='0.05'>Học. <em>Hiểu.</em> Lớn lên.</div><div class='footer-bottom'><span>© ${i.brand.year} Gia Sư 10 Điểm</span><a href='#top'>Về đầu trang ↑</a></div></div></footer>
 </div>
-<script>${script}</script>
+<script>window.__EN=__EN_DICT__;${script}</script>
 </body></html>`;
-fs.writeFileSync("index.html", renderSeo(html, "/"));
+// Subject names arrive from the API after load, so they ship too.
+const { subjects: catalogSubjects } = await import("../server/catalog.js");
+const extra = new Set(["Tất cả môn học", ...catalogSubjects.map((row) => row[1])]);
+const onPage = Object.fromEntries(Object.entries(dictionary).filter(([vi]) => vi.length > 1 && (extra.has(vi) || html.includes(vi) || html.includes(escape(vi)))));
+fs.writeFileSync("index.html", renderSeo(html.replace("__EN_DICT__", JSON.stringify(onPage).replace(/</g, "\\u003c")), "/"));
 console.log(
   `Built Vietnamese editorial landing (${(html.length / 1024).toFixed(1)} KB).`,
 );
