@@ -205,19 +205,19 @@ export function ClassDetail() {
 }
 
 function SessionRow({ s, tutor, onChanged }: { s: ClassSession; tutor: boolean; onChanged: () => void }) {
-  const { user } = useApp();
+  const { user } = useApp(), { t } = useI18n();
   if (user?.role === "admin")
     return (
       <li className="session-row" data-color={s.color}>
         <time dateTime={s.starts_at}><strong>{dayOf(s.starts_at)}</strong><span>{timeOf(s.starts_at)}</span></time>
         <div>
-          <span>{s.student_name} · {s.outcome || s.status}</span>
+          <span>{s.student_name} · {t(({ pending: "Chờ xác nhận", confirmed: "Đã xác nhận", charged: "Hủy sát giờ, vẫn tính phí", refunded: "Đã hủy, hoàn tiền", disputed: "Đang xử lý báo cáo" } as Record<string, string>)[s.outcome || ""] || (s.status === "cancelled" ? "Đã hủy" : "Đã lên lịch"))}</span>
           {s.status === "scheduled" && (
             <Button size="sm" variant="ghost" className="danger-text" onClick={async () => {
-              const note = prompt("Lý do hủy buổi (gửi cho hai bên)");
+              const note = prompt(t("Lý do hủy buổi (gửi cho hai bên)"));
               if (!note) return;
               try { await api(`/admin/sessions/${s.id}/cancel`, "POST", { note }); onChanged(); } catch (e) { toast.error((e as Error).message); }
-            }}>Hủy buổi (quản trị)</Button>
+            }}>{t("Hủy buổi (quản trị)")}</Button>
           )}
         </div>
       </li>
@@ -226,7 +226,7 @@ function SessionRow({ s, tutor, onChanged }: { s: ClassSession; tutor: boolean; 
     <li className="session-row" data-color={s.color}>
       <time dateTime={s.starts_at}><strong>{dayOf(s.starts_at)}</strong><span>{timeOf(s.starts_at)}</span></time>
       <div>
-        <span>{tutor ? s.student_name : s.tutor_name}{s.moved_from && " · đã dời lịch"}</span>
+        <span>{tutor ? s.student_name : s.tutor_name}{s.moved_from && ` · ${t("đã dời lịch")}`}</span>
         <SessionActions s={s} onChanged={onChanged} />
       </div>
     </li>

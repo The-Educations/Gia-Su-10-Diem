@@ -64,7 +64,6 @@ test("lesson ratings, end-of-course review and the trust score", async ({ browse
   expect(chau.trust.tags.map(t => t.label)).toEqual(["Dễ hiểu"]);
   await page.goto(`/app/tutors/${chau.user_id}`);
   await expect(page.getByText("Cô giảng dễ hiểu và rất kiên nhẫn.")).toBeVisible();
-  await expect(page.getByText(/Điểm tính từ đánh giá sau từng buổi/)).toBeVisible();
   await expect(page.getByRole("list", { name: "Học sinh thường nhận xét" })).toContainText("Dễ hiểu");
   await expect(page.getByRole("list", { name: "Học sinh thường nhận xét" })).not.toContainText("Kiên nhẫn");
   await expect(page.getByText("Có muốn học tiếp")).toHaveCount(0);

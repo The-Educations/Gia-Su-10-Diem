@@ -8,7 +8,7 @@ test("an accepted offer opens a class with lessons on the calendar, materials an
   const student = await sc.newPage(), tutor = await tc.newPage();
   const errors: string[] = [];
   for (const p of [student, tutor]) p.on("pageerror", (e) => errors.push(e.message));
-  await login(student, "community-parent"); await login(tutor, "nam");
+  await login(student, "profile-other"); await login(tutor, "nam");
   const nam = await (await tutor.request.get("/api/tutor/profile")).json();
   const dep = await (await student.request.post("/api/wallet/deposits", { data: { amount: 2000000 } })).json();
   expect((await student.request.post(`/api/wallet/deposits/${dep.id}/simulate`, { data: {} })).ok()).toBe(true);

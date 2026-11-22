@@ -177,18 +177,33 @@ Profile removals, hidden/rejected posts, and removed comments enqueue an email i
 
 ## SePay: Số dư học phí
 
-Nạp tiền chỉ bật trên production khi có đủ `SEPAY_WEBHOOK_SECRET`, `SEPAY_BANK_ACCOUNT` và `SEPAY_BANK_CODE`. Thiếu một trong ba thì nút Nạp tiền tắt và webhook trả 503 (fail closed). Local không có khóa thì nạp tiền được giả lập bằng nút "Giả lập tiền đã về".
+Nạp tiền dùng **Cổng thanh toán SePay** (chuyển khoản QR, NAPAS, thẻ). Website ký form thanh toán bằng HMAC-SHA256, người dùng thanh toán trên trang của SePay, rồi SePay gọi **IPN** về website. Số dư chỉ được cộng khi IPN báo `ORDER_PAID`, đơn `CAPTURED`, giao dịch `APPROVED` và đúng số tiền của lệnh nạp. Mỗi giao dịch chỉ được cộng một lần.
 
-1. my.sepay.vn → **Công ty → Cấu hình chung → Cấu trúc mã thanh toán**: tiền tố `GSD` (hoặc giá trị của `SEPAY_CODE_PREFIX`), kiểu **Số và chữ**, độ dài hậu tố tối thiểu và tối đa đều là **8**.
-2. my.sepay.vn → **Webhooks → Thêm webhook**: sự kiện **Tiền vào**, chỉ tài khoản nhận học phí, URL `https://giasudiem10.online/api/sepay/webhook`, xác thực **HMAC-SHA256**, bật **Dùng để xác thực thanh toán**, tắt **Chỉ gửi khi có mã thanh toán** và **Lọc theo mã thanh toán**.
-3. Lưu bí mật HMAC và thông tin tài khoản vào Worker (không commit):
+Ba secret của Worker (không commit):
+
+| Secret | Lấy ở đâu |
+|---|---|
+| `SEPAY_MERCHANT_ID` | Cổng thanh toán → Cấu hình → Thông tin đơn vị (Mã đơn vị, ví dụ `SP-LIVE-…`) |
+| `SEPAY_SECRET_KEY` | Cùng trang, Secret Key của đơn vị (`spsk_live_…`) |
+| `SEPAY_IPN_SECRET` | Chuỗi bạn tự đặt, nhập giống hệt ở tab IPN |
 
 ```bash
-npx wrangler secret put SEPAY_WEBHOOK_SECRET
-npx wrangler secret put SEPAY_BANK_ACCOUNT     # số tài khoản nhận
-npx wrangler secret put SEPAY_BANK_CODE        # mã ngân hàng VietQR, ví dụ MB, VCB, TCB
-npx wrangler secret put SEPAY_ACCOUNT_NAME     # tên chủ tài khoản, hiện cho người nạp
+npx wrangler secret put SEPAY_MERCHANT_ID
+npx wrangler secret put SEPAY_SECRET_KEY
+npx wrangler secret put SEPAY_IPN_SECRET
 ```
 
-4. Thử bằng **Test mode → Mô phỏng giao dịch** với nội dung là một mã `GSD…` vừa tạo trên trang Số dư, rồi một lần chuyển khoản thật nhỏ. Webhook trả `{"success": true}` khi đã cộng số dư; mã không khớp được ghi vào "Tiền về chưa khớp mã" ở Quản trị → Tài chính.
-5. Sau khi chạy thật: bật **Tự động gửi lại khi server trả lỗi** và cảnh báo lỗi liên tiếp trong cấu hình webhook.
+Cấu hình tab **IPN** trong my.sepay.vn:
+
+- IPN URL: `https://giasudiem10.online/api/sepay/ipn`
+- Auth Type: **Secret Key**, giá trị = `SEPAY_IPN_SECRET`
+- Content Type: `application/json`
+- Trạng thái: Kích hoạt IPN
+
+Thiếu một trong ba secret thì nút Nạp tiền tắt trên production và IPN trả 503. Ở máy local không có secret thì nạp tiền được giả lập. Thử sandbox: thêm `SEPAY_ENV=sandbox` và dùng khóa `spsk_test_…`.
+
+Sau khi chạy: nạp thử 50.000đ, kiểm tra **Nhật ký IPN** trên SePay trả 200 và số dư tăng. Giao dịch không khớp hiện ở Quản trị → Tài chính → "Tiền về chưa khớp mã".
+
+Secret Key của đơn vị chỉ hiện một lần. Nếu key bị lộ (gửi qua chat, commit lên Git), tạo lại ở trang Thông tin đơn vị rồi chạy lại `npx wrangler secret put SEPAY_SECRET_KEY`.
+
+Webhook chuyển khoản ngân hàng (`/api/sepay/webhook`, `SEPAY_WEBHOOK_SECRET`, `SEPAY_BANK_ACCOUNT`, `SEPAY_BANK_CODE`) vẫn được hỗ trợ nếu sau này cần nhận chuyển khoản thẳng vào tài khoản ngân hàng.

@@ -2251,7 +2251,7 @@ test("tutor credentials need proof, stay private and show only approved labels p
 test("wallet deposits, SePay webhook verdicts, offers holding money and tutor credits", async (t) => {
   const { createHmac } = await import("node:crypto");
   const secret = "test-sepay-secret";
-  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", ready: true } });
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
   const student = client(), tutor = client(), admin = client();
   const s = await student.login("student"), u = await tutor.login("chau"); await admin.login("admin");
   const hook = (payload, key = secret, stamp = Math.floor(Date.now() / 1000)) => {
@@ -2421,9 +2421,11 @@ test("parents link with a child's code, top up and follow the child; community t
   assert.equal((await child.request("/wallet")).data.available, 600000);
   assert.equal((await other.request("/wallet/deposits", "POST", { amount: 600000, student_id: c.id })).status, 403);
   const start = new Date(Date.now() + 7 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
-  const sent = await parent.request("/proposals", "POST", { tutor_id: u.id, student_id: c.id, subject_id: "toan", mode: "online", sessions: 2, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start });
+  // Parents follow; the child sends the offer from the student account.
+  const offerBody = { tutor_id: u.id, student_id: c.id, subject_id: "toan", mode: "online", sessions: 2, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start };
+  assert.equal((await parent.request("/proposals", "POST", offerBody)).status, 403);
+  const sent = await child.request("/proposals", "POST", offerBody);
   assert.equal(sent.status, 201);
-  assert.equal(sent.data.student_id, c.id);
   assert.ok((await parent.request("/proposals")).data.some(p => p.id === sent.data.id));
   const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
   assert.equal((await parent.request(`/classes/${accepted.data.class_id}`)).status, 200);
@@ -2449,4 +2451,72 @@ test("parents link with a child's code, top up and follow the child; community t
   assert.equal((await other.request(`/community/posts/${pid}/pitches`)).data.pitches, undefined);
   assert.equal((await child.request(`/community/posts/${pid}/close`, "POST")).status, 200);
   assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 409);
+});
+test("quick demo sign-in exists only outside production", async (t) => {
+  const local = await fixture(t), live = await fixture(t, { production: true });
+  const a = local.client(), b = live.client();
+  assert.equal((await a.request("/auth/demo")).data.enabled, true);
+  const me = await a.request("/auth/demo", "POST", { role: "tutor" });
+  assert.equal(me.data.user.role, "tutor");
+  assert.equal((await b.request("/auth/demo")).data.enabled, false);
+  assert.equal((await b.request("/auth/demo", "POST", { role: "admin" })).status, 404);
+});
+
+test("students verify with a school record; one record and one student code per account; tutors cannot share proof", async (t) => {
+  const { client, base, db } = await fixture(t), a = client(), b = client(), admin = client(), tutor = client(), other = client();
+  for (const [c, email] of [[a, "hs-a@example.test"], [b, "hs-b@example.test"]]) {
+    await c.request("/auth/register", "POST", { name: "Học sinh", email, password: "StudentStudy2026!" });
+    db.prepare("UPDATE users SET onboarding_step=3 WHERE email=?").run(email);
+  }
+  await admin.login("admin"); const u = await tutor.login("chau"); await other.login("nam");
+  const pdf = Buffer.from("%PDF-1.4 học bạ của bạn A");
+  const start = new Date(Date.now() + 7 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
+  const offer = { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 1, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start };
+  assert.equal((await a.request("/proposals", "POST", offer)).status, 403);
+  assert.equal((await a.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "HS 0001" })).status, 400);
+  const res = await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: a.cookie, "Content-Type": "application/pdf" }, body: pdf });
+  assert.equal(res.status, 201);
+  assert.equal((await a.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "hs 0001" })).data.status, "pending");
+  // The same file or the same student code cannot verify a second account.
+  assert.equal((await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: b.cookie, "Content-Type": "application/pdf" }, body: pdf })).status, 409);
+  await fetch(base + "/account/verification/files", { method: "POST", headers: { Cookie: b.cookie, "Content-Type": "application/pdf" }, body: Buffer.from("%PDF-1.4 bạn B") });
+  assert.equal((await b.request("/account/verification", "PUT", { school: "THCS A", grade: "Lớp 9", student_code: "HS0001" })).status, 409);
+  const pending = (await admin.request("/admin/verifications")).data;
+  assert.equal(pending.length, 1);
+  assert.equal((await admin.request(`/admin/verifications/${pending[0].user_id}`, "PATCH", { status: "rejected" })).status, 400);
+  assert.equal((await admin.request(`/admin/verifications/${pending[0].user_id}`, "PATCH", { status: "approved" })).status, 200);
+  const dep = await a.request("/wallet/deposits", "POST", { amount: 200000 });
+  await a.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
+  assert.equal((await a.request("/proposals", "POST", offer)).status, 201);
+  // Tutors: one proof file and one candidate number per tutor.
+  const mine = (await tutor.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0", reference: "VN123456" } })).data;
+  const proof = Buffer.from("%PDF-1.4 IELTS của Châu");
+  assert.equal((await fetch(base + `/tutor/credentials/${mine.id}/files`, { method: "POST", headers: { Cookie: tutor.cookie, "Content-Type": "application/pdf" }, body: proof })).status, 201);
+  const theirs = (await other.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0" } })).data;
+  assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: proof })).status, 409);
+  assert.equal((await other.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "7.0", reference: "VN123456" } })).status, 409);
+  assert.equal((await fetch(base + `/tutor/credentials/${theirs.id}/files`, { method: "POST", headers: { Cookie: other.cookie, "Content-Type": "application/pdf" }, body: pdf })).status, 409);
+});
+test("SePay payment gateway: signed checkout form and IPN credits a top-up once", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const sepay = { secret: "", account: "", bank: "", holder: "", prefix: "GSD", merchant: "SP-TEST-1", merchantSecret: "spsk_test_x", ipnSecret: "ipn-secret-1234567890", sandbox: true, webhook: false, gateway: true, ready: true };
+  const { client, base } = await fixture(t, { sepay, origin: "https://giasu.example" });
+  const s = client(); await s.login("student");
+  const dep = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  assert.equal(dep.checkout.action, "https://pay-sandbox.sepay.vn/v1/checkout/init");
+  const f = dep.checkout.fields;
+  assert.deepEqual(Object.keys(f), ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url", "lang", "signature"]);
+  const signed = ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url"].map(k => `${k}=${f[k]}`).join(",");
+  assert.equal(f.signature, createHmac("sha256", "spsk_test_x").update(signed).digest("base64"));
+  assert.equal(f.order_invoice_number, dep.code);
+  assert.ok(f.success_url.startsWith("https://giasu.example/app/wallet?deposit="));
+  const ipn = (body, key = sepay.ipnSecret) => fetch(base + "/sepay/ipn", { method: "POST", headers: { "Content-Type": "application/json", "X-Secret-Key": key }, body: JSON.stringify(body) });
+  const paid = { timestamp: 1, notification_type: "ORDER_PAID", order: { id: "o-1", order_status: "CAPTURED", order_amount: "300000.00", order_invoice_number: dep.code }, transaction: { id: "tx-1", transaction_status: "APPROVED", transaction_type: "PAYMENT", payment_method: "BANK_TRANSFER" } };
+  assert.equal((await ipn(paid, "wrong-secret-1234567")).status, 401);
+  assert.deepEqual(await (await ipn({ ...paid, transaction: { ...paid.transaction, id: "tx-0" }, order: { ...paid.order, order_amount: "100000" } })).json(), { success: false });
+  assert.deepEqual(await (await ipn(paid)).json(), { success: true });
+  assert.deepEqual(await (await ipn(paid)).json(), { success: true });
+  assert.deepEqual(await (await ipn({ ...paid, transaction: { ...paid.transaction, id: "tx-2" } })).json(), { success: false });
+  assert.equal((await s.request("/wallet")).data.available, 300000);
+  assert.equal((await s.request(`/wallet/deposits/${dep.id}`)).data.checkout, null);
 });

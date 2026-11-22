@@ -11,6 +11,7 @@ import { registerProposals } from "./proposals.js";
 import { registerClasses, classRatings } from "./classes.js";
 import { registerCommunityTopics } from "./community-topics.js";
 import { registerFamily } from "./family.js";
+import { registerStudentVerification } from "./student-verification.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -95,7 +96,7 @@ export function createApi(
         !(
           (req.method === "PUT" && /^\/community\/me\/(avatar|cover)$/.test(req.path)) ||
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path)))
+          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path) || req.path === "/account/verification/files"))
         ) &&
         !req.is("application/json")
       )
@@ -258,6 +259,7 @@ export function createApi(
   registerTutorThemes(app, db, auth, audit);
   registerUploads(app, db, auth, audit, processPhoto);
   registerCredentials(app, db, auth, audit, processPhoto);
+  registerStudentVerification(app, db, auth, audit, processPhoto);
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
@@ -269,7 +271,7 @@ export function createApi(
   registerWeeklyRequests(app, db, auth);
   registerOffers(app, db, auth);
   registerNotifications(app, db, auth);
-  const walletApi = registerWallet(app, db, auth, audit, { production, sepay });
+  const walletApi = registerWallet(app, db, auth, audit, { production, sepay, origin });
   registerProposals(app, db, auth, audit, walletApi);
   registerClasses(app, db, auth, audit);
   registerCommunityTopics(app, db, auth);
@@ -303,6 +305,16 @@ export function createApi(
       );
     if (user.role === "admin" && isGoogleAdmin(user.email, google.adminEmail))
       fail(403, "Tài khoản này cần đăng nhập bằng Google.");
+    res.json({ user: session(res, user) });
+  });
+  // Local development only: one tap into a demo account of each role.
+  const DEMO = { student: "student", parent: "parent", tutor: "chau", admin: "admin" };
+  app.get("/api/auth/demo", (req, res) => res.json({ enabled: !production }));
+  app.post("/api/auth/demo", (req, res) => {
+    if (production) fail(404, "Không có chức năng này.");
+    const { role } = z.object({ role: z.enum(["student", "parent", "tutor", "admin"]) }).parse(req.body);
+    const user = one(db, "SELECT * FROM users WHERE email=? AND demo=1 AND status='active'", `${DEMO[role]}@demo.giasu.test`);
+    if (!user) fail(404, "Chưa có dữ liệu mẫu. Chạy npm run seed:demo.");
     res.json({ user: session(res, user) });
   });
   app.post("/api/auth/logout", (req, res) => {

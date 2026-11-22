@@ -31,6 +31,47 @@ const KIND: Record<string, string> = {
   lesson_refund: "Hoàn học phí",
 };
 
+function payOnSepay(checkout: NonNullable<Deposit["checkout"]>) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = checkout.action;
+  for (const [name, value] of Object.entries(checkout.fields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.append(input);
+  }
+  document.body.append(form);
+  form.submit();
+}
+
+// Back from SePay: the balance updates when SePay's notice arrives, usually within seconds.
+function ReturnedFromSepay({ id, result, onPaid }: { id: number; result: string; onPaid: () => void }) {
+  const { t } = useI18n(), [d, setD] = useState<Deposit | null>(null), box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      try {
+        const next = await api<Deposit>(`/wallet/deposits/${id}`);
+        if (stop) return;
+        setD(next);
+        if (next.status === "paid") { celebrate(box.current); onPaid(); return; }
+      } catch { /* keep waiting */ }
+      if (!stop && result === "success") setTimeout(tick, 3000);
+    };
+    tick();
+    return () => { stop = true; };
+  }, [id]);
+  const paid = d?.status === "paid";
+  return (
+    <div className="sepay-return" ref={box} role="status" data-state={paid ? "paid" : result}>
+      {paid ? <CircleCheck aria-hidden="true" /> : result === "success" ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
+      <span>{t(paid ? "Đã nhận {amount} vào số dư" : result === "success" ? "Đang chờ SePay xác nhận thanh toán…" : result === "cancel" ? "Bạn đã hủy thanh toán. Số dư chưa thay đổi." : "Thanh toán chưa thành công. Bạn có thể thử lại.", { amount: money(d?.received || 0) })}</span>
+    </div>
+  );
+}
+
 function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: boolean; onOpenChange: (v: boolean) => void; min: number; onPaid: () => void; forStudent?: number }) {
   const { t } = useI18n(),
     [amount, setAmount] = useState(500000),
@@ -57,7 +98,12 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
     e.preventDefault();
     setBusy(true);
     setError("");
-    try { setDeposit(await api<Deposit>("/wallet/deposits", "POST", { amount, ...(forStudent ? { student_id: forStudent } : {}) })); }
+    try {
+      const d = await api<Deposit>("/wallet/deposits", "POST", { amount, ...(forStudent ? { student_id: forStudent } : {}) });
+      // The payment gateway takes over: post the signed form to SePay's page.
+      if (d.checkout) return payOnSepay(d.checkout);
+      setDeposit(d);
+    }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   }
@@ -160,6 +206,7 @@ export default function WalletPage() {
     [params] = useSearchParams(),
     forStudent = Number(params.get("for")) || undefined;
   useEffect(() => { if (forStudent) setDepositOpen(true); }, [forStudent]);
+  const returned = Number(params.get("deposit")) || 0;
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
   const w = result.data, tutor = user?.role === "tutor";
@@ -172,6 +219,7 @@ export default function WalletPage() {
   return (
     <Page>
       <Heading title={t("Số dư học phí")} />
+      {returned > 0 && <ReturnedFromSepay id={returned} result={params.get("result") || ""} onPaid={refresh} />}
       {w.payments === "off" && <p className="studio-note" role="status">{t("Nạp tiền đang tạm đóng trong lúc nền tảng hoàn tất kết nối ngân hàng.")}</p>}
       <section className="balance-card">
         <div>

@@ -188,6 +188,13 @@ function seedClasses(db) {
     move(db, student, "offer_hold", { amount: -2200000, held: 2200000, ref: `proposal:${p2}` });
     proposal("tutor", nam, "vat-li", 6, 200000, [{ weekday: 5, hour: 9, minute: 0 }], day(3), "pending", "Thầy thấy em cần củng cố phần điện học, mình học 6 buổi nhé.");
     run(db, "UPDATE wallets SET credits_free=8 WHERE user_id=?", nam);
+    // A parent linked to the demo student, following the same class.
+    const parent = id("parent");
+    if (parent) {
+      run(db, "UPDATE users SET learner_type='parent',display_name='Mẹ Minh Anh' WHERE id=?", parent);
+      run(db, "INSERT OR IGNORE INTO family_links(parent_id,student_id) VALUES (?,?)", parent, student);
+      move(db, parent, "deposit", { amount: 1000000, ref: "demo", note: "Nạp mẫu" });
+    }
     run(db, "INSERT INTO demo_seeds VALUES ('classes-v1')");
     db.exec("COMMIT");
   } catch (e) {

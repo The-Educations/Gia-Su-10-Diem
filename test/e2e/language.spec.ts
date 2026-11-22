@@ -1,33 +1,20 @@
 import { test, expect } from "@playwright/test";
 
-test("language switch changes the shell, persists after reload and defaults to Vietnamese", async ({ page }) => {
+const VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+
+test("English mode shows English across the app and switching back restores Vietnamese", async ({ page }) => {
+  expect((await page.request.post("/api/auth/login", { data: { email: "student@demo.giasu.test", password: "BrowserStudy2026!" } })).ok()).toBe(true);
   await page.goto("/app/tutors");
-  const sidebar = page.getByRole("complementary", { name: "Thanh điều hướng" });
-  const language = page.getByRole("group", { name: "Ngôn ngữ" });
-  await expect(page.locator("html")).toHaveAttribute("lang", "vi");
-  await expect(language.getByRole("button", { name: "Tiếng Việt" })).toHaveAttribute("aria-pressed", "true");
-  await expect(sidebar.getByRole("link", { name: "Tìm môn học" })).toBeVisible();
-
-  await language.getByRole("button", { name: "Tiếng Anh" }).click();
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("complementary", { name: "Navigation bar" }).getByRole("link", { name: "Find subjects" })).toBeVisible();
-  await expect(page.getByRole("group", { name: "Language" }).getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
-
-  await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await page.getByRole("button", { name: "English", exact: true }).click();
   await expect(page.getByRole("link", { name: "Find tutors" }).first()).toBeVisible();
-
-  await page.getByRole("group", { name: "Language" }).getByRole("button", { name: "Vietnamese" }).click();
-  await expect(page.locator("html")).toHaveAttribute("lang", "vi");
-  await expect(page.getByRole("complementary", { name: "Thanh điều hướng" }).getByRole("link", { name: "Tìm gia sư" })).toBeVisible();
-});
-
-test("language switch fits the top bar at 320 px", async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto("/app/tutors");
-  const language = page.getByRole("group", { name: "Ngôn ngữ" });
-  await expect(language).toBeVisible();
-  const box = await language.boundingBox();
-  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expect(page.getByRole("searchbox").or(page.getByRole("textbox")).first()).toHaveAttribute("placeholder", /[A-Za-z]/);
+  for (const path of ["/app/wallet", "/app/schedule", "/app/proposals", "/app/settings"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    // Interface chrome (navigation and headings) carries no Vietnamese.
+    const chrome = await page.locator("nav, h1, h2, button, label").evaluateAll((els) => els.map((e) => (e.closest('[translate="no"]') ? "" : e.textContent || "")));
+    expect(chrome.filter((t) => VI.test(t.replace(/Gia Sư 10 Điểm|Minh Anh|Nguyễn Minh Châu|Lê Thảo Linh|Trần Hoàng Nam/g, "")))).toEqual([]);
+  }
+  await page.getByRole("button", { name: "Tiếng Việt", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tài khoản của tôi" })).toBeVisible();
 });

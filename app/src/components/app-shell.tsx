@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from 
 
 export function Brand({ to, onClick }: { to: string; onClick?: () => void }) {
   return (
-    <Link className="brand" to={to} aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={onClick}>
+    <Link className="brand" to={to} aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={onClick} translate="no">
       <span className="brand-mark" aria-hidden="true">10<span>đ</span></span>
       <span className="nav-label">Gia Sư<strong>10 Điểm</strong></span>
     </Link>

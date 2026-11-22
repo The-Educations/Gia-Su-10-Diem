@@ -41,6 +41,8 @@ for (const [slug, role, learner] of [
   );
   if (role === "tutor")
     run(db, "INSERT INTO tutors(user_id,status) VALUES (?,?)", id, slug === "profile-tutor" ? "approved" : "pending");
+  if (role === "student" && learner === "student")
+    run(db, "INSERT INTO student_verifications(user_id,school,grade,student_code,status) VALUES (?,?,?,?,'approved')", id, "THCS Mẫu", "Lớp 9", `E2E${id}`);
   if (slug.startsWith("profile-")) run(db, "UPDATE users SET display_name=? WHERE id=?", `Bạn ${slug.slice(8)}`, id);
 }
 db.close();

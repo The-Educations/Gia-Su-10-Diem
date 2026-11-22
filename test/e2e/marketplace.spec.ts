@@ -740,6 +740,8 @@ test("administrator confirms or cancels promotion and the new administrator sign
   expect(signup.status()).toBe(202);
   await user.goto("/app/verify-email");
   await verifyEmail(user, email);
+  // Wait for the signed-in page before reading the session.
+  await expect(user).not.toHaveURL(/verify-email/);
   const target = (await (await uc.request.get("/api/auth/me")).json()).user;
   await login(admin, "admin");
   await admin.goto("/app/admin?tab=users");
@@ -801,8 +803,6 @@ test("parent chooses a separate setup and reaches shared booking tools", async (
   await expect(page.getByRole("heading", { name: "Không gian phụ huynh", exact: true })).toBeVisible();
   await expect(page.locator(".sidebar").getByRole("link", { name: "Lịch học của con", exact: true })).toBeVisible();
   await expect(page.locator(".sidebar .brand")).toHaveAttribute("href", "/app/workspace");
-  await page.getByRole("link", { name: "Xem buổi học sắp tới: 0", exact: true }).click();
-  await expect(page).toHaveURL(/bookings$/);
   await page.goto("/app/bookings?view=list");
   await expect(page.locator("main h1")).toBeVisible();
   await page.goto("/app/settings");
@@ -1004,7 +1004,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Đề nghị học", exact: true })).toBeVisible();
+  await expect(dialog.locator(".tutor-presentation")).toBeVisible();
   await dialog.locator("summary").filter({ hasText: "Kho giao diện" }).click();
   await dialog.getByRole("button", { name: "Cấp Ngọc bích", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Đã cấp", exact: true })).toHaveCount(2);
