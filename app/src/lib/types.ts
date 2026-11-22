@@ -289,3 +289,23 @@ export type Proposal = {
   created_at: string;
   incoming: boolean;
 };
+
+export type ClassSession = {
+  id: number; class_id: number; starts_at: string; minutes: number; status: string; moved_from: string | null;
+  title: string; color: string; tutor_id: number; subject_id: string; mode: string; meeting_url: string;
+  member_id: number | null; tutor_confirmed_at: string | null; student_confirmed_at: string | null;
+  outcome: "pending" | "confirmed" | "charged" | "refunded" | "disputed" | null; rating: number | null;
+  student_id: number | null; student_name: string | null; tutor_name: string;
+};
+export type ClassMember = {
+  id: number; class_id: number; student_id: number; name: string; sessions_total: number; rate: number; held: number;
+  status: string; done: number; remaining: number; published_rating: number | null; review: string; reminded_at: string | null;
+};
+export type ClassInfo = {
+  id: number; tutor_id: number; tutor_name: string; title: string; subject_id: string; subject_name: string; mode: string; area: string;
+  color: string; minutes: number; schedule: { weekday: number; hour: number; minute: number }[]; meeting_url: string; status: string;
+  members: ClassMember[]; next_at?: string | null;
+  sessions?: ClassSession[];
+  materials?: { id: number; session_id: number | null; title: string; url: string; note: string; created_at: string }[];
+  moves?: { id: number; session_id: number; requested_by: number; starts_at: string }[];
+};

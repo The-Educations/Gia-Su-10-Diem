@@ -12,6 +12,7 @@ import {
   UserRoundPen,
   Send,
   Wallet,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 import type { User } from "./types";
@@ -33,6 +34,8 @@ const news = item("/news", "Tin tức", Newspaper);
 const messages = item("/messages", "Tin nhắn", MessageCircle);
 const offers = item("/proposals", "Offer", Send);
 const wallet = item("/wallet", "Số dư", Wallet);
+const classes = item("/classes", "Lớp học", GraduationCap, "Lớp");
+const schedule = item("/schedule", "Lịch", CalendarDays);
 
 export function navigationFor(user: User | null): NavModel {
   if (!user)
@@ -57,7 +60,7 @@ export function navigationFor(user: User | null): NavModel {
     const lessons = item("/bookings", "Lịch dạy của tôi", CalendarDays, "Lịch dạy");
     return {
       home: "/workspace",
-      primary: [overview, lessons, offers, messages, community],
+      primary: [overview, schedule, classes, offers, messages, community],
       groups: [
         {
           label: "Hồ sơ",
@@ -65,11 +68,12 @@ export function navigationFor(user: User | null): NavModel {
             wallet,
             item("/studio", "Hồ sơ gia sư", UserRoundPen),
             item("/calendar", "Giờ trống hằng tuần", CalendarClock),
+            lessons,
           ],
         },
         { label: "Khám phá", items: [find, subjects, news] },
       ],
-      bar: [overview, lessons, offers, messages],
+      bar: [overview, schedule, classes, offers],
     };
   }
   const lessons = item(
@@ -80,19 +84,20 @@ export function navigationFor(user: User | null): NavModel {
   );
   return {
     home: "/workspace",
-    primary: [overview, find, lessons, offers, messages],
+    primary: [overview, find, schedule, classes, offers, messages],
     groups: [
       {
         label: "Của tôi",
         items: [
           wallet,
+          lessons,
           item("/availability", "Lịch rảnh", CalendarClock),
           item("/favorites", "Gia sư đã lưu", Heart),
         ],
       },
       { label: "Khám phá", items: [subjects, community, news] },
     ],
-    bar: [overview, find, lessons, messages],
+    bar: [overview, find, schedule, classes],
   };
 }
 

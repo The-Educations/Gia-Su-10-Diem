@@ -3,6 +3,7 @@ import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { isLiveTutor } from "./tutor-visibility.js";
 import { move, settings, spendCredits, wallet } from "./wallet.js";
+import { startClass } from "./classes.js";
 
 // An offer (Upwork-style proposal) for a package of lessons. A student's offer
 // holds the whole package from their balance until the tutor answers; a tutor's
@@ -71,7 +72,8 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
 
   app.patch("/api/proposals/:id", auth("student", "tutor"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
-    const { action } = z.object({ action: z.enum(["accept", "decline", "withdraw"]) }).parse(req.body);
+    const { action, class_id } = z.object({ action: z.enum(["accept", "decline", "withdraw"]), class_id: z.number().int().positive().optional() }).parse(req.body);
+    let classId = null;
     expireProposals();
     transaction(db, () => {
       const p = get(id);
@@ -89,9 +91,11 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
         run(db, "UPDATE proposals SET held=? WHERE id=?", p.total, id);
       }
       if (action !== "accept" && p.held) move(db, p.student_id, "offer_released", { amount: p.held, held: -p.held, ref: `proposal:${id}` });
+      // An accepted offer becomes a class (or joins one of the tutor's classes).
+      if (action === "accept") classId = startClass(db, get(id), req.user.id === p.tutor_id ? class_id : null);
       notify(db, req.user.id === p.student_id ? p.tutor_id : p.student_id, `proposal_${status}`, { actor: req.user.name, subject: p.subject_name, link: `/proposals?id=${id}` });
     });
     audit(req.user.id, `proposal.${action}`, id);
-    res.json(proposalView(db, [get(id)], req.user)[0]);
+    res.json({ ...proposalView(db, [get(id)], req.user)[0], class_id: classId });
   });
 }
