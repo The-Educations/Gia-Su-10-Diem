@@ -5,6 +5,7 @@ import { api, useLoad } from "@/lib/api";
 import type { Tutor, ProfileTheme, PublishedProfile, Subject } from "@/lib/types";
 import { TutorProfileView } from "./tutor-profile-view";
 import { TutorInventory } from "./tutor-inventory";
+import { CredentialReview } from "./credential-review";
 import { Button } from "./ui/button";
 import { ErrorState, Loading } from "./common";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
@@ -65,7 +66,7 @@ export function TutorReviewDialog({ tutor, catalog, subjects, open, onOpenChange
   return <Dialog open={open} onOpenChange={value => { if (!busy) { setError(""); onOpenChange(value); } }}>
     <DialogContent className="tutor-review-dialog" closeDisabled={!!busy} aria-busy={!!busy} onOpenAutoFocus={e => { e.preventDefault(); title.current?.focus({ preventScroll: true }); }} onEscapeKeyDown={e => { if (busy) e.preventDefault(); }} onInteractOutside={e => { if (busy) e.preventDefault(); }} onCloseAutoFocus={e => { e.preventDefault(); returnFocus(); }}>
       <DialogHeader><DialogTitle ref={title} tabIndex={-1}>Xem & duyệt hồ sơ</DialogTitle><DialogDescription>Giao diện học sinh</DialogDescription></DialogHeader>
-      <div className="tutor-review-body">{detail.data && <RevisionSummary tutor={detail.data} subjects={subjects} />}{detail.loading ? <Loading /> : detail.error ? <ErrorState error={detail.error} retry={detail.reload} /> : detail.data && <TutorProfileView tutor={detail.data} subjects={subjects} preview />}
+      <div className="tutor-review-body">{tutor && <CredentialReview tutorId={tutor.user_id} />}{detail.data && <RevisionSummary tutor={detail.data} subjects={subjects} />}{detail.loading ? <Loading /> : detail.error ? <ErrorState error={detail.error} retry={detail.reload} /> : detail.data && <TutorProfileView tutor={detail.data} subjects={subjects} preview />}
         {tutor && <details className="review-inventory"><summary>Kho giao diện</summary><TutorInventory key={tutor.user_id} tutor={tutor} catalog={catalog} /></details>}
       </div>
       <div className="tutor-review-actions">

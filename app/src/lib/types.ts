@@ -48,8 +48,35 @@ export type PublishedProfile = Pick<
   Tutor,
   "headline" | "bio" | "education" | "experience" | "education_history" | "profile_sections" | "teaching_style" | "lesson_plan" | "subjects" | "levels" | "goals"
 >;
+export type TutorKind = "" | "student" | "teacher" | "professional";
+export type VerifiedCredential = { kind: CredentialKind; label: string };
+export type CredentialKind = "school" | "award" | "certificate";
+export type CredentialDetail = {
+  field: string;
+  start_year: number | null;
+  end_year: number | null;
+  current: boolean;
+  prize: string;
+  subject: string;
+  score: string;
+  reference: string;
+};
+export type Credential = {
+  id: number;
+  kind: CredentialKind;
+  catalog_id: string;
+  name: string;
+  detail: CredentialDetail;
+  label: string;
+  status: "pending" | "approved" | "rejected";
+  review_note: string;
+  files: { id: string; mime: string; name: string; size: number; url: string }[];
+};
 export type Tutor = {
   email?: string;
+  tutor_kind: TutorKind;
+  intro_video: string;
+  verified?: VerifiedCredential[];
   // Last approved content while an edited version awaits review.
   published?: PublishedProfile | null;
   theme_inventory: ProfileTheme[];

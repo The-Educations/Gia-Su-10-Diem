@@ -38,6 +38,9 @@ export const tutorSchema = z.object({
   profile_sections: z.array(z.object({ title: text(80), body: text(2000) })).max(10).optional(),
   teaching_style: z.string().trim().max(1500).default(""),
   lesson_plan: z.string().trim().max(1500).default(""),
+  tutor_kind: z.enum(["", "student", "teacher", "professional"]).optional(),
+  // A public introduction video: YouTube or a shared Google Drive file.
+  intro_video: z.union([z.literal(""), z.url().max(300).refine(url => /^https:\/\/(www\.)?(youtube\.com|youtu\.be|drive\.google\.com)\//.test(url), "Dùng liên kết YouTube hoặc Google Drive.")]).default(""),
   profile_theme: z.enum(["paper", "sage", "ink"]).optional(),
   bio: text(2000),
   location: text(100),
