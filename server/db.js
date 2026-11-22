@@ -5,6 +5,8 @@ import { migrateNotifications } from "./notifications.js";
 import { migrateCredentials } from "./credentials.js";
 import { migrateWallet } from "./wallet.js";
 import { migrateClasses } from "./classes.js";
+import { migrateCommunityTopics } from "./community-topics.js";
+import { migrateFamily } from "./family.js";
 import {
   randomBytes,
   scrypt as scryptCallback,
@@ -222,6 +224,8 @@ export function migrateDatabase(db) {
   migrateCredentials(db);
   migrateWallet(db);
   migrateClasses(db);
+  migrateCommunityTopics(db);
+  migrateFamily(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

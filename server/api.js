@@ -9,6 +9,8 @@ import { registerCredentials, verifiedCredentials } from "./credentials.js";
 import { registerWallet, sepayConfig } from "./wallet.js";
 import { registerProposals } from "./proposals.js";
 import { registerClasses, classRatings } from "./classes.js";
+import { registerCommunityTopics } from "./community-topics.js";
+import { registerFamily } from "./family.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -270,6 +272,8 @@ export function createApi(
   const walletApi = registerWallet(app, db, auth, audit, { production, sepay });
   registerProposals(app, db, auth, audit, walletApi);
   registerClasses(app, db, auth, audit);
+  registerCommunityTopics(app, db, auth);
+  registerFamily(app, db, auth);
   registerTrust(app, db, auth, audit);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>

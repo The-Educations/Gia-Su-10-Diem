@@ -2401,3 +2401,52 @@ test("accepted offers become classes; lessons confirm, cancel, move, settle with
   assert.deepEqual([profile.rating.average, profile.rating.count, profile.rating.reviews[0].body], [4.5, 1, "Cô giảng dễ hiểu"]);
   assert.equal(JSON.stringify(profile.rating).includes("Minh Anh"), false);
 });
+test("parents link with a child's code, top up and follow the child; community topics, reactions and boosted pitches", async (t) => {
+  const { client, db } = await fixture(t), child = client(), parent = client(), tutor = client(), other = client();
+  const c = await child.login("student"), u = await tutor.login("chau"); await other.login("nam");
+  await parent.request("/auth/register", "POST", { name: "Phụ huynh Lan", email: "lan@example.test", password: "ParentStudy2026!" });
+  await parent.request("/account/onboarding", "PUT", { step: 0, role: "parent" });
+  await parent.request("/account/onboarding", "PUT", { step: 1, name: "Phụ huynh Lan", display_name: "Mẹ Lan", school: "THCS A", province_code: "", ward_code: "" });
+  db.prepare("UPDATE users SET onboarding_step=3 WHERE email='lan@example.test'").run();
+  const { code } = (await child.request("/family")).data;
+  assert.match(code, /^[A-Z0-9]{6}$/);
+  assert.equal((await child.request("/family/link", "POST", { code })).status, 403);
+  assert.equal((await parent.request("/family/link", "POST", { code: "ZZZZZZ" })).status, 404);
+  assert.equal((await parent.request("/family/link", "POST", { code: code.toLowerCase() })).status, 201);
+  const fam = (await parent.request("/family")).data;
+  assert.equal(fam.children[0].id, c.id);
+  // The parent tops up the child's balance and sends an offer for the child.
+  const dep = await parent.request("/wallet/deposits", "POST", { amount: 600000, student_id: c.id });
+  await parent.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
+  assert.equal((await child.request("/wallet")).data.available, 600000);
+  assert.equal((await other.request("/wallet/deposits", "POST", { amount: 600000, student_id: c.id })).status, 403);
+  const start = new Date(Date.now() + 7 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
+  const sent = await parent.request("/proposals", "POST", { tutor_id: u.id, student_id: c.id, subject_id: "toan", mode: "online", sessions: 2, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18, minute: 0 }], start_date: start });
+  assert.equal(sent.status, 201);
+  assert.equal(sent.data.student_id, c.id);
+  assert.ok((await parent.request("/proposals")).data.some(p => p.id === sent.data.id));
+  const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
+  assert.equal((await parent.request(`/classes/${accepted.data.class_id}`)).status, 200);
+  assert.equal((await other.request(`/classes/${accepted.data.class_id}`)).status, 404);
+
+  // A "Tìm gia sư" post: tutors pitch with credits; extra credits rank them; closing refunds those outside the top three.
+  db.prepare("UPDATE users SET display_name='Minh Anh' WHERE id=?").run(c.id);
+  const created = await child.request("/community/posts", "POST", { title: "Cần tìm gia sư Toán lớp 9", body: "Em cần gia sư Toán ôn thi vào 10, học online tối thứ 3.", topic: "find_tutor" });
+  db.prepare("UPDATE community_posts SET status='approved',published_at=CURRENT_TIMESTAMP WHERE id=?").run(created.data.id);
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+  const pid = created.data.id;
+  assert.equal((await child.request(`/community/posts?topic=find_tutor`)).data.items[0].topic, "find_tutor");
+  await other.request(`/community/posts/${pid}/react`, "POST", { kind: "interest", on: true });
+  assert.equal((await child.request(`/community/posts?sort=trending`)).data.items.find(p => p.id === pid).interests, 1);
+  const pitch = { subject_id: "toan", mode: "online", sessions: 4, minutes: 90, rate: 180000, schedule: [{ weekday: 1, hour: 19, minute: 0 }], start_date: start, message: "Cô có kinh nghiệm luyện thi vào 10." };
+  assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", { ...pitch, boost: 3 })).status, 201);
+  assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 409);
+  assert.equal((await tutor.request("/wallet")).data.credits_free, 5);
+  assert.equal((await other.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 201);
+  const view = (await child.request(`/community/posts/${pid}/pitches`)).data;
+  assert.deepEqual([view.count, view.pitches[0].tutor_id, view.pitches[0].featured], [2, u.id, true]);
+  assert.deepEqual((await other.request(`/community/posts/${pid}/pitches`)).data.mine.rank, 2);
+  assert.equal((await other.request(`/community/posts/${pid}/pitches`)).data.pitches, undefined);
+  assert.equal((await child.request(`/community/posts/${pid}/close`, "POST")).status, 200);
+  assert.equal((await tutor.request(`/community/posts/${pid}/pitches`, "POST", pitch)).status, 409);
+});

@@ -4,6 +4,7 @@ import { notify } from "./notifications.js";
 import { isLiveTutor } from "./tutor-visibility.js";
 import { move, settings, spendCredits, wallet } from "./wallet.js";
 import { startClass } from "./classes.js";
+import { isParentOf, childrenOf } from "./family.js";
 
 // An offer (Upwork-style proposal) for a package of lessons. A student's offer
 // holds the whole package from their balance until the tutor answers; a tutor's
@@ -43,12 +44,17 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
 
   app.get("/api/proposals", auth("student", "tutor"), (req, res) => {
     expireProposals();
-    res.json(proposalView(db, all(db, `${select} WHERE p.student_id=? OR p.tutor_id=? ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END, p.id DESC LIMIT 200`, req.user.id, req.user.id), req.user));
+    const people = [req.user.id, ...childrenOf(db, req.user.id)];
+    const rows = all(db, `${select} WHERE p.student_id IN (${people.map(() => "?").join(",")}) OR p.tutor_id=? ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END, p.id DESC LIMIT 200`, ...people, req.user.id);
+    res.json(proposalView(db, rows, req.user).map((p) => ({ ...p, incoming: p.incoming || (p.sender === "tutor" && people.includes(p.student_id)) })));
   });
 
   app.post("/api/proposals", auth("student", "tutor"), (req, res) => {
     const d = proposalSchema.parse(req.body), s = settings(db), byStudent = req.user.role === "student";
-    const studentId = byStudent ? req.user.id : d.student_id, tutorId = byStudent ? d.tutor_id : req.user.id;
+    // Parents send offers for a linked child; the child's balance pays.
+    const forChild = byStudent && req.user.learner_type === "parent" && d.student_id;
+    if (forChild && !isParentOf(db, req.user.id, d.student_id)) fail(403, "Chỉ gửi offer cho tài khoản con đã liên kết.");
+    const studentId = byStudent ? (forChild ? d.student_id : req.user.id) : d.student_id, tutorId = byStudent ? d.tutor_id : req.user.id;
     if (!studentId || !tutorId) fail(400, byStudent ? "Chọn gia sư." : "Chọn học sinh.");
     if (!one(db, "SELECT 1 FROM subjects WHERE id=? AND archived=0", d.subject_id)) fail(400, "Môn học không có trong danh mục.");
     const tutor = one(db, "SELECT t.status,t.published FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", tutorId);
@@ -77,10 +83,12 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
     expireProposals();
     transaction(db, () => {
       const p = get(id);
-      if (!p || ![p.student_id, p.tutor_id].includes(req.user.id)) fail(404, "Không tìm thấy offer.");
+      // A linked parent answers for the child.
+      const actor = p && isParentOf(db, req.user.id, p.student_id) ? p.student_id : req.user.id;
+      if (!p || ![p.student_id, p.tutor_id].includes(actor)) fail(404, "Không tìm thấy offer.");
       if (p.status !== "pending") fail(409, "Offer đã được xử lý hoặc hết hạn.");
       const recipient = p.sender === "student" ? p.tutor_id : p.student_id, sender = p.sender === "student" ? p.student_id : p.tutor_id;
-      if (action === "withdraw" ? req.user.id !== sender : req.user.id !== recipient) fail(403, action === "withdraw" ? "Chỉ người gửi rút được offer." : "Chỉ người nhận trả lời được offer.");
+      if (action === "withdraw" ? actor !== sender : actor !== recipient) fail(403, action === "withdraw" ? "Chỉ người gửi rút được offer." : "Chỉ người nhận trả lời được offer.");
       const status = { accept: "accepted", decline: "declined", withdraw: "withdrawn" }[action];
       if (!run(db, "UPDATE proposals SET status=?,decided_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", status, id).changes) fail(409, "Offer vừa thay đổi. Tải lại trang.");
       if (action === "accept" && p.sender === "tutor") {

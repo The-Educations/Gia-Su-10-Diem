@@ -2,6 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
+import { isParentOf } from "./family.js";
 
 // "Số dư học phí": money a student pays in ahead of lessons. SePay never holds
 // it; transfers land in the platform's bank account and SePay's webhook tells
@@ -143,12 +144,15 @@ export function registerWallet(app, db, auth, audit, { production, sepay }) {
   app.get("/api/wallet", auth(), (req, res) => { expireProposals(); res.json(view(req.user.id)); });
   app.post("/api/wallet/deposits", auth("student", "tutor"), (req, res) => {
     const s = settings(db);
-    const { amount } = z.object({ amount: z.number().int().min(s.min_deposit).max(50000000) }).parse(req.body);
+    const { amount, student_id } = z.object({ amount: z.number().int().min(s.min_deposit).max(50000000), student_id: z.number().int().positive().optional() }).parse(req.body);
+    // A parent tops up a linked child's balance.
+    if (student_id && !isParentOf(db, req.user.id, student_id)) fail(403, "Chỉ nạp được cho tài khoản con đã liên kết.");
+    const owner = student_id || req.user.id;
     if (!sepay.ready && !simulate) fail(503, "Nạp tiền đang tạm đóng. Vui lòng quay lại sau.");
     let d;
     for (let attempt = 0; !d && attempt < 5; attempt++) {
       const code = sepay.prefix + Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
-      try { d = one(db, "SELECT * FROM deposits WHERE id=?", run(db, "INSERT INTO deposits(user_id,payer_id,code,amount) VALUES (?,?,?,?)", req.user.id, req.user.id, code, amount).lastInsertRowid); }
+      try { d = one(db, "SELECT * FROM deposits WHERE id=?", run(db, "INSERT INTO deposits(user_id,payer_id,code,amount) VALUES (?,?,?,?)", owner, req.user.id, code, amount).lastInsertRowid); }
       catch (e) { if (!/UNIQUE/.test(String(e.message))) throw e; }
     }
     res.status(201).json({ ...deposit(d), simulated: simulate });

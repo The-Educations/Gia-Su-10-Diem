@@ -2,6 +2,7 @@ import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { move, settings } from "./wallet.js";
+import { childrenOf } from "./family.js";
 
 // A class has one tutor, one or more students and a weekly rhythm. Each student
 // brings their own package (an accepted offer): a number of lessons paid in
@@ -159,9 +160,10 @@ export function registerClasses(app, db, auth, audit) {
       (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome IN ('confirmed','charged')) AS done,
       (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome='pending') AS remaining
       FROM class_members m JOIN users u ON u.id=m.student_id WHERE m.class_id=? ORDER BY m.status, m.id`, id);
-    const allowed = c.tutor_id === user.id || members.some((m) => m.student_id === user.id) || user.role === "admin";
+    const kids = childrenOf(db, user.id), mine = (m) => m.student_id === user.id || kids.includes(m.student_id);
+    const allowed = c.tutor_id === user.id || members.some(mine) || user.role === "admin";
     if (!allowed) fail(404, "Không tìm thấy lớp.");
-    return { ...c, schedule: JSON.parse(c.schedule), members: c.tutor_id === user.id || user.role === "admin" ? members : members.filter((m) => m.student_id === user.id) };
+    return { ...c, schedule: JSON.parse(c.schedule), members: c.tutor_id === user.id || user.role === "admin" ? members : members.filter(mine) };
   };
 
   app.get("/api/classes", auth("student", "tutor"), (req, res) => {
@@ -176,7 +178,8 @@ export function registerClasses(app, db, auth, audit) {
   app.get("/api/classes/:id", auth(), (req, res) => {
     upkeep(db);
     const id = z.coerce.number().int().positive().parse(req.params.id), c = classFor(id, req.user);
-    const sessions = all(db, `${sessionSql} WHERE cs.class_id=? ORDER BY cs.starts_at`, id).filter((s) => c.tutor_id === req.user.id || req.user.role === "admin" || s.student_id === req.user.id);
+    const own = new Set(c.members.map((m) => m.student_id));
+    const sessions = all(db, `${sessionSql} WHERE cs.class_id=? ORDER BY cs.starts_at`, id).filter((s) => c.tutor_id === req.user.id || req.user.role === "admin" || own.has(s.student_id));
     res.json({ ...c, sessions, materials: all(db, "SELECT * FROM class_materials WHERE class_id=? ORDER BY id DESC", id),
       moves: all(db, "SELECT mv.* FROM session_moves mv JOIN class_sessions cs ON cs.id=mv.session_id WHERE cs.class_id=? AND mv.status='pending'", id) });
   });
