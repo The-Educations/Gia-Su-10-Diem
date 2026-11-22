@@ -3262,3 +3262,29 @@
   font-weight: 600;
   box-shadow: 0 1px 2px rgb(40 40 32 / 8%);
 }
+
+/* Ratings */
+.rating-summary { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 24px; align-items: center; margin-bottom: 16px; }
+.rating-big { display: grid; justify-items: start; gap: 4px; }
+.rating-big strong { font: 500 44px/1 "Lora", serif; }
+.rating-big span { font-size: 13px; color: var(--muted-foreground); }
+.rating-bars { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.rating-bars li { display: grid; grid-template-columns: 12px 14px minmax(0, 1fr) 24px; gap: 6px; align-items: center; }
+.rating-bars svg { width: 13px; height: 13px; color: #c99a3c; fill: currentColor; }
+.rating-bars i { height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.rating-bars b { display: block; height: 100%; border-radius: inherit; background: #c99a3c; }
+.stars { display: inline-flex; gap: 1px; }
+.stars svg { width: 15px; height: 15px; color: var(--input); }
+.stars svg[data-on] { color: #c99a3c; fill: currentColor; }
+.star-filled { color: #c99a3c; fill: currentColor; }
+.review header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.booking-card { position: sticky; top: calc(var(--topbar-height) + 20px); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); }
+.booking-card-price strong { font: 500 30px/1.1 "Lora", serif; }
+.booking-card-price span { margin-left: 4px; color: var(--muted-foreground); }
+.booking-card-meta { display: grid; gap: 4px; font-size: 13px; }
+.booking-card-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.booking-card-meta svg { width: 15px; height: 15px; color: var(--positive); }
+.booking-message { width: 100%; }
+.booking-ask { display: grid; gap: 8px; }
+.booking-steps { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted-foreground); display: grid; gap: 4px; }
+@media (max-width: 640px) { .rating-summary { grid-template-columns: 1fr; } .booking-card { position: static; } }
