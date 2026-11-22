@@ -8,6 +8,7 @@ import { registerNotifications, notify } from "./notifications.js";
 import { registerCredentials, verifiedCredentials } from "./credentials.js";
 import { registerWallet, sepayConfig } from "./wallet.js";
 import { registerProposals } from "./proposals.js";
+import { registerClasses, classRatings } from "./classes.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -220,7 +221,7 @@ export function createApi(
     return b;
   };
   const tutorRows = (preview = false) => {
-    const trust = trustReader(db), verified = verifiedCredentials(db);
+    const trust = trustReader(db), verified = verifiedCredentials(db), ratings = classRatings(db);
     return all(
       db,
       `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks
@@ -236,6 +237,7 @@ export function createApi(
       trust: score,
       review_count: score.review_count,
       verified: verified.get(t.user_id) || [],
+      rating: ratings(t.user_id),
       ...(preview && { published: publishedView(published) }),
       ...uploadMetadata(db, t.user_id),
       weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
@@ -267,6 +269,7 @@ export function createApi(
   registerNotifications(app, db, auth);
   const walletApi = registerWallet(app, db, auth, audit, { production, sepay });
   registerProposals(app, db, auth, audit, walletApi);
+  registerClasses(app, db, auth, audit);
   registerTrust(app, db, auth, audit);
   app.get("/api/health", (req, res) => res.json({ ok: true }));
   app.get("/api/auth/me", (req, res) =>

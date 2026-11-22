@@ -2346,3 +2346,58 @@ test("SePay webhook fails closed without a secret and deposits are simulated onl
   assert.equal((await student.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST")).data.status, "paid");
   assert.equal((await student.request("/wallet")).data.available, 100000);
 });
+test("accepted offers become classes; lessons confirm, cancel, move, settle with the fee and publish stars", async (t) => {
+  const { client, db } = await fixture(t), student = client(), tutor = client(), outsider = client();
+  const s = await student.login("student"), u = await tutor.login("chau"); await outsider.login("nam");
+  const grant = (id, amount) => db.prepare("INSERT INTO wallets(user_id,available) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET available=available+excluded.available").run(id, amount);
+  grant(s.id, 1000000);
+  const start = new Date(Date.now() + 7 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
+  const sent = await student.request("/proposals", "POST", { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 4, minutes: 60, rate: 200000, schedule: [{ weekday: 0, hour: 18, minute: 0 }, { weekday: 3, hour: 18, minute: 0 }], start_date: start });
+  const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
+  assert.ok(accepted.data.class_id);
+  const cid = accepted.data.class_id;
+  let cls = (await student.request(`/classes/${cid}`)).data;
+  assert.equal(cls.sessions.length, 4);
+  assert.equal((await outsider.request(`/classes/${cid}`)).status, 404);
+  assert.equal((await student.request("/classes")).data[0].id, cid);
+
+  // Make the first two lessons already finished.
+  const [a, b, c, d] = cls.sessions;
+  const past = (id, hours) => db.prepare("UPDATE class_sessions SET starts_at=? WHERE id=?").run(new Date(Date.now() - hours * 3600000).toISOString(), id);
+  past(a.id, 3); past(b.id, 60);
+  assert.equal((await student.request(`/sessions/${c.id}/confirm`, "POST")).status, 409);
+  await student.request(`/sessions/${a.id}/confirm`, "POST");
+  await tutor.request(`/sessions/${a.id}/confirm`, "POST");
+  await student.request(`/sessions/${a.id}/rating`, "PUT", { rating: 5 });
+  // One side confirmed more than 48 hours ago: the lesson confirms itself.
+  await tutor.request(`/sessions/${b.id}/confirm`, "POST");
+  await student.request(`/sessions/${b.id}/rating`, "PUT", { rating: 4 });
+  cls = (await tutor.request(`/classes/${cid}`)).data;
+  assert.deepEqual(cls.sessions.slice(0, 2).map(x => x.outcome), ["confirmed", "confirmed"]);
+
+  // The student cancels lesson c early (refunded) and asks to move lesson d; the tutor agrees.
+  assert.equal((await student.request(`/sessions/${c.id}/cancel`, "POST")).data.outcome, "refunded");
+  const newTime = new Date(Date.now() + 5 * 86400000).toISOString();
+  assert.equal((await student.request(`/sessions/${d.id}/move`, "POST", { starts_at: newTime })).status, 201);
+  const move = (await tutor.request(`/classes/${cid}`)).data.moves[0];
+  assert.equal((await student.request(`/moves/${move.id}`, "PATCH", { accept: true })).status, 403);
+  await tutor.request(`/moves/${move.id}`, "PATCH", { accept: true });
+  assert.equal((await tutor.request(`/classes/${cid}`)).data.sessions.find(x => x.id === d.id).starts_at, newTime);
+
+  // A late cancellation by the tutor refunds the lesson and counts a violation.
+  db.prepare("UPDATE class_sessions SET starts_at=? WHERE id=?").run(new Date(Date.now() + 2 * 3600000).toISOString(), d.id);
+  assert.deepEqual((await tutor.request(`/sessions/${d.id}/cancel`, "POST")).data, { outcome: "refunded", late: true });
+  assert.equal(db.prepare("SELECT violations FROM tutors WHERE user_id=?").get(u.id).violations, 1);
+
+  // Every lesson is resolved: 2 confirmed lessons pay the tutor minus 5%, the rest goes back.
+  const sw = (await student.request("/wallet")).data, tw = (await tutor.request("/wallet")).data;
+  assert.deepEqual([sw.available, sw.held], [600000, 0]);
+  assert.equal(tw.available, 380000);
+  cls = (await student.request(`/classes/${cid}`)).data;
+  assert.equal(cls.members[0].status, "ended");
+  assert.equal(cls.members[0].published_rating, 4.5);
+  await student.request(`/members/${cls.members[0].id}/review`, "PUT", { body: "Cô giảng dễ hiểu" });
+  const profile = (await outsider.request(`/tutors/${u.id}`)).data;
+  assert.deepEqual([profile.rating.average, profile.rating.count, profile.rating.reviews[0].body], [4.5, 1, "Cô giảng dễ hiểu"]);
+  assert.equal(JSON.stringify(profile.rating).includes("Minh Anh"), false);
+});

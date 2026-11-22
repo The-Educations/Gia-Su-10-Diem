@@ -3,6 +3,8 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { all, one, run } from "./db.js";
 import { saveUpload } from "./uploads.js";
 import { normalizeCredential } from "./credentials.js";
+import { startClass } from "./classes.js";
+import { move, wallet } from "./wallet.js";
 
 const profiles = [
   [
@@ -152,6 +154,47 @@ async function seedCredentials(db, tutor, slug) {
     throw e;
   }
 }
+// Money, offers and classes so every role sees a lived-in workspace locally.
+function seedClasses(db) {
+  if (one(db, "SELECT key FROM demo_seeds WHERE key='classes-v1'")) return;
+  const id = (slug) => one(db, "SELECT id FROM users WHERE email=? AND demo=1", `${slug}@demo.giasu.test`)?.id;
+  const student = id("student"), chau = id("chau"), linh = id("linh"), nam = id("nam");
+  if (!student || !chau || !linh || !nam) return;
+  const day = (offset) => new Date(Date.now() + 7 * 3600000 + offset * 86400000).toISOString().slice(0, 10);
+  const proposal = (sender, tutor, subject, sessions, rate, schedule, start, status, message) => Number(run(db,
+    `INSERT INTO proposals(sender,student_id,tutor_id,subject_id,mode,sessions,minutes,rate,total,schedule,start_date,message,status,held,credits,expires_at,decided_at)
+     VALUES (?,?,?,?,'online',?,90,?,?,?,?,?,?,?,?,?,?)`, sender, student, tutor, subject, sessions, rate, sessions * rate, JSON.stringify(schedule), start, message, status,
+    sender === "student" && status !== "declined" ? sessions * rate : 0, sender === "tutor" ? 2 : 0, new Date(Date.now() + 40 * 3600000).toISOString(), status === "pending" ? null : new Date().toISOString()).lastInsertRowid);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    move(db, student, "deposit", { amount: 5000000, ref: "demo", note: "Nạp mẫu" });
+    for (const t of [chau, linh, nam]) wallet(db, t);
+    // An ongoing maths class with two lessons already confirmed and one waiting for the student.
+    const p1 = proposal("student", chau, "toan", 8, 180000, [{ weekday: 1, hour: 18, minute: 0 }, { weekday: 4, hour: 18, minute: 0 }], day(-12), "accepted", "Em cần ôn thi vào lớp 10.");
+    move(db, student, "offer_hold", { amount: -1440000, held: 1440000, ref: `proposal:${p1}` });
+    const c1 = startClass(db, one(db, "SELECT * FROM proposals WHERE id=?", p1));
+    const sessions = all(db, "SELECT id FROM class_sessions WHERE class_id=? ORDER BY starts_at", c1);
+    const ago = (h) => new Date(Date.now() - h * 3600000).toISOString();
+    [[sessions[0].id, ago(24 * 9), "confirmed", 5], [sessions[1].id, ago(24 * 5), "confirmed", 4], [sessions[2].id, ago(26), "pending", null]].forEach(([sid, at, outcome, rating], i) => {
+      run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", at, sid);
+      run(db, "UPDATE session_members SET outcome=?,rating=?,tutor_confirmed_at=CURRENT_TIMESTAMP,student_confirmed_at=CASE WHEN ?='confirmed' THEN CURRENT_TIMESTAMP END WHERE session_id=?", outcome, rating, outcome, sid);
+    });
+    run(db, "UPDATE classes SET meeting_url='https://meet.google.com/abc-defg-hij' WHERE id=?", c1);
+    run(db, "INSERT INTO class_materials(class_id,title,url,note) VALUES (?,?,?,?),(?,?,?,?)",
+      c1, "Phương trình bậc hai: công thức nghiệm", "https://www.youtube.com/watch?v=8v6jS0g3gqY", "Xem lại trước buổi thứ 3.",
+      c1, "Đề luyện tập tuần 2", "https://drive.google.com/file/d/1demoFile/view", "Làm câu 1–8, buổi sau chữa.");
+    // A waiting offer to another tutor, and a tutor's offer waiting for the student.
+    const p2 = proposal("student", linh, "tieng-anh", 10, 220000, [{ weekday: 2, hour: 19, minute: 30 }], day(5), "pending", "Em muốn luyện nói tiếng Anh giao tiếp.");
+    move(db, student, "offer_hold", { amount: -2200000, held: 2200000, ref: `proposal:${p2}` });
+    proposal("tutor", nam, "vat-li", 6, 200000, [{ weekday: 5, hour: 9, minute: 0 }], day(3), "pending", "Thầy thấy em cần củng cố phần điện học, mình học 6 buổi nhé.");
+    run(db, "UPDATE wallets SET credits_free=8 WHERE user_id=?", nam);
+    run(db, "INSERT INTO demo_seeds VALUES ('classes-v1')");
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
 export async function enrichDemo(db, { activity = false } = {}) {
   for (const [i, [slug, , , bio]] of profiles.entries()) {
     const tutor = one(
@@ -187,6 +230,7 @@ export async function enrichDemo(db, { activity = false } = {}) {
       throw e;
     }
   }
+  if (activity) seedClasses(db);
   if (
     !activity ||
     one(db, "SELECT key FROM demo_seeds WHERE key='activity-v1'")

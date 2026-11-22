@@ -27,6 +27,9 @@ import { PageMetadata } from "./components/page-metadata";
 const Offers = lazy(() => import("./pages/Offers"));
 const Proposals = lazy(() => import("./pages/Proposals"));
 const WalletPage = lazy(() => import("./pages/Wallet"));
+const Schedule = lazy(() => import("./pages/Schedule"));
+const ClassList = lazy(() => import("./pages/Classes").then((m) => ({ default: m.ClassList })));
+const ClassDetail = lazy(() => import("./pages/Classes").then((m) => ({ default: m.ClassDetail })));
 const Availability = lazy(() => import("./pages/Availability"));
 const Tutors = lazy(() => import("./pages/Tutors"));
 const TutorDetail = lazy(() => import("./pages/TutorDetail"));
@@ -103,7 +106,7 @@ function Shell() {
   }, [loc.pathname]);
   useEffect(finishBoot, []);
   const model = navigationFor(user),
-    title = loc.pathname.startsWith("/community") ? "Cộng đồng" : allItems(model).find((n) => n.to === loc.pathname)?.label || "Gia Sư 10 Điểm";
+    title = loc.pathname.startsWith("/community") ? "Cộng đồng" : (allItems(model).find((n) => n.to === loc.pathname) || allItems(model).find((n) => loc.pathname.startsWith(n.to + "/")))?.label || "Gia Sư 10 Điểm";
   return (
     <div className="app-shell" data-auth-page={loc.pathname === "/auth" || undefined} data-role={user?.role || "guest"} data-sidebar-collapsed={collapsed}>
       <PageMetadata />
@@ -180,6 +183,9 @@ function Shell() {
                 <Route path="/offers" element={<Require><Offers /></Require>} />
                 <Route path="/proposals" element={<Require><Proposals /></Require>} />
                 <Route path="/wallet" element={<Require><WalletPage /></Require>} />
+                <Route path="/schedule" element={<Require><Schedule /></Require>} />
+                <Route path="/classes" element={<Require><ClassList /></Require>} />
+                <Route path="/classes/:id" element={<Require><ClassDetail /></Require>} />
                 <Route path="/calendar" element={<Require><TutorCalendar /></Require>} />
                 <Route path="/availability" element={<Require role="student"><Availability /></Require>} />
                 <Route

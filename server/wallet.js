@@ -234,7 +234,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay }) {
         COALESCE((SELECT SUM(received) FROM deposits),0) AS deposited,
         COALESCE((SELECT SUM(available+held) FROM wallets),0) AS balances,
         COALESCE((SELECT -SUM(amount) FROM wallet_entries WHERE kind='credits_purchased'),0) AS credit_revenue,
-        COALESCE((SELECT SUM(amount) FROM wallet_entries WHERE kind='platform_fee'),0) AS fee_revenue`),
+        COALESCE((SELECT SUM(amount) FROM platform_revenue WHERE kind='lesson_fee'),0) AS fee_revenue`),
       settings: settings(db),
       payments: sepay.ready ? "live" : simulate ? "simulated" : "off",
     });
