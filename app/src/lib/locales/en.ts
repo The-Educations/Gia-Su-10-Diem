@@ -401,6 +401,12 @@ export const en: Record<string, string> = {
   "Liên kết": "Link", "Đã liên kết với con": "Linked to your child", "Liên kết với phụ huynh": "Link with a parent",
   "Phụ huynh nhập mã này để theo dõi lịch học, nạp tiền và gửi offer giúp bạn.": "A parent enters this code to follow your lessons, top up and send offers for you.",
   "Chép mã": "Copy code", "Đổi mã": "New code", "Đã liên kết: {names}": "Linked: {names}",
+  // Admin today
+  "Buổi học bị báo vấn đề": "Reported lessons",
+  "Minh chứng chờ đối chiếu": "Proof waiting", "Hồ sơ gia sư chờ duyệt": "Tutor profiles waiting", "Bài cộng đồng chờ duyệt": "Community posts waiting",
+  "Đã xử lý báo cáo": "Report resolved", "Buổi đã diễn ra": "Lesson happened", "Hoàn tiền": "Refund",
+  "Không có báo cáo nào.": "No reports.", "Gia sư vi phạm nhiều lần": "Tutors with repeated violations",
+  "{n} lần hủy sát giờ hoặc không đến": "{n} late cancellations or no-shows",
   // Language switch
   "Ngôn ngữ": "Language",
   "Tiếng Việt": "Vietnamese",

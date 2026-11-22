@@ -41,13 +41,14 @@ import {
 } from "@/components/ui/dialog";
 import ResourceEditor from "./ResourceEditor";
 import { AdminFinance } from "@/components/admin-finance";
+import { AdminToday } from "@/components/admin-today";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["tutors", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
+  const tab = ["today", "tutors", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
-      : "tutors",
+      : "today",
     status = params.get("status") || "";
   const communityQueue = useLoad<unknown[]>("/admin/community/queue");
   const pendingProofs = useLoad<{ tutor_id: number; count: number }[]>("/admin/credentials/pending");
@@ -159,6 +160,7 @@ export default function Admin() {
           }}
         >
           <TabsList className="admin-tabs">
+            <TabsTrigger value="today">Hôm nay</TabsTrigger>
             <TabsTrigger value="tutors">Gia sư ({d.tutors.length})</TabsTrigger>
             <TabsTrigger value="users">Tài khoản</TabsTrigger>
             <TabsTrigger value="resources">Kỳ thi</TabsTrigger>
@@ -200,6 +202,7 @@ export default function Admin() {
               />
             )}
           </div>}
+          <TabsContent value="today"><AdminToday /></TabsContent>
           <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="finance"><AdminFinance /></TabsContent>
           <TabsContent value="posts"><AdminPosts /></TabsContent>

@@ -297,3 +297,16 @@
 .pitch-form { display: grid; gap: 12px; }
 @media (max-width: 640px) { .pitch-list li { grid-template-columns: 40px minmax(0, 1fr); } .pitch-list .actions { grid-column: 1 / -1; } }
 .topic-chips { grid-column: 1 / -1; max-width: 100%; min-width: 0; margin: 0; }
+
+/* Admin today */
+.admin-today { display: grid; gap: 24px; }
+.admin-today h2 { margin-bottom: 10px; }
+.today-queues { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 14px; background: var(--card); overflow: hidden; }
+.today-queues li + li { border-left: 1px solid var(--border); }
+.today-queues a { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; }
+.today-queues a:hover { background: var(--muted); }
+.today-queues strong { font: 500 28px/1.1 "Lora", serif; color: var(--primary); }
+.today-queues [data-empty] strong { color: var(--muted-foreground); }
+.today-queues span { font-size: 13px; color: var(--muted-foreground); }
+.today-violations { margin: 0; padding-left: 18px; font-size: 14px; }
+@media (max-width: 700px) { .today-queues li + li { border-left: 0; border-top: 1px solid var(--border); } }

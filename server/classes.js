@@ -331,6 +331,31 @@ export function registerClasses(app, db, auth, audit) {
     upkeep(db);
     res.json({ ok: true });
   });
+  // Administrators settle a reported lesson: it happened (tutor paid) or not (refunded).
+  app.get("/api/admin/today", auth("admin"), (req, res) => {
+    upkeep(db);
+    res.json({
+      tutors: one(db, "SELECT COUNT(*) n FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.status='pending' AND u.status='active'").n,
+      credentials: one(db, "SELECT COUNT(*) n FROM tutor_credentials c WHERE c.status='pending' AND EXISTS(SELECT 1 FROM credential_files f WHERE f.credential_id=c.id)").n,
+      withdrawals: one(db, "SELECT COUNT(*) n FROM withdrawals WHERE status='requested'").n,
+      community: one(db, "SELECT COUNT(*) n FROM community_posts WHERE status='pending'").n,
+      violations: all(db, "SELECT t.user_id,u.name,t.violations FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.violations>=3 ORDER BY t.violations DESC"),
+      disputes: all(db, `SELECT sm.session_id,sm.member_id,sm.note,cs.starts_at,c.id AS class_id,c.title,u.name AS student_name,t.name AS tutor_name
+        FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN classes c ON c.id=cs.class_id
+        JOIN class_members m ON m.id=sm.member_id JOIN users u ON u.id=m.student_id JOIN users t ON t.id=c.tutor_id WHERE sm.outcome='disputed' ORDER BY cs.starts_at`),
+    });
+  });
+  app.post("/api/admin/sessions/:id/resolve", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const d = z.object({ member_id: z.number().int().positive(), outcome: z.enum(["confirmed", "refunded"]) }).parse(req.body);
+    const r = one(db, "SELECT sm.*,m.student_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
+    if (!r) fail(404, "Không tìm thấy báo cáo.");
+    run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
+    for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: "/classes" });
+    audit(req.user.id, `session.resolve.${d.outcome}`, id);
+    upkeep(db);
+    res.json({ ok: true });
+  });
   app.put("/api/members/:id/review", auth("student"), (req, res) => {
     const { body } = z.object({ body: z.string().trim().max(1500) }).parse(req.body);
     const m = one(db, "SELECT * FROM class_members WHERE id=? AND student_id=?", req.params.id, req.user.id);
