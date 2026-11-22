@@ -48,10 +48,11 @@ export function navigationFor(user: User | null): NavModel {
     };
   if (user.role === "admin") {
     const admin = item("/admin", "Quản trị", ShieldCheck),
-      lessons = item("/schedule", "Lịch", CalendarDays);
+      lessons = item("/schedule", "Lịch", CalendarDays),
+      hours = item("/calendar", "Lịch dạy", CalendarClock);
     return {
       home: "/admin",
-      primary: [admin, lessons, messages],
+      primary: [admin, lessons, hours, messages],
       groups: [{ label: "Khám phá", items: [find, subjects, community, news] }],
       bar: [admin, lessons, messages, community],
     };
