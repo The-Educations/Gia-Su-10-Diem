@@ -21,7 +21,8 @@ export const proposalSchema = z.object({
   area: z.string().trim().max(160).default(""),
   sessions: z.number().int().min(1).max(60),
   minutes: z.number().int().refine((m) => [60, 90, 120].includes(m), "Chọn 60, 90 hoặc 120 phút."),
-  rate: z.number().int().min(50000).max(3000000),
+  rate: z.number().int().min(0).max(3000000),
+  trial: z.boolean().default(false),
   schedule: z.array(z.object({ weekday: z.number().int().min(0).max(6), hour: z.number().int().min(6).max(22), minute: z.number().int().refine((m) => m === 0 || m === 30).default(0) })).min(1).max(14),
   start_date: date.refine((d) => d >= new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10), "Ngày bắt đầu không được ở quá khứ."),
   message: z.string().trim().max(2000).default(""),
@@ -62,14 +63,21 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
     const tutor = one(db, "SELECT t.status,t.published FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", tutorId);
     if (!isLiveTutor(tutor)) fail(409, "Gia sư hiện chưa nhận offer.");
     if (!one(db, "SELECT 1 FROM users WHERE id=? AND role='student' AND status='active'", studentId)) fail(409, "Tài khoản học sinh không hoạt động.");
+    // A free trial is one 60-minute lesson, once per student and tutor, when the tutor offers trials.
+    if (d.trial) {
+      if (!byStudent) fail(400, "Chỉ học sinh gửi được yêu cầu học thử.");
+      if (!one(db, "SELECT accepts_trial FROM tutors WHERE user_id=?", tutorId)?.accepts_trial) fail(409, "Gia sư hiện không nhận học thử.");
+      if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND trial=1 AND status IN ('pending','accepted')", studentId, tutorId)) fail(409, "Bạn đã học thử với gia sư này.");
+      Object.assign(d, { sessions: 1, minutes: 60, rate: 0, schedule: d.schedule.slice(0, 1) });
+    } else if (d.rate < 50000) fail(400, "Học phí tối thiểu 50.000đ / buổi.");
     const total = d.sessions * d.rate;
     const id = transaction(db, () => {
       if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND status='pending'", studentId, tutorId)) fail(409, "Đang có một offer chờ trả lời giữa hai bạn.");
       const expires = new Date(Date.now() + s.offer_hours * 3600000).toISOString();
-      const pid = Number(run(db, `INSERT INTO proposals(sender,student_id,tutor_id,subject_id,level,mode,area,sessions,minutes,rate,total,schedule,start_date,message,expires_at,held,credits)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, byStudent ? "student" : "tutor", studentId, tutorId, d.subject_id, d.level, d.mode, d.area, d.sessions, d.minutes, d.rate, total,
-        JSON.stringify(d.schedule), d.start_date, d.message, expires, byStudent ? total : 0, byStudent ? 0 : s.offer_credits).lastInsertRowid);
-      if (byStudent) move(db, studentId, "offer_hold", { amount: -total, held: total, ref: `proposal:${pid}` });
+      const pid = Number(run(db, `INSERT INTO proposals(sender,student_id,tutor_id,subject_id,level,mode,area,sessions,minutes,rate,total,schedule,start_date,message,expires_at,held,credits,trial)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, byStudent ? "student" : "tutor", studentId, tutorId, d.subject_id, d.level, d.mode, d.area, d.sessions, d.minutes, d.rate, total,
+        JSON.stringify(d.schedule), d.start_date, d.message, expires, byStudent ? total : 0, byStudent ? 0 : s.offer_credits, Number(d.trial)).lastInsertRowid);
+      if (byStudent && total) move(db, studentId, "offer_hold", { amount: -total, held: total, ref: `proposal:${pid}` });
       else spendCredits(db, tutorId, s.offer_credits, `proposal:${pid}`);
       notify(db, byStudent ? tutorId : studentId, "proposal_new", { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", d.subject_id).name, link: `/proposals?id=${pid}` });
       return pid;

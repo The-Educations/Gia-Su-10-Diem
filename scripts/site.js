@@ -187,3 +187,49 @@
     })
     .catch(() => {}); // The all-subjects search remains usable if the catalog is unavailable.
 })();
+
+// Language: the same choice as the app (localStorage "giasu.lang").
+(() => {
+  const EN = window.__EN || {}, originals = new Map();
+  const VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+  const apply = (lang) => {
+    document.documentElement.lang = lang;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (n.parentElement?.closest("[translate='no'], script, style")) continue;
+      if (!originals.has(n)) originals.set(n, n.nodeValue);
+      const vi = originals.get(n), key = vi.trim();
+      const count = key.match(/^(\d+) chương trình$/);
+      const en = EN[key] || (count ? `${count[1]} programmes` : "");
+      const next = lang === "en" && VI.test(key) && en ? vi.replace(key, en) : vi;
+      // Writing an unchanged value would wake the observer again.
+      if (n.nodeValue !== next) n.nodeValue = next;
+    }
+    for (const el of document.querySelectorAll("[aria-label], [placeholder]"))
+      for (const attr of ["aria-label", "placeholder"]) {
+        if (!el.hasAttribute(attr) || el.closest("[translate='no']")) continue;
+        const key = `data-vi-${attr}`;
+        if (!el.hasAttribute(key)) el.setAttribute(key, el.getAttribute(attr));
+        const vi = el.getAttribute(key);
+        const next = lang === "en" && EN[vi] ? EN[vi] : vi;
+        if (el.getAttribute(attr) !== next) el.setAttribute(attr, next);
+      }
+    for (const b of document.querySelectorAll(".lang-switch button")) b.setAttribute("aria-pressed", String(b.dataset.lang === lang));
+  };
+  let lang = "vi";
+  try { lang = localStorage.getItem("giasu.lang") === "en" ? "en" : "vi"; } catch {}
+  for (const b of document.querySelectorAll(".lang-switch button"))
+    b.addEventListener("click", () => {
+      lang = b.dataset.lang;
+      try { localStorage.setItem("giasu.lang", lang); } catch {}
+      apply(lang);
+    });
+  apply(lang);
+  // Subject lists and counters change after load; translate them as they appear.
+  new MutationObserver((records) => {
+    if (lang !== "en") return;
+    for (const r of records) for (const n of r.addedNodes) if (n.nodeType === 3) originals.delete(n);
+    for (const r of records) if (r.type === "characterData") originals.delete(r.target);
+    apply(lang);
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+})();

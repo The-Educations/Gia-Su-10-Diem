@@ -66,7 +66,7 @@ function Card({ p, focused, onChanged }: { p: Proposal; focused: boolean; onChan
           <span>{t("{n} × {rate}", { n: p.sessions, rate: money(p.rate) })}</span>
           {user?.role === "tutor" && <span className="payout">{t("Bạn nhận {amount} sau phí {fee}%", { amount: money(p.payout), fee: p.fee_percent })}</span>}
         </div>
-        {p.status === "pending" && (
+        {p.status === "pending" && user?.learner_type !== "parent" && (
           <div className="actions">
             {p.incoming ? (
               <>

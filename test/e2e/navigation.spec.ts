@@ -17,8 +17,8 @@ test("desktop collapse persists and mobile navigation stays expanded", async ({ 
   expect(markBox!.x).toBeGreaterThanOrEqual(sidebarBox!.x);
   expect(markBox!.x + markBox!.width).toBeLessThanOrEqual(sidebarBox!.x + sidebarBox!.width);
   await expect(logo).toHaveAttribute("href", "/app/tutors");
-  await sidebar.getByRole("link", { name: "Tìm môn học" }).click();
-  await expect(page).toHaveURL(/library$/);
+  await sidebar.getByRole("link", { name: "Cộng đồng" }).click();
+  await expect(page).toHaveURL(/community$/);
   await page.reload();
   await expect(sidebar).toHaveCSS("width", "76px");
   await page.setViewportSize({ width: 320, height: 700 });
@@ -26,13 +26,13 @@ test("desktop collapse persists and mobile navigation stays expanded", async ({ 
   const menu = page.getByRole("navigation", { name: "Điều hướng nhanh" }).getByRole("button", { name: "Thêm", exact: true });
   await menu.click();
   const drawer = page.getByRole("dialog");
-  await expect(drawer.getByText("Tìm môn học", { exact: true })).toBeVisible();
-  expect(await drawer.getByText("Tìm môn học", { exact: true }).evaluate(e => getComputedStyle(e).opacity)).toBe("1");
+  await expect(drawer.getByText("Cộng đồng", { exact: true })).toBeVisible();
+  expect(await drawer.getByText("Cộng đồng", { exact: true }).evaluate(e => getComputedStyle(e).opacity)).toBe("1");
   await page.keyboard.press("Escape");
   await expect(drawer).not.toBeVisible();
   await expect(menu).toBeFocused();
   await menu.click();
-  await drawer.getByRole("link", { name: "Tìm môn học" }).click();
+  await drawer.getByRole("link", { name: "Cộng đồng" }).click();
   await expect(drawer).not.toBeVisible();
   await menu.click();
   await page.setViewportSize({ width: 1024, height: 900 });
@@ -56,7 +56,9 @@ test("public app pages fit small phones, tablets and desktops", async ({ page })
         const menu = await page.getByRole("button", { name: "Thêm", exact: true }).boundingBox();
         expect(menu!.width).toBeGreaterThanOrEqual(44);
         expect(menu!.height).toBeGreaterThanOrEqual(44);
+        // On phones the filters open from the filter button.
         const subject = page.getByRole("combobox", { name: "Môn học", exact: true });
+        if (!(await subject.isVisible())) await page.getByRole("button", { name: "Bộ lọc", exact: true }).click();
         expect((await subject.boundingBox())!.width).toBeGreaterThan(240);
       }
     }
@@ -106,8 +108,8 @@ test("mobile sheet rises flat, restores focus and respects reduced motion", asyn
   const reduced = record();
   await menu.click();
   expect((await reduced).every(f => Math.abs(f.y) < 0.1 && f.flat)).toBe(true);
-  await drawer.getByRole("link", { name: "Tin tức" }).click();
-  await expect(page).toHaveURL(/news$/);
+  await drawer.getByRole("link", { name: "Cộng đồng" }).click();
+  await expect(page).toHaveURL(/community$/);
   await expect(drawer).toHaveCount(0);
   await expect(page.locator("main")).toBeFocused();
   await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");

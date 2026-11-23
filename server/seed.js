@@ -102,9 +102,6 @@ export async function seedDemo(db, password, options = {}) {
       ).lastInsertRowid,
     );
     assignProfileCode(db, id);
-    // Demo students are already verified so every journey can be tried at once.
-    if (role === "student" && slug !== "parent")
-      run(db, "INSERT OR IGNORE INTO student_verifications(user_id,school,grade,student_code,status,submitted_at,reviewed_at) VALUES (?,?,?,?,'approved',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", id, "THCS Nguyễn Du", "Lớp 9", `DEMO${id}`);
     if (role !== "tutor") continue;
     run(
       db,
@@ -132,6 +129,10 @@ export async function seedDemo(db, password, options = {}) {
         );
       }
   }
+  // Demo students are verified so every journey can be tried at once, also on older local data.
+  const demoStudent = one(db, "SELECT id FROM users WHERE email='student@demo.giasu.test'");
+  if (demoStudent)
+    run(db, "INSERT OR IGNORE INTO student_verifications(user_id,school,grade,student_code,status,submitted_at,reviewed_at) VALUES (?,?,?,?,'approved',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", demoStudent.id, "THCS Nguyễn Du", "Lớp 9", `DEMO${demoStudent.id}`);
   const specialisms = [
     [
       "chau",

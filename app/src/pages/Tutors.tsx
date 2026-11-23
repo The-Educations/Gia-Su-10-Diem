@@ -3,7 +3,7 @@ import { TutorLocalTime } from "@/components/tutor-timezone";
 import { Collapsible } from "@animate-ui/react/primitives/radix-ui/collapsible";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
+import { BadgeCheck,
   Heart,
   MapPin,
   ArrowUpRight,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, money } from "@/lib/api";
-import type { Tutor, Subject, Resource, WeeklySchedule } from "@/lib/types";
+import type { Tutor, Subject, Resource } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -45,9 +45,6 @@ export default function Tutors({
     favorites = useLoad<number[]>(
       user?.role === "student" ? "/favorites" : null,
     );
-  const schedule = useLoad<WeeklySchedule>(user?.role === "student" ? "/account/availability" : null);
-  const myHours = new Set(schedule.data?.blocks.map(b => `${b.weekday}:${b.hour}`));
-  const matchingHours = (t: Tutor) => t.weekly_blocks.filter(b => myHours.has(`${b.weekday}:${b.hour}`)).length;
   const q = params.get("q") || "",
     subject = params.get("subject") || "",
     mode = params.get("mode") || "",
@@ -65,7 +62,6 @@ export default function Tutors({
     .filter(
       (t) =>
         (!favoritesOnly || favorites.data?.includes(t.user_id)) &&
-        (params.get("match") !== "1" || (myHours.size > 0 && matchingHours(t) > 0)) &&
         (!subject || t.subjects.includes(subject)) &&
         (!level || t.levels.includes(level)) &&
         (!goal || t.goals.includes(goal)) &&
@@ -78,9 +74,7 @@ export default function Tutors({
         (!budget || t.rate <= Number(budget)),
     )
     .sort((a, b) =>
-      sort === "schedule" && myHours.size > 0
-        ? matchingHours(b) - matchingHours(a) || b.trust.sort_score - a.trust.sort_score
-        : sort === "price"
+      sort === "price"
         ? a.rate - b.rate
         : sort === "experience"
           ? b.experience - a.experience
@@ -135,7 +129,8 @@ export default function Tutors({
             <Collapsible.Trigger asChild>
               <Button variant="outline" className="advanced-filter-toggle">
                 <SlidersHorizontal data-icon="inline-start" />
-                Bộ lọc thêm
+                <span className="filter-label-wide">Bộ lọc thêm</span>
+                <span className="filter-label-narrow">Bộ lọc</span>
                 {(location || goal || level) && (
                   <span
                     className="filter-dot"
@@ -145,7 +140,7 @@ export default function Tutors({
               </Button>
             </Collapsible.Trigger>
           </div>
-          <div className="filter-grid three">
+          <div className="filter-grid three" data-filled={!!(subject || mode || budget) || undefined}>
             <Choose
               label="Môn học"
               value={subject}
@@ -225,9 +220,6 @@ export default function Tutors({
           </div>
         )}
       </section>
-      {user?.role === "student" && <div className="schedule-filter"><Button variant={params.get("match") === "1" ? "default" : "outline"} aria-pressed={params.get("match") === "1"} disabled={schedule.loading} onClick={() => { const p = new URLSearchParams(params); if (p.get("match") === "1") p.delete("match"); else { p.set("match", "1"); p.set("sort", "schedule"); } setParams(p, { replace: true }); }}>Trùng lịch rảnh của tôi</Button><Link className="text-link" to="/availability">Sửa lịch rảnh</Link></div>}
-      {sort === "schedule" && user?.role === "student" && !schedule.loading && !myHours.size && <Button asChild variant="outline"><Link to="/availability">Thêm lịch rảnh để so khớp gia sư</Link></Button>}
-      {sort === "schedule" && schedule.error && <ErrorState error={schedule.error} retry={schedule.reload} />}
       <div className="results-heading" id="tutor-results">
         <h2>
           {rows.length} gia sư{favoritesOnly ? " đã lưu" : ""}
@@ -239,7 +231,6 @@ export default function Tutors({
             onChange={(v) => set("sort", v)}
             options={[
               { value: "recommended", label: "Đánh giá cao" },
-              ...(user?.role === "student" ? [{ value: "schedule", label: "Khớp lịch của tôi" }] : []),
               { value: "price", label: "Học phí tăng dần" },
               { value: "experience", label: "Nhiều kinh nghiệm" },
             ]}
@@ -311,8 +302,8 @@ export default function Tutors({
                     {subjects.data?.find((s) => s.id === id)?.name || id}
                   </Badge>
                 ))}
+                {!!t.verified?.length && <Badge variant="outline" className="verified-badge"><BadgeCheck data-icon="inline-start" />Đã xác minh</Badge>}
                 {!!t.demo && <Badge variant="outline">Hồ sơ mẫu</Badge>}
-                {sort === "schedule" && myHours.size > 0 && <Badge variant="outline">Trùng {matchingHours(t)} giờ / tuần</Badge>}
 
               </div>
               <div className="tutor-facts">

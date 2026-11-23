@@ -2,30 +2,34 @@
 
 Chốt với chủ dự án ngày 22/11/2026 qua buổi hỏi đáp. Các mục dưới đây là **[CHỐT]** và thay thế mọi tài liệu cũ nói khác (đặc biệt `tutor-fees.md`, phần hiển thị sao trong `danh-gia-va-diem-tin-cay.md`, mục "không bắt chọn loại bài" trong `dai-tim-gia-su-dashboard.md`).
 
-Làm theo 6 PR nối tiếp:
+Đã triển khai (đã merge và deploy):
 
-1. Hệ thiết kế, khung điều hướng theo vai trò, trung tâm thông báo, màn hình mở app.
-2. Hồ sơ gia sư theo bước + minh chứng + admin đối chiếu từng mục.
-3. Số dư học phí (SePay), offer, credit.
-4. Lớp học, lịch kiểu Apple Calendar, xác nhận buổi, đối chiếu, đánh giá.
-5. Phụ huynh liên kết con, cộng đồng theo chủ đề, trang quản trị đầy đủ, dữ liệu mẫu.
-6. Trang giới thiệu theo hệ thiết kế mới.
+| PR | Nội dung |
+|---|---|
+| #82 | Hệ thiết kế, khung điều hướng theo vai trò, trung tâm thông báo, màn hình mở app |
+| #83 | Hồ sơ gia sư theo bước + minh chứng + admin đối chiếu từng mục |
+| #84 | Số dư học phí, offer, credit, rút tiền |
+| #85 | Lớp học, lịch kiểu Apple Calendar, xác nhận buổi, đối chiếu 5%, đánh giá |
+| #86 | Phụ huynh liên kết con, cộng đồng theo chủ đề, admin quản lý toàn bộ |
+| #87 | Cổng thanh toán SePay (IPN), xác minh học sinh, Tổng quan mới, chế độ English |
+| #88 | Điều hướng gọn, trang giới thiệu VI/EN, dọn tính năng cũ |
 
 ## Vai trò
 
 - **Gia sư là trung tâm**: tìm học sinh qua bài "Tìm gia sư", gửi hồ sơ bằng credit, quản lý lớp, bài giảng (link YouTube/Google Drive), lịch, học sinh và tiền.
 - **Học sinh**: tìm gia sư, gửi offer (phải đủ số dư), học, xác nhận buổi, đánh giá.
-- **Phụ huynh**: liên kết con bằng mã mời; theo dõi lịch, điểm danh, bài giảng, số buổi còn lại; nạp tiền vào số dư của con; tìm và gửi offer thay con. Một phụ huynh liên kết được nhiều con.
+- **Học sinh phải xác minh** bằng ảnh học bạ hoặc bảng điểm (trường, lớp, mã học sinh) trước khi gửi hoặc nhận offer. Admin duyệt ở tab "Hôm nay". Một tệp, một mã học sinh, một số báo danh chứng chỉ của gia sư chỉ chứng minh được một tài khoản.
+- **Phụ huynh** (không cần xác minh): liên kết con bằng mã mời; theo dõi lịch, bài giảng, số buổi còn lại; nạp tiền vào số dư của con. **Không gửi hay trả lời offer**: con làm việc đó từ tài khoản học sinh. Một phụ huynh liên kết tối đa 6 con.
+- **Thiết lập tài khoản có thể để sau**: trước khi thiết lập chỉ xem được gia sư, môn học, cộng đồng; các tính năng khác yêu cầu thiết lập xong.
 - **Admin**: một vai trò duy nhất, toàn quyền; mọi thao tác ghi nhật ký.
 
 ## Tiền
 
-- SePay **không giữ tiền**: học sinh chuyển khoản VietQR, tiền về thẳng tài khoản ngân hàng của nền tảng, SePay chỉ báo giao dịch qua webhook để cộng số dư. Giao diện gọi là **"Số dư học phí"**, không phải ví; không chuyển tiền giữa người dùng.
-- Mỗi lần nạp có mã chuyển khoản riêng; số dư tự cộng khi webhook báo tiền về.
+- Nạp tiền qua **Cổng thanh toán SePay**: website ký form, người dùng trả trên trang SePay (QR, NAPAS, thẻ), SePay gọi **IPN** `/api/sepay/ipn` để cộng số dư đúng số tiền, mỗi giao dịch một lần. SePay không giữ tiền; tiền về tài khoản của nền tảng. Giao diện gọi là **"Số dư học phí"**, không phải ví; không chuyển tiền giữa người dùng. Cấu hình: `docs/cloudflare-deployment.md`.
 - Gửi offer → tạm giữ đủ tổng gói. Từ chối / hết hạn 48 giờ → hoàn về số dư.
 - Đối chiếu khi hết gói; gói dài hơn 1 tháng thì đối chiếu cuối mỗi tháng. Nền tảng thu **5% trên tiền các buổi đã xác nhận**, phần còn lại vào số dư gia sư; buổi không diễn ra hoàn về học sinh.
 - Rút tiền: thẻ yêu cầu gửi vào hội thoại với admin; admin chuyển khoản tay rồi bấm "Đã chuyển" mới trừ số dư.
-- Production tắt thanh toán thật cho tới khi chủ dự án nhập khóa SePay.
+- Production đã bật cổng thanh toán (khóa lưu trong Worker secrets). Local không có khóa thì nạp tiền được giả lập.
 
 ## Credit gia sư
 

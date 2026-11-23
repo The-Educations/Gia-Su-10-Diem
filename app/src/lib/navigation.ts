@@ -1,12 +1,9 @@
 import {
-  BookOpen,
-  CalendarClock,
   CalendarDays,
   Heart,
   House,
   MessageCircle,
   MessagesSquare,
-  Newspaper,
   Search,
   ShieldCheck,
   UserRoundPen,
@@ -29,9 +26,7 @@ export type NavModel = {
 
 const item = (to: string, label: string, icon: LucideIcon, short?: string): NavItem => ({ to, label, icon, short });
 const find = item("/tutors", "Tìm gia sư", Search);
-const subjects = item("/library", "Tìm môn học", BookOpen, "Môn học");
 const community = item("/community", "Cộng đồng", MessagesSquare);
-const news = item("/news", "Tin tức", Newspaper);
 const messages = item("/messages", "Tin nhắn", MessageCircle);
 const offers = item("/proposals", "Offer", Send);
 const wallet = item("/wallet", "Số dư", Wallet);
@@ -39,69 +34,38 @@ const classes = item("/classes", "Lớp học", GraduationCap, "Lớp");
 const schedule = item("/schedule", "Lịch", CalendarDays);
 
 export function navigationFor(user: User | null): NavModel {
-  if (!user)
-    return {
-      home: "/tutors",
-      primary: [find, subjects, community, news],
-      groups: [],
-      bar: [find, subjects, community, news],
-    };
+  if (!user) return { home: "/tutors", primary: [find, community], groups: [], bar: [find, community] };
   if (user.role === "admin") {
-    const admin = item("/admin", "Quản trị", ShieldCheck),
-      lessons = item("/schedule", "Lịch", CalendarDays),
-      hours = item("/calendar", "Lịch dạy", CalendarClock);
+    const admin = item("/admin", "Quản trị", ShieldCheck);
     return {
       home: "/admin",
-      primary: [admin, lessons, hours, messages],
-      groups: [{ label: "Khám phá", items: [find, subjects, community, news] }],
-      bar: [admin, lessons, messages, community],
+      primary: [admin, schedule, messages],
+      groups: [{ label: "Khám phá", items: [find, community] }],
+      bar: [admin, schedule, messages, community],
     };
   }
   const overview = item("/workspace", "Tổng quan", House);
-  if (user.role === "tutor") {
-    const lessons = item("/bookings", "Lịch dạy của tôi", CalendarDays, "Lịch dạy");
+  if (user.role === "tutor")
     return {
       home: "/workspace",
       primary: [overview, schedule, classes, offers, messages, community],
-      groups: [
-        {
-          label: "Hồ sơ",
-          items: [
-            wallet,
-            item("/studio", "Hồ sơ gia sư", UserRoundPen),
-            item("/calendar", "Giờ trống hằng tuần", CalendarClock),
-            lessons,
-          ],
-        },
-        { label: "Khám phá", items: [find, subjects, news] },
-      ],
+      groups: [{ label: "Hồ sơ", items: [wallet, item("/studio", "Hồ sơ gia sư", UserRoundPen), find] }],
       bar: [overview, schedule, classes, offers],
     };
+  if (user.learner_type === "parent") {
+    const family = item("/family", "Con của tôi", UsersRound, "Con");
+    return {
+      home: "/workspace",
+      primary: [overview, family, schedule, find, messages],
+      groups: [{ label: "Của tôi", items: [wallet, community] }],
+      bar: [overview, family, schedule, find],
+    };
   }
-  const lessons = item(
-    "/bookings",
-    user.learner_type === "parent" ? "Lịch học của con" : "Lịch học của tôi",
-    CalendarDays,
-    "Lịch học",
-  );
   return {
     home: "/workspace",
-    primary: user.learner_type === "parent"
-      ? [overview, item("/family", "Con của tôi", UsersRound, "Con"), find, schedule, offers, messages]
-      : [overview, find, schedule, classes, offers, messages],
-    groups: [
-      {
-        label: "Của tôi",
-        items: [
-          wallet,
-          lessons,
-          item("/availability", "Lịch rảnh", CalendarClock),
-          item("/favorites", "Gia sư đã lưu", Heart),
-        ],
-      },
-      { label: "Khám phá", items: [subjects, community, news] },
-    ],
-    bar: user.learner_type === "parent" ? [overview, item("/family", "Con của tôi", UsersRound, "Con"), schedule, find] : [overview, find, schedule, classes],
+    primary: [overview, find, schedule, classes, offers, messages],
+    groups: [{ label: "Của tôi", items: [wallet, item("/favorites", "Gia sư đã lưu", Heart), community] }],
+    bar: [overview, find, schedule, classes],
   };
 }
 

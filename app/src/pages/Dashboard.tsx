@@ -1,18 +1,10 @@
 import { TodayPanel } from "@/components/today-panel";
-import { lessonMessageHref } from "@/lib/message-context";
 import type { StudyOffer } from "@/lib/offers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import {
-  CalendarDays,
-  MessageCircle,
-  ArrowUpRight,
-  BookOpen,
-  Heart,
-  GraduationCap,
-} from "lucide-react";
-import { useApp, useLoad, dateTime, money } from "@/lib/api";
+import { MessageCircle, ArrowUpRight } from "lucide-react";
+import { useApp, useLoad, money } from "@/lib/api";
 import type { Booking, Inquiry, Tutor } from "@/lib/types";
 import {
   Page,
@@ -24,14 +16,9 @@ import {
   ErrorState,
   TextLink,
 } from "@/components/common";
-import {
-  WorkspacePanel,
-  WorkspacePanels,
-  WeekAgenda,
-} from "@/components/workspace";
+import { WorkspacePanel } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { TodayLessons } from "@/components/today-lessons";
 import { CoursesToReview, CourseReviewDialog } from "@/components/trust";
 export default function Dashboard() {
   const [reviewing, setReviewing] = useState<StudyOffer | null>(null);
@@ -96,126 +83,9 @@ export default function Dashboard() {
       />
       {!isTutor && (!user.school || !user.ward_code) && <Alert><AlertDescription><Link to="/settings">Hoàn thiện hồ sơ: trường học & nơi sinh sống</Link></AlertDescription></Alert>}
       <TodayPanel />
-      <TodayLessons lessons={rows} role={isTutor ? "tutor" : "student"} onChanged={bookings.reload} />
       {!isTutor && <CoursesToReview offers={offers.data || []} onReview={setReviewing} />}
       <CourseReviewDialog offer={reviewing} onClose={() => setReviewing(null)} onDone={() => { offers.reload(); bookings.reload(); }} />
-      <div className="workspace-overview">
-        <WorkspacePanels>
-          <section
-            className={`next-lesson-panel ${isTutor ? "tutor-next" : ""}`}
-          >
-            <div className="next-lesson-heading">
-              <span>
-                <CalendarDays size={18} />
-                {isTutor ? "Buổi dạy tiếp theo" : user.learner_type === "parent" ? "Buổi học tiếp theo của con" : "Buổi học tiếp theo"}
-              </span>
-              {next && <State value={next.status} />}
-            </div>
-            {next ? (
-              <>
-                <div className="next-lesson-body">
-                  <div className="next-lesson-date">
-                    <strong>
-                      {new Date(next.starts_at).toLocaleDateString("vi-VN", {
-                        day: "2-digit",
-                        timeZone: "Asia/Ho_Chi_Minh",
-                      })}
-                    </strong>
-                    <span>
-                      Tháng{" "}
-                      {new Date(next.starts_at).toLocaleDateString("vi-VN", {
-                        month: "2-digit",
-                        timeZone: "Asia/Ho_Chi_Minh",
-                      })}
-                    </span>
-                  </div>
-                  <div>
-                    <h2>{next.subject_name}</h2>
-                    <p>{isTutor ? next.student_name : next.tutor_name}</p>
-                    <span>{dateTime(next.starts_at)} · {next.duration_minutes} phút</span>
-                  </div>
-                </div>
-                <div className="next-lesson-actions">
-                  <Button asChild variant="secondary">
-                    <Link to={lessonMessageHref(next)}>
-                      <MessageCircle data-icon="inline-start" />
-                      Trao đổi buổi học
-                    </Link>
-                  </Button>
-                  <Link to={next.offer_id ? `/bookings?offer=${next.offer_id}` : `/bookings?status=${next.status}`}>
-                    Xem lịch
-                    <ArrowUpRight size={16} />
-                  </Link>
-                </div>
-              </>
-            ) : (
-              <div className="next-lesson-empty">
-                <BookOpen size={32} />
-                <h2>
-                  {isTutor
-                    ? "Sẵn sàng cho buổi dạy mới"
-                    : "Chọn gia sư đầu tiên"}
-                </h2>
-                <Button asChild variant="secondary">
-                  <Link to={isTutor ? "/studio?tab=slots" : "/tutors"}>
-                    {isTutor ? "Thêm giờ trống" : "Khám phá gia sư"}
-                    <ArrowUpRight data-icon="inline-end" />
-                  </Link>
-                </Button>
-              </div>
-            )}
-          </section>
-          <WorkspacePanel
-            title={isTutor ? "Đề nghị cần phản hồi" : user.learner_type === "parent" ? "Mục tiêu học tập của con" : "Mục tiêu của bạn"}
-            action={
-              <TextLink to={isTutor ? (pendingOffers.length ? "/offers" : "/bookings?status=pending") : "/settings"}>
-                {isTutor ? "Xem tất cả" : "Chỉnh sửa"}
-              </TextLink>
-            }
-          >
-            {isTutor ? (
-              pending.length || pendingOffers.length ? (
-                <div className="request-preview">
-                  {pendingOffers.slice(0,3).map(o=><Link to={`/offers?id=${o.id}`} key={`offer-${o.id}`}><Person name={o.student_name} id={o.student_id} /><div><strong>{o.student_name}</strong><span>{o.subject_name} · {o.blocks.length} giờ / tuần</span></div><ArrowUpRight size={18} /></Link>)}
-                  {pending.slice(0, 3).map((b) => (
-                    <Link to="/bookings?status=pending" key={b.id}>
-                      <Person name={b.student_name} id={b.student_id} />
-                      <div>
-                        <strong>{b.student_name}</strong>
-                        <span>
-                          {b.subject_name} · {dateTime(b.starts_at)}
-                        </span>
-                      </div>
-                      <ArrowUpRight size={18} />
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <Blank title="Không có yêu cầu đang chờ" />
-              )
-            ) : (
-              <div className="student-goal">
-                <BookOpen size={28} />
-                <p>{user.goal || "Đặt mục tiêu để tìm gia sư phù hợp."}</p>
-                <div className="workspace-shortcuts">
-                  <Link to="/library">
-                    <GraduationCap size={18} />
-                    Tìm môn học
-                    <ArrowUpRight size={16} />
-                  </Link>
-                  <Link to="/favorites">
-                    <Heart size={18} />
-                    Gia sư đã lưu
-                    <ArrowUpRight size={16} />
-                  </Link>
-                </div>
-              </div>
-            )}
-          </WorkspacePanel>
-        </WorkspacePanels>
-      </div>
       <div className="workspace-lower">
-        <WeekAgenda bookings={rows} tutor={isTutor} />
         <div className="workspace-side">
           {isTutor ? (
             <WorkspacePanel

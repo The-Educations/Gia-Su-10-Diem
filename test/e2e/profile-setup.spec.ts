@@ -133,7 +133,7 @@ test("searchable address, crop preview and tutor steps preserve edits and save t
   expect(saved.tutor_kind).toBe("student");
   expect(saved.location).toBe("Phường Bến Thành, Thành phố Hồ Chí Minh");
   expect(saved.weekly_schedule.blocks).toContainEqual({ weekday: 1, hour: 18 });
-  await page.getByRole("link", { name: "Giờ trống hằng tuần", exact: true }).click();
+  await page.goto("/app/studio?step=schedule");
   await expect(
     page.getByRole("button", { name: "Thứ 3, 18:00–19:00", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -175,7 +175,7 @@ test("admin calendar and reversible take-down dialog work without deleting the t
     .getByRole("button", { name: "Duyệt & công bố", exact: true })
     .click();
   await expect(row).toContainText("Đã công bố");
-  await page.getByRole("link", { name: "Lịch dạy", exact: true }).click();
+  await page.goto("/app/calendar");
   await expect(
     page.getByRole("heading", { name: "Lịch dạy", exact: true }),
   ).toBeVisible();

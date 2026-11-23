@@ -19,6 +19,7 @@ export function migrateCredentials(db) {
   const columns = db.prepare("PRAGMA table_info(tutors)").all().map((c) => c.name);
   if (!columns.includes("tutor_kind")) db.exec("ALTER TABLE tutors ADD COLUMN tutor_kind TEXT NOT NULL DEFAULT ''");
   if (!columns.includes("intro_video")) db.exec("ALTER TABLE tutors ADD COLUMN intro_video TEXT NOT NULL DEFAULT ''");
+  if (!columns.includes("sample_video")) db.exec("ALTER TABLE tutors ADD COLUMN sample_video TEXT NOT NULL DEFAULT ''");
   db.exec(`CREATE TABLE IF NOT EXISTS tutor_credentials (
     id INTEGER PRIMARY KEY, tutor_id INTEGER NOT NULL REFERENCES tutors(user_id),
     kind TEXT NOT NULL CHECK(kind IN ('school','award','certificate')), catalog_id TEXT NOT NULL DEFAULT '',

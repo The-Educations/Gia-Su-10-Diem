@@ -844,6 +844,31 @@ footer {
   gap: 30px;
   font-size: 14px;
 }
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.footer-top .footer-social {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  margin: 0 0 0 -12px;
+  font-size: inherit;
+  color: #e1c8c3;
+}
+.footer-social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  transition: color 0.2s ease-out;
+}
+.footer-social a:hover {
+  color: var(--white);
+}
 .footer-word {
   font-size: clamp(42px, 8vw, 120px);
   line-height: 1.5;
@@ -1478,3 +1503,7 @@ footer {
     opacity: 1;
   }
 }
+.nav-inner > .lang-switch { margin-left: -12px; }
+.lang-switch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line, rgba(0,0,0,.12)); border-radius: 999px; }
+.lang-switch button { min-width: 34px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; color: inherit; }
+.lang-switch button[aria-pressed="true"] { background: #1f1d1a; color: #fbf7ef; }

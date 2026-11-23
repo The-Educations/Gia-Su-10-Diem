@@ -12,6 +12,7 @@ import { registerClasses, classRatings } from "./classes.js";
 import { registerCommunityTopics } from "./community-topics.js";
 import { registerFamily } from "./family.js";
 import { registerStudentVerification } from "./student-verification.js";
+import { registerCalendarEvents } from "./calendar-events.js";
 import { registerWeeklyRequests } from "./weekly-requests.js";
 import { registerSupport } from "./support.js";
 import { registerAccountDeletion } from "./account-deletion.js";
@@ -260,6 +261,7 @@ export function createApi(
   registerUploads(app, db, auth, audit, processPhoto);
   registerCredentials(app, db, auth, audit, processPhoto);
   registerStudentVerification(app, db, auth, audit, processPhoto);
+  registerCalendarEvents(app, db, auth);
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
@@ -536,7 +538,7 @@ export function createApi(
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,sample_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
@@ -550,6 +552,7 @@ export function createApi(
         d.teaching_style,
         d.lesson_plan,
         d.intro_video,
+        d.sample_video,
         d.profile_theme ?? null,
         d.education_history ? JSON.stringify(d.education_history) : null,
         d.profile_sections ? JSON.stringify(d.profile_sections) : null,

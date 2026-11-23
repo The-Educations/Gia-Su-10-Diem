@@ -18,6 +18,7 @@ export const CONTENT_FIELDS = [
   "teaching_style",
   "lesson_plan",
   "intro_video",
+  "sample_video",
   "subjects",
   "levels",
   "goals",
@@ -41,7 +42,7 @@ export const contentSnapshot = (row) => JSON.stringify(Object.fromEntries(CONTEN
 export function publicView(row) {
   if (!row || row.status === "approved" || row.published == null) return row;
   // Snapshots taken before a field existed must not reveal the unreviewed draft.
-  return { ...row, intro_video: "", ...JSON.parse(row.published) };
+  return { ...row, intro_video: "", sample_video: "", ...JSON.parse(row.published) };
 }
 
 const normal = (field, value) => (JSON_FIELDS.has(field) ? JSON.stringify(JSON.parse(value)) : value);

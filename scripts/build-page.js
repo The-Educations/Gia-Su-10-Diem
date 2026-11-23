@@ -3,6 +3,11 @@ import { renderSeo } from "../server/seo.js";
 const i = JSON.parse(fs.readFileSync("inputs.json", "utf8"));
 const css = fs.readFileSync("styles.css", "utf8");
 const script = fs.readFileSync("scripts/site.js", "utf8");
+// English for the landing comes from the app's dictionaries, limited to strings on this page.
+const dictionary = {};
+for (const file of ["app/src/lib/locales/en.ts", "app/src/lib/locales/en-more.ts"])
+  for (const m of fs.readFileSync(file, "utf8").matchAll(/^\s*("(?:[^"\\]|\\.)*"):\s*("(?:[^"\\]|\\.)*"),?$/gm))
+    dictionary[JSON.parse(m[1])] ??= JSON.parse(m[2]);
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -18,6 +23,19 @@ const arrow = `<svg aria-hidden='true' viewBox='0 0 24 24' fill='none'><path d='
 const brand = `<img src='/assets/icon-v2.svg' width='40' height='40' alt=''><span>${escape(i.brand.name)}</span>`;
 const art = (name, cls = "", speed = "0.1") =>
   `<img class='${cls}' src='/assets/landing/${name}.svg' width='600' height='600' alt='' aria-hidden='true' data-parallax='${speed}'>`;
+// Same pages and icons as app/src/components/social-links.tsx: change both together.
+const social = [
+  { name: "Facebook", href: "https://www.facebook.com/profile.php?id=61596469006930", icon: "<path d='M13.5 21v-7.5h2.6l.4-3.1h-3V8.5c0-.9.3-1.5 1.6-1.5h1.6V4.2c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.3H8v3.1h2.5V21h3Z'/>" },
+  { name: "Instagram", href: "https://www.instagram.com/giasu_10diem/", icon: "<rect x='4' y='4' width='16' height='16' rx='4.5' fill='none' stroke='currentColor' stroke-width='1.8'/><circle cx='12' cy='12' r='3.6' fill='none' stroke='currentColor' stroke-width='1.8'/><circle cx='16.9' cy='7.1' r='1.1'/>" },
+  { name: "TikTok", href: "https://www.tiktok.com/@giasu_10diem", icon: "<path d='M16.6 3h-2.9v11.6a2.6 2.6 0 1 1-2.6-2.6c.3 0 .5 0 .8.1V9.1a5.5 5.5 0 1 0 4.7 5.4V9.1a6.6 6.6 0 0 0 3.8 1.2V7.4a3.9 3.9 0 0 1-3.8-4.4Z'/>" },
+  { name: "Threads", href: "https://www.threads.com/@giasu_10diem", icon: "<path d='M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.478-2.256h.044c3.194.02 5.097 1.975 5.287 5.388.108.046.216.094.321.142 1.49.7 2.58 1.761 3.154 3.07.797 1.82.871 4.79-1.548 7.158-1.85 1.81-4.094 2.628-7.277 2.65Zm1.003-11.69c-.242 0-.487.007-.739.021-1.836.103-2.98.946-2.916 2.143.067 1.256 1.452 1.839 2.784 1.767 1.224-.065 2.818-.543 3.086-3.71a10.5 10.5 0 0 0-2.215-.221z'/>" },
+];
+const socialLinks = `<nav class='footer-social' aria-label='Mạng xã hội'>${social
+  .map(
+    (s) =>
+      `<a href='${s.href}' target='_blank' rel='noopener noreferrer' aria-label='${s.name}' title='${s.name}'><svg viewBox='0 0 24 24' width='20' height='20' fill='currentColor' aria-hidden='true' focusable='false'>${s.icon}</svg></a>`,
+  )
+  .join("")}</nav>`;
 const nav = [
   { label: "Môn học", href: "#labs" },
   { label: "Cách kết nối", href: "#journey" },
@@ -58,6 +76,7 @@ const html = `<!DOCTYPE html>
 <header class='nav'>
   <div class='container nav-inner'>
     <a href='/' class='brand' aria-label='Gia Sư 10 Điểm — Trang chủ'>${brand}</a>
+    <div class='lang-switch' role='group' aria-label='Ngôn ngữ' translate='no'><button type='button' data-lang='vi' aria-label='Tiếng Việt'>VI</button><button type='button' data-lang='en' aria-label='English'>EN</button></div>
     <a class='te-brand' href='#top' aria-label='The Educations, về đầu trang'>${teLogo}</a>
     <nav class='nav-links' aria-label='Điều hướng chính'>${navLinks}</nav>
     <a class='nav-login' href='/app/auth'>Tài khoản ${arrow}</a>
@@ -93,7 +112,7 @@ const html = `<!DOCTYPE html>
 </section>
 <section class='subjects section-space' id='labs' aria-labelledby='labs-title' data-od-id='labs'>
   <div class='container'>
-    <div class='section-head'><h2 id='labs-title' data-reveal>Hôm nay, em muốn<br><em>hiểu thêm điều gì?</em></h2><a class='text-link' href='/app/library'>Tất cả môn học & kỳ thi ${arrow}</a></div>
+    <div class='section-head'><h2 id='labs-title' data-reveal>Hôm nay, em muốn<br><em>hiểu thêm điều gì?</em></h2><a class='text-link' href='/app/tutors'>Tất cả gia sư ${arrow}</a></div>
     <div class='course-controls'><div class='pills' aria-label='Lọc môn học'>${i.labs.pills.map((p) => `<button class='pill${p.active ? " active" : ""}' type='button' data-filter='${p.key}' aria-pressed='${!!p.active}'>${escape(p.label)}</button>`).join("")}</div><input id='course-search' type='search' placeholder='Tìm môn học' aria-label='Tìm môn học'></div>
     <p id='course-count' class='sr-only' role='status' aria-live='polite'>5 chương trình</p>
     <div class='subject-list' id='labs-container'>${i.labs.cards
@@ -116,9 +135,9 @@ const html = `<!DOCTYPE html>
     <div class='journey-copy'>
       <h2 id='journey-title'>Từ lời chào đầu tiên.<br><em>Đến giờ học của em.</em></h2>
       <ol class='journey-steps'>
-        <li><span>01</span><div><h3>Chọn người phù hợp.</h3><p>Xem chuyên môn, cách dạy, học phí và CV của gia sư.</p><a href='/app/tutors'>Khám phá hồ sơ ${arrow}</a></div></li>
-        <li><span>02</span><div><h3>Cứ hỏi, trước khi học.</h3><p>Nhắn trực tiếp để trao đổi mục tiêu và những điều em còn băn khoăn.</p><a href='/app/tutors'>Tìm người để trò chuyện ${arrow}</a></div></li>
-        <li><span>03</span><div><h3>Hẹn một giờ tiến bộ.</h3><p>Chọn giờ trống, gửi yêu cầu và nhận xác nhận từ gia sư.</p><a href='/app/auth'>Tạo tài khoản ${arrow}</a></div></li>
+        <li><span>01</span><div><h3>Chọn người phù hợp.</h3><p>Trường học, giải thưởng và chứng chỉ của gia sư đều đã được đối chiếu minh chứng.</p><a href='/app/tutors'>Khám phá hồ sơ ${arrow}</a></div></li>
+        <li><span>02</span><div><h3>Gửi một offer.</h3><p>Chọn số buổi, lịch và học phí. Tiền được giữ an toàn đến khi gia sư nhận lớp.</p><a href='/app/tutors'>Tìm gia sư ${arrow}</a></div></li>
+        <li><span>03</span><div><h3>Học và cùng xác nhận.</h3><p>Sau mỗi buổi, cả hai bên bấm xác nhận. Buổi không diễn ra được hoàn tiền.</p><a href='/app/auth?mode=register'>Tạo tài khoản ${arrow}</a></div></li>
       </ol>
     </div>
     <div class='learning-desk' aria-hidden='true'>
@@ -134,8 +153,8 @@ const html = `<!DOCTYPE html>
   <div class='container tutor-grid'>
     <div class='tutor-art'>${art("desk", "", "0.12")}<span class='tutor-handwriting' data-parallax='-0.1'>Một góc học.<br>Mở nhiều chân trời.</span></div>
     <div class='tutor-copy'><h2 id='tutor-title' data-reveal>Giỏi một điều.<br><em>Truyền đi nhiều điều.</em></h2><p class='lead' data-reveal>Đưa chuyên môn và cách dạy của bạn đến với những học sinh đang cần.</p>
-      <ul class='tutor-features'><li data-reveal><h3>Hồ sơ mang dấu ấn của bạn</h3><p>Giới thiệu kinh nghiệm, môn nhận dạy, ảnh đại diện và CV.</p></li><li data-reveal><h3>Lịch dạy do bạn chủ động</h3><p>Mở giờ trống, nhận yêu cầu học và trao đổi ngay trong ứng dụng.</p></li></ul>
-      <a class='button primary' href='/app/auth'>Trở thành gia sư ${arrow}</a>
+      <ul class='tutor-features'><li data-reveal><h3>Hồ sơ đã xác minh</h3><p>Chọn trường, giải thưởng, chứng chỉ từ danh sách và kèm minh chứng. Học sinh thấy dấu Đã xác minh.</p></li><li data-reveal><h3>Lớp học trong một nơi</h3><p>Nhận offer, gửi hồ sơ vào bài Tìm gia sư, quản lý lịch, bài giảng và học phí.</p></li></ul>
+      <a class='button primary' href='/app/auth?mode=register'>Trở thành gia sư ${arrow}</a>
     </div>
   </div>
 </section>
@@ -152,11 +171,15 @@ const html = `<!DOCTYPE html>
   <div class='contact-orbit' aria-hidden='true'>${art("orbit", "", "-0.08")}</div>
 </section>
 </main>
-<footer><div class='container'><div class='footer-top'><a class='brand' href='/'>${brand}</a><nav aria-label='Điều hướng cuối trang'><a href='/app/tutors'>Tìm gia sư</a><a href='/app/library'>Tìm môn học</a><a href='/app/auth'>Tài khoản</a><a href='/privacy'>Quyền riêng tư</a><a href='/terms'>Điều khoản dịch vụ</a></nav></div><div class='footer-word' aria-hidden='true' data-parallax='0.05'>Học. <em>Hiểu.</em> Lớn lên.</div><div class='footer-bottom'><span>© ${i.brand.year} Gia Sư 10 Điểm</span><a href='#top'>Về đầu trang ↑</a></div></div></footer>
+<footer><div class='container'><div class='footer-top'><div class='footer-brand'><a class='brand' href='/'>${brand}</a>${socialLinks}</div><nav aria-label='Điều hướng cuối trang'><a href='/app/tutors'>Tìm gia sư</a><a href='/app/community'>Cộng đồng</a><a href='/app/auth'>Tài khoản</a><a href='/privacy'>Quyền riêng tư</a><a href='/terms'>Điều khoản dịch vụ</a></nav></div><div class='footer-word' aria-hidden='true' data-parallax='0.05'>Học. <em>Hiểu.</em> Lớn lên.</div><div class='footer-bottom'><span>© ${i.brand.year} Gia Sư 10 Điểm</span><a href='#top'>Về đầu trang ↑</a></div></div></footer>
 </div>
-<script>${script}</script>
+<script>window.__EN=__EN_DICT__;${script}</script>
 </body></html>`;
-fs.writeFileSync("index.html", renderSeo(html, "/"));
+// Subject names arrive from the API after load, so they ship too.
+const { subjects: catalogSubjects } = await import("../server/catalog.js");
+const extra = new Set(["Tất cả môn học", ...catalogSubjects.map((row) => row[1])]);
+const onPage = Object.fromEntries(Object.entries(dictionary).filter(([vi]) => vi.length > 1 && (extra.has(vi) || html.includes(vi) || html.includes(escape(vi)))));
+fs.writeFileSync("index.html", renderSeo(html.replace("__EN_DICT__", JSON.stringify(onPage).replace(/</g, "\\u003c")), "/"));
 console.log(
   `Built Vietnamese editorial landing (${(html.length / 1024).toFixed(1)} KB).`,
 );

@@ -76,6 +76,7 @@ export type Tutor = {
   email?: string;
   tutor_kind: TutorKind;
   intro_video: string;
+  sample_video?: string;
   verified?: VerifiedCredential[];
   // Last approved content while an edited version awaits review.
   published?: PublishedProfile | null;
@@ -294,7 +295,7 @@ export type ClassSession = {
   id: number; class_id: number; starts_at: string; minutes: number; status: string; moved_from: string | null;
   title: string; color: string; tutor_id: number; subject_id: string; mode: string; meeting_url: string;
   member_id: number | null; tutor_confirmed_at: string | null; student_confirmed_at: string | null;
-  outcome: "pending" | "confirmed" | "charged" | "refunded" | "disputed" | null; rating: number | null;
+  outcome: "pending" | "confirmed" | "charged" | "refunded" | "disputed" | null; rating: number | null; survey?: string; comment?: string;
   student_id: number | null; student_name: string | null; tutor_name: string;
 };
 export type ClassMember = {
@@ -309,3 +310,5 @@ export type ClassInfo = {
   materials?: { id: number; session_id: number | null; title: string; url: string; note: string; created_at: string }[];
   moves?: { id: number; session_id: number; requested_by: number; starts_at: string }[];
 };
+
+export type CalendarEvent = { id: number; title: string; starts_at: string; ends_at: string; color: string; note: string };
