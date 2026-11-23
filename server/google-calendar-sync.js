@@ -65,7 +65,7 @@ export function createCalendarSync(db, { origin, google = {} }) {
   function eventFor(b, userId) {
     return {
       summary: `${b.subject_name} · ${b.tutor_id === userId ? b.student_name : b.tutor_name}`,
-      description: [b.mode === "online" ? "Trực tuyến" : "Trực tiếp", b.note, b.lesson_note, b.meeting_url, `${origin}/app/bookings?lesson=${b.id}`].filter(Boolean).join("\n\n"),
+      description: [b.mode === "online" ? "Trực tuyến" : "Trực tiếp", b.note, b.lesson_note, b.meeting_url, `${origin}${b.class_session ? `/app/classes` : `/app/bookings?lesson=${b.id}`}`].filter(Boolean).join("\n\n"),
       start: { dateTime: new Date(b.starts_at).toISOString(), timeZone: "Asia/Ho_Chi_Minh" },
       end: { dateTime: new Date(Date.parse(b.starts_at) + b.duration_minutes * 60000).toISOString(), timeZone: "Asia/Ho_Chi_Minh" },
       extendedProperties: { private: { giasuBooking: String(b.id), giasuOwner: hash(`${origin}:${userId}`) } },
@@ -95,9 +95,21 @@ export function createCalendarSync(db, { origin, google = {} }) {
         c.calendar_id = calendar.id;
         run(db, "UPDATE google_calendars SET calendar_id=? WHERE user_id=? AND generation=?", c.calendar_id, userId, c.generation);
       }
-      const lessons = all(db, `SELECT b.*,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name
-        FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id
-        WHERE (b.student_id=? OR b.tutor_id=?) AND b.status IN ('accepted','completed') ORDER BY b.starts_at,b.id`, userId, userId);
+      const lessons = [
+        // Retired one-off bookings (history stays synced).
+        ...all(db, `SELECT b.*,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,0 AS class_session
+          FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id
+          WHERE (b.student_id=? OR b.tutor_id=?) AND b.status IN ('accepted','completed')`, userId, userId),
+        // Class sessions of the new flow use negative ids in google_calendar_events.booking_id so they never collide.
+        ...all(db, `SELECT -cs.id AS id, cs.starts_at, cs.minutes AS duration_minutes, c.mode, c.meeting_url, sm.note, '' AS lesson_note,
+            cs.id AS real_id, c.tutor_id, m.student_id, u_s.name AS student_name, u_t.name AS tutor_name, sub.name AS subject_name,
+            'accepted' AS status, 1 AS class_session
+          FROM class_sessions cs JOIN classes c ON c.id=cs.class_id
+          JOIN subjects sub ON sub.id=c.subject_id JOIN users u_t ON u_t.id=c.tutor_id
+          JOIN class_members m ON m.class_id=c.id AND m.status='active' JOIN users u_s ON u_s.id=m.student_id
+          LEFT JOIN session_members sm ON sm.session_id=cs.id AND sm.member_id=m.id AND sm.outcome='missed'
+          WHERE cs.status='scheduled' AND (m.student_id=? OR c.tutor_id=?)`, userId, userId),
+      ].sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.id - b.id);
       const stored = all(db, "SELECT * FROM google_calendar_events WHERE user_id=?", userId);
       const ids = new Set(lessons.map(b => b.id));
       const changes = lessons.map(b => {

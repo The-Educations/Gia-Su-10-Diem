@@ -18,7 +18,6 @@ async function setup(t, { configured = true } = {}) {
     run(db, "INSERT INTO slots(id,tutor_id,starts_at) VALUES (?,3,?)", id, start);
     return run(db, "INSERT INTO bookings(id,slot_id,student_id,tutor_id,subject_id,starts_at,rate,mode,note,status,duration_minutes) VALUES (?,?,?,3,'toan',?,150000,'online','Mục tiêu',?,90)", id, id, student, start, status);
   };
-  lesson(1); lesson(2, "completed"); lesson(3, "pending"); lesson(4, "cancelled"); lesson(5, "accepted", 4);
   const fake = { calls: [], calendars: new Map(), nonce: "", sub: "google-2", fail: "", lostEvent: false, delay: null, verified: true };
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
   const calendarFetch = async (url, options) => {
@@ -59,6 +58,7 @@ async function setup(t, { configured = true } = {}) {
   };
   const app = createApi(db, { limit: false, google: { clientId: "calendar-client", clientSecret: "test-secret", calendarTokenKey: configured ? Buffer.alloc(32, 7).toString("base64") : "", calendarFetch, calendarVerifyToken: async () => ({ sub: fake.sub, email: `${fake.sub}@example.test`, email_verified: fake.verified, nonce: fake.nonce }) } });
   const server = app.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve));
+  lesson(1); lesson(2, "completed"); lesson(3, "pending"); lesson(4, "cancelled"); lesson(5, "accepted", 4);
   t.after(async () => { await new Promise(resolve => server.close(resolve)); db.close(); });
   const base = `http://127.0.0.1:${server.address().port}`;
   const request = (path, method = "GET", user = 2, data = {}) => fetch(base + path, { method, redirect: "manual", headers: { Cookie: `giasu_session=session-${user}`, "Content-Type": "application/json" }, ...(method !== "GET" ? { body: JSON.stringify(data) } : {}) });
@@ -128,4 +128,118 @@ test("disconnect cancels an in-flight authorization callback without resurrectin
   assert.equal(fake.calendars.size, 0);
 });
 
+test("calendar sync exports only the user's confirmed lessons, encrypts credentials and reuses its own calendar", async t => {
+  const { db, app, fake, request, start, callback } = await setup(t);
+  await callback(await start());
+  const connection = one(db, "SELECT * FROM google_calendars WHERE user_id=2");
+  assert.notEqual(connection.refresh_token, "test-refresh-token");
+  assert.equal(app.locals.calendarSync.decrypt(connection.refresh_token, 2), "test-refresh-token");
+  assert.throws(() => app.locals.calendarSync.decrypt(connection.refresh_token, 4));
+  const status = await (await request("/api/account/google-calendar")).json();
+  assert.equal(status.connected, true); assert.ok(status.lastSynced);
+  assert.ok(!JSON.stringify(status).includes("token"));
+  const events = [...fake.calendars.get(connection.calendar_id).values()];
+  assert.equal(events.length, 2);
+  assert.equal(events[0].summary, "Toán · Person 3");
+  assert.equal(events[0].start.dateTime, "2030-01-07T16:30:00.000Z");
+  assert.equal(events[0].end.dateTime, "2030-01-07T18:00:00.000Z");
+  assert.ok(!events[0].attendees, "No invitations are sent to other users");
+  await app.locals.calendarSync.syncUser(2);
+  assert.equal(fake.calls.filter(c => c.method === "POST" && c.url.includes("/events")).length, 2);
+  await callback(await start()); assert.equal(fake.calendars.size, 1);
+  fake.sub = "another-account";
+  assert.match((await callback(await start())).headers.get("location"), /account_changed/);
+  assert.equal(one(db, "SELECT subject FROM google_calendars WHERE user_id=2").subject, "google-2");
+  await callback(await start(3));
+  const tutor = one(db, "SELECT * FROM google_calendars WHERE user_id=3");
+  assert.equal(fake.calendars.get(tutor.calendar_id).size, 3);
+  assert.match([...fake.calendars.get(tutor.calendar_id).values()][0].summary, /Person 2/);
+});
 
+test("background sync updates notes, removes cancelled lessons and survives ambiguous event responses without duplicates", async t => {
+  const { db, app, fake, start, callback } = await setup(t);
+  fake.lostEvent = true; await callback(await start());
+  assert.equal(one(db, "SELECT error FROM google_calendars").error, "temporary");
+  await app.locals.calendarSync.syncUser(2);
+  const calendar = [...fake.calendars.values()][0]; assert.equal(calendar.size, 2);
+  run(db, "UPDATE bookings SET lesson_note='Bài 1–5',meeting_url='https://meet.google.com/example' WHERE id=1");
+  run(db, "UPDATE bookings SET status='cancelled' WHERE id=2");
+  run(db, "UPDATE google_calendars SET next_sync=0");
+  await app.locals.calendarSync.syncDue();
+  assert.equal(calendar.size, 1);
+  assert.match([...calendar.values()][0].description, /Bài 1–5/);
+  assert.match([...calendar.values()][0].description, /meet.google.com/);
+  assert.equal(all(db, "SELECT * FROM google_calendar_events WHERE user_id=2").length, 1);
+});
+
+test("calendar jobs have a bounded batch, serialize concurrent requests and stop after disconnect", async t => {
+  const { db, app, fake, start, callback, lesson, request } = await setup(t);
+  for (let id = 10; id < 23; id++) lesson(id);
+  await callback(await start());
+  assert.equal([...fake.calendars.values()][0].size, 10);
+  assert.equal(one(db, "SELECT last_synced FROM google_calendars").last_synced, null);
+  let release; fake.delay = new Promise(resolve => { release = resolve; });
+  const first = app.locals.calendarSync.syncUser(2);
+  await app.locals.calendarSync.syncUser(2);
+  release(); await first;
+  assert.equal([...fake.calendars.values()][0].size, 15);
+  assert.ok(one(db, "SELECT last_synced FROM google_calendars").last_synced);
+  await request("/api/account/google-calendar", "DELETE");
+  assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendars").n, 0);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendar_events").n, 0);
+  const before = fake.calls.length; await app.locals.calendarSync.syncDue();
+  assert.equal(fake.calls.length, before);
+  assert.equal([...fake.calendars.values()][0].size, 15, "Disconnect preserves existing Google events");
+});
+
+test("revoked credentials pause automatic retries and deleted accounts lose stored Calendar authorization", async t => {
+  const { db, app, fake, start, callback, request } = await setup(t);
+  fake.fail = "revoked";
+  const flow = await start();
+  assert.match((await callback(flow)).headers.get("location"), /failed/);
+  fake.fail = ""; await callback(await start());
+  // A fresh service has no cached access token and detects invalid_grant.
+  const { createCalendarSync } = await import("../server/google-calendar-sync.js");
+  const paused = createCalendarSync(db, { origin: "http://127.0.0.1:4174", google: { clientId: "client", clientSecret: "secret", calendarTokenKey: Buffer.alloc(32, 7).toString("base64"), calendarFetch: async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }) } });
+  run(db, "UPDATE bookings SET lesson_note='Changed after revocation' WHERE id=1");
+  await paused.syncUser(2);
+  assert.equal(one(db, "SELECT error FROM google_calendars").error, "reconnect");
+  const before = fake.calls.length; run(db, "UPDATE google_calendars SET next_sync=0");
+  await app.locals.calendarSync.syncDue(); assert.equal(fake.calls.length, before);
+  assert.equal((await request("/api/admin/users/2", "DELETE", 1, { email: "user2@example.test" })).status, 200);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendars").n, 0);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendar_events").n, 0);
+});
+
+test("one deleted Google event is recreated without stopping sync; a deleted calendar is reported", async t => {
+  const { db, app, fake, start, callback, lesson } = await setup(t);
+  await callback(await start());
+  const connection = one(db, "SELECT * FROM google_calendars");
+  const mapping = one(db, "SELECT * FROM google_calendar_events WHERE booking_id=1");
+  const calendar = fake.calendars.get(connection.calendar_id);
+  calendar.delete(mapping.event_id);
+  run(db, "UPDATE bookings SET lesson_note='After Google deletion' WHERE id=1");
+  await app.locals.calendarSync.syncUser(2);
+  assert.equal(calendar.size, 2);
+  assert.notEqual(one(db, "SELECT event_id FROM google_calendar_events WHERE booking_id=1").event_id, mapping.event_id);
+  assert.equal(one(db, "SELECT error FROM google_calendars").error, "");
+  fake.calendars.delete(connection.calendar_id); lesson(6);
+  await app.locals.calendarSync.syncUser(2);
+  assert.equal(one(db, "SELECT error FROM google_calendars").error, "calendar_missing");
+});
+
+test("suspending the last connected account preserves the scheduler so reactivation resumes sync", async t => {
+  const { db, app, fake, start, callback } = await setup(t);
+  await callback(await start());
+  run(db, "UPDATE users SET status='suspended' WHERE id=2");
+  run(db, "UPDATE bookings SET lesson_note='Updated while suspended' WHERE id=1");
+  run(db, "UPDATE google_calendars SET next_sync=0");
+  const calls = fake.calls.length;
+  await app.locals.calendarSync.syncDue();
+  assert.equal(fake.calls.length, calls);
+  assert.equal(app.locals.calendarSync.hasConnections(), true, "The DO must retain its next alarm");
+  run(db, "UPDATE users SET status='active' WHERE id=2");
+  await app.locals.calendarSync.syncDue();
+  assert.ok(fake.calls.length > calls);
+  assert.match([...fake.calendars.values()][0].values().next().value.description, /Updated while suspended/);
+});
