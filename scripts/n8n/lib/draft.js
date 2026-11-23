@@ -6,9 +6,16 @@ export function buildPrompt(item) {
     `Hãy dùng công cụ đọc web để đọc bài báo gốc tại: ${item.link} (báo: ${item.source}).`,
     item.summary ? `Tóm tắt trong RSS (dùng nếu không đọc được trang): ${item.summary}` : "",
     "",
-    "Viết lại thành một bài mới, theo các quy tắc sau:",
+    "BƯỚC 1 - Chọn lọc. Mục Tin tức chỉ nhận bài thuộc một trong các nhóm sau, vì độc giả cần dùng được thông tin để quyết định việc học:",
+    "- Tuyển sinh và thi cử: tuyển sinh đại học/cao đẳng, thi tốt nghiệp THPT, tuyển sinh lớp 10, điểm chuẩn, phương thức xét tuyển, điểm cộng, lịch thi, đề thi.",
+    "- Chính sách và quy định về giáo dục cho học sinh, sinh viên, phụ huynh: học phí, miễn giảm, học bổng, chương trình và sách giáo khoa, dạy thêm học thêm, quy chế, thông tư.",
+    "- Thông tin học tập: phương pháp học và ôn thi, ngoại ngữ và chứng chỉ (IELTS...), chọn ngành, hướng nghiệp, du học.",
+    "Phải BỎ QUA (trả skip) các loại tin sau, dù có nhắc đến trường lớp: sự cố, tai nạn, bạo lực học đường, vụ việc kỷ luật cá nhân; chuyện cảm động hay gương người thầy; lễ kỷ niệm, tri ân, quà tặng, ngày 20/11; tin nội bộ của một trường; tin quốc tế không liên quan học sinh Việt Nam; chuyện lạ, đố vui, mẹo vặt. Nếu không chắc bài có thuộc nhóm cần hay không thì bỏ qua.",
+    "",
+    "BƯỚC 2 - Viết lại thành một bài mới, theo các quy tắc sau:",
     "- Viết bằng lời của bạn, tuyệt đối không chép nguyên văn câu nào từ bài gốc.",
     "- Chỉ dùng dữ kiện có trong nguồn. Không bịa số liệu, tên người, ngày tháng.",
+    "- Nêu rõ điều gì thay đổi hoặc diễn ra, ai bị ảnh hưởng, mốc thời gian, và học sinh hay phụ huynh nên chú ý gì.",
     "- Văn bản chữ thuần: các đoạn ngắn cách nhau một dòng trống, không dùng ký hiệu định dạng (không **, không #).",
     "- Giọng thân thiện, dễ hiểu, dài khoảng 250 đến 400 chữ.",
     `- Dòng cuối cùng của bài đúng dạng: Nguồn: ${item.source} - ${item.link}`,
@@ -16,7 +23,7 @@ export function buildPrompt(item) {
     "",
     'Chỉ trả về đúng MỘT đối tượng JSON, không thêm chữ nào khác: {"skip":false,"title":"...","summary":"...","body":"..."}',
     '(title tối đa 160 ký tự, summary tối đa 500 ký tự.)',
-    'Nếu tin không liên quan tới học sinh, phụ huynh hay gia sư, hoặc bạn không đọc được nội dung, trả: {"skip":true,"reason":"lý do ngắn"}',
+    'Nếu bài bị bỏ qua theo Bước 1, hoặc bạn không đọc được nội dung, trả: {"skip":true,"reason":"lý do ngắn"}',
   ]
     .filter((line, i) => line !== "" || i > 0)
     .join("\n");

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { emptyState, parseState, todayVN, pickNew, settle } from "../scripts/n8n/lib/select.js";
+import { isOnTopic } from "../scripts/n8n/lib/topic.js";
 import { buildPrompt, parseClaudeOutput, normalizeDraft, validateDraft } from "../scripts/n8n/lib/draft.js";
 import { buildPostBody, extractSessionCookie } from "../scripts/n8n/lib/web.js";
 
@@ -215,4 +216,52 @@ test("buildPrompt chứa link, tên nguồn, dòng Nguồn và quy tắc chính"
   assert.ok(p.includes(src.source));
   assert.ok(p.includes("Nguồn:"));
   assert.ok(p.includes('"skip"'));
+});
+
+const topic = (title, summary = "") => isOnTopic({ title, summary });
+
+test("isOnTopic nhận tin tuyển sinh, thi cử, chính sách, học tập, chọn ngành", () => {
+  for (const title of [
+    "Tuyển sinh đại học 2027: Còn những loại điểm cộng nào, IELTS được tính ra sao?",
+    "IELTS không còn được cộng điểm, học sinh có nên đầu tư?",
+    "Đề xuất đổi cách thi lớp 10 chuyên: Học sinh, phụ huynh, giáo viên nói gì?",
+    "Tốt nghiệp đại học loại khá có thể dự tuyển thẳng tiến sĩ từ 1-1-2027",
+    "Chuẩn đại học mới: 70% người tốt nghiệp phải có việc làm, 20-40% giảng viên tiến sĩ",
+    "Chọn ngành giữa làn sóng AI: Đừng chỉ chạy theo nghề 'hot'",
+    "Bộ GD-ĐT: Thi khối chuyên không đồng nghĩa phải học chuyên sâu nhiều môn",
+    "Đề xuất miễn học phí cho học sinh vùng cao",
+  ]) assert.equal(topic(title), true, title);
+});
+
+test("isOnTopic loại tin lạc đề: chuyện lạ, thời sự, 20/11, nhà giáo, sự cố", () => {
+  for (const title of [
+    "Nước nào có nhiều hồ nhất thế giới?",
+    "Kỷ luật hiệu trưởng vụ 17 cây xanh bị đốn hạ",
+    "Thầy cô 'cười hết cỡ' bốc thăm quà 20/11",
+    "Cô giáo bật khóc khi học trò xách mực, ghẹ, ốc đến tặng ngày 20/11",
+    "Học sinh ôm gà, hoa chuối, rau rừng tặng thầy cô ngày 20/11",
+    "Thầy giáo tặng trường trăm tỷ ở Mèo Vạc và nhận nuôi 22 học sinh Làng Nủ",
+    "Tôn vinh 335 nhà giáo tiêu biểu năm 2026",
+    "Bé 2 tuổi tử vong sau khi được phát hiện bất tỉnh tại nhóm trẻ tư thục",
+    "Giá vàng ngày 23/11: Đồng loạt đi ngang",
+    "Dòng họ nào ở Hàn Quốc có nguồn gốc từ một hoàng tử Việt Nam?",
+    "Bộ trưởng Giáo dục Hàn Quốc từ chức giữa bão gian lận AI",
+  ]) assert.equal(topic(title), false, title);
+});
+
+test("isOnTopic giải mã thực thể HTML của Thanh Niên trước khi so từ khoá", () => {
+  assert.equal(topic("C&oacute; muộn kh&ocirc;ng khi học chương tr&igrave;nh nước ngo&agrave;i từ lớp 10?"), true);
+  assert.equal(topic("Học sinh &ocirc;m g&agrave;, hoa chuối tặng thầy c&ocirc; ng&agrave;y 20/11"), false);
+});
+
+test("isOnTopic xét thêm phần tóm tắt, nhưng chữ 20/11 trong tóm tắt không làm mất tin tuyển sinh", () => {
+  assert.equal(topic("Thông báo mới", "Thí sinh đăng ký xét tuyển đại học trước ngày 20/11"), true);
+  assert.equal(topic("Chuyện thường ngày", "Một câu chuyện không liên quan"), false);
+});
+
+test("buildPrompt nêu rõ các chủ đề được nhận, các loại phải bỏ và bỏ khi không chắc", () => {
+  const p = buildPrompt(src);
+  for (const word of ["tuyển sinh", "chính sách", "học phí", "chọn ngành"]) assert.ok(p.toLowerCase().includes(word), `thiếu ${word}`);
+  assert.ok(p.includes("20/11") && p.includes("tai nạn"), "thiếu ví dụ loại tin phải bỏ");
+  assert.ok(/không chắc/.test(p), "phải dặn bỏ qua khi không chắc");
 });
