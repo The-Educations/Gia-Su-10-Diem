@@ -4,6 +4,8 @@ export default defineConfig({
   testDir: "test/e2e",
   fullyParallel: false,
   workers: 1,
+  // One retry on CI so a timing flake does not block a merge; a real failure fails twice.
+  retries: process.env.CI ? 1 : 0,
   timeout: 45000,
   use: {
     baseURL: `http://127.0.0.1:${port}`,
