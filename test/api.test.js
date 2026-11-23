@@ -2567,6 +2567,16 @@ test("students verify with a school record; one record and one student code per 
   const dep = await a.request("/wallet/deposits", "POST", { amount: 200000 });
   await a.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
   assert.equal((await a.request("/proposals", "POST", offer)).status, 201);
+  // Decided records stay listed by status, and an approval can be withdrawn.
+  assert.equal((await admin.request("/admin/verifications")).data.length, 0);
+  const approved = (await admin.request("/admin/verifications?status=approved")).data.filter((v) => v.email === "hs-a@example.test");
+  assert.deepEqual([approved.length, approved[0].status, approved[0].files.length], [1, "approved", 1]);
+  assert.ok((await admin.request("/admin/verifications?status=all")).data.some((v) => v.email === "hs-a@example.test"));
+  assert.equal((await admin.request(`/admin/verifications/${approved[0].user_id}`, "PATCH", { status: "approved" })).status, 404);
+  assert.equal((await admin.request(`/admin/verifications/${approved[0].user_id}`, "PATCH", { status: "rejected", note: "Ảnh mờ, chụp lại giúp" })).status, 200);
+  assert.equal((await a.request("/proposals", "POST", { ...offer, start_date: start })).status, 403);
+  assert.equal((await admin.request("/admin/verifications?status=rejected")).data.find((v) => v.email === "hs-a@example.test").note, "Ảnh mờ, chụp lại giúp");
+  assert.equal((await admin.request(`/admin/verifications/${approved[0].user_id}`, "PATCH", { status: "approved" })).status, 200);
   // Tutors: one proof file and one candidate number per tutor.
   const mine = (await tutor.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0", reference: "VN123456" } })).data;
   const proof = Buffer.from("%PDF-1.4 IELTS của Châu");
