@@ -126,46 +126,57 @@ export async function seedShowcase(db, hash) {
       const at = new Date(); at.setMonth(at.getMonth() - m); at.setDate(12);
       run(db, "INSERT INTO platform_revenue(kind,amount,ref,created_at) VALUES ('lesson_fee',?,?,?)", 260000 + (6 - m) * 40000, `demo-m${m}`, at.toISOString());
     }
-    audit(admin, "withdrawal.done", "2", { name: "Trần Hoàng Nam", amount: 1200000 }, iso(-24 * 6));
-    audit(admin, "withdrawal.rejected", "3", { name: "Trần Hoàng Nam", amount: 400000, note: "Sai tên tài khoản" }, iso(-24 * 12));
-    audit(admin, "deposit.assign", "1", { code: "GSD-DEMO-001", name: "Minh Anh", amount: 3000000 }, iso(-24 * 40));
+    audit(admin, "withdrawal.done", String(one(db, "SELECT id FROM withdrawals WHERE status='done' ORDER BY id DESC LIMIT 1")?.id), { name: "Trần Hoàng Nam", amount: 1200000 }, iso(-24 * 6));
+    audit(admin, "withdrawal.rejected", String(one(db, "SELECT id FROM withdrawals WHERE status='rejected' ORDER BY id DESC LIMIT 1")?.id), { name: "Trần Hoàng Nam", amount: 400000, note: "Sai tên tài khoản" }, iso(-24 * 12));
+    audit(admin, "deposit.assign", String(one(db, "SELECT id FROM deposits WHERE code='GSD-DEMO-001'")?.id), { code: "GSD-DEMO-001", name: "Minh Anh", amount: 3000000 }, iso(-24 * 40));
   });
 
   // ~30 audit rows across every group and several days so paging/filter/link tests work.
+  // Targets are real ids looked up at seed time so deep links open the right record.
   mark("showcase-audit-v1", () => {
+    const bao = uid("bao"), nhi = uid("nhi"), trang = uid("trang"), tuan = uid("tuan"), an = uid("an"), huy = uid("huy");
+    const credential = (slug) => one(db, "SELECT id FROM tutor_credentials WHERE tutor_id=? ORDER BY id LIMIT 1", uid(slug))?.id;
+    const session = one(db, "SELECT cs.id FROM class_sessions cs JOIN classes c ON c.id=cs.class_id WHERE c.tutor_id=? LIMIT 1", chau)?.id;
+    const member = one(db, "SELECT id FROM class_members WHERE student_id=? LIMIT 1", student)?.id;
+    const dep = (code) => one(db, "SELECT id FROM deposits WHERE code=?", code)?.id;
+    const wdr = (st) => one(db, "SELECT id FROM withdrawals WHERE status=? ORDER BY id LIMIT 1", st)?.id;
+    const booking = one(db, "SELECT id FROM bookings WHERE student_id=? LIMIT 1", student)?.id;
+    const post = one(db, "SELECT id FROM community_posts WHERE status='approved' LIMIT 1")?.id;
     const rows = [
-      ["account.adjust", "1", { name: "Minh Anh", amount: 500000, note: "Bù lỗi hệ thống" }, -24],
-      ["account.suspend", "4", { name: "Trần Thu Nhi", note: "Vi phạm liên hệ ngoài" }, -50],
-      ["account.resume", "4", { name: "Trần Thu Nhi", note: "Đã xác minh lại" }, -49],
-      ["tutor.approved", "2", { name: "Nguyễn Minh Châu" }, -24 * 20],
-      ["tutor.approved", "3", { name: "Trần Hoàng Nam" }, -24 * 19],
-      ["tutor.revision", "9", { name: "Hoàng Mai Trang", revision: 2 }, -24 * 2],
-      ["credential.approved", "5", { name: "Lê Thảo Linh", title: "IELTS 8.0" }, -24 * 18],
-      ["credential.rejected", "7", { name: "Võ Đức Huy", title: "Bằng lái xe", note: "Không liên quan" }, -24 * 16],
-      ["deposit.assign", "2", { code: "GSD-DEMO-002", name: "Phụ huynh Lan", amount: 1500000 }, -24 * 20],
-      ["deposit.dismissed", "4", { event: "GSD-SAI-KHOA", note: "Sai khóa IPN" }, -24 * 1],
-      ["session.admin_cancel", "5", { session: "Toán · Minh Anh", refunded: [{ amount: 180000 }] }, -24 * 5],
-      ["session.remind", "6", { session: "Tiếng Anh · Nguyễn Gia Bảo" }, -20],
-      ["member.admin_end", "2", { name: "Minh Anh", class: "Toán" }, -24 * 8],
-      ["proposal.review", "3", { student: "Minh Anh", tutor: "Lê Thảo Linh" }, -24 * 10],
-      ["booking.admin_cancel", "1", { student: "Minh Anh", tutor: "Nguyễn Minh Châu", note: "Trùng lịch" }, -24 * 4],
+      ["account.adjust", student, { name: "Minh Anh", amount: 500000, note: "Bù lỗi hệ thống" }, -24],
+      ["account.suspend", nhi, { name: "Trần Thu Nhi", note: "Vi phạm liên hệ ngoài" }, -50],
+      ["account.resume", nhi, { name: "Trần Thu Nhi", note: "Đã xác minh lại" }, -49],
+      ["tutor.approved", chau, { name: "Nguyễn Minh Châu" }, -24 * 20],
+      ["tutor.approved", nam, { name: "Trần Hoàng Nam" }, -24 * 19],
+      ["tutor.revision", trang, { name: "Hoàng Mai Trang", revision: 2 }, -24 * 2],
+      ["credential.approved", credential("linh"), { name: "Lê Thảo Linh", title: "IELTS 8.0" }, -24 * 18],
+      ["credential.rejected", credential("huy"), { name: "Võ Đức Huy", title: "Bằng lái xe", note: "Không liên quan" }, -24 * 16],
+      ["deposit.assign", dep("GSD-DEMO-002"), { code: "GSD-DEMO-002", name: "Phụ huynh Lan", amount: 1500000 }, -24 * 20],
+      ["deposit.dismissed", one(db, "SELECT id FROM sepay_events WHERE status='rejected_key' LIMIT 1")?.id, { event: "GSD-001", note: "Sai khóa IPN" }, -24 * 1],
+      ["session.admin_cancel", session, { session: "Toán · Minh Anh", refunded: [{ amount: 180000 }] }, -24 * 5],
+      ["session.remind", session, { session: "Tiếng Anh · Nguyễn Gia Bảo" }, -20],
+      ["member.admin_end", member, { name: "Minh Anh", class: "Toán" }, -24 * 8],
+      ["proposal.review", one(db, "SELECT id FROM proposals WHERE tutor_id=? LIMIT 1", linh)?.id, { student: "Minh Anh", tutor: "Lê Thảo Linh" }, -24 * 10],
+      ["booking.admin_cancel", booking, { student: "Minh Anh", tutor: "Nguyễn Minh Châu", note: "Trùng lịch" }, -24 * 4],
       ["subject.update", "toan", { title: "Toán" }, -24 * 15],
       ["subject.archive", "hoa-hoc", { title: "Hóa học" }, -24 * 14],
-      ["resource.review", "3", { title: "Đề thi thử Toán 2025" }, -24 * 11],
-      ["community.approved", "1", { title: "Kinh nghiệm ôn thi" }, -24 * 6],
-      ["community.rejected", "2", { title: "Quảng cáo ngoài", note: "Spam" }, -24 * 3],
-      ["community.hidden", "4", { title: "Bài tranh luận", note: "Ngôn từ chưa phù hợp" }, -30],
+      ["resource.review", one(db, "SELECT id FROM resources LIMIT 1")?.id, { title: "Đề thi thử Toán 2025" }, -24 * 11],
+      ["community.approved", post, { title: "Kinh nghiệm ôn thi" }, -24 * 6],
+      ["community.rejected", post, { title: "Quảng cáo ngoài", note: "Spam" }, -24 * 3],
+      ["community.hidden", post, { title: "Bài tranh luận", note: "Ngôn từ chưa phù hợp" }, -30],
       ["settings.update", "0", { keys: ["lesson_fee_pct"] }, -24 * 22],
-      ["payout.sent", "2", { name: "Nguyễn Minh Châu", amount: 2100000 }, -24 * 9],
-      ["verification.approved", "1", { name: "Minh Anh" }, -24 * 17],
-      ["verification.rejected", "5", { name: "Trần Thu Nhi", note: "Ảnh mờ" }, -24 * 13],
-      ["wallet.adjust", "1", { name: "Minh Anh", amount: -100000, note: "Trừ lỗi" }, -24 * 7],
-      ["theme.granted", "2", { name: "Nguyễn Minh Châu", theme: "rose" }, -24 * 12],
-      ["support.replied", "1", { name: "Minh Anh" }, -24 * 2],
-      ["deposits.recheck", "3", { event: "sepay" }, -15],
-      ["booking.review", "2", { student: "Minh Anh", tutor: "Trần Hoàng Nam" }, -24 * 21],
+      ["payout.sent", nam, { name: "Trần Hoàng Nam", amount: 2100000 }, -24 * 9],
+      ["verification.approved", student, { name: "Minh Anh" }, -24 * 17],
+      ["verification.rejected", nhi, { name: "Trần Thu Nhi", note: "Ảnh mờ" }, -24 * 13],
+      ["wallet.adjust", student, { name: "Minh Anh", amount: -100000, note: "Trừ lỗi" }, -24 * 7],
+      ["theme.granted", chau, { name: "Nguyễn Minh Châu", theme: "rose" }, -24 * 12],
+      ["support.replied", student, { name: "Minh Anh" }, -24 * 2],
+      ["deposits.recheck", "0", { event: "sepay" }, -15],
+      ["booking.review", booking, { student: "Minh Anh", tutor: "Trần Hoàng Nam" }, -24 * 21],
+      ["tutor.approved", tuan, { name: "Bùi Quốc Tuấn" }, -24 * 23],
+      ["verification.approved", bao, { name: "Nguyễn Gia Bảo" }, -24 * 15],
     ];
-    for (const [action, target, detail, h] of rows) audit(admin, action, target, detail, iso(h));
+    for (const [action, target, detail, h] of rows) if (target != null) audit(admin, action, String(target), detail, iso(h));
   });
 
   // Messages: support thread, unread lesson chat, attachment, event cards.
