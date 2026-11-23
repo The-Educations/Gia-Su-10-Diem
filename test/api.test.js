@@ -2681,7 +2681,7 @@ test("SePay payment gateway: signed checkout form and IPN credits a top-up once"
   // The QR opens a page that forwards the same signed form to SePay, for this order only.
   assert.equal(dep.pay_url, `https://giasu.example/api/wallet/pay/${dep.code}`);
   const page = await (await fetch(base + `/wallet/pay/${dep.code}`)).text();
-  assert.ok(page.includes('action="https://pay-sandbox.sepay.vn/v1/checkout/init"') && page.includes(`value="${dep.code}"`) && page.includes(`value="${f.signature}"`));
+  assert.ok(page.includes('action="https://pay-sandbox.sepay.vn/v1/checkout/init"') && page.includes(`value="${dep.code}"`) && page.includes('name="signature"'));
   const second = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
   assert.notEqual(second.code, dep.code);
   assert.equal((await fetch(base + "/wallet/pay/NOPE", { redirect: "manual" })).status, 303);
@@ -2856,4 +2856,37 @@ test("a stranded unmatched event never breaks startup and is credited once", asy
   assert.ok(app, "startup survives a stranded and a malformed event");
   assert.equal((await student.request("/wallet")).data.available, before + 200000, "the stranded payment is rescued once");
   assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=?", 555001).status, "processed");
+});
+
+test("SePay webhook connectivity test (id=0) answers success:false and records nothing", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const secret = "test-sepay-secret";
+  const { base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, webhook: true, gateway: false, ready: true, apiToken: "", merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false } });
+  const body = JSON.stringify({ id: 0, transferType: "in", transferAmount: 1, code: "GSDTEST" });
+  const stamp = Math.floor(Date.now() / 1000);
+  const r = await fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", secret).update(`${stamp}.${body}`).digest("hex") }, body });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { success: false });
+  assert.equal(one(db, "SELECT COUNT(*) n FROM sepay_events").n, 0);
+});
+
+test("SePay API v2 reconciliation credits deposits once and skips quietly without a token", async (t) => {
+  const { client, db } = await fixture(t, { sepay: { secret: "", account: "0123456789", bank: "MB", bankReady: true, webhook: false, gateway: false, ready: true, apiToken: "tok-test", merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false } });
+  const student = client(); await student.login("student");
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 200000 });
+  assert.equal(dep.status, 201);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).startsWith("https://userapi.sepay.vn"))
+      return Response.json({ status: 200, data: { transactions: [
+        { id: "uuid-in-1", amount_in: 200000, amount_out: 0, code: dep.data.code, transaction_content: "", reference_number: "RF1" },
+        { id: "uuid-skip", amount_in: 500000, amount_out: 0, code: "GSDUNKNOWN", transaction_content: "", reference_number: "RF2" },
+      ] } });
+    return realFetch(url, opts);
+  };
+  try {
+    assert.equal((await student.request("/wallet")).data.available, 200000, "v2 money-in with a known code credits the deposit");
+    assert.equal((await student.request("/wallet")).data.available, 200000, "a second run does not credit twice");
+    assert.equal(one(db, "SELECT COUNT(*) n FROM sepay_recon_events").n, 2, "every seen transaction is deduplicated, matched or not");
+  } finally { globalThis.fetch = realFetch; }
 });

@@ -2,6 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
+import { insertChatEvent } from "./chat-media.js";
 import { isParentOf } from "./family.js";
 import banks from "../shared/banks.json" with { type: "json" };
 
@@ -42,6 +43,8 @@ export function migrateWallet(db) {
   CREATE TABLE IF NOT EXISTS gateway_events (
     id TEXT PRIMARY KEY, invoice TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL DEFAULT 0, verdict INTEGER NOT NULL,
     status TEXT NOT NULL, deposit_id INTEGER, payload TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+  CREATE TABLE IF NOT EXISTS sepay_recon_events (
+    id TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE IF NOT EXISTS withdrawals (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), amount INTEGER NOT NULL,
     bank_name TEXT NOT NULL, account_number TEXT NOT NULL, account_name TEXT NOT NULL,
@@ -124,6 +127,8 @@ export function sepayConfig(env = process.env) {
     merchantSecret: env.SEPAY_SECRET_KEY || "",
     ipnSecret: env.SEPAY_IPN_SECRET || "",
     sandbox: env.SEPAY_ENV === "sandbox",
+    // Read-only reconciliation over the SePay account API; optional.
+    apiToken: env.SEPAY_API_TOKEN || "",
   };
   // Bank transfers only need the account number and bank code; the webhook
   // secret just adds automatic confirmation.
@@ -156,6 +161,12 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       transaction(db, () => {
         if (!run(db, "UPDATE proposals SET status='expired',decided_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", p.id).changes) return;
         if (p.held) move(db, p.student_id, "offer_released", { amount: p.held, held: -p.held, ref: `proposal:${p.id}` });
+        // The expiry is announced once, inside the same inquiry the proposal
+        // arrived in — not lazily when someone happens to list proposals.
+        run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", p.student_id, p.tutor_id);
+        const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", p.student_id, p.tutor_id);
+        if (!one(db, "SELECT 1 FROM inquiry_messages WHERE inquiry_id=? AND context_kind='proposal' AND context_id=? AND body='đề nghị đã hết hạn'", thread.id, p.id))
+          insertChatEvent(db, "inquiry", thread.id, { id: p.sender === "tutor" ? p.tutor_id : p.student_id }, "đề nghị đã hết hạn", { kind: "proposal", id: p.id });
       });
   };
   const view = (userId) => {
@@ -171,9 +182,15 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   const qr = (d) => sepay.bankReady
     ? `https://vietqr.app/img?${new URLSearchParams({ acc: sepay.account, bank: sepay.bank, amount: String(d.amount), des: d.code, template: "compact" })}`
     : null;
+<<<<<<< HEAD
   // With a bank account the QR is the whole flow: no hosted-checkout form or
   // QR that links out to SePay ever leaves this response.
   const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: sepay.bankReady ? null : sepay.gateway || simulate ? `${origin}/api/wallet/pay/${d.code}` : null, account: sepay.bankReady ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: sepay.bankReady ? null : checkout(d) });
+=======
+  // Top-ups are always the inline VietQR — no hosted-checkout link or QR that
+  // bounces the buyer through SePay's page.
+  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: null, account: sepay.bankReady ? sepay.account : "", bank: sepay.bankReady ? sepay.bank : "", holder: sepay.bankReady ? sepay.holder : "", checkout: null });
+>>>>>>> 0669ba2 (feat(wallet): inline VietQR top-ups, SePay v2 reconciliation, webhook id=0)
   // A signed form the browser posts to SePay's hosted checkout page.
   const checkout = (d) => {
     if (!sepay.gateway || d.status !== "pending") return null;
@@ -236,7 +253,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   }
 
   // Pending top-ups from the last 7 days are checked with SePay, so a missed IPN still lands.
-  const recheck = async (rows) => { for (const d of rows) await checkWithSepay(d); };
+  const recheck = async (rows) => { await reconcileBank(); for (const d of rows) await checkWithSepay(d); };
   const recent = () => new Date(Date.now() - 7 * 86400000).toISOString().replace("T", " ").slice(0, 19);
   app.get("/api/wallet", auth(), async (req, res) => {
     expireProposals();
@@ -305,6 +322,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     const id = z.coerce.number().int().parse(req.params.id);
     const d = one(db, "SELECT * FROM deposits WHERE id=? AND payer_id=?", id, req.user.id);
     if (!d) fail(404, "Không tìm thấy lệnh nạp.");
+    await reconcileBank();
     await checkWithSepay(d);
     res.json(deposit(one(db, "SELECT * FROM deposits WHERE id=?", id)));
   });
@@ -347,12 +365,13 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     notify(db, w.user_id, "withdrawal_paid", { subject: String(w.amount), link: "/wallet" });
     return true;
   }
-  // A line in the user's conversation with the administrators, with the receipt when there is one.
-  function supportNote(userId, body, attachment = null) {
+  // A wallet event card in the user's conversation with the administrators,
+  // linking back to /wallet; the receipt image rides on the card when present.
+  function supportNote(userId, body, attachment = null, senderId = null) {
     run(db, "INSERT OR IGNORE INTO support_threads(user_id) VALUES (?)", userId);
     const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", userId);
     const admin = one(db, "SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1");
-    const id = Number(run(db, "INSERT INTO support_messages(thread_id,sender_id,body) VALUES (?,?,?)", thread.id, admin?.id || userId, body).lastInsertRowid);
+    const id = insertChatEvent(db, "support", thread.id, { id: senderId || admin?.id || userId }, body, null, "/wallet");
     if (attachment) run(db, "UPDATE chat_attachments SET message_id=? WHERE id=? AND message_id IS NULL", id, attachment);
   }
   // A receipt is an image the administrator uploaded into that user's support conversation.
@@ -378,6 +397,43 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       const paid = (o.transactions || []).find((t) => t.transaction_status === "APPROVED" && t.transaction_type !== "REFUND");
       if (o.order_status === "CAPTURED" && paid) creditGateway(d.code, Math.round(Number(o.order_amount) || 0), paid.payment_method);
     } catch { /* the IPN or the next check will settle it */ }
+  }
+
+  // Fallback when no webhook can be pointed at the server: the read-only SePay
+  // account API lists the same transfers, so a missed webhook still lands.
+  // Every seen transaction is stored once — ids are UUIDs — so a retry never
+  // credits or confirms twice. Silently off without SEPAY_API_TOKEN.
+  async function reconcileBank() {
+    if (!sepay.apiToken) return;
+    try {
+      const params = new URLSearchParams({ limit: "100" });
+      if (sepay.account) params.set("account_number", sepay.account);
+      const r = await fetch(`https://userapi.sepay.vn/v2/transactions?${params}`, {
+        headers: { Authorization: `Bearer ${sepay.apiToken}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) return;
+      const body = await r.json();
+      const rows = Array.isArray(body?.data?.transactions) ? body.data.transactions : Array.isArray(body?.transactions) ? body.transactions : [];
+      for (const t of rows) {
+        try {
+          const tid = String(t.id || "");
+          if (!tid || !run(db, "INSERT OR IGNORE INTO sepay_recon_events(id) VALUES (?)", tid).changes) continue;
+          const inAmount = Math.round(Number(t.amount_in) || 0), outAmount = Math.round(Number(t.amount_out) || 0), code = String(t.code || "").trim() || null;
+          if (inAmount > 0 && code) credit(code, inAmount, `sepay-api:${tid}`);
+          if (outAmount > 0) {
+            const content = String(t.transaction_content || "").toUpperCase();
+            const w = (code && one(db, "SELECT * FROM withdrawals WHERE code=? COLLATE NOCASE", code))
+              || all(db, "SELECT * FROM withdrawals WHERE code IS NOT NULL AND status IN ('requested','paid') AND bank_ref='' ORDER BY id DESC LIMIT 200").find((x) => content.includes(x.code));
+            if (w && w.amount === outAmount)
+              transaction(db, () => {
+                if (w.status === "requested") payout(w, { via: "sepay-api", ref: String(t.reference_number || tid) });
+                else run(db, "UPDATE withdrawals SET bank_ref=? WHERE id=? AND bank_ref=''", String(t.reference_number || tid), w.id);
+              });
+          }
+        } catch { /* one malformed row never stops the rest */ }
+      }
+    } catch { /* the webhook or the next read settles it */ }
   }
 
   // Payment gateway IPN: SePay calls this once the buyer has paid on the hosted page.
@@ -415,8 +471,14 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (!fresh || signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected)))
       return res.status(401).json({ success: false });
     const e = req.body || {};
+<<<<<<< HEAD
     const id = Number(e.id), amount = Number(e.transferAmount) || 0, code = eventCode(e);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ success: false });
+=======
+    const id = Number(e.id), amount = Number(e.transferAmount) || 0, code = e.code || null;
+    // id=0 is SePay's connectivity test; answer success:false without recording it.
+    if (!Number.isInteger(id) || id <= 0) return res.json({ success: false });
+>>>>>>> 0669ba2 (feat(wallet): inline VietQR top-ups, SePay v2 reconciliation, webhook id=0)
     const seen = one(db, "SELECT verdict FROM sepay_events WHERE id=?", id);
     if (seen) return res.json({ success: !!seen.verdict });
     let verdict = false, depositId = null, status = "unmatched";
@@ -453,11 +515,8 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     const id = transaction(db, () => {
       const wid = Number(run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name,code) VALUES (?,?,?,?,?,?)", req.user.id, d.amount, d.bank_name, d.account_number, d.account_name.toUpperCase(), newCode()).lastInsertRowid);
       move(db, req.user.id, "withdrawal_requested", { amount: -d.amount, held: d.amount, ref: `withdrawal:${wid}` });
-      // The request appears in the user's conversation with the administrators.
-      run(db, "INSERT OR IGNORE INTO support_threads(user_id) VALUES (?)", req.user.id);
-      const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", req.user.id);
-      run(db, "INSERT INTO support_messages(thread_id,sender_id,body) VALUES (?,?,?)", thread.id, req.user.id,
-        `Yêu cầu rút tiền #${wid}: ${d.amount.toLocaleString("vi-VN")}đ về ${d.bank_name} ****${d.account_number.slice(-4)} (${d.account_name.toUpperCase()}).`);
+      // The request appears as a wallet event card in the user's support thread.
+      supportNote(req.user.id, `Yêu cầu rút tiền #${wid}: ${d.amount.toLocaleString("vi-VN")}đ về ${d.bank_name} ****${d.account_number.slice(-4)} (${d.account_name.toUpperCase()}).`, null, req.user.id);
       for (const admin of all(db, "SELECT id FROM users WHERE role='admin' AND status='active'"))
         notify(db, admin.id, "withdrawal_requested", { actor: req.user.name, subject: String(d.amount), link: "/admin?tab=finance" });
       return wid;
