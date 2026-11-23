@@ -2261,10 +2261,11 @@ test("notifications reach the other party, collapse per conversation and stay pr
   assert.equal((await tutor.request("/notifications/read", "POST", {})).status, 400);
   assert.equal((await client().request("/notifications")).status, 401);
   // Email for important events is on until turned off, per topic.
-  assert.deepEqual((await tutor.request("/account/notifications")).data, { proposals: true, money: true, lessons: true, community: true });
-  assert.deepEqual((await tutor.request("/account/notifications", "PUT", { money: false })).data, { proposals: true, money: false, lessons: true, community: true });
+  const allOn = { proposals: true, money: true, lessons: true, community: true };
+  assert.deepEqual((await tutor.request("/account/notifications")).data, { email: allOn, bell: allOn });
+  assert.deepEqual((await tutor.request("/account/notifications", "PUT", { money: false })).data.email, { proposals: true, money: false, lessons: true, community: true });
   assert.equal((await tutor.request("/account/notifications", "PUT", { spam: true })).status, 400);
-  assert.equal((await tutor.request("/account/notifications")).data.money, false);
+  assert.equal((await tutor.request("/account/notifications")).data.email.money, false);
 });
 test("important notices also arrive by email after the request, unless turned off", async (t) => {
   const { client, emails } = await fixture(t), s = client(), tu = client();
@@ -3146,5 +3147,28 @@ test("tutor profile 404: not-found vs unpublished vs live", async (t) => {
   const live = await guest.request("/tutors/3");
   assert.equal(live.status, 200);
   assert.ok(live.data.user_id);
+});
+
+test("every notification kind has a template and a valid link", async () => {
+  const { readFileSync, readdirSync } = await import("node:fs");
+  const kinds = new Set(), links = new Set();
+  for (const f of readdirSync("server").filter((f) => f.endsWith(".js"))) {
+    const src = readFileSync(`server/${f}`, "utf8");
+    for (const m of src.matchAll(/notify\(db,[^)]*"[a-z_]+"[^)]*\)/g)) {
+      kinds.add(m[0].match(/"([a-z_]+)"/)[1]);
+      const lm = m[0].match(/link:\s*[`"'"]([^`"'"'`]+)[`"'"]/);
+      if (lm) links.add(lm[1]);
+    }
+  }
+  // Templates come from the bell source — the file declares them as keys.
+  const bell = readFileSync("app/src/components/notification-bell.tsx", "utf8");
+  const templated = new Set([...bell.matchAll(/^\s*([a-z_]+):\s*\[/gm)].map((m) => m[1]));
+  const missing = [...kinds].filter((k) => !templated.has(k) && !["community"].some((p) => k.startsWith(p)));
+  assert.deepEqual(missing, [], "notify kinds without a template in notification-bell.tsx");
+  // Every literal link must land on a route the app actually serves.
+  const main = readFileSync("app/src/main.tsx", "utf8");
+  const routes = new Set([...main.matchAll(/path="(\/[^"]*)"/g)].map((m) => m[1].split("/:")[0].replace(/\/$/, "")).concat(["/"]));
+  const bad = [...links].filter((l) => !l || l === "/" || !routes.has("/" + l.replace(/^\//, "").split(/[?#]/)[0].split("/")[0]));
+  assert.deepEqual(bad, [], "notification links that lead nowhere");
 });
 });

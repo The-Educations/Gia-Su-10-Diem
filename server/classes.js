@@ -638,8 +638,8 @@ export function registerClasses(app, db, auth, audit) {
       if (!run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=? AND status='scheduled'", id).changes) fail(409, "Buổi học không còn hoạt động.");
       const refunded = all(db, "SELECT m.student_id, m.rate AS amount FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome IN ('pending','disputed')", id);
       run(db, "UPDATE session_members SET outcome='refunded',note=? WHERE session_id=? AND outcome IN ('pending','disputed')", note, id);
-      for (const r of all(db, "SELECT DISTINCT m.student_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=?", id))
-        for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "session_cancelled", { actor: "Quản trị viên", subject: r.title, link: "/schedule" });
+      for (const r of all(db, "SELECT DISTINCT m.student_id,c.tutor_id,c.title,m.class_id FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=?", id))
+        for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "session_cancelled", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` });
       audit(req.user.id, "session.admin_cancel", id, { note, refunded });
     });
     upkeep(db);
@@ -659,10 +659,10 @@ export function registerClasses(app, db, auth, audit) {
   app.post("/api/admin/sessions/:id/resolve", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     const d = z.object({ member_id: z.number().int().positive(), outcome: z.enum(["confirmed", "refunded"]) }).parse(req.body);
-    const r = one(db, "SELECT sm.*,m.student_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
+    const r = one(db, "SELECT sm.*,m.student_id,m.class_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
     if (!r) fail(404, "Không tìm thấy báo cáo.");
     run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
-    for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: "/classes" });
+    for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: `/classes/${r.class_id}` });
     audit(req.user.id, `session.resolve.${d.outcome}`, id, { member_id: d.member_id, outcome: d.outcome, user_id: r.student_id });
     upkeep(db);
     res.json({ ok: true });
