@@ -50,6 +50,25 @@ const STEPS: { id: string; label: string; icon: LucideIcon }[] = [
   { id: "proof", label: "Học vấn & minh chứng", icon: GraduationCap },
   { id: "review", label: "Xem lại & gửi duyệt", icon: ListChecks },
 ];
+// The question each screen asks; the short label names the step in the progress bar.
+const QUESTIONS: Record<string, string> = {
+  who: "Bạn đang là ai?",
+  subjects: "Bạn dạy môn nào?",
+  mode: "Dạy ở đâu, học phí bao nhiêu?",
+  schedule: "Khi nào bạn rảnh?",
+  intro: "Giới thiệu đôi chút về bạn",
+  proof: "Bạn học ở đâu?",
+  review: "Học sinh sẽ thấy hồ sơ như thế này",
+};
+// Where the cursor goes when a step still needs something.
+const MISSING_TARGET: Record<string, string> = {
+  who: 'input[name="tutor_kind"]',
+  subjects: ".subject-picker input, .levels-field input",
+  mode: ":invalid, .address-trigger",
+  schedule: ".availability-grid button:not([disabled])",
+  intro: ":invalid",
+  proof: ".credential-group button",
+};
 const KINDS: { value: Exclude<TutorKind, "">; label: string; icon: LucideIcon }[] = [
   { value: "student", label: "Sinh viên", icon: GraduationCap },
   { value: "teacher", label: "Giáo viên", icon: BookOpenCheck },
@@ -88,13 +107,13 @@ function Chips({ legend, options, value, onChange }: {
   );
 }
 
-function Cards<T extends string>({ legend, name, options, value, onChange }: {
-  legend: string; name: string; options: { value: T; label: string; icon: LucideIcon }[]; value: T | ""; onChange: (v: T) => void;
+function Cards<T extends string>({ legend, name, options, value, onChange, quiet = false }: {
+  legend: string; name: string; options: { value: T; label: string; icon: LucideIcon }[]; value: T | ""; onChange: (v: T) => void; quiet?: boolean;
 }) {
   const { t } = useI18n();
   return (
     <FieldSet>
-      <FieldLegend>{t(legend)}</FieldLegend>
+      <FieldLegend className={quiet ? "sr-only" : undefined}>{t(legend)}</FieldLegend>
       <div className="choice-cards">
         {options.map(({ value: v, label, icon: Icon }) => (
           <label key={v} className="choice-card" data-checked={value === v || undefined}>
@@ -154,17 +173,27 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
     intro: draft.headline.trim().length > 0 && draft.bio.trim().length > 0,
     proof: schools.length > 0,
   }), [draft, hours, schools.length]);
+  const missingSteps = STEPS.filter((s) => s.id in checks && !checks[s.id as keyof typeof checks]);
 
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
     document.querySelector('.wizard-steps [aria-current="step"]')?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [index]);
 
-  function go(next: number) {
+  function go(next: number, focusMissing = false) {
     setError("");
     setDirection(next > index ? 1 : -1);
     setParams((p) => { const n = new URLSearchParams(p); n.set("step", STEPS[next].id); return n; }, { replace: true });
     window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    const id = STEPS[next].id;
+    if (focusMissing && id in checks && !checks[id as keyof typeof checks]) {
+      // After the step has slid in, put the cursor on the first thing it still needs.
+      setTimeout(() => {
+        const target = document.querySelector<HTMLElement>(`.wizard-panel :is(${MISSING_TARGET[id]})`);
+        target?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+        target?.focus({ preventScroll: true });
+      }, reduce ? 60 : 320);
+    }
   }
   function validate() {
     if (!form.current?.reportValidity()) return false;
@@ -215,7 +244,7 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
   const body: Record<string, React.ReactNode> = {
     who: (
       <FieldGroup>
-        <Cards legend="Bạn đang là" name="tutor_kind" options={KINDS} value={draft.tutor_kind} onChange={(tutor_kind) => set({ tutor_kind })} />
+        <Cards quiet legend="Bạn đang là" name="tutor_kind" options={KINDS} value={draft.tutor_kind} onChange={(tutor_kind) => set({ tutor_kind })} />
         <Field className="narrow-field">
           <FieldLabel htmlFor="experience">{t("Số năm kinh nghiệm dạy")}</FieldLabel>
           <Input id="experience" type="number" min={0} max={60} required value={draft.experience} onChange={(e) => set({ experience: Number(e.target.value) })} />
@@ -225,7 +254,7 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
     subjects: (
       <FieldGroup>
         <SubjectPicker subjects={subjects} value={draft.subjects} onChange={(v) => set({ subjects: v })} />
-        <Chips legend="Cấp học nhận dạy" options={LEVELS.map((v) => ({ value: v, label: v }))} value={draft.levels} onChange={(levels) => set({ levels })} />
+        <div className="levels-field"><Chips legend="Cấp học nhận dạy" options={LEVELS.map((v) => ({ value: v, label: v }))} value={draft.levels} onChange={(levels) => set({ levels })} /></div>
         {goals.length > 0 && <Chips legend="Mục tiêu kỳ thi nhận luyện" options={goals.map((v) => ({ value: v, label: v }))} value={draft.goals} onChange={(g) => set({ goals: g })} />}
       </FieldGroup>
     ),
@@ -271,6 +300,8 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
           <FieldLabel htmlFor="bio">{t("Giới thiệu & phương pháp dạy")}</FieldLabel>
           <Textarea id="bio" required maxLength={2000} rows={5} value={draft.bio} onChange={(e) => set({ bio: e.target.value })} />
         </Field>
+        <section className="wizard-optional" aria-label={t("Không bắt buộc")}>
+        <h3>{t("Thêm cho hồ sơ nổi bật (không bắt buộc)")}</h3>
         <Field>
           <FieldLabel htmlFor="teaching_style">{t("Phương pháp giảng dạy")}</FieldLabel>
           <Textarea id="teaching_style" maxLength={1500} rows={4} value={draft.teaching_style} onChange={(e) => set({ teaching_style: e.target.value })} />
@@ -290,22 +321,29 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
             onChange={(e) => { e.target.setCustomValidity(e.target.value && !embedUrl(e.target.value) ? t("Dùng liên kết YouTube hoặc Google Drive.") : ""); set({ sample_video: e.target.value }); }} />
         </Field>
         <ProfileSectionsEditor value={draft.profile_sections} onChange={(profile_sections) => set({ profile_sections })} />
+        </section>
       </FieldGroup>
     ),
     proof: null,
     review: (
-      <ul className="review-checklist">
-        {STEPS.slice(0, -1).map((s, i) => {
-          const done = checks[s.id as keyof typeof checks] ?? true;
-          return (
-            <li key={s.id} data-done={done || undefined}>
-              {done ? <BadgeCheck aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
-              <span>{t(s.label)}</span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => go(i)}>{t(done ? "Sửa" : "Hoàn thành")}</Button>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="wizard-review">
+        {missingSteps.length > 0 && (
+          <ul className="review-checklist">
+            {missingSteps.map((s) => (
+              <li key={s.id}>
+                <CircleAlert aria-hidden="true" />
+                <span>{t(s.label)}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => go(STEPS.indexOf(s), true)}>{t("Hoàn thành")}</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div role="region" aria-label={t("Xem trước hồ sơ")}>
+          <TutorPresentation preview subjects={subjects}
+            tutor={{ ...draft, photo_url: tutor.photo_url, banner_url: tutor.banner_url, profile_theme: tutor.profile_theme, intro_video: video ? draft.intro_video : "",
+              verified: (credentials.data || []).filter((c) => c.status === "approved" && c.files.length).map((c) => ({ kind: c.kind, label: c.label })) }} />
+        </div>
+      </div>
     ),
   };
 
@@ -330,25 +368,31 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
         animate: { opacity: 1, x: 0 },
         exit: { opacity: 0, x: -28 * direction },
       };
-  const progress = Math.round((Object.values(checks).filter(Boolean).length / Object.keys(checks).length) * 100);
   return (
     <div className="wizard" data-step={step.id}>
-      <nav className="wizard-steps" aria-label={t("Các bước tạo hồ sơ")}>
-        <div className="wizard-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
-        <ol>
-          {STEPS.map((s, i) => {
-            const Icon = s.icon, done = checks[s.id as keyof typeof checks];
-            return (
-              <li key={s.id}>
-                <button type="button" aria-current={i === index ? "step" : undefined} data-done={done || undefined} onClick={() => go(i)}>
-                  <span className="wizard-dot">{done && i !== index ? <Check aria-hidden="true" /> : <Icon aria-hidden="true" />}</span>
-                  <span className="wizard-label">{t(s.label)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+      <div className="wizard-top">
+        <div className="wizard-top-row">
+          <span>{t("Bước {n}/{total}", { n: index + 1, total: STEPS.length })} · {t(step.label)}</span>
+          {missingSteps.length ? (
+            <button type="button" className="wizard-missing" onClick={() => go(STEPS.indexOf(missingSteps[0]), true)}>
+              <CircleAlert aria-hidden="true" />{t("Còn {n} mục chưa xong", { n: missingSteps.length })}
+            </button>
+          ) : <span className="wizard-missing" data-done><BadgeCheck aria-hidden="true" />{t("Đã đủ thông tin")}</span>}
+        </div>
+        <nav className="wizard-steps" aria-label={t("Các bước tạo hồ sơ")}>
+          <ol>
+            {STEPS.map((s, i) => {
+              const done = checks[s.id as keyof typeof checks];
+              return (
+                <li key={s.id}>
+                  <button type="button" aria-current={i === index ? "step" : undefined} data-done={done || undefined} title={t(s.label)}
+                    aria-label={`${t(s.label)}${s.id in checks ? (done ? ` · ${t("xong")}` : ` · ${t("còn thiếu")}`) : ""}`} onClick={() => go(i, true)} />
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+      </div>
       <div className="wizard-main">
         <AnimatePresence mode="wait" initial={false} custom={direction}>
           <motion.div
@@ -358,8 +402,7 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
             {...motionProps}
           >
             <header className="wizard-heading">
-              <span>{t("Bước {n}/{total}", { n: index + 1, total: STEPS.length })}</span>
-              <h2 ref={heading} tabIndex={-1}>{t(step.label)}</h2>
+              <h2 ref={heading} tabIndex={-1}>{t(QUESTIONS[step.id])}</h2>
             </header>
             {before[step.id] && <div className="wizard-block">{before[step.id]}</div>}
             <form
@@ -372,7 +415,7 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
             {after[step.id] && <div className="wizard-block">{after[step.id]}</div>}
             {error && <ErrorState error={error} />}
             <div className="wizard-actions">
-              {index > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => go(index - 1)}>{t("Quay lại")}</Button>}
+              {index > 0 && <Button type="button" variant="ghost" disabled={busy} onClick={() => go(index - 1)}>{t("Quay lại")}</Button>}
               <Button type="submit" form="wizard-form" disabled={busy}>
                 {busy && <LoaderCircle className="animate-spin" data-icon="inline-start" />}
                 {t(step.id === "review" ? "Lưu & gửi duyệt" : "Tiếp tục")}
@@ -381,15 +424,6 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
           </motion.div>
         </AnimatePresence>
       </div>
-      <aside className="studio-preview" aria-label={t("Xem trước hồ sơ")}>
-        <div className="studio-preview-heading">
-          <h2>{t("Xem trước hồ sơ")}</h2>
-          <span>{money(draft.rate)} / {t("buổi")}</span>
-        </div>
-        <TutorPresentation preview subjects={subjects}
-          tutor={{ ...draft, photo_url: tutor.photo_url, banner_url: tutor.banner_url, profile_theme: tutor.profile_theme, intro_video: video ? draft.intro_video : "",
-            verified: (credentials.data || []).filter((c) => c.status === "approved" && c.files.length).map((c) => ({ kind: c.kind, label: c.label })) }} />
-      </aside>
     </div>
   );
 }
