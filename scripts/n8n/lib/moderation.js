@@ -37,8 +37,12 @@ export function parseModState(text) {
   };
 }
 
+// Khoá một lần chấm. Web có thể tái dùng id bài sau khi admin xoá hẳn bài (id=6 cũ bị xoá, bài mới đăng lại nhận id=6, phiên bản 0),
+// nên khoá phải có thêm created_at: bài mới trùng id không bị coi là "đã chấm" của bài cũ.
 export function reviewKey(item) {
-  return `${item.id}:${item.review_version || 0}`;
+  const base = `${item.id}:${item.review_version || 0}`;
+  const created = String(item.created_at ?? "").trim();
+  return created ? `${base}:${created}` : base;
 }
 
 export function extractLinks(html) {

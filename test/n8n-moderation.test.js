@@ -35,7 +35,16 @@ test("parseModState chịu được rỗng, hỏng, sai kiểu", () => {
   assert.deepEqual(s.daily, { date: TODAY, approved: 4, rejected: 0 });
 });
 
-test("reviewKey ghép id và review_version", () => {
+test("reviewKey: id tái dùng sau khi admin xoá hẳn bài thì không trùng khoá với bài cũ", () => {
+  assert.equal(reviewKey({ id: 6, review_version: 0, created_at: "2026-11-23 11:39:02" }), "6:0:2026-11-23 11:39:02");
+  assert.notEqual(
+    reviewKey({ id: 6, review_version: 0, created_at: "2026-11-23 11:39:02" }),
+    reviewKey({ id: 6, review_version: 0, created_at: "2026-11-23 15:09:36" }),
+  );
+  const state = parseModState(JSON.stringify({ graded: { "6:0:2026-11-23 11:39:02": { t: NOW, outcome: "rejected" } } }));
+  const fresh = post({ id: 6, created_at: "2026-11-23 15:09:36" });
+  const { candidates } = pickPending([fresh], state, opts);
+  assert.equal(candidates.length, 1, "bài mới trùng id phải được chấm, không bị bỏ qua vì khoá của bài cũ");
   assert.equal(reviewKey({ id: 7, review_version: 3 }), "7:3");
 });
 
