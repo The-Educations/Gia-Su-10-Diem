@@ -55,7 +55,7 @@ export function StudentVerification() {
         <h2>{locked && <BadgeCheck aria-hidden="true" />}{t("Xác minh học sinh")}</h2>
         <span className="verify-status">{t({ draft: "Chưa xác minh", pending: "Đang chờ duyệt", approved: "Đã xác minh", rejected: "Cần bổ sung" }[v.status])}</span>
       </header>
-      {!locked && <p>{t("Gửi ảnh học bạ hoặc bảng điểm có tên và trường của bạn. Sau khi được xác minh, bạn gửi và nhận offer với gia sư.")}</p>}
+      {!locked && <p>{t("Gửi ảnh học bạ hoặc bảng điểm có tên và trường của bạn. Sau khi được xác minh, bạn gửi và nhận đề nghị với gia sư.")}</p>}
       {v.status === "rejected" && v.note && <p className="verify-note" role="alert">{v.note}</p>}
       {!locked && (
         <form onSubmit={submit}>
@@ -97,7 +97,7 @@ export function VerifyFirst() {
   return (
     <div className="verify-first" role="status">
       <BadgeCheck aria-hidden="true" />
-      <span>{t("Xác minh tài khoản học sinh để gửi offer.")}</span>
+      <span>{t("Xác minh tài khoản học sinh để gửi đề nghị.")}</span>
       <Button asChild size="sm" variant="outline"><Link to="/settings#verify">{t("Xác minh ngay")}</Link></Button>
     </div>
   );

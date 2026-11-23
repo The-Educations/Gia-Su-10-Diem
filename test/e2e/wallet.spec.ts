@@ -69,7 +69,7 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
 
   // The offer composer shows the total and holds it on sending.
   await student.goto(`/app/tutors/${linh.user_id}`);
-  await student.getByRole("button", { name: "Gửi offer", exact: true }).click();
+  await student.getByRole("button", { name: "Gửi đề nghị", exact: true }).click();
   const dialog = student.getByRole("dialog");
   await dialog.getByLabel("Số buổi").fill("4");
   await dialog.getByLabel("Học phí / buổi").fill("200000");
@@ -85,19 +85,19 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
   await tutor.goto("/app/proposals");
   const card = tutor.locator(".proposal-card").filter({ hasText: "Em muốn luyện nói tiếng Anh" });
   await expect(card).toContainText("Bạn nhận 760.000");
-  await card.getByRole("button", { name: "Nhận offer" }).click();
-  await expect(tutor.getByText("Đã nhận offer", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Nhận đề nghị" }).click();
+  await expect(tutor.getByText("Đã nhận đề nghị", { exact: true })).toBeVisible();
   await tutor.getByRole("link", { name: /Lịch sử/ }).click();
   await expect(tutor.locator(".proposal-card").filter({ hasText: "Em muốn luyện nói tiếng Anh" })).toContainText("Đã nhận");
   await student.goto("/app/workspace");
   await student.getByRole("button", { name: /Thông báo/ }).click();
-  await expect(student.locator(".notification-panel")).toContainText("đã nhận offer");
+  await expect(student.locator(".notification-panel")).toContainText("đã nhận đề nghị");
   for (const width of [360, 768, 1280]) {
     await tutor.setViewportSize({ width, height: 900 });
     await tutor.goto("/app/wallet");
     expect(await tutor.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  await expect(tutor.locator(".credits-card")).toContainText("credit");
+  await expect(tutor.locator(".credits-card")).toContainText("Xu");
   expect(errors).toEqual([]);
   await sc.close(); await tc.close();
 });

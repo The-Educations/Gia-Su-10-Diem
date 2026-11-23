@@ -54,14 +54,14 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
   app.post("/api/proposals", auth("student", "tutor"), (req, res) => {
     const d = proposalSchema.parse(req.body), s = settings(db), byStudent = req.user.role === "student";
     // Parents follow their child's learning; offers are between the student and the tutor.
-    if (req.user.learner_type === "parent") fail(403, "Phụ huynh theo dõi tài khoản của con. Con gửi offer từ tài khoản học sinh.");
-    if (req.user.onboarding_step < 3) fail(403, "Hoàn tất thiết lập tài khoản để gửi offer.");
-    if (byStudent && !isVerifiedStudent(db, req.user.id)) fail(403, "Xác minh tài khoản học sinh (học bạ hoặc bảng điểm) để gửi offer.");
+    if (req.user.learner_type === "parent") fail(403, "Phụ huynh theo dõi tài khoản của con. Con gửi đề nghị từ tài khoản học sinh.");
+    if (req.user.onboarding_step < 3) fail(403, "Hoàn tất thiết lập tài khoản để gửi đề nghị.");
+    if (byStudent && !isVerifiedStudent(db, req.user.id)) fail(403, "Xác minh tài khoản học sinh (học bạ hoặc bảng điểm) để gửi đề nghị.");
     const studentId = byStudent ? req.user.id : d.student_id, tutorId = byStudent ? d.tutor_id : req.user.id;
     if (!studentId || !tutorId) fail(400, byStudent ? "Chọn gia sư." : "Chọn học sinh.");
     if (!one(db, "SELECT 1 FROM subjects WHERE id=? AND archived=0", d.subject_id)) fail(400, "Môn học không có trong danh mục.");
     const tutor = one(db, "SELECT t.status,t.published FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", tutorId);
-    if (!isLiveTutor(tutor)) fail(409, "Gia sư hiện chưa nhận offer.");
+    if (!isLiveTutor(tutor)) fail(409, "Gia sư hiện chưa nhận đề nghị.");
     if (!one(db, "SELECT 1 FROM users WHERE id=? AND role='student' AND status='active'", studentId)) fail(409, "Tài khoản học sinh không hoạt động.");
     // A free trial is one 60-minute lesson, once per student and tutor, when the tutor offers trials.
     if (d.trial) {
@@ -72,7 +72,7 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
     } else if (d.rate < 50000) fail(400, "Học phí tối thiểu 50.000đ / buổi.");
     const total = d.sessions * d.rate;
     const id = transaction(db, () => {
-      if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND status='pending'", studentId, tutorId)) fail(409, "Đang có một offer chờ trả lời giữa hai bạn.");
+      if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND status='pending'", studentId, tutorId)) fail(409, "Đang có một đề nghị chờ trả lời giữa hai bạn.");
       const expires = new Date(Date.now() + s.offer_hours * 3600000).toISOString();
       const pid = Number(run(db, `INSERT INTO proposals(sender,student_id,tutor_id,subject_id,level,mode,area,sessions,minutes,rate,total,schedule,start_date,message,expires_at,held,credits,trial)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, byStudent ? "student" : "tutor", studentId, tutorId, d.subject_id, d.level, d.mode, d.area, d.sessions, d.minutes, d.rate, total,
@@ -94,17 +94,17 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
     transaction(db, () => {
       const p = get(id);
       const actor = req.user.id;
-      if (!p || ![p.student_id, p.tutor_id].includes(actor)) fail(404, "Không tìm thấy offer.");
-      if (p.status !== "pending") fail(409, "Offer đã được xử lý hoặc hết hạn.");
+      if (!p || ![p.student_id, p.tutor_id].includes(actor)) fail(404, "Không tìm thấy đề nghị.");
+      if (p.status !== "pending") fail(409, "Đề nghị đã được xử lý hoặc hết hạn.");
       const recipient = p.sender === "student" ? p.tutor_id : p.student_id, sender = p.sender === "student" ? p.student_id : p.tutor_id;
-      if (action === "withdraw" ? actor !== sender : actor !== recipient) fail(403, action === "withdraw" ? "Chỉ người gửi rút được offer." : "Chỉ người nhận trả lời được offer.");
+      if (action === "withdraw" ? actor !== sender : actor !== recipient) fail(403, action === "withdraw" ? "Chỉ người gửi rút được đề nghị." : "Chỉ người nhận trả lời được đề nghị.");
       const status = { accept: "accepted", decline: "declined", withdraw: "withdrawn" }[action];
-      if (!run(db, "UPDATE proposals SET status=?,decided_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", status, id).changes) fail(409, "Offer vừa thay đổi. Tải lại trang.");
+      if (!run(db, "UPDATE proposals SET status=?,decided_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", status, id).changes) fail(409, "Đề nghị vừa thay đổi. Tải lại trang.");
       if (action === "accept" && p.sender === "tutor") {
-        if (!isVerifiedStudent(db, p.student_id)) fail(403, "Xác minh tài khoản học sinh (học bạ hoặc bảng điểm) để nhận offer.");
+        if (!isVerifiedStudent(db, p.student_id)) fail(403, "Xác minh tài khoản học sinh (học bạ hoặc bảng điểm) để nhận đề nghị.");
         // The student pays in when accepting a tutor's offer.
         const w = wallet(db, p.student_id);
-        if (w.available < p.total) fail(402, `Số dư còn thiếu ${(p.total - w.available).toLocaleString("vi-VN")}đ. Nạp thêm để nhận offer.`);
+        if (w.available < p.total) fail(402, `Số dư còn thiếu ${(p.total - w.available).toLocaleString("vi-VN")}đ. Nạp thêm để nhận đề nghị.`);
         move(db, p.student_id, "offer_hold", { amount: -p.total, held: p.total, ref: `proposal:${id}` });
         run(db, "UPDATE proposals SET held=? WHERE id=?", p.total, id);
       }

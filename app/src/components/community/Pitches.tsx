@@ -117,12 +117,12 @@ export function PitchPanel({ post }: { post: CommunityPostData }) {
               <Field><FieldLabel htmlFor="pt-time">{t("Giờ bắt đầu")}</FieldLabel><Input id="pt-time" name="time" type="time" step={1800} defaultValue="19:00" required /></Field>
             </div>
             <Field><FieldLabel htmlFor="pt-message">{t("Lời nhắn")}</FieldLabel><Textarea id="pt-message" name="message" rows={3} maxLength={2000} required /></Field>
-            <Field><FieldLabel htmlFor="pt-boost">{t("Đặt thêm credit để lên top 3 (không bắt buộc)")}</FieldLabel><Input id="pt-boost" name="boost" type="number" min={0} max={50} defaultValue={0} /></Field>
+            <Field><FieldLabel htmlFor="pt-boost">{t("Đặt thêm Xu để lên top 3 (không bắt buộc)")}</FieldLabel><Input id="pt-boost" name="boost" type="number" min={0} max={50} defaultValue={0} /></Field>
           </FieldGroup>
           <div className="actions dialog-actions"><Button type="button" variant="ghost" onClick={() => setOpen(false)}>{t("Hủy")}</Button><Submit busy={busy}><Send data-icon="inline-start" />{t("Gửi hồ sơ")}</Submit></div>
         </form>
       ) : (
-        <Button onClick={() => setOpen(true)}><Send data-icon="inline-start" />{t("Gửi hồ sơ (2 credit)")}</Button>
+        <Button onClick={() => setOpen(true)}><Send data-icon="inline-start" />{t("Gửi hồ sơ (2 Xu)")}</Button>
       ))}
     </section>
   );

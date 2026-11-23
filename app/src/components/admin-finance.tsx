@@ -27,9 +27,9 @@ type Payout = {
 };
 const SETTINGS: [string, string][] = [
   ["fee_percent", "Phí nền tảng (%)"],
-  ["monthly_credits", "Credit miễn phí mỗi tháng"],
-  ["offer_credits", "Credit cho mỗi offer"],
-  ["offer_hours", "Offer hết hạn sau (giờ)"],
+  ["monthly_credits", "Xu miễn phí mỗi tháng"],
+  ["offer_credits", "Xu cho mỗi đề nghị"],
+  ["offer_hours", "Đề nghị hết hạn sau (giờ)"],
   ["confirm_hours", "Tự xác nhận buổi học sau (giờ)"],
   ["cancel_hours", "Hủy không mất phí trước (giờ)"],
   ["min_deposit", "Nạp tối thiểu (VND)"],
