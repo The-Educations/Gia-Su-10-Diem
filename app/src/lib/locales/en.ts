@@ -413,5 +413,14 @@ export const en: Record<string, string> = {
   "Ngôn ngữ": "Language",
   "Tiếng Việt": "Vietnamese",
   "Tiếng Anh": "English",
+  // Admin finance sections, business settings and Xu packs
+  "Mục tài chính": "Finance sections", "Chuyển tiền": "Payouts", "Cài đặt": "Settings",
+  "Chưa có lệnh nạp nào thành công.": "No successful top-ups yet.",
+  "Phí và nạp tiền": "Fees and top-ups", "Xu gia sư": "Tutor credits", "Thời hạn": "Time limits", "Gói Xu": "Credit packs",
+  "Số Xu của gói {n}": "Credits in pack {n}", "Giá gói {n} (VND)": "Price of pack {n} (VND)", "{price}/Xu": "{price}/credit",
+  "Xóa gói {n}": "Remove pack {n}", "Thêm gói": "Add pack", "Mỗi gói cần số Xu khác nhau.": "Each pack needs a different number of credits.",
+  // Admin ends a class package
+  "Kết thúc gói": "End package", "Đã kết thúc gói": "Package ended",
+  "Kết thúc gói của {name}? Các buổi chưa học trong tương lai sẽ được hoàn tiền cho học sinh.": "End {name}'s package? Future lessons not yet held are refunded to the student.",
 };
 for (const [vi, text] of Object.entries(enMore)) en[vi] ??= text;

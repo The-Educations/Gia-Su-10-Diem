@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import "@/calendar.css";
+import "@/money.css";
 
 const rhythm = (c: ClassInfo, t: (s: string) => string) => c.schedule.map((s) => `${t(WEEKDAYS[s.weekday])} ${timeLabel(s)}`).join(" · ");
 
@@ -128,6 +129,11 @@ export function ClassDetail() {
     try { await api(`/moves/${moveId}`, "PATCH", { accept }); toast.success(t(accept ? "Đã đồng ý dời lịch" : "Đã từ chối dời lịch")); result.reload(); }
     catch (e) { toast.error((e as Error).message); }
   }
+  async function endMember(memberId: number, name: string) {
+    if (!confirm(t("Kết thúc gói của {name}? Các buổi chưa học trong tương lai sẽ được hoàn tiền cho học sinh.", { name }))) return;
+    try { await api(`/admin/members/${memberId}/end`, "POST"); toast.success(t("Đã kết thúc gói")); result.reload(); }
+    catch (e) { toast.error((e as Error).message); }
+  }
   return (
     <Page>
       <header className="class-hero" data-color={c.color}>
@@ -178,11 +184,16 @@ export function ClassDetail() {
                     <small>{t("{done}/{total} buổi đã học", { done: m.done, total: m.sessions_total })} · {money(m.rate)}/{t("buổi")}{m.status !== "active" && ` · ${t("Đã kết thúc")}`}</small>
                     <div className="class-progress"><span style={{ width: `${Math.min(100, (m.done / Math.max(1, m.sessions_total)) * 100)}%` }} /></div>
                   </div>
-                  {tutor && m.status === "active" && left <= 2 && (
-                    <Button size="sm" variant="outline" onClick={async () => { try { await api(`/members/${m.id}/remind`, "POST"); toast.success(t("Đã nhắc gia hạn")); } catch (e) { toast.error((e as Error).message); } }}>
-                      <BellRing data-icon="inline-start" />{t("Nhắc gia hạn")}
-                    </Button>
-                  )}
+                  <span className="member-actions">
+                    {tutor && m.status === "active" && left <= 2 && (
+                      <Button size="sm" variant="outline" onClick={async () => { try { await api(`/members/${m.id}/remind`, "POST"); toast.success(t("Đã nhắc gia hạn")); } catch (e) { toast.error((e as Error).message); } }}>
+                        <BellRing data-icon="inline-start" />{t("Nhắc gia hạn")}
+                      </Button>
+                    )}
+                    {user?.role === "admin" && m.status === "active" && (
+                      <Button size="sm" variant="ghost" className="member-end" onClick={() => endMember(m.id, m.name)}>{t("Kết thúc gói")}</Button>
+                    )}
+                  </span>
                 </li>
               );
             })}
