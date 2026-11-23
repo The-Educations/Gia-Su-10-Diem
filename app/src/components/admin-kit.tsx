@@ -82,7 +82,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   "subject.save": "Lưu môn học", "subject.removed": "Bỏ môn học", "resource.create": "Thêm kỳ thi", "resource.update": "Sửa kỳ thi", "resource.removed": "Bỏ kỳ thi",
   "community.rules.update": "Sửa quy tắc cộng đồng", "community.post.delete": "Xóa bài cộng đồng", "community.comment.delete": "Gỡ bình luận", "community.comment.remove": "Gỡ bình luận",
   "community.announcement.create": "Đăng thông báo", "community.announcement.update": "Sửa thông báo", "community.report.resolve": "Xử lý báo cáo cộng đồng", "community.user.lock": "Khóa quyền cộng đồng", "community.user.unlock": "Mở quyền cộng đồng",
-  "community.revision.approve": "Duyệt bản sửa bài viết", "community.revision.reject": "Từ chối bản sửa bài viết", "community.post.approve": "Duyệt bài cộng đồng", "community.post.reject": "Từ chối bài cộng đồng", "community.post.hide": "Ẩn bài cộng đồng",
+  "community.revision.approve": "Duyệt bản sửa bài viết", "community.revision.reject": "Từ chối bản sửa bài viết", "community.post.approve": "Duyệt bài cộng đồng", "community.post.reject": "Từ chối bài cộng đồng", "community.post.hide": "Ẩn bài cộng đồng", "community.post.undelete": "Khôi phục bài đã xóa", "community.post.purge": "Xóa vĩnh viễn bài cộng đồng",
   publish_post: "Đăng tin tức", unpublish_post: "Gỡ tin tức", delete_post: "Xóa tin tức", upload_news_image: "Tải ảnh tin tức", pin_post: "Ghim tin tức", unpin_post: "Bỏ ghim tin tức", save_post_draft: "Lưu nháp tin tức",
 };
 

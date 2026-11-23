@@ -285,7 +285,7 @@ export type CommunitySummary = { pending: number; approved: number; hidden: numb
 export type CommunityFeed = { rules: CommunityPostData | null; items: CommunityPostData[]; more: boolean };
 export type CommunityNotice = { detail: string; id: number; kind: string; post_id: number; title: string; created_at: string; read_at: string | null };
 export type CommunityOwner = { id: number; name: string; email: string; community_locked: boolean | number; community_lock_reason: string };
-export type CommunityReview = CommunityPostData & { owner: CommunityOwner; review_version: number };
+export type CommunityReview = CommunityPostData & { owner: CommunityOwner; review_version: number; days_left?: number };
 
 export type CommunityMember = CommunityAuthor & {
   code: string; has_cover: boolean; bio: string; joined_at: string; mine: boolean; display_name?: string;

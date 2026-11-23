@@ -12,6 +12,33 @@ export function registerCommunityAdmin(
 ) {
   const base = "/api/admin/community";
   const admin = auth("admin");
+  const PURGE_DAYS = 30;
+  const purge = (rows, actorId, auto) =>
+    transaction(db, () => {
+      for (const p of rows) {
+        run(db, "DELETE FROM community_posts WHERE id=?", p.id);
+        audit(actorId, "community.post.purge", p.id, {
+          id: p.id,
+          title: p.title,
+          author_id: p.author_id,
+          auto,
+        });
+      }
+    });
+  const purgeExpired = (actorId) => {
+    const rows = all(
+      db,
+      "SELECT id,title,author_id FROM community_posts WHERE status='deleted' AND kind!='rules' AND updated_at < datetime('now', ?)",
+      `-${PURGE_DAYS} days`,
+    );
+    if (rows.length) purge(rows, actorId, true);
+  };
+  const deletedPost = (id, status) => {
+    const p = one(db, "SELECT * FROM community_posts WHERE id=?", id);
+    if (!p || p.kind === "rules") fail(404, "Không tìm thấy bài viết.");
+    if (p.status !== status) fail(409, "Trạng thái bài không phù hợp.");
+    return p;
+  };
   const privatePost = (p) => ({
     ...p,
     owner: one(
@@ -20,7 +47,8 @@ export function registerCommunityAdmin(
       p.author_id,
     ),
   });
-  app.get(`${base}/summary`, admin, (_req, res) =>
+  app.get(`${base}/summary`, admin, (req, res) => {
+    purgeExpired(req.user.id);
     res.json({
       ...one(
         db,
@@ -34,8 +62,8 @@ export function registerCommunityAdmin(
         db,
         "SELECT COUNT(*) total FROM community_reports WHERE status='open'",
       ).total,
-    }),
-  );
+    });
+  });
   app.get(`${base}/queue`, admin, (_req, res) =>
     res.json(
       all(
@@ -45,6 +73,7 @@ export function registerCommunityAdmin(
     ),
   );
   app.get(`${base}/posts`, admin, (req, res) => {
+    purgeExpired(req.user.id);
     const page = z.coerce
       .number()
       .int()
@@ -63,7 +92,22 @@ export function registerCommunityAdmin(
       (page - 1) * 20,
     );
     res.json({
-      items: rows.slice(0, 20).map(privatePost),
+      items: rows.slice(0, 20).map((p) => ({
+        ...privatePost(p),
+        ...(status === "deleted"
+          ? {
+              days_left: Math.max(
+                0,
+                PURGE_DAYS -
+                  Math.floor(
+                    (Date.now() -
+                      Date.parse(`${p.updated_at.replace(" ", "T")}Z`)) /
+                      864e5,
+                  ),
+              ),
+            }
+          : {}),
+      })),
       more: rows.length > 20,
     });
   });
@@ -156,6 +200,34 @@ export function registerCommunityAdmin(
       });
       res.json({ ok: true, ...(mailId ? await mail.deliver(mailId, req.user.id) : {}) });
     });
+  app.post(`${base}/posts/:id/delete`, admin, (req, res) => {
+    const p = deletedPost(req.params.id, "hidden");
+    transaction(db, () => {
+      run(
+        db,
+        "UPDATE community_posts SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        p.id,
+      );
+      audit(req.user.id, "community.post.delete", p.id, { post_id: p.id, title: p.title });
+    });
+    res.json({ ok: true });
+  });
+  app.post(`${base}/posts/:id/undelete`, admin, (req, res) => {
+    const p = deletedPost(req.params.id, "deleted");
+    transaction(db, () => {
+      run(
+        db,
+        "UPDATE community_posts SET status='hidden',updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        p.id,
+      );
+      audit(req.user.id, "community.post.undelete", p.id, { post_id: p.id, title: p.title });
+    });
+    res.json({ ok: true });
+  });
+  app.delete(`${base}/posts/:id`, admin, (req, res) => {
+    purge([deletedPost(req.params.id, "deleted")], req.user.id, false);
+    res.json({ ok: true });
+  });
   app.post(`${base}/posts`, admin, (req, res) => {
     const d = postSchema.parse(req.body);
     const id = transaction(db, () => {
