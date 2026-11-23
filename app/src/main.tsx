@@ -20,6 +20,7 @@ import { LanguageSwitch } from "./components/language-switch";
 import { RequestStrip } from "./components/request-strip";
 import { ErrorBoundary } from "./components/error-boundary";
 import { NotificationBell } from "./components/notification-bell";
+import { BalanceChip } from "./components/balance-chip";
 import { Brand, MobileBar, Sidebar } from "./components/app-shell";
 import { SocialLinks } from "./components/social-links";
 import { allItems, navigationFor } from "./lib/navigation";
@@ -143,6 +144,7 @@ function Shell() {
             {user?.demo && (
               <span className="demo-indicator">{t("Tài khoản mẫu")}</span>
             )}
+            <BalanceChip />
             <LanguageSwitch />
             <NotificationBell />
           </div>

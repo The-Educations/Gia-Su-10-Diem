@@ -8,6 +8,7 @@ import { migrateClasses } from "./classes.js";
 import { migrateCommunityTopics } from "./community-topics.js";
 import { migrateFamily } from "./family.js";
 import { migrateStudentVerification } from "./student-verification.js";
+import { migrateCalendarEvents } from "./calendar-events.js";
 import {
   randomBytes,
   scrypt as scryptCallback,
@@ -228,6 +229,7 @@ export function migrateDatabase(db) {
   migrateCommunityTopics(db);
   migrateFamily(db);
   migrateStudentVerification(db);
+  migrateCalendarEvents(db);
   return db;
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);

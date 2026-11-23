@@ -79,7 +79,7 @@ assert.ok(html.includes('initLearningParallax'), 'Learning parallax must initial
 console.log('✓ Tutor discovery form and subject filter verified.');
 
 // 8. Verify Vietnamese marketplace copy
-const vietnameseKeywords = ["Gia Sư 10 Điểm", "Toán", "CV", "lịch học"];
+const vietnameseKeywords = ["Gia Sư 10 Điểm", "Toán", "offer", "minh chứng"];
 for (const kw of vietnameseKeywords) {
   assert.ok(html.toLocaleLowerCase('vi').includes(kw.toLocaleLowerCase('vi')), `Missing expected Vietnamese keyword: ${kw}`);
 }

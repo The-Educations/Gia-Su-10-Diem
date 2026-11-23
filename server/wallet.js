@@ -56,6 +56,8 @@ export function migrateWallet(db) {
     status TEXT NOT NULL DEFAULT 'pending', held INTEGER NOT NULL DEFAULT 0, credits INTEGER NOT NULL DEFAULT 0,
     expires_at TEXT NOT NULL, decided_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE INDEX IF NOT EXISTS proposals_people ON proposals(student_id, tutor_id, status);`);
+  if (!db.prepare("PRAGMA table_info(proposals)").all().some((c) => c.name === "trial"))
+    db.exec("ALTER TABLE proposals ADD COLUMN trial INTEGER NOT NULL DEFAULT 0");
 }
 
 export function settings(db) {
@@ -185,10 +187,12 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     }
     res.status(201).json({ ...deposit(d), simulated: simulate });
   });
-  app.get("/api/wallet/deposits/:id", auth(), (req, res) => {
-    const d = one(db, "SELECT * FROM deposits WHERE id=? AND payer_id=?", z.coerce.number().int().parse(req.params.id), req.user.id);
+  app.get("/api/wallet/deposits/:id", auth(), async (req, res) => {
+    const id = z.coerce.number().int().parse(req.params.id);
+    const d = one(db, "SELECT * FROM deposits WHERE id=? AND payer_id=?", id, req.user.id);
     if (!d) fail(404, "Không tìm thấy lệnh nạp.");
-    res.json(deposit(d));
+    await checkWithSepay(d);
+    res.json(deposit(one(db, "SELECT * FROM deposits WHERE id=?", id)));
   });
   // Local development only: stands in for the bank transfer and SePay's webhook.
   app.post("/api/wallet/deposits/:id/simulate", auth(), (req, res) => {
@@ -199,11 +203,42 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     res.json(deposit(one(db, "SELECT * FROM deposits WHERE id=?", d.id)));
   });
 
+  // One payment per top-up, for exactly the amount asked; shared by the IPN and the order check.
+  function creditGateway(code, amount, method = "") {
+    return transaction(db, () => {
+      const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", code);
+      if (!d || d.amount !== amount || !run(db, "UPDATE deposits SET received=?,status='paid',paid_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", amount, d.id).changes) return null;
+      move(db, d.user_id, "deposit", { amount, ref: `deposit:${d.id}`, note: `sepay-pg:${method}` });
+      notify(db, d.user_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+      if (d.payer_id !== d.user_id) notify(db, d.payer_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+      return d;
+    });
+  }
+  // Asks SePay directly when the buyer is back but the IPN has not arrived (or never will).
+  async function checkWithSepay(d) {
+    if (!sepay.gateway || d.status !== "pending") return;
+    try {
+      const host = sepay.sandbox ? "https://pgapi-sandbox.sepay.vn" : "https://pgapi.sepay.vn";
+      const r = await fetch(`${host}/v1/order/detail/${encodeURIComponent(d.code)}`, {
+        headers: { Authorization: `Basic ${Buffer.from(`${sepay.merchant}:${sepay.merchantSecret}`).toString("base64")}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) return;
+      const o = (await r.json()).data || {};
+      const paid = (o.transactions || []).find((t) => t.transaction_status === "APPROVED" && t.transaction_type !== "REFUND");
+      if (o.order_status === "CAPTURED" && paid) creditGateway(d.code, Math.round(Number(o.order_amount) || 0), paid.payment_method);
+    } catch { /* the IPN or the next check will settle it */ }
+  }
+
   // Payment gateway IPN: SePay calls this once the buyer has paid on the hosted page.
   app.post("/api/sepay/ipn", (req, res) => {
     const key = req.get("X-Secret-Key") || "";
     if (!sepay.ipnSecret) return res.status(503).json({ success: false });
-    if (key.length !== sepay.ipnSecret.length || !timingSafeEqual(Buffer.from(key), Buffer.from(sepay.ipnSecret))) return res.status(401).json({ success: false });
+    if (key.length !== sepay.ipnSecret.length || !timingSafeEqual(Buffer.from(key), Buffer.from(sepay.ipnSecret))) {
+      // Kept for Admin → Finance so a wrong IPN key in SePay is easy to spot.
+      run(db, "INSERT OR IGNORE INTO gateway_events(id,invoice,amount,verdict,status,payload) VALUES (?,?,?,0,'rejected_key','{}')", `rejected:${Date.now()}:${randomInt(1e9)}`, String(req.body?.order?.order_invoice_number || ""), Math.round(Number(req.body?.order?.order_amount) || 0));
+      return res.status(401).json({ success: false });
+    }
     const e = req.body || {}, order = e.order || {}, tx = e.transaction || {};
     const eventId = String(tx.id || order.id || "");
     if (!eventId) return res.status(400).json({ success: false });
@@ -211,17 +246,10 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (seen) return res.json({ success: !!seen.verdict });
     const amount = Math.round(Number(order.order_amount) || 0);
     let verdict = false, depositId = null;
-    if (e.notification_type === "ORDER_PAID" && order.order_status === "CAPTURED" && tx.transaction_status === "APPROVED" && tx.transaction_type !== "REFUND")
-      transaction(db, () => {
-        const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", String(order.order_invoice_number || ""));
-        // One payment per top-up, for exactly the amount asked.
-        if (!d || d.amount !== amount || !run(db, "UPDATE deposits SET received=?,status='paid',paid_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", amount, d.id).changes) return;
-        move(db, d.user_id, "deposit", { amount, ref: `deposit:${d.id}`, note: `sepay-pg:${tx.payment_method || ""}` });
-        notify(db, d.user_id, "deposit_received", { subject: String(amount), link: "/wallet" });
-        if (d.payer_id !== d.user_id) notify(db, d.payer_id, "deposit_received", { subject: String(amount), link: "/wallet" });
-        verdict = true;
-        depositId = d.id;
-      });
+    if (e.notification_type === "ORDER_PAID" && order.order_status === "CAPTURED" && tx.transaction_status === "APPROVED" && tx.transaction_type !== "REFUND") {
+      const d = creditGateway(String(order.order_invoice_number || ""), amount, tx.payment_method);
+      if (d) { verdict = true; depositId = d.id; }
+    }
     run(db, "INSERT OR IGNORE INTO gateway_events(id,invoice,amount,verdict,status,deposit_id,payload) VALUES (?,?,?,?,?,?,?)",
       eventId, String(order.order_invoice_number || ""), amount, Number(verdict), verdict ? "processed" : "unmatched", depositId, JSON.stringify(e));
     // 200 tells SePay the notice arrived; unmatched ones wait in Admin → Finance.
@@ -292,7 +320,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       deposits: all(db, "SELECT d.id,d.code,d.amount,d.received,d.status,d.created_at,d.paid_at,u.name FROM deposits d JOIN users u ON u.id=d.user_id ORDER BY d.id DESC LIMIT 200"),
       unmatched: all(db, `SELECT id,code,amount,reference,created_at FROM (
         SELECT CAST(id AS TEXT) id,code,amount,reference,created_at FROM sepay_events WHERE status='unmatched'
-        UNION ALL SELECT id,invoice AS code,amount,'' AS reference,created_at FROM gateway_events WHERE status='unmatched') ORDER BY created_at DESC LIMIT 100`),
+        UNION ALL SELECT id,invoice AS code,amount,CASE status WHEN 'rejected_key' THEN 'Sai khóa IPN' ELSE '' END AS reference,created_at FROM gateway_events WHERE status IN ('unmatched','rejected_key')) ORDER BY created_at DESC LIMIT 100`),
       totals: one(db, `SELECT
         COALESCE((SELECT SUM(received) FROM deposits),0) AS deposited,
         COALESCE((SELECT SUM(available+held) FROM wallets),0) AS balances,

@@ -245,6 +245,10 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
             ))}
           </div>
         </Field>
+        <label className="trial-toggle">
+          <input type="checkbox" checked={!!draft.accepts_trial} onChange={(e) => set({ accepts_trial: e.target.checked })} />
+          <span><strong>{t("Nhận học thử miễn phí")}</strong><small>{t("Học sinh mới được học thử 1 buổi 60 phút trước khi gửi gói.")}</small></span>
+        </label>
       </FieldGroup>
     ),
     schedule: (
@@ -279,6 +283,11 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
           <FieldLabel htmlFor="intro_video">{t("Video giới thiệu (YouTube hoặc Google Drive)")}</FieldLabel>
           <Input id="intro_video" type="url" inputMode="url" maxLength={300} placeholder="https://youtu.be/…" value={draft.intro_video}
             onChange={(e) => { e.target.setCustomValidity(e.target.value && !embedUrl(e.target.value) ? t("Dùng liên kết YouTube hoặc Google Drive.") : ""); set({ intro_video: e.target.value }); }} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="sample_video">{t("Video một buổi học mẫu (không bắt buộc)")}</FieldLabel>
+          <Input id="sample_video" type="url" inputMode="url" maxLength={300} placeholder="https://youtu.be/…" value={draft.sample_video || ""}
+            onChange={(e) => { e.target.setCustomValidity(e.target.value && !embedUrl(e.target.value) ? t("Dùng liên kết YouTube hoặc Google Drive.") : ""); set({ sample_video: e.target.value }); }} />
         </Field>
         <ProfileSectionsEditor value={draft.profile_sections} onChange={(profile_sections) => set({ profile_sections })} />
       </FieldGroup>

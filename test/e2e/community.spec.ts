@@ -242,7 +242,7 @@ test("community guest, SEO, pinned rules, keyboard expansion and responsive widt
   const nav = page.locator("#desktop-navigation nav a");
   const names = await nav.allTextContents();
   expect(names.findIndex((n) => n.includes("Cộng đồng"))).toBe(
-    names.findIndex((n) => n.includes("Tìm môn học")) + 1,
+    names.findIndex((n) => n.includes("Tìm gia sư")) + 1,
   );
   await expect(page.locator(".community-card").first()).toHaveClass(
     /community-rules/,

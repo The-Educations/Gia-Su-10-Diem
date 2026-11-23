@@ -23,7 +23,7 @@ export function TutorPresentation({
 }) {
   const { t: tr } = useI18n();
   const Title = preview ? "h3" : "h1";
-  const video = t.intro_video ? embedUrl(t.intro_video) : null;
+  const video = t.intro_video ? embedUrl(t.intro_video) : null, sample = t.sample_video ? embedUrl(t.sample_video) : null;
   const kind = { student: "Sinh viên", teacher: "Giáo viên", professional: "Người đi làm" }[t.tutor_kind as string];
   return (
     <article
@@ -91,6 +91,13 @@ export function TutorPresentation({
         <Section title={tr("Video giới thiệu")}>
           <div className="intro-video">
             <iframe src={video} title={tr("Video giới thiệu của {name}", { name: t.name })} loading="lazy" allow="encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+          </div>
+        </Section>
+      )}
+      {sample && (
+        <Section title={tr("Một buổi học mẫu")}>
+          <div className="intro-video">
+            <iframe src={sample} title={tr("Buổi học mẫu của {name}", { name: t.name })} loading="lazy" allow="encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
           </div>
         </Section>
       )}
