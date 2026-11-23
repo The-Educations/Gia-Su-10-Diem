@@ -17,11 +17,15 @@ async function fixture(t, options = {}) {
   seedCatalog(db);
   await seedDemo(db, "TestStudy2026!");
   const emails = [];
-  const server = createApi(db, { processPhoto, limit: false, sendEmail: async message => { emails.push(message); }, ...options }).listen(0, "127.0.0.1");
+  const app = createApi(db, { processPhoto, limit: false, sendEmail: async message => { emails.push(message); }, ...options });
+  const server = app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
   t.after(async () => {
     await new Promise((r) => server.close(r));
+    // Flush queued notices while the db is still open; a delayed flush after
+    // close is a no-op (see mailer.isOpen guard).
+    try { await app.locals.flushMail?.(); } catch { }
     db.close();
     rmSync(dir, { recursive: true, force: true });
   });
