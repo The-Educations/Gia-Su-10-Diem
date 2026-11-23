@@ -18,7 +18,7 @@ const LINES = {
 export function createNoticeMailer(db, { sendEmail, origin }) {
   let running = false;
   async function flush() {
-    if (!sendEmail || running) return 0;
+    if (!sendEmail || running || db.isOpen === false) return 0;
     running = true;
     let sent = 0;
     try {
@@ -38,6 +38,6 @@ export function createNoticeMailer(db, { sendEmail, origin }) {
     } finally { running = false; }
     return sent;
   }
-  const pending = () => !!one(db, "SELECT 1 FROM email_outbox WHERE sent_at IS NULL AND attempts<5 AND sending_until<=? LIMIT 1", Date.now());
+  const pending = () => db.isOpen !== false && !!one(db, "SELECT 1 FROM email_outbox WHERE sent_at IS NULL AND attempts<5 AND sending_until<=? LIMIT 1", Date.now());
   return { flush, pending };
 }
