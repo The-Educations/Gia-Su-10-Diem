@@ -36,6 +36,8 @@ type Thread = {
   unread: number;
   last: string;
   lastAt: string;
+  lastSender?: string | null;
+  lastIsEvent?: number | null;
 };
 type ChatMessage = MessageData & { pending?: boolean };
 const PAGE = 40;
@@ -60,12 +62,13 @@ function Attachment({ m }: { m: ChatMessage }) {
 }
 function ChatEvent({ m }: { m: ChatMessage }) {
   const { t } = useI18n();
-  const Icon = m.context?.kind === "offer" ? FileText : CalendarDays;
+  const Icon = m.context?.kind === "offer" || m.context?.kind === "proposal" ? FileText : CalendarDays;
   return (
     <div className="chat-event" data-mid={m.id}>
       <Icon size={14} aria-hidden="true" />
       <div className="chat-event-body">
-        <span>{m.name} {m.body}</span>
+        <span>{m.name} {t(m.body)}</span>
+        {!m.context && m.event_href && <Link className="chat-event-link" to={m.event_href}>{t("Xem chi tiết")}</Link>}
         {m.context && <MessageContextCard context={m.context} />}
         <time>{dateTime(m.created_at)}</time>
       </div>
@@ -261,7 +264,7 @@ export default function Messages() {
   const { user } = useApp(),
     bookings = useLoad<Booking[]>("/bookings"),
     inquiries = useLoad<Inquiry[]>(user?.role === "admin" ? null : "/inquiries"),
-    support = useLoad<{ id: number; user_id: number; name: string; role: string; learner_type: string; status: string; created_at: string; last_message?: string; last_message_at?: string; unread_count?: number }[]>("/support"),
+    support = useLoad<{ id: number; user_id: number; name: string; role: string; learner_type: string; status: string; created_at: string; last_message?: string; last_message_at?: string; last_sender?: string | null; last_is_event?: number | null; unread_count?: number }[]>("/support"),
     [params, setParams] = useSearchParams(),
     [q, setQ] = useState(""),
     [filter, setFilter] = useState("all"),
@@ -279,6 +282,7 @@ export default function Messages() {
       detail: user?.role === "admin" ? `${t("Hỗ trợ")} · ${s.role === "tutor" ? t("Gia sư") : s.learner_type === "parent" ? t("Phụ huynh") : t("Học sinh")}` : "admin@giasudiem10.online",
       time: s.last_message_at || s.created_at, tutorId: s.user_id, endpoint: `/support/${s.id}/messages`, inactive: s.status !== "active",
       unread: s.unread_count || 0, last: s.last_message || "", lastAt: s.last_message_at || s.created_at,
+      lastSender: s.last_sender, lastIsEvent: s.last_is_event,
     })),
     ...(inquiries.data || []).map((i) => ({
       key: `inquiry-${i.id}`,
@@ -292,6 +296,7 @@ export default function Messages() {
       personId: user?.role === "tutor" ? i.student_id : i.tutor_id,
       endpoint: `/inquiries/${i.id}/messages`,
       unread: i.unread_count || 0, last: i.last_message || "", lastAt: i.last_message_at || i.created_at,
+      lastSender: i.last_sender, lastIsEvent: i.last_is_event,
     })),
     ...(bookings.data || []).filter((b) => !b.offer_id).map((b) => ({
       key: `lesson-${b.id}`,
@@ -307,6 +312,7 @@ export default function Messages() {
       scheduleHref: `/bookings?lesson=${b.id}`,
       context: { kind: "lesson" as const, id: b.id, subject_name: b.subject_name, status: b.status, starts_at: b.starts_at, duration_minutes: b.duration_minutes },
       unread: b.unread_count || 0, last: b.last_message || "", lastAt: b.last_message_at || b.starts_at,
+      lastSender: b.last_sender, lastIsEvent: b.last_is_event,
     })),
   ];
   threads.sort((a, b) => msgDate(b.lastAt).getTime() - msgDate(a.lastAt).getTime());
@@ -353,7 +359,7 @@ export default function Messages() {
                   {th.kind === "support" ? <ShieldCheck size={24} aria-hidden="true" /> : <Person name={th.name} id={th.personId ?? th.tutorId} />}
                   <div>
                     <strong data-unread={unread > 0 || undefined}>{th.name}{th.kind === "support" && user?.role !== "admin" && <Pin size={13} aria-label={t("Đã ghim")} />}</strong>
-                    <span>{th.last || th.detail}</span>
+                    <span>{th.lastIsEvent && th.lastSender ? `${th.lastSender} ${t(th.last)}` : th.last || th.detail}</span>
                     <small>{th.last ? `${th.detail} · ` : ""}{ago(th.lastAt)}</small>
                   </div>
                   {unread > 0 && <em className="conversation-unread" aria-label={t("{n} tin chưa đọc", { n: unread })}>{unread}</em>}

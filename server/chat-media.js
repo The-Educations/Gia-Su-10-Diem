@@ -27,12 +27,24 @@ export function withChatMedia(db, kind, threadId, messages) {
 // A compact system card inside the chat flow (booking made, offer answered…).
 // It carries the acting user's id but no notification: the lifecycle that
 // creates it already notifies on its own.
-export function insertChatEvent(db, kind, threadId, user, text, context = null) {
+export function insertChatEvent(db, kind, threadId, user, text, context = null, href = null) {
   const [, table, column] = threads[kind];
   if (kind === "inquiry")
-    run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,is_event) VALUES (?,?,?,?,?,1)`, threadId, user.id, text, context?.kind || null, context?.id || null);
+    run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,is_event,event_href) VALUES (?,?,?,?,?,1,?)`, threadId, user.id, text, context?.kind || null, context?.id || null, href);
   else
     run(db, `INSERT INTO ${table}(${column},sender_id,body,is_event) VALUES (?,?,?,1)`, threadId, user.id, text);
+}
+// Every student–tutor pair affected by a class-session change gets a card
+// in their own conversation, so it shows up where they actually talk.
+export function sessionChatEvent(db, sessionId, user, text) {
+  const rows = all(db, `SELECT DISTINCT cm.student_id,c.tutor_id,c.id AS class_id FROM class_sessions cs
+    JOIN classes c ON c.id=cs.class_id JOIN session_members sm ON sm.session_id=cs.id
+    JOIN class_members cm ON cm.id=sm.member_id WHERE cs.id=?`, sessionId);
+  for (const r of rows) {
+    run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", r.student_id, r.tutor_id);
+    const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", r.student_id, r.tutor_id);
+    insertChatEvent(db, "inquiry", thread.id, user, text, null, `/classes/${r.class_id}`);
+  }
 }
 export function markChatRead(db, kind, threadId, userId) {
   const [, table, column] = threads[kind];

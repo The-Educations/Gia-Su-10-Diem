@@ -3568,3 +3568,4 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 [data-flash].flash [data-slot="bubble-content"], .chat-event.flash { animation: chat-flash 1.6s ease-out; }
 @keyframes chat-flash { 0% { outline: 2px solid var(--primary); outline-offset: 2px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
 @media (prefers-reduced-motion: reduce) { .chat-event.flash, [data-flash].flash [data-slot="bubble-content"] { animation: none; outline: 2px solid var(--primary); } }
+.chat-event-link { color: var(--primary); font-size: 12px; font-weight: 500; width: fit-content; }

@@ -1,5 +1,5 @@
 import { liveTutorSql, publicView } from "./tutor-visibility.js";
-import { withChatMedia, insertChatMessage, insertChatEvent, chatPage, unreadCount } from "./chat-media.js";
+import { withChatMedia, insertChatMessage, insertChatEvent, chatPage } from "./chat-media.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text, availabilitySchema } from "./validation.js";
 import { weeklySchedule } from "./availability.js";
@@ -22,12 +22,15 @@ export function registerInquiries(app, db, auth) {
         db,
         `SELECT i.*,s.name AS student_name,t.name AS tutor_name,
     (SELECT body FROM inquiry_messages WHERE inquiry_id=i.id ORDER BY id DESC LIMIT 1) AS last_message,
-    (SELECT created_at FROM inquiry_messages WHERE inquiry_id=i.id ORDER BY id DESC LIMIT 1) AS last_message_at
+    (SELECT created_at FROM inquiry_messages WHERE inquiry_id=i.id ORDER BY id DESC LIMIT 1) AS last_message_at,
+    (SELECT u.name FROM inquiry_messages m JOIN users u ON u.id=m.sender_id WHERE m.inquiry_id=i.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
+    (SELECT is_event FROM inquiry_messages WHERE inquiry_id=i.id ORDER BY id DESC LIMIT 1) AS last_is_event,
+    (SELECT COUNT(*) FROM inquiry_messages m WHERE m.inquiry_id=i.id AND m.sender_id<>${req.user.id} AND m.id>COALESCE((SELECT last_read_id FROM chat_reads WHERE thread_kind='inquiry' AND thread_id=i.id AND user_id=${req.user.id}),0)) AS unread_count
     FROM inquiries i JOIN users s ON s.id=i.student_id JOIN users t ON t.id=i.tutor_id
     WHERE i.student_id=? OR i.tutor_id=? ORDER BY i.id DESC`,
         req.user.id,
         req.user.id,
-      ).map(i => ({ ...i, unread_count: unreadCount(db, "inquiry", i.id, req.user.id) })),
+      ),
     ),
   );
   app.post("/api/inquiries", auth("student"), (req, res) => {

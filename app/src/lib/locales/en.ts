@@ -469,3 +469,25 @@ const enCalChat: Record<string, string> = {
   "Liên hệ gia sư từ hồ sơ để bắt đầu trao đổi.": "Contact a tutor from their profile to start chatting.",
 };
 for (const [vi, text] of Object.entries(enCalChat)) en[vi] ??= text;
+// Session A round 2: chat event bodies (rendered as "{name} <body>") + links
+const enChatEvents: Record<string, string> = {
+  "đã đặt buổi học": "booked a lesson",
+  "đã xác nhận buổi học": "confirmed the lesson",
+  "đã từ chối buổi học": "declined the lesson",
+  "đã hủy buổi học": "cancelled the lesson",
+  "đã hoàn thành buổi học": "marked the lesson complete",
+  "đã báo học sinh vắng": "reported the student absent",
+  "đã báo gia sư vắng": "reported the tutor absent",
+  "đã gửi đề nghị học": "sent a lesson request",
+  "đã chấp nhận đề nghị học": "accepted the request",
+  "đã từ chối đề nghị học": "declined the request",
+  "đã hủy đề nghị học": "cancelled the request",
+  "đã rút đề nghị học": "withdrew the request",
+  "đề nghị đã hết hạn": "has an expired request",
+  "đã báo vấn đề buổi học": "reported a problem with the lesson",
+  "đã đề nghị dời buổi học": "proposed to reschedule the lesson",
+  "đã đồng ý dời buổi học": "agreed to the reschedule",
+  "đã từ chối dời buổi học": "declined the reschedule",
+  "Xem chi tiết": "View details",
+};
+for (const [vi, text] of Object.entries(enChatEvents)) en[vi] ??= text;

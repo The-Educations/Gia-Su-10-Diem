@@ -151,6 +151,8 @@ export type Booking = {
   rating_editable?: boolean;
   last_message?: string | null;
   last_message_at?: string | null;
+  last_sender?: string | null;
+  last_is_event?: number | null;
   unread_count?: number;
 };
 export type Resource = {
@@ -167,7 +169,7 @@ export type Resource = {
   published: number | boolean;
 };
 export type MessageContext = {
-  kind: "offer" | "lesson" | "weekly-request";
+  kind: "offer" | "lesson" | "weekly-request" | "proposal";
   id: number;
   subject_name: string;
   status: string;
@@ -175,6 +177,8 @@ export type MessageContext = {
   end_date?: string;
   starts_at?: string;
   duration_minutes?: number;
+  sessions?: number;
+  minutes?: number;
   blocks?: WeeklySchedule["blocks"];
 };
 export type ChatAttachment = { id: string; kind: "image" | "audio" | "file"; name?: string; size: number; url: string };
@@ -189,6 +193,7 @@ export type Message = {
   context?: MessageContext | null;
   context_kind?: MessageContext["kind"] | null;
   is_event?: number;
+  event_href?: string | null;
 };
 export type AdminData = {
   theme_catalog: ProfileTheme[];
@@ -213,6 +218,8 @@ export type Inquiry = {
   created_at: string;
   last_message: string;
   last_message_at?: string | null;
+  last_sender?: string | null;
+  last_is_event?: number | null;
   unread_count?: number;
 };
 
