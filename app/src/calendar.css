@@ -140,3 +140,7 @@
 .cal-draft { position: absolute; left: 3px; right: 3px; z-index: 2; border-radius: 8px; background: color-mix(in srgb, var(--primary) 18%, transparent); border: 1px solid var(--primary); pointer-events: none; font-size: 12px; padding: 4px 8px; color: var(--primary); }
 .cal-chip[data-kind="event"] { font-style: italic; }
 @media (max-width: 760px) { .event-time { grid-template-columns: 1fr 1fr; } .event-time > :first-child { grid-column: 1 / -1; } }
+/* Long class names stay inside their day cell. */
+.cal-month-cell { min-width: 0; overflow: hidden; }
+.cal-chip { display: block; max-width: 100%; }
+.cal-frame { max-width: 100%; }
