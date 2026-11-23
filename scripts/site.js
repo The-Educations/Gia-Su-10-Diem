@@ -223,13 +223,19 @@
       lang = b.dataset.lang;
       try { localStorage.setItem("giasu.lang", lang); } catch {}
       apply(lang);
+      observer.takeRecords();
     });
-  apply(lang);
   // Subject lists and counters change after load; translate them as they appear.
-  new MutationObserver((records) => {
-    if (lang !== "en") return;
+  const observer = new MutationObserver((records) => {
+    // Content the page itself changed has a new Vietnamese original.
     for (const r of records) for (const n of r.addedNodes) if (n.nodeType === 3) originals.delete(n);
     for (const r of records) if (r.type === "characterData") originals.delete(r.target);
+    if (lang !== "en") return;
     apply(lang);
-  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    // Our own writes are not page changes: forgetting their originals would make English the "original".
+    observer.takeRecords();
+  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  apply(lang);
+  observer.takeRecords();
 })();
