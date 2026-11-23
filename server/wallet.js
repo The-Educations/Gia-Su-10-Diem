@@ -3,6 +3,7 @@ import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { isParentOf } from "./family.js";
+import banks from "../shared/banks.json" with { type: "json" };
 
 // "Số dư học phí": money a student pays in ahead of lessons. SePay never holds
 // it; transfers land in the platform's bank account and SePay's webhook tells
@@ -58,7 +59,19 @@ export function migrateWallet(db) {
   CREATE INDEX IF NOT EXISTS proposals_people ON proposals(student_id, tutor_id, status);`);
   if (!db.prepare("PRAGMA table_info(proposals)").all().some((c) => c.name === "trial"))
     db.exec("ALTER TABLE proposals ADD COLUMN trial INTEGER NOT NULL DEFAULT 0");
+  // A payout carries a code for the transfer memo, the bank's reference once SePay sees
+  // the money leave, and the receipt the administrator attached.
+  const cols = db.prepare("PRAGMA table_info(withdrawals)").all().map((c) => c.name);
+  for (const [name, type] of [["code", "TEXT"], ["bank_ref", "TEXT NOT NULL DEFAULT ''"], ["paid_via", "TEXT NOT NULL DEFAULT ''"], ["receipt_id", "TEXT"]])
+    if (!cols.includes(name)) db.exec(`ALTER TABLE withdrawals ADD COLUMN ${name} ${type}`);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS withdrawals_code ON withdrawals(code)");
 }
+
+const bankCode = (name) => banks.find((b) => b.name.toLowerCase() === String(name).toLowerCase())?.code || "";
+// VietQR for the administrator's banking app: the user's account, the amount and the memo filled in.
+export const payoutQr = (w) => bankCode(w.bank_name) && w.code
+  ? `https://vietqr.app/img?${new URLSearchParams({ acc: w.account_number, bank: bankCode(w.bank_name), amount: String(w.amount), des: w.code, template: "compact" })}`
+  : null;
 
 export function settings(db) {
   const stored = Object.fromEntries(all(db, "SELECT key,value FROM platform_settings").map((r) => [r.key, JSON.parse(r.value)]));
@@ -125,6 +138,15 @@ export function signCheckout(fields, secret) {
 
 export function registerWallet(app, db, auth, audit, { production, sepay, origin = "" }) {
   const simulate = !production && !sepay.ready;
+  // One code space for top-ups and payouts, so a memo always points at one record.
+  const newCode = () => {
+    for (;;) {
+      const code = sepay.prefix + Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
+      if (!one(db, "SELECT 1 FROM deposits WHERE code=? UNION ALL SELECT 1 FROM withdrawals WHERE code=?", code, code)) return code;
+    }
+  };
+  // Requests made before payouts had codes get one, so they can be paid by QR too.
+  for (const w of all(db, "SELECT id FROM withdrawals WHERE code IS NULL AND status='requested'")) run(db, "UPDATE withdrawals SET code=? WHERE id=?", newCode(), w.id);
   const expireProposals = () => {
     for (const p of all(db, "SELECT * FROM proposals WHERE status='pending' AND expires_at<?", new Date().toISOString()))
       transaction(db, () => {
@@ -137,7 +159,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     return {
       available: w.available, held: w.held, credits_free: w.credits_free, credits_paid: w.credits_paid,
       entries: all(db, "SELECT id,kind,amount,held,credits,ref,note,created_at FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50", userId),
-      withdrawals: all(db, "SELECT id,amount,bank_name,account_number,account_name,substr(account_number,-4) AS account_last4,status,note,created_at,handled_at FROM withdrawals WHERE user_id=? ORDER BY id DESC LIMIT 20", userId),
+      withdrawals: all(db, "SELECT id,amount,bank_name,account_number,account_name,substr(account_number,-4) AS account_last4,status,note,created_at,handled_at,code,bank_ref!='' AS bank_confirmed,CASE WHEN receipt_id IS NULL THEN NULL ELSE '/api/chat/attachments/' || receipt_id END AS receipt_url FROM withdrawals WHERE user_id=? ORDER BY id DESC LIMIT 20", userId),
       settings: (({ offer_credits, credit_packs, min_deposit, fee_percent }) => ({ offer_credits, credit_packs, min_deposit, fee_percent }))(settings(db)),
       payments: sepay.ready ? "live" : simulate ? "simulated" : "off",
     };
@@ -193,12 +215,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (student_id && !isParentOf(db, req.user.id, student_id)) fail(403, "Chỉ nạp được cho tài khoản con đã liên kết.");
     const owner = student_id || req.user.id;
     if (!sepay.ready && !simulate) fail(503, "Nạp tiền đang tạm đóng. Vui lòng quay lại sau.");
-    let d;
-    for (let attempt = 0; !d && attempt < 5; attempt++) {
-      const code = sepay.prefix + Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
-      try { d = one(db, "SELECT * FROM deposits WHERE id=?", run(db, "INSERT INTO deposits(user_id,payer_id,code,amount) VALUES (?,?,?,?)", owner, req.user.id, code, amount).lastInsertRowid); }
-      catch (e) { if (!/UNIQUE/.test(String(e.message))) throw e; }
-    }
+    const d = one(db, "SELECT * FROM deposits WHERE id=?", run(db, "INSERT INTO deposits(user_id,payer_id,code,amount) VALUES (?,?,?,?)", owner, req.user.id, newCode(), amount).lastInsertRowid);
     res.status(201).json({ ...deposit(d), simulated: simulate });
   });
   app.get("/api/wallet/deposits/:id", auth(), async (req, res) => {
@@ -239,6 +256,31 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       return d;
     });
   }
+  // Marks a payout as sent, once: by an administrator, or by SePay seeing the money leave the bank.
+  function payout(w, { actor = null, via, ref = "", receipt = null }) {
+    if (!run(db, "UPDATE withdrawals SET status='paid',handled_by=?,handled_at=CURRENT_TIMESTAMP,paid_via=?,bank_ref=?,receipt_id=? WHERE id=? AND status='requested'", actor, via, ref, receipt, w.id).changes) return false;
+    move(db, w.user_id, "withdrawal_paid", { held: -w.amount, ref: `withdrawal:${w.id}`, actor });
+    supportNote(w.user_id, `Đã chuyển ${w.amount.toLocaleString("vi-VN")}đ cho yêu cầu rút tiền #${w.id} về ${w.bank_name} ****${w.account_number.slice(-4)}.${receipt ? " Biên lai đính kèm." : ""}`, receipt);
+    notify(db, w.user_id, "withdrawal_paid", { subject: String(w.amount), link: "/wallet" });
+    return true;
+  }
+  // A line in the user's conversation with the administrators, with the receipt when there is one.
+  function supportNote(userId, body, attachment = null) {
+    run(db, "INSERT OR IGNORE INTO support_threads(user_id) VALUES (?)", userId);
+    const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", userId);
+    const admin = one(db, "SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1");
+    const id = Number(run(db, "INSERT INTO support_messages(thread_id,sender_id,body) VALUES (?,?,?)", thread.id, admin?.id || userId, body).lastInsertRowid);
+    if (attachment) run(db, "UPDATE chat_attachments SET message_id=? WHERE id=? AND message_id IS NULL", id, attachment);
+  }
+  // A receipt is an image the administrator uploaded into that user's support conversation.
+  function receiptFor(w, id, adminId) {
+    if (!id) return null;
+    const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", w.user_id);
+    if (!thread || !one(db, "SELECT 1 FROM chat_attachments WHERE id=? AND owner_id=? AND thread_kind='support' AND thread_id=? AND message_id IS NULL AND kind='image'", id, adminId, thread.id))
+      fail(400, "Biên lai không hợp lệ. Tải lại ảnh rồi thử lại.");
+    return id;
+  }
+
   // Asks SePay directly when the buyer is back but the IPN has not arrived (or never will).
   async function checkWithSepay(d) {
     if (!sepay.gateway || d.status !== "pending") return;
@@ -294,13 +336,27 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ success: false });
     const seen = one(db, "SELECT verdict FROM sepay_events WHERE id=?", id);
     if (seen) return res.json({ success: !!seen.verdict });
-    let verdict = false, depositId = null;
+    let verdict = false, depositId = null, status = "unmatched";
     if (e.transferType === "in" && (!sepay.account || String(e.accountNumber) === sepay.account || e.subAccount)) {
       const d = credit(code, amount, `sepay:${id}`);
       if (d) { verdict = true; depositId = d.id; }
     }
+    // Money leaving the bank with a payout code in its memo confirms that payout.
+    if (e.transferType === "out") {
+      status = "ignored";
+      const content = String(e.content || "").toUpperCase();
+      const w = (code && one(db, "SELECT * FROM withdrawals WHERE code=? COLLATE NOCASE", code))
+        || all(db, "SELECT * FROM withdrawals WHERE code IS NOT NULL AND status IN ('requested','paid') AND bank_ref='' ORDER BY id DESC LIMIT 200").find((x) => content.includes(x.code));
+      if (w && w.amount === amount) {
+        transaction(db, () => {
+          if (w.status === "requested") payout(w, { via: "sepay", ref: String(e.referenceCode || id) });
+          else run(db, "UPDATE withdrawals SET bank_ref=? WHERE id=? AND bank_ref=''", String(e.referenceCode || id), w.id);
+        });
+        verdict = true; status = "payout";
+      }
+    }
     run(db, "INSERT OR IGNORE INTO sepay_events(id,code,amount,reference,verdict,status,deposit_id,payload) VALUES (?,?,?,?,?,?,?,?)",
-      id, code, amount, String(e.referenceCode || ""), Number(verdict), verdict ? "processed" : "unmatched", depositId, JSON.stringify(e));
+      id, code, amount, String(e.referenceCode || ""), Number(verdict), verdict ? (status === "payout" ? "payout" : "processed") : status, depositId, JSON.stringify(e));
     res.json({ success: verdict });
   });
 
@@ -312,7 +368,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       account_name: z.string().trim().min(2).max(80),
     }).parse(req.body);
     const id = transaction(db, () => {
-      const wid = Number(run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name) VALUES (?,?,?,?,?)", req.user.id, d.amount, d.bank_name, d.account_number, d.account_name.toUpperCase()).lastInsertRowid);
+      const wid = Number(run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name,code) VALUES (?,?,?,?,?,?)", req.user.id, d.amount, d.bank_name, d.account_number, d.account_name.toUpperCase(), newCode()).lastInsertRowid);
       move(db, req.user.id, "withdrawal_requested", { amount: -d.amount, held: d.amount, ref: `withdrawal:${wid}` });
       // The request appears in the user's conversation with the administrators.
       run(db, "INSERT OR IGNORE INTO support_threads(user_id) VALUES (?)", req.user.id);
@@ -341,7 +397,20 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   // Administrators
   app.get("/api/admin/finance", auth("admin"), (req, res) => {
     res.json({
-      withdrawals: all(db, "SELECT w.*,u.name FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE w.status WHEN 'requested' THEN 0 ELSE 1 END, w.id DESC LIMIT 200"),
+      withdrawals: all(db, `SELECT w.id,w.user_id,w.amount,w.bank_name,w.account_number,w.account_name,w.status,w.note,w.created_at,w.handled_at,w.code,w.bank_ref,w.paid_via,
+        u.name,u.email,u.role,(SELECT id FROM support_threads WHERE user_id=w.user_id) AS thread_id,
+        CASE WHEN w.receipt_id IS NULL THEN NULL ELSE '/api/chat/attachments/' || w.receipt_id END AS receipt_url
+        FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE w.status WHEN 'requested' THEN 0 ELSE 1 END, w.id DESC LIMIT 200`).map((w) => ({ ...w, qr_url: w.status === "requested" ? payoutQr(w) : null })),
+      // Month by month in Vietnam time: money in, money out, and what the platform earned.
+      months: all(db, `WITH m(month) AS (SELECT strftime('%Y-%m', datetime('now','+7 hours','start of month','-' || n || ' months')) FROM (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5))
+        SELECT month,
+          COALESCE((SELECT SUM(received) FROM deposits WHERE status='paid' AND strftime('%Y-%m', paid_at, '+7 hours')=month),0) AS deposits,
+          COALESCE((SELECT SUM(amount) FROM withdrawals WHERE status='paid' AND strftime('%Y-%m', handled_at, '+7 hours')=month),0) AS payouts,
+          COALESCE((SELECT SUM(amount) FROM withdrawals WHERE status='paid' AND bank_ref!='' AND strftime('%Y-%m', handled_at, '+7 hours')=month),0) AS payouts_confirmed,
+          COALESCE((SELECT SUM(amount) FROM platform_revenue WHERE kind='lesson_fee' AND strftime('%Y-%m', created_at, '+7 hours')=month),0) AS fees,
+          COALESCE((SELECT -SUM(amount) FROM wallet_entries WHERE kind='credits_purchased' AND strftime('%Y-%m', created_at, '+7 hours')=month),0) AS credits
+        FROM m ORDER BY month`),
+      payout_check: !!sepay.secret,
       // Paid top-ups with who paid, for whom and how, to trace a transfer quickly.
       deposits: all(db, `SELECT d.id,d.code,d.amount,d.received,d.status,d.created_at,d.paid_at,d.user_id,d.payer_id,
         u.name, u.email, p.name AS payer_name, p.email AS payer_email,
@@ -361,15 +430,34 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   });
   app.patch("/api/admin/withdrawals/:id", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
-    const d = z.object({ status: z.enum(["paid", "rejected"]), note: z.string().trim().max(300).default("") }).parse(req.body);
+    const d = z.object({ status: z.enum(["paid", "rejected"]), note: z.string().trim().max(300).default(""), receipt_id: z.string().uuid().optional() }).parse(req.body);
     transaction(db, () => {
       const w = one(db, "SELECT * FROM withdrawals WHERE id=?", id);
       if (!w) fail(404, "Không tìm thấy yêu cầu.");
-      if (!run(db, "UPDATE withdrawals SET status=?,note=?,handled_by=?,handled_at=CURRENT_TIMESTAMP WHERE id=? AND status='requested'", d.status, d.note, req.user.id, id).changes) fail(409, "Yêu cầu đã được xử lý.");
-      if (d.status === "paid") move(db, w.user_id, "withdrawal_paid", { held: -w.amount, ref: `withdrawal:${id}`, actor: req.user.id });
-      else move(db, w.user_id, "withdrawal_rejected", { amount: w.amount, held: -w.amount, ref: `withdrawal:${id}`, note: d.note, actor: req.user.id });
-      notify(db, w.user_id, `withdrawal_${d.status}`, { subject: String(w.amount), link: "/wallet" });
+      if (d.status === "paid") {
+        if (!payout(w, { actor: req.user.id, via: "manual", receipt: receiptFor(w, d.receipt_id, req.user.id) })) fail(409, "Yêu cầu đã được xử lý.");
+      } else {
+        if (!run(db, "UPDATE withdrawals SET status='rejected',note=?,handled_by=?,handled_at=CURRENT_TIMESTAMP WHERE id=? AND status='requested'", d.note, req.user.id, id).changes) fail(409, "Yêu cầu đã được xử lý.");
+        move(db, w.user_id, "withdrawal_rejected", { amount: w.amount, held: -w.amount, ref: `withdrawal:${id}`, note: d.note, actor: req.user.id });
+        supportNote(w.user_id, `Yêu cầu rút tiền #${id} chưa được chuyển: ${d.note}. Số tiền đã trả lại số dư.`);
+        notify(db, w.user_id, "withdrawal_rejected", { subject: String(w.amount), link: "/wallet" });
+      }
       audit(req.user.id, `withdrawal.${d.status}`, id);
+    });
+    res.json({ ok: true });
+  });
+  // A receipt can be added after the payout, for example once SePay confirmed it on its own.
+  app.post("/api/admin/withdrawals/:id/receipt", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const { receipt_id } = z.object({ receipt_id: z.string().uuid() }).parse(req.body);
+    transaction(db, () => {
+      const w = one(db, "SELECT * FROM withdrawals WHERE id=?", id);
+      if (!w || w.status !== "paid") fail(409, "Chỉ thêm biên lai cho yêu cầu đã chuyển.");
+      const receipt = receiptFor(w, receipt_id, req.user.id);
+      run(db, "UPDATE withdrawals SET receipt_id=? WHERE id=?", receipt, id);
+      supportNote(w.user_id, `Biên lai chuyển khoản cho yêu cầu rút tiền #${id}.`, receipt);
+      notify(db, w.user_id, "withdrawal_paid", { subject: String(w.amount), link: "/wallet" });
+      audit(req.user.id, "withdrawal.receipt", id);
     });
     res.json({ ok: true });
   });

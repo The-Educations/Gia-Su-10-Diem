@@ -2352,6 +2352,68 @@ test("wallet deposits, SePay webhook verdicts, offers holding money and tutor cr
   assert.equal(finance.totals.credit_revenue, 50000);
   assert.equal(finance.unmatched.length, 2);
 });
+test("payouts: a memo code and VietQR for the admin, SePay confirms money leaving the bank, receipts reach the user", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const sharp = (await import("sharp")).default;
+  const secret = "test-sepay-secret";
+  const { client, base } = await fixture(t, { sepay: { secret, account: "", bank: "", holder: "", prefix: "GSD", webhook: false, gateway: false, ready: false } });
+  const tutor = client(), admin = client();
+  const u = await tutor.login("chau"); await admin.login("admin");
+  const hook = (payload) => {
+    const body = JSON.stringify(payload), stamp = Math.floor(Date.now() / 1000);
+    return fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", secret).update(`${stamp}.${body}`).digest("hex") }, body });
+  };
+  assert.equal((await admin.request(`/admin/wallets/${u.id}/adjust`, "POST", { amount: 600000, note: "Học phí tháng 11" })).status, 200);
+  const payee = { bank_name: "MB Bank", account_number: "0987654321", account_name: "Nguyen Minh Chau" };
+  const first = (await tutor.request("/wallet/withdrawals", "POST", { amount: 200000, ...payee })).data;
+  const second = (await tutor.request("/wallet/withdrawals", "POST", { amount: 150000, ...payee })).data;
+  const [w2, w1] = first.withdrawals.length === 1 ? [second.withdrawals[0], second.withdrawals[1]] : second.withdrawals;
+  assert.match(w1.code, /^GSD[A-Z0-9]{8}$/);
+  assert.notEqual(w1.code, w2.code);
+  assert.equal(w1.status, "requested");
+
+  let finance = (await admin.request("/admin/finance")).data;
+  const row = finance.withdrawals.find((w) => w.id === w1.id);
+  assert.ok(row.qr_url.startsWith("https://vietqr.app/img?") && row.qr_url.includes("bank=MB") && row.qr_url.includes(`des=${w1.code}`) && row.qr_url.includes("amount=200000"));
+  assert.equal(finance.payout_check, true);
+  assert.equal(finance.months.length, 6);
+
+  // The admin's transfer leaves the bank with the code in its memo: SePay confirms it.
+  const out = { id: 7001, gateway: "MBBank", transactionDate: "2026-11-23 09:00:00", accountNumber: "0962250207", subAccount: "", code: null, content: `${w1.code} rut tien`, transferType: "out", description: "", transferAmount: 200000, accumulated: 0, referenceCode: "FT-OUT-1" };
+  assert.deepEqual(await (await hook({ ...out, id: 7000, transferAmount: 199000 })).json(), { success: false });
+  assert.deepEqual(await (await hook(out)).json(), { success: true });
+  assert.deepEqual(await (await hook(out)).json(), { success: true });
+  assert.deepEqual(await (await hook({ ...out, id: 7002, content: "RetailVisa 50000 PLX" , transferAmount: 50000 })).json(), { success: false });
+  let mine = (await tutor.request("/wallet")).data;
+  const paid = mine.withdrawals.find((w) => w.id === w1.id);
+  assert.deepEqual([paid.status, paid.bank_confirmed], ["paid", 1]);
+  assert.deepEqual([mine.available, mine.held], [250000, 150000]);
+  assert.equal((await admin.request(`/admin/withdrawals/${w1.id}`, "PATCH", { status: "paid" })).status, 409);
+
+  // The admin pays the second one by hand with a receipt; it reaches the user's conversation.
+  const thread = finance.withdrawals.find((w) => w.id === w2.id).thread_id;
+  const png = await sharp({ create: { width: 24, height: 24, channels: 3, background: "#ffffff" } }).png().toBuffer();
+  const upload = async () => (await (await fetch(base + `/chat/support/${thread}/attachments`, { method: "POST", headers: { Cookie: admin.cookie, "Content-Type": "image/png" }, body: png })).json()).id;
+  assert.equal((await admin.request(`/admin/withdrawals/${w2.id}`, "PATCH", { status: "paid", receipt_id: "00000000-0000-4000-8000-000000000000" })).status, 400);
+  const receipt = await upload();
+  assert.equal((await admin.request(`/admin/withdrawals/${w2.id}`, "PATCH", { status: "paid", receipt_id: receipt })).status, 200);
+  mine = (await tutor.request("/wallet")).data;
+  const manual = mine.withdrawals.find((w) => w.id === w2.id);
+  assert.deepEqual([manual.status, manual.bank_confirmed, manual.receipt_url], ["paid", 0, `/api/chat/attachments/${receipt}`]);
+  assert.equal(mine.held, 0);
+  assert.equal((await fetch(base + `/chat/attachments/${receipt}`, { headers: { Cookie: tutor.cookie } })).status, 200);
+  const messages = (await tutor.request(`/support/${thread}/messages`)).data;
+  assert.ok(messages.some((m) => m.attachment?.id === receipt && /Đã chuyển 150\.000đ/.test(m.body)));
+
+  // SePay seeing the manual transfer later still marks it as confirmed by the bank.
+  assert.deepEqual(await (await hook({ ...out, id: 7003, content: `CK ${manual.code}`, transferAmount: 150000, referenceCode: "FT-OUT-2" })).json(), { success: true });
+  assert.equal((await tutor.request("/wallet")).data.withdrawals.find((w) => w.id === w2.id).bank_confirmed, 1);
+  // A receipt can be added afterwards to the one SePay confirmed.
+  assert.equal((await admin.request(`/admin/withdrawals/${w1.id}/receipt`, "POST", { receipt_id: await upload() })).status, 200);
+  finance = (await admin.request("/admin/finance")).data;
+  assert.equal(finance.months.at(-1).payouts, 350000);
+  assert.equal(finance.months.at(-1).payouts_confirmed, 350000);
+});
 test("SePay webhook fails closed without a secret and deposits are simulated only in development", async (t) => {
   const { client, base } = await fixture(t, { sepay: { secret: "", account: "", bank: "", holder: "", prefix: "GSD", ready: false } });
   const student = client(); await student.login("student");

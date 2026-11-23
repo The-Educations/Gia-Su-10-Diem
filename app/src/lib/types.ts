@@ -283,7 +283,7 @@ export type Wallet = {
   credits_free: number;
   credits_paid: number;
   entries: WalletEntry[];
-  withdrawals: { id: number; amount: number; bank_name: string; account_number: string; account_name: string; account_last4: string; status: string; note: string; created_at: string; handled_at: string | null }[];
+  withdrawals: { id: number; amount: number; bank_name: string; account_number: string; account_name: string; account_last4: string; status: string; note: string; created_at: string; handled_at: string | null; code: string | null; bank_confirmed: number; receipt_url: string | null }[];
   settings: { offer_credits: number; credit_packs: { credits: number; price: number }[]; min_deposit: number; fee_percent: number };
   payments: "live" | "simulated" | "off";
 };

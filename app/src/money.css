@@ -449,3 +449,50 @@
 .survey-questions li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
 .survey-answer { display: inline-flex; gap: 6px; }
 .survey-answer .chip { min-height: 32px; padding: 0 12px; }
+
+/* Admin payouts and the monthly report */
+.month-report { display: grid; gap: 14px; }
+.finance-totals small { display: block; margin-top: 4px; font-size: 12px; color: var(--muted-foreground); }
+.month-chart { display: grid; gap: 10px; margin: 0; padding: 18px 18px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
+.month-bars { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; height: 180px; }
+.month-col { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 6px; text-align: center; }
+.month-col small { font-size: 12px; color: var(--muted-foreground); }
+.month-stack { display: flex; align-items: flex-end; justify-content: center; gap: 4px; }
+.month-stack span { width: min(18px, 28%); min-height: 2px; border-radius: 5px 5px 2px 2px; transition: height var(--duration-slow) var(--ease-out); }
+[data-kind="in"] { --k: var(--pastel-sage-ink); }
+[data-kind="out"] { --k: var(--pastel-rose-ink); }
+[data-kind="rev"] { --k: #c99a3c; }
+.month-stack span { background: var(--k); }
+.month-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted-foreground); }
+.month-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.month-legend span::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--k); }
+.payout-queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 14px; margin-top: 12px; }
+.payout-card { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--border); }
+.payout-card > img, .payout-noqr { width: 150px; aspect-ratio: 1; border-radius: 12px; background: #fff; object-fit: contain; }
+.payout-noqr { display: grid; place-items: center; background: var(--muted); color: var(--muted-foreground); }
+.payout-body { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.payout-amount { font: 500 28px/1.1 "Lora", serif; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.payout-body > span { font-size: 14px; }
+.payout-body > span small { display: block; font-size: 12px; color: var(--muted-foreground); }
+.payout-body dl { display: grid; gap: 4px; margin: 0; font-size: 13px; }
+.payout-body dl div { display: flex; justify-content: space-between; gap: 10px; }
+.payout-body dt { color: var(--muted-foreground); }
+.payout-body dd { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.payout-body dd.deposit-code { white-space: nowrap; overflow-wrap: normal; }
+.payout-body dd button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: var(--muted); cursor: pointer; }
+.payout-body dd button svg { width: 12px; height: 12px; }
+.bank-ok { display: inline-flex !important; align-items: center; gap: 4px; margin-top: 4px; color: var(--positive) !important; font-weight: 600; }
+.bank-ok svg { width: 13px; height: 13px; }
+.receipt-drop { display: grid; place-items: center; gap: 8px; min-height: 180px; padding: 16px; border: 2px dashed var(--input); border-radius: 16px; background: var(--muted); color: var(--muted-foreground); font: inherit; font-size: 14px; cursor: pointer; transition: border-color var(--duration-fast) ease-out, background-color var(--duration-fast) ease-out; }
+.receipt-drop[data-over] { border-color: var(--primary); background: var(--pastel-rose); }
+.receipt-drop[data-filled] { padding: 6px; border-style: solid; background: var(--card); }
+.receipt-drop img { max-height: 320px; border-radius: 10px; }
+.receipt-drop svg { width: 28px; height: 28px; }
+.ledger-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; color: var(--muted-foreground); }
+.ledger-sub a { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 560px) {
+  .payout-card { grid-template-columns: 1fr; }
+  .payout-card > img, .payout-noqr { width: 180px; justify-self: center; }
+  .month-bars { height: 140px; gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .month-stack span { transition: none; } }
