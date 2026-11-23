@@ -17,6 +17,7 @@ export function registerCommunityAdmin(
     transaction(db, () => {
       for (const p of rows) {
         run(db, "DELETE FROM community_posts WHERE id=?", p.id);
+        run(db, "DELETE FROM community_mail WHERE post_id=? AND sent_at IS NULL", p.id);
         audit(actorId, "community.post.purge", p.id, {
           id: p.id,
           title: p.title,
@@ -196,7 +197,7 @@ export function registerCommunityAdmin(
           `community.${revision && ["approve", "reject"].includes(action) ? "revision" : "post"}.${action}`,
           JSON.stringify({ id: p.id, note }),
         );
-        if (action === "hide" || action === "reject") return mail.enqueue(p.author_id, `${revision && action === "reject" ? "Bản sửa bài viết" : "Bài viết"} “${revision && action === "reject" ? p.revision_title : p.title}” ${action === "hide" ? "đã bị ẩn" : "chưa được duyệt"}.`, note, "/app/community/mine");
+        if (action === "hide" || action === "reject") return mail.enqueue(p.author_id, `${revision && action === "reject" ? "Bản sửa bài viết" : "Bài viết"} “${revision && action === "reject" ? p.revision_title : p.title}” ${action === "hide" ? "đã bị ẩn" : "chưa được duyệt"}.`, note, "/app/community/mine", p.id);
       });
       res.json({ ok: true, ...(mailId ? await mail.deliver(mailId, req.user.id) : {}) });
     });
@@ -307,7 +308,7 @@ export function registerCommunityAdmin(
         JSON.stringify({ id: c.id, note }),
       );
       const post = one(db, "SELECT title FROM community_posts WHERE id=?", c.post_id);
-      return mail.enqueue(c.author_id, `Bình luận trong bài “${post.title}” đã được gỡ: “${c.body.slice(0, 300)}”`, note, `/app/community/${c.post_id}`);
+      return mail.enqueue(c.author_id, `Bình luận trong bài “${post.title}” đã được gỡ: “${c.body.slice(0, 300)}”`, note, `/app/community/${c.post_id}`, c.post_id);
     });
     res.json({ ok: true, ...await mail.deliver(mailId, req.user.id) });
   });

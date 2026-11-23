@@ -136,6 +136,8 @@ CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notificatio
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT,
     attempted_at INTEGER NOT NULL DEFAULT 0, sending_until INTEGER NOT NULL DEFAULT 0
   )`);
+  if (!db.prepare("PRAGMA table_info(community_mail)").all().some(c => c.name === "post_id"))
+    db.exec("ALTER TABLE community_mail ADD COLUMN post_id INTEGER");
   if (!db.prepare("PRAGMA table_info(community_notifications)").all().some(c => c.name === "detail"))
     db.exec("ALTER TABLE community_notifications ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   if (

@@ -3,8 +3,8 @@ import { z } from "./validation.js";
 
 // Enqueue within the moderation transaction; call Mailflare only after commit.
 export function registerCommunityMail(app, db, auth, audit, { sendAdminEmail, origin }) {
-  function enqueue(userId, detail, reason, path) {
-    return Number(run(db, "INSERT INTO community_mail(user_id,detail,reason,path) VALUES (?,?,?,?)", userId, detail, reason, path).lastInsertRowid);
+  function enqueue(userId, detail, reason, path, postId = null) {
+    return Number(run(db, "INSERT INTO community_mail(user_id,detail,reason,path,post_id) VALUES (?,?,?,?,?)", userId, detail, reason, path, postId).lastInsertRowid);
   }
   async function deliver(id, actorId) {
     const row = one(db, "SELECT m.*,u.email,u.status FROM community_mail m JOIN users u ON u.id=m.user_id WHERE m.id=?", id);
@@ -36,6 +36,15 @@ export function registerCommunityMail(app, db, auth, audit, { sendAdminEmail, or
     if (!row) return res.status(404).json({ error: "Không tìm thấy thông báo email." });
     if (!row.sent_at && row.attempted_at > Date.now() - 60000) return res.status(429).json({ error: "Vui lòng đợi một phút trước khi gửi lại." });
     res.json({ ok: true, ...await deliver(id, req.user.id) });
+  });
+  app.delete("/api/admin/community/mail/:id", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const row = one(db, "SELECT id,sent_at,sending_until FROM community_mail WHERE id=?", id);
+    if (!row) return res.status(404).json({ error: "Không tìm thấy thông báo email." });
+    if (row.sent_at || row.sending_until > Date.now()) return res.status(409).json({ error: "Email đã gửi hoặc đang được gửi." });
+    run(db, "DELETE FROM community_mail WHERE id=?", id);
+    audit(req.user.id, "community.mail.dismiss", id);
+    res.json({ ok: true });
   });
   return { enqueue, deliver };
 }

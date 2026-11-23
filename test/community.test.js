@@ -1051,6 +1051,9 @@ test("admin deletes hidden posts, undoes, purges, and expired posts clean up laz
   await call("parent", `/community/posts/${id}/comments`, "POST", { body: "Học đều nhé" });
   await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
   const before = notes();
+  const unsentMail = (pid) =>
+    db.prepare("SELECT COUNT(*) n FROM community_mail WHERE post_id=? AND sent_at IS NULL").get(pid).n;
+  assert.equal(unsentMail(id), 1);
   assert.equal((await call("student", `/admin/community/posts/${id}/delete`, "POST")).status, 403);
   assert.equal((await call("admin", `/admin/community/posts/${id}/delete`, "POST")).status, 200);
   assert.equal(post(id).status, "deleted");
@@ -1067,6 +1070,7 @@ test("admin deletes hidden posts, undoes, purges, and expired posts clean up laz
   assert.equal((await call("student", `/admin/community/posts/${id}`, "DELETE")).status, 403);
   assert.equal((await call("admin", `/admin/community/posts/${id}`, "DELETE")).status, 200);
   assert.equal(post(id), undefined);
+  assert.equal(unsentMail(id), 0);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM community_comments WHERE post_id=?").get(id).n, 0);
   assert.equal(audits("community.post.purge"), 1);
 
@@ -1086,4 +1090,20 @@ test("admin deletes hidden posts, undoes, purges, and expired posts clean up laz
   assert.equal(post(old), undefined);
   assert.equal(audits("community.post.purge"), 2);
   assert.equal((await call("admin", `/admin/community/posts/${young}/undelete`, "POST")).status, 200);
+});
+
+test("admin can dismiss an unsent moderation email but not a sent one", async (t) => {
+  const { call, create, approve, db } = await fixture(t);
+  const id = await create();
+  await approve(id);
+  await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
+  const [mail] = (await call("admin", "/admin/community/mail")).data;
+  assert.ok(mail);
+  assert.equal((await call("student", `/admin/community/mail/${mail.id}`, "DELETE")).status, 403);
+  assert.equal((await call("admin", `/admin/community/mail/${mail.id}`, "DELETE")).status, 200);
+  assert.deepEqual((await call("admin", "/admin/community/mail")).data, []);
+  assert.equal((await call("admin", `/admin/community/mail/${mail.id}`, "DELETE")).status, 404);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM audit WHERE action='community.mail.dismiss'").get().n, 1);
+  const sent = Number(run(db, "INSERT INTO community_mail(user_id,detail,reason,path,sent_at) SELECT author_id,'x','y','/z',CURRENT_TIMESTAMP FROM community_posts WHERE id=?", id).lastInsertRowid);
+  assert.equal((await call("admin", `/admin/community/mail/${sent}`, "DELETE")).status, 409);
 });
