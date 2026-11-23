@@ -107,6 +107,14 @@
     "auth": "admin",
     "file": "wallet.js"
   },
+  "POST /api/admin/health/email/{id}/resend": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/health": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
   "POST /api/admin/members/{id}/end": {
     "auth": "admin",
     "file": "classes.js"
