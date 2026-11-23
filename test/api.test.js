@@ -1168,6 +1168,21 @@ test("news authoring is admin-only and drafts never leak publicly", async (t) =>
   assert.equal((await guest.request("/posts")).data.length, 0);
 });
 
+test("admin can permanently delete a news post, guests and students cannot", async (t) => {
+  const { client } = await fixture(t), admin = client(), student = client(), guest = client();
+  await admin.login("admin"); await student.login("student");
+  const post = { title: "Bài xoá", summary: "Tóm tắt", body: "Nội dung", published: true };
+  const id = (await admin.request("/admin/posts", "POST", post)).data.id;
+  assert.equal((await guest.request(`/admin/posts/${id}`, "DELETE")).status, 401);
+  assert.equal((await student.request(`/admin/posts/${id}`, "DELETE")).status, 403);
+  assert.equal((await guest.request(`/posts/${id}`)).status, 200);
+  assert.equal((await admin.request(`/admin/posts/${id}`, "DELETE")).status, 200);
+  assert.equal((await guest.request(`/posts/${id}`)).status, 404);
+  assert.equal((await guest.request("/posts")).data.length, 0);
+  assert.equal((await admin.request("/admin/posts")).data.length, 0);
+  assert.equal((await admin.request(`/admin/posts/${id}`, "DELETE")).status, 404);
+});
+
 test("tutor education timeline and timezone validate, persist and remain subject to moderation", async t => {
   const { client, file } = await fixture(t);
   const tutor = client(), admin = client(), guest = client();

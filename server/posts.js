@@ -25,4 +25,13 @@ export function registerPosts(app, db, auth, audit) {
   };
   app.post("/api/admin/posts", auth("admin"), save);
   app.put("/api/admin/posts/:id", auth("admin"), save);
+  app.delete("/api/admin/posts/:id", auth("admin"), (req, res) => {
+    const post = one(db, "SELECT id FROM posts WHERE id=?", req.params.id);
+    if (!post) return res.status(404).json({ error: "Không tìm thấy bài viết." });
+    transaction(db, () => {
+      run(db, "DELETE FROM posts WHERE id=?", post.id);
+      audit(req.user.id, "delete_post", String(post.id));
+    });
+    res.json({ ok: true });
+  });
 }
