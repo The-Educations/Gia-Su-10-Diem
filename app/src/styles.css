@@ -3429,7 +3429,9 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
 .verified-badge svg { width: 12px; height: 12px; }
 
 /* Blog-style editor */
-.community-editor-tools { position: sticky; top: calc(var(--topbar-height, 64px) + 4px); z-index: 3; flex-wrap: wrap; backdrop-filter: none; }
+.community-editor-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--muted); }
+.community-editor { display: flex; flex-direction: column; overflow: hidden; }
+.community-editor > .tiptap, .community-editor > div:has(> .community-editor-content) { flex: 1; }
 .community-editor-tools [data-group-start] { margin-left: 10px; position: relative; }
 .community-editor-tools [data-group-start]::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 1px; background: var(--border); }
 .community-editor-content { min-height: 360px; padding: 20px 22px; font-size: 16px; line-height: 1.75; }
@@ -3445,3 +3447,12 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
 .compose-title { height: auto; padding: 8px 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; font: 600 30px/1.25 "Be Vietnam Pro", sans-serif; box-shadow: none; }
 .compose-title:focus-visible { border-bottom-color: var(--primary); box-shadow: none; outline: none; }
 @media (max-width: 640px) { .compose-title { font-size: 24px; } }
+
+/* Free hours read as one block; zoom changes the row height. */
+.availability-grid button[aria-pressed="true"][data-join-bottom] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+.availability-grid button[aria-pressed="true"][data-join-top] { border-top-left-radius: 0; border-top-right-radius: 0; border-top-color: transparent; }
+.availability-grid td:has(> button[data-join-bottom]) { padding-bottom: 0; }
+.availability-grid td:has(> button[data-join-top]) { padding-top: 0; }
+.availability-zoom { display: inline-flex; gap: 2px; margin-bottom: 6px; }
+.availability-scroll[data-zoom="0"] .availability-grid button { min-height: 28px; height: 28px; }
+.availability-scroll[data-zoom="2"] .availability-grid button { min-height: 64px; height: 64px; }
