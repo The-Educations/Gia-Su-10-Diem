@@ -2,7 +2,8 @@ import sanitizeHtml from "sanitize-html";
 import { decodeHTML } from "entities";
 
 export const IMAGE_PATH = /^\/api\/community\/images\/([a-f0-9-]{36})$/;
-export function cleanPostHtml(value) {
+// `imagePath` lets other sections (news) sanitize against their own image route.
+export function cleanPostHtml(value, imagePath = IMAGE_PATH) {
   const images = new Set();
   let image_count = 0;
   const html = sanitizeHtml(value, {
@@ -44,7 +45,7 @@ export function cleanPostHtml(value) {
       img: (_tag, attrs) => ({
         tagName: "img",
         attribs: {
-          src: IMAGE_PATH.test(attrs.src || "") ? attrs.src : "",
+          src: imagePath.test(attrs.src || "") ? attrs.src : "",
           alt: (attrs.alt || "").slice(0, 300),
           loading: "lazy",
         },
@@ -52,7 +53,7 @@ export function cleanPostHtml(value) {
     },
     exclusiveFilter: (frame) => {
       if (frame.tag !== "img") return false;
-      const match = frame.attribs.src?.match(IMAGE_PATH);
+      const match = frame.attribs.src?.match(imagePath);
       if (!match) return true;
       images.add(match[1]);
       image_count++;
