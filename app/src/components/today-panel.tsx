@@ -25,6 +25,12 @@ export function TodayPanel() {
   const toConfirm = rows.filter((s) => endOf(s) <= now && s.outcome === "pending" && !(tutor ? s.tutor_confirmed_at : s.student_confirmed_at))
     .filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
   const next = rows.filter((s) => endOf(s) > now && s.status === "scheduled").sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+  // Parents have no lessons of their own: surface the child's next class instead.
+  const childNext = parent
+    ? (family.data?.children || [])
+        .flatMap((k) => k.classes.filter((c) => c.next_at && Date.parse(c.next_at) > now))
+        .sort((a, b) => a.next_at!.localeCompare(b.next_at!))[0]
+    : undefined;
   const answer = (proposals.data || []).filter((p) => p.status === "pending" && p.incoming);
   const ending = (classes.data || []).flatMap((c) => c.members.filter((m) => m.status === "active" && m.sessions_total - m.done <= 2).map((m) => ({ c, m })));
   const w = wallet.data;
@@ -36,10 +42,16 @@ export function TodayPanel() {
           <strong>{dayOf(next.starts_at)} · {timeOf(next.starts_at)}</strong>
           <small>{next.title}</small>
         </Link>
+      ) : childNext ? (
+        <Link to="/family" className="today-next" data-color={childNext.color}>
+          <span><CalendarDays aria-hidden="true" />{t("Buổi học tiếp theo")}</span>
+          <strong>{dayOf(childNext.next_at!)} · {timeOf(childNext.next_at!)}</strong>
+          <small>{childNext.title}</small>
+        </Link>
       ) : (
         <Link to={tutor ? "/proposals" : "/tutors"} className="today-next" data-color="sand">
           <span><CalendarDays aria-hidden="true" />{t("Chưa có buổi sắp tới")}</span>
-          <strong>{t(tutor ? "Nhận đề nghị để mở lớp" : "Tìm gia sư và gửi đề nghị")}</strong>
+          <strong>{t(tutor ? "Nhận đề nghị để mở lớp" : parent ? "Tìm gia sư cho con" : "Tìm gia sư và gửi đề nghị")}</strong>
         </Link>
       )}
       <div className="today-stats">
