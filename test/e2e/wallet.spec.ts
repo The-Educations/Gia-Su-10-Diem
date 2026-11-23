@@ -75,7 +75,7 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
   await dialog.getByLabel("Học phí / buổi").fill("200000");
   await expect(dialog.locator(".proposal-summary")).toContainText("800.000");
   await dialog.getByLabel("Lời nhắn").fill("Em muốn luyện nói tiếng Anh");
-  await dialog.getByRole("button", { name: /^Gửi offer 800\.000/ }).click();
+  await dialog.getByRole("button", { name: /^Gửi đề nghị 800\.000/ }).click();
   await expect(student).toHaveURL(/proposals\?id=\d+/);
   await expect(student.locator(".proposal-card[data-focused]")).toContainText("Chờ trả lời");
   const held = await (await student.request.get("/api/wallet")).json();
