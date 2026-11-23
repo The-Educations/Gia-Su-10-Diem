@@ -24,6 +24,48 @@ export function withChatMedia(db, kind, threadId, messages) {
   const attachments = new Map(all(db, "SELECT id,kind,size,name,message_id FROM chat_attachments WHERE thread_kind=? AND thread_id=? AND message_id IS NOT NULL", kind, threadId).map(row => [row.message_id, metadata(row)]));
   return messages.map(message => ({ ...message, attachment: attachments.get(message.id) || null }));
 }
+// A compact system card inside the chat flow (booking made, offer answered…).
+// It carries the acting user's id but no notification: the lifecycle that
+// creates it already notifies on its own.
+export function insertChatEvent(db, kind, threadId, user, text, context = null, href = null) {
+  const [, table, column] = threads[kind];
+  if (kind === "inquiry")
+    run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,is_event,event_href) VALUES (?,?,?,?,?,1,?)`, threadId, user.id, text, context?.kind || null, context?.id || null, href);
+  else
+    run(db, `INSERT INTO ${table}(${column},sender_id,body,is_event) VALUES (?,?,?,1)`, threadId, user.id, text);
+}
+// Every student–tutor pair affected by a class-session change gets a card
+// in their own conversation, so it shows up where they actually talk.
+export function sessionChatEvent(db, sessionId, user, text) {
+  const rows = all(db, `SELECT DISTINCT cm.student_id,c.tutor_id,c.id AS class_id FROM class_sessions cs
+    JOIN classes c ON c.id=cs.class_id JOIN session_members sm ON sm.session_id=cs.id
+    JOIN class_members cm ON cm.id=sm.member_id WHERE cs.id=?`, sessionId);
+  for (const r of rows) {
+    run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", r.student_id, r.tutor_id);
+    const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", r.student_id, r.tutor_id);
+    insertChatEvent(db, "inquiry", thread.id, user, text, null, `/classes/${r.class_id}`);
+  }
+}
+export function markChatRead(db, kind, threadId, userId) {
+  const [, table, column] = threads[kind];
+  const last = one(db, `SELECT MAX(id) AS id FROM ${table} WHERE ${column}=?`, threadId)?.id || 0;
+  run(db, "INSERT INTO chat_reads(thread_kind,thread_id,user_id,last_read_id) VALUES (?,?,?,?) ON CONFLICT(thread_kind,thread_id,user_id) DO UPDATE SET last_read_id=excluded.last_read_id", kind, threadId, userId, last);
+  return last;
+}
+export function unreadCount(db, kind, threadId, userId) {
+  const [, table, column] = threads[kind];
+  const read = one(db, "SELECT last_read_id FROM chat_reads WHERE thread_kind=? AND thread_id=? AND user_id=?", kind, threadId, userId)?.last_read_id || 0;
+  return one(db, `SELECT COUNT(*) AS n FROM ${table} WHERE ${column}=? AND id>? AND sender_id<>?`, threadId, read, userId).n;
+}
+// ?before=<messageId>&limit=<n>: the newest n rows before a cursor, oldest first.
+export function chatPage(db, kind, threadId, req) {
+  const q = z.object({ before: z.coerce.number().int().positive().optional(), limit: z.coerce.number().int().min(1).max(200).optional() }).parse(req.query);
+  const [, table, column] = threads[kind];
+  const base = `SELECT m.*,u.name FROM ${table} m JOIN users u ON u.id=m.sender_id WHERE ${column}=?`;
+  if (!q.limit) return { messages: all(db, `${base} ORDER BY m.id`, threadId), hasMore: false };
+  const rows = all(db, `${base} ${q.before ? "AND m.id<?" : ""} ORDER BY m.id DESC LIMIT ?`, threadId, ...(q.before ? [q.before] : []), q.limit + 1);
+  return { messages: rows.slice(0, q.limit).reverse(), hasMore: rows.length > q.limit };
+}
 export function insertChatMessage(db, kind, threadId, user, input, context = null) {
   return transaction(db, () => {
     participant(db, user, kind, threadId, true);
@@ -83,6 +125,12 @@ function fileName(header) {
   return name || "Tệp đính kèm";
 }
 export function registerChatMedia(app, db, auth, processPhoto) {
+  app.post("/api/chat/:kind/:id/read", auth(), (req, res) => {
+    const kind = z.enum(["inquiry", "lesson", "support"]).parse(req.params.kind);
+    const threadId = z.coerce.number().int().positive().parse(req.params.id);
+    participant(db, req.user, kind, threadId);
+    res.json({ last_read_id: markChatRead(db, kind, threadId, req.user.id) });
+  });
   app.post("/api/chat/:kind/:id/attachments", auth(), express.raw({ type: () => true, limit: MEDIA_LIMIT }), async (req, res) => {
     const kind = z.enum(["inquiry", "lesson", "support"]).parse(req.params.kind);
     const threadId = z.coerce.number().int().positive().parse(req.params.id);

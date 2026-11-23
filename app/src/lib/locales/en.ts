@@ -424,3 +424,80 @@ export const en: Record<string, string> = {
   "Kết thúc gói của {name}? Các buổi chưa học trong tương lai sẽ được hoàn tiền cho học sinh.": "End {name}'s package? Future lessons not yet held are refunded to the student.",
 };
 for (const [vi, text] of Object.entries(enMore)) en[vi] ??= text;
+// Session A: calendar & messaging redesign
+const enCalChat: Record<string, string> = {
+  "3 ngày": "3 days",
+  "Tất cả": "All",
+  "Lớp học": "Lessons",
+  "Đề nghị": "Requests",
+  "Hỗ trợ": "Support",
+  "Tìm cuộc trò chuyện": "Search conversations",
+  "Lọc theo loại": "Filter by type",
+  "Không có cuộc trò chuyện nào khớp.": "No conversations match.",
+  "{n} tin chưa đọc": "{n} unread",
+  "Đã ghim": "Pinned",
+  "Hôm nay": "Today",
+  "Hôm qua": "Yesterday",
+  "Mở ảnh đính kèm": "Open image",
+  "Ảnh đính kèm": "Attached image",
+  "Tải tệp": "Download file",
+  "Tin nhắn thoại từ": "Voice message from",
+  "Tải thêm tin nhắn cũ": "Load older messages",
+  "Đang gửi…": "Sending…",
+  "Bắt đầu cuộc trò chuyện": "Start the conversation",
+  "Gửi lời nhắn để bắt đầu trao đổi.": "Send a message to start talking.",
+  "Xem lịch dạy": "View teaching schedule",
+  "Xem lịch học": "View lesson schedule",
+  "Hỗ trợ quản trị": "Admin support",
+  "Xem hồ sơ": "View profile",
+  "Tin nhắn được ghim": "Pinned message",
+  "Hỗ trợ Gia Sư 10 Điểm": "Gia Su 10 Diem Support",
+  "Chào bạn! Gửi tin nhắn tại đây để được quản trị viên hỗ trợ.": "Hi! Message here to get help from the team.",
+  "Ngữ cảnh tin nhắn": "Message context",
+  "Bỏ ngữ cảnh tin nhắn": "Remove message context",
+  "Nội dung trò chuyện": "Conversation",
+  "Đến tin nhắn mới nhất": "Jump to latest message",
+  "Nội dung liên quan không còn khả dụng.": "The linked item is no longer available.",
+  "Trao đổi lịch học & bài tập": "Schedule & homework",
+  "Tư vấn trước buổi học": "Pre-lesson chat",
+  "Gia sư": "Tutor",
+  "Phụ huynh": "Parent",
+  "Học sinh": "Student",
+  "Chọn một cuộc trò chuyện": "Choose a conversation",
+  "Chưa có cuộc trò chuyện": "No conversations yet",
+  "Tin nhắn hỗ trợ sẽ xuất hiện khi người dùng liên hệ.": "Support chats appear when users reach out.",
+  "Liên hệ gia sư từ hồ sơ để bắt đầu trao đổi.": "Contact a tutor from their profile to start chatting.",
+};
+for (const [vi, text] of Object.entries(enCalChat)) en[vi] ??= text;
+// Session A round 2: chat event bodies (rendered as "{name} <body>") + links
+const enChatEvents: Record<string, string> = {
+  "đã đặt buổi học": "booked a lesson",
+  "đã xác nhận buổi học": "confirmed the lesson",
+  "đã từ chối buổi học": "declined the lesson",
+  "đã hủy buổi học": "cancelled the lesson",
+  "đã hoàn thành buổi học": "marked the lesson complete",
+  "đã báo học sinh vắng": "reported the student absent",
+  "đã báo gia sư vắng": "reported the tutor absent",
+  "đã gửi đề nghị học": "sent a lesson request",
+  "đã chấp nhận đề nghị học": "accepted the request",
+  "đã từ chối đề nghị học": "declined the request",
+  "đã hủy đề nghị học": "cancelled the request",
+  "đã rút đề nghị học": "withdrew the request",
+  "đề nghị đã hết hạn": "has an expired request",
+  "đã báo vấn đề buổi học": "reported a problem with the lesson",
+  "đã đề nghị dời buổi học": "proposed to reschedule the lesson",
+  "đã đồng ý dời buổi học": "agreed to the reschedule",
+  "đã từ chối dời buổi học": "declined the reschedule",
+  "Xem chi tiết": "View details",
+};
+for (const [vi, text] of Object.entries(enChatEvents)) en[vi] ??= text;
+
+// Session A round 3: context card labels
+const enCtxCard: Record<string, string> = {
+  "Đề nghị học": "Lesson request",
+  "Giờ VN": "VN time",
+  "{sessions} buổi · {minutes} phút": "{sessions} lessons · {minutes} min",
+  "{minutes} phút": "{minutes} min",
+  "Trả lời về": "Reply to",
+};
+for (const [vi, text] of Object.entries(enCtxCard)) en[vi] = text;

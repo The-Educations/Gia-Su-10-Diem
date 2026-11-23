@@ -6,6 +6,7 @@ import { move, settings, spendCredits, wallet } from "./wallet.js";
 import { startClass } from "./classes.js";
 import { childrenOf } from "./family.js";
 import { isVerifiedStudent } from "./student-verification.js";
+import { insertChatEvent } from "./chat-media.js";
 
 // An offer (Upwork-style proposal) for a package of lessons. A student's offer
 // holds the whole package from their balance until the tutor answers; a tutor's
@@ -48,6 +49,13 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
     expireProposals();
     const people = [req.user.id, ...childrenOf(db, req.user.id)];
     const rows = all(db, `${select} WHERE p.student_id IN (${people.map(() => "?").join(",")}) OR p.tutor_id=? ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END, p.id DESC LIMIT 200`, ...people, req.user.id);
+    // An expiry has no actor; the card lands once in the pair's conversation.
+    for (const p of rows.filter((r) => r.status === "expired")) {
+      run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", p.student_id, p.tutor_id);
+      const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", p.student_id, p.tutor_id);
+      if (!one(db, "SELECT 1 FROM inquiry_messages WHERE inquiry_id=? AND context_kind='proposal' AND context_id=? AND body='đề nghị đã hết hạn'", thread.id, p.id))
+        insertChatEvent(db, "inquiry", thread.id, { id: p.sender === "tutor" ? p.tutor_id : p.student_id }, "đề nghị đã hết hạn", { kind: "proposal", id: p.id });
+    }
     res.json(proposalView(db, rows, req.user).map((p) => ({ ...p, incoming: p.incoming || (p.sender === "tutor" && people.includes(p.student_id)) })));
   });
 
@@ -79,6 +87,9 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
         JSON.stringify(d.schedule), d.start_date, d.message, expires, byStudent ? total : 0, byStudent ? 0 : s.offer_credits, Number(d.trial)).lastInsertRowid);
       if (byStudent && total) move(db, studentId, "offer_hold", { amount: -total, held: total, ref: `proposal:${pid}` });
       else spendCredits(db, tutorId, s.offer_credits, `proposal:${pid}`);
+      run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", studentId, tutorId);
+      const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", studentId, tutorId);
+      insertChatEvent(db, "inquiry", thread.id, req.user, "đã gửi đề nghị học", { kind: "proposal", id: pid });
       notify(db, byStudent ? tutorId : studentId, "proposal_new", { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", d.subject_id).name, link: `/proposals?id=${pid}` });
       return pid;
     });
@@ -111,6 +122,9 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
       if (action !== "accept" && p.held) move(db, p.student_id, "offer_released", { amount: p.held, held: -p.held, ref: `proposal:${id}` });
       // An accepted offer becomes a class (or joins one of the tutor's classes).
       if (action === "accept") classId = startClass(db, get(id), req.user.id === p.tutor_id ? class_id : null);
+      run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", p.student_id, p.tutor_id);
+      const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", p.student_id, p.tutor_id);
+      insertChatEvent(db, "inquiry", thread.id, req.user, { accepted: "đã chấp nhận đề nghị học", declined: "đã từ chối đề nghị học", withdrawn: "đã rút đề nghị học" }[status], { kind: "proposal", id });
       notify(db, req.user.id === p.student_id ? p.tutor_id : p.student_id, `proposal_${status}`, { actor: req.user.name, subject: p.subject_name, link: `/proposals?id=${id}` });
     });
     audit(req.user.id, `proposal.${action}`, id);

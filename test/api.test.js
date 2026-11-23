@@ -321,10 +321,10 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
   await tutor.request(`/bookings/${id}/messages`, "POST", {
     body: "Mình sẽ bắt đầu từ kiến thức cơ bản.",
   });
-  assert.equal(
-    (await owner.request(`/bookings/${id}/messages`)).data.length,
-    2,
-  );
+  const thread = (await owner.request(`/bookings/${id}/messages`)).data;
+  assert.equal(thread.filter((m) => !m.is_event).length, 2);
+  // Booking and acceptance land in the thread as compact event cards.
+  assert.equal(thread.filter((m) => m.is_event).length, 2);
   assert.equal(
     (
       await tutor.request(`/bookings/${id}/lesson`, "PATCH", {
@@ -350,7 +350,11 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
   );
   const reopened = openDatabase(file);
   assert.equal(
-    one(reopened, "SELECT count(*) n FROM messages WHERE booking_id=?", id).n,
+    one(reopened, "SELECT count(*) n FROM messages WHERE booking_id=? AND is_event=0", id).n,
+    2,
+  );
+  assert.equal(
+    one(reopened, "SELECT count(*) n FROM messages WHERE booking_id=? AND is_event=1", id).n,
     2,
   );
   reopened.close();
@@ -515,6 +519,43 @@ test("student cross-tutor collisions, slots, favorites and admin catalogue edits
       .status,
     404,
   );
+});
+
+test("inquiry_messages rebuild keeps rows, attachments and allows proposal contexts", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "giasu-im-")),
+    file = join(dir, "old.sqlite");
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const original = openDatabase(file);
+  seedCatalog(original);
+  run(original, "INSERT INTO users(id,name,email,password,role) VALUES (1,'Học viên','s@t.vn','h','student'),(2,'Gia sư','t@t.vn','h','tutor')");
+  run(original, "INSERT INTO tutors(user_id,headline,subjects) VALUES (2,'t','[\"toan\"]')");
+  run(original, "INSERT INTO inquiries(id,student_id,tutor_id) VALUES (1,1,2)");
+  // Roll the table back to the pre-proposal shape, like a production database.
+  original.exec(`CREATE TABLE im_old (
+    id INTEGER PRIMARY KEY, inquiry_id INTEGER NOT NULL REFERENCES inquiries(id),
+    sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request')), context_id INTEGER,
+    is_event INTEGER NOT NULL DEFAULT 0);
+  INSERT INTO im_old(id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event)
+    SELECT id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event FROM inquiry_messages;
+  DROP TABLE inquiry_messages; ALTER TABLE im_old RENAME TO inquiry_messages;`);
+  run(original, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id) VALUES (1,1,'Tin cũ','offer',5),(1,2,'Trả lời',NULL,NULL)");
+  const mid = Number(one(original, "SELECT MAX(id) id FROM inquiry_messages").id);
+  run(original, "INSERT INTO chat_attachments(id,thread_kind,thread_id,owner_id,message_id,kind,mime,size,name) VALUES ('att-1','inquiry',1,2,?, 'image','image/png',100,'a.png')", mid);
+  original.close();
+  const migrated = openDatabase(file);
+  assert.equal(one(migrated, "SELECT count(*) n FROM inquiry_messages").n, 2);
+  const first = one(migrated, "SELECT id,body,context_kind,context_id FROM inquiry_messages ORDER BY id LIMIT 1");
+  assert.equal(Number(first.id), mid - 1); assert.equal(first.body, "Tin cũ"); assert.equal(first.context_kind, "offer"); assert.equal(Number(first.context_id), 5);
+  const last = one(migrated, "SELECT id,body,context_kind,context_id FROM inquiry_messages ORDER BY id DESC LIMIT 1");
+  assert.equal(Number(last.id), mid); assert.equal(last.body, "Trả lời"); assert.equal(last.context_kind, null);
+  run(migrated, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id,event_href) VALUES (1,1,'Đề nghị','proposal',7,'/proposals?id=7')");
+  const att = one(migrated, "SELECT ca.id,m.body FROM chat_attachments ca JOIN inquiry_messages m ON m.id=ca.message_id WHERE ca.id='att-1'");
+  assert.equal(att.body, "Trả lời");
+  migrated.close();
+  const again = openDatabase(file); // second open is a no-op
+  assert.equal(one(again, "SELECT count(*) n FROM inquiry_messages").n, 3);
+  again.close();
 });
 
 test("additive tutor migration preserves existing accounts and profile data", (t) => {
@@ -1777,7 +1818,9 @@ test("message context persists for both participants and rejects content from an
   for (const context of [{ kind: "offer", id: 0 }, { kind: "support", id: 1 }, { kind: "offer", id: offer.id, href: "https://evil.invalid" }]) {
     assert.equal((await student.request(`${path}/messages`, "POST", { body: "Invalid", context })).status, 400);
   }
-  assert.equal((await tutor.request(`${path}/messages`)).data.length, 1);
+  const sent = (await tutor.request(`${path}/messages`)).data;
+  assert.equal(sent.filter((m) => !m.is_event).length, 1);
+  assert.equal(sent.find((m) => m.is_event)?.context?.id, offer.id);
   assert.equal((await tutor.request(`/offers/${offer.id}`, "PATCH", { status: "accepted" })).status, 200);
   const lesson = (await student.request("/bookings")).data.find(b => b.offer_id === offer.id);
   assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Bài tập của buổi này", context: { kind: "lesson", id: lesson.id } })).status, 201);
@@ -1797,7 +1840,7 @@ test("message context persists for both participants and rejects content from an
   await student.request(`/bookings/${lesson.id}/messages`, "POST", { body: "Old lesson thread" });
   assert.equal((await tutor.request(`/bookings/${lesson.id}/messages`)).data[0].context.id, lesson.id);
   run(db, "UPDATE inquiry_messages SET context_id=999999 WHERE id=?", received.id);
-  const unavailable = (await student.request(`${path}/messages`)).data[0];
+  const unavailable = (await student.request(`${path}/messages`)).data.find((m) => m.id === received.id);
   assert.equal(unavailable.context, null);
   assert.equal(unavailable.context_kind, "offer");
 });

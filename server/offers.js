@@ -4,6 +4,7 @@ import { overlaps, weeklySchedule } from "./availability.js";
 import { availabilitySchema, z } from "./validation.js";
 import { withCourseState } from "./trust.js";
 import { notify } from "./notifications.js";
+import { insertChatEvent } from "./chat-media.js";
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const dayMs = 86400000;
@@ -97,6 +98,7 @@ export function registerOffers(app, db, auth) {
       run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", d.student_id, d.tutor_id);
       const { id: inquiry_id } = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", d.student_id, d.tutor_id);
       const id = Number(run(db, "INSERT INTO offers(student_id,tutor_id,inquiry_id,subject_id,mode,blocks,note,rate,start_date,end_date,kind,weeks) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", d.student_id, d.tutor_id, inquiry_id, d.subject_id, d.mode, JSON.stringify(d.blocks), d.note, d.rate, d.start_date, d.end_date, d.kind, d.weeks ?? null).lastInsertRowid);
+      insertChatEvent(db, "inquiry", inquiry_id, req.user, "đã gửi đề nghị học", { kind: "offer", id });
       notify(db, d.tutor_id, "offer_new", { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", d.subject_id)?.name || "", link: `/offers?id=${id}` });
       return { id, inquiry_id };
     });
@@ -132,6 +134,7 @@ export function registerOffers(app, db, auth) {
         if (endsCourse) run(db, "UPDATE offers SET ended_at=?,ended_by=? WHERE id=?", at, req.user.id, o.id);
       }
       run(db, "UPDATE offers SET status=?,accepted_at=CASE WHEN ?='accepted' THEN CURRENT_TIMESTAMP ELSE accepted_at END WHERE id=?", status, status, o.id);
+      insertChatEvent(db, "inquiry", o.inquiry_id, req.user, { accepted: "đã chấp nhận đề nghị học", declined: "đã từ chối đề nghị học", cancelled: "đã hủy đề nghị học" }[status], { kind: "offer", id: o.id });
       notify(db, req.user.id === o.tutor_id ? o.student_id : o.tutor_id, `offer_${status}`, { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", o.subject_id)?.name || "", link: `/offers?id=${o.id}` });
     });
     res.json({ ok: true });

@@ -129,7 +129,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
     .fill("Chào em, mình sẽ ôn phương trình.");
   await tutor.getByRole("button", { name: "Gửi", exact: true }).click();
   await expect(
-    tutor.getByText("Chào em, mình sẽ ôn phương trình.", { exact: true }),
+    tutor.locator(".conversation-body").getByText("Chào em, mình sẽ ôn phương trình.", { exact: true }),
   ).toBeVisible();
   await student.reload();
   await expect(student.locator(".lesson-card")).toContainText("Đã xác nhận");
@@ -138,7 +138,7 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   expect((await download).suggestedFilename()).toMatch(/\.ics$/);
   await student.getByRole("link", { name: "Trao đổi" }).click();
   await expect(
-    student.getByText("Chào em, mình sẽ ôn phương trình.", { exact: true }),
+    student.locator(".conversation-body").getByText("Chào em, mình sẽ ôn phương trình.", { exact: true }),
   ).toBeVisible();
   await student
     .getByRole("textbox", { name: "Tin nhắn", exact: true })
@@ -146,10 +146,10 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   await student.getByRole("button", { name: "Gửi", exact: true }).click();
   await student.reload();
   await expect(
-    student.getByText("Em cảm ơn cô.", { exact: true }),
+    student.locator(".conversation-body").getByText("Em cảm ơn cô.", { exact: true }),
   ).toBeVisible();
   await tutor.reload();
-  await expect(tutor.getByText("Em cảm ơn cô.", { exact: true })).toBeVisible();
+  await expect(tutor.locator(".conversation-body").getByText("Em cảm ơn cô.", { exact: true })).toBeVisible();
   await student.goto("/app/bookings?view=list");
   await student.getByRole("button", { name: "Hủy buổi", exact: true }).click();
   await student.getByRole("button", { name: "Xác nhận", exact: true }).click();
@@ -418,12 +418,12 @@ test("student contacts a tutor before booking and receives a private reply", asy
   await student.goto(`/app/messages?inquiry=${(await contact.json()).id}`);
   await expect(student).toHaveURL(/messages\?inquiry=/);
   await expect(
-    student.getByText(/Cô có nhận học sinh lớp 9 vào cuối tuần không ạ\?/),
+    student.locator(".conversation-body").getByText(/Cô có nhận học sinh lớp 9 vào cuối tuần không ạ\?/),
   ).toBeVisible();
   await login(tutor, "chau");
   await tutor.goto("/app/messages");
   await tutor
-    .locator(".conversation-list button")
+    .locator(".conversation-list > button")
     .filter({ hasText: "Tư vấn trước buổi học" })
     .click();
   await expect(tutor).toHaveURL(/messages\?inquiry=/);
@@ -433,11 +433,11 @@ test("student contacts a tutor before booking and receives a private reply", asy
     .fill("Cô còn lịch sáng thứ bảy nhé.");
   await tutor.getByRole("button", { name: "Gửi", exact: true }).click();
   await expect(
-    tutor.getByText("Cô còn lịch sáng thứ bảy nhé.", { exact: true }),
+    tutor.locator(".conversation-body").getByText("Cô còn lịch sáng thứ bảy nhé.", { exact: true }),
   ).toBeVisible();
   await student.reload();
   await expect(
-    student.getByText("Cô còn lịch sáng thứ bảy nhé.", { exact: true }),
+    student.locator(".conversation-body").getByText("Cô còn lịch sáng thứ bảy nhé.", { exact: true }),
   ).toBeVisible();
   await student.setViewportSize({ width: 360, height: 800 });
   expect(

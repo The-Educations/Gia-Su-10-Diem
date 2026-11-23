@@ -14,7 +14,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { freeRuns } from "@/lib/free-hours";
 import "@/calendar.css";
 
-type View = "day" | "week" | "month";
+type View = "day" | "tri" | "week" | "month";
 const HOURS = Array.from({ length: 17 }, (_, i) => 6 + i); // 06:00–22:00
 const ZOOM = [32, 48, 72, 96]; // px per hour
 const DAY = 86400000;
@@ -27,9 +27,49 @@ const minutesInDay = (iso: string) => { const d = new Date(Date.parse(iso) + VN)
 
 function range(view: View, anchor: string) {
   if (view === "day") return [anchor];
+  if (view === "tri") { const s = startOfDay(anchor); return Array.from({ length: 3 }, (_, i) => vnDate(s + i * DAY)); }
   if (view === "week") { const s = startOfDay(weekStart(anchor)); return Array.from({ length: 7 }, (_, i) => vnDate(s + i * DAY)); }
   const first = `${anchor.slice(0, 7)}-01`, s = startOfDay(weekStart(first));
   return Array.from({ length: 42 }, (_, i) => vnDate(s + i * DAY));
+}
+
+// Apple-style side-by-side layout for overlapping events in one day:
+// cluster transitively overlapping events, give each the first free column,
+// then stretch it right over the columns no concurrent neighbour occupies.
+export function layoutDay(items: { key: string; starts_at: string; minutes: number }[]) {
+  const sorted = [...items].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at) || b.minutes - a.minutes);
+  const layout = new Map<string, { left: number; width: number }>();
+  let cluster: typeof sorted = [], clusterEnd = -Infinity;
+  const flush = () => {
+    const ends: number[] = [], placed = new Map<string, { col: number; start: number; end: number }>();
+    for (const item of cluster) {
+      const start = Date.parse(item.starts_at), end = start + item.minutes * 60000;
+      let col = ends.findIndex((e) => e <= start);
+      if (col < 0) { col = ends.length; ends.push(0); }
+      ends[col] = end;
+      placed.set(item.key, { col, start, end });
+    }
+    const cols = Math.max(1, ends.length);
+    for (const item of cluster) {
+      const me = placed.get(item.key)!;
+      let span = 1;
+      for (let c = me.col + 1; c < cols; c++) {
+        const blocked = cluster.some((o) => placed.get(o.key)!.col === c && placed.get(o.key)!.start < me.end && placed.get(o.key)!.end > me.start);
+        if (blocked) break;
+        span++;
+      }
+      layout.set(item.key, { left: me.col / cols, width: span / cols });
+    }
+    cluster = []; clusterEnd = -Infinity;
+  };
+  for (const item of sorted) {
+    const start = Date.parse(item.starts_at), end = start + item.minutes * 60000;
+    if (cluster.length && start >= clusterEnd) flush();
+    cluster.push(item);
+    clusterEnd = Math.max(clusterEnd, end);
+  }
+  flush();
+  return layout;
 }
 
 export default function Schedule() {
@@ -99,7 +139,7 @@ export default function Schedule() {
   };
   function shift(n: number) {
     setDirection(n);
-    const step = view === "day" ? DAY : view === "week" ? 7 * DAY : 0;
+    const step = view === "day" ? DAY : view === "tri" ? 3 * DAY : view === "week" ? 7 * DAY : 0;
     if (step) setAnchor(vnDate(startOfDay(anchor) + n * step));
     else { const [y, m] = anchor.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); setAnchor(d.toISOString().slice(0, 10)); }
   }
@@ -132,8 +172,8 @@ export default function Schedule() {
           </div>
         )}
         <div className="segmented" role="group" aria-label={t("Chế độ xem")}>
-          {(["day", "week", "month"] as View[]).map((v) => (
-            <button type="button" key={v} aria-pressed={view === v} onClick={() => setView(v)}>{t(v === "day" ? "Ngày" : v === "week" ? "Tuần" : "Tháng")}</button>
+          {(["day", "tri", "week", "month"] as View[]).map((v) => (
+            <button type="button" key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v)}>{t(v === "day" ? "Ngày" : v === "tri" ? "3 ngày" : v === "week" ? "Tuần" : "Tháng")}</button>
           ))}
         </div>
       </div>
@@ -203,7 +243,13 @@ function TimeGrid({ days, byDay, today, now, lang, row, free, onZoom, onOpen, on
     making = useRef<{ day: number; from: number } | null>(null);
   const [ghost, setGhost] = useState<{ key: string; day: number; from: number; to: number } | null>(null);
   const [draft, setDraft] = useState<{ day: number; from: number; to: number } | null>(null);
-  useEffect(() => { body.current?.scrollTo({ top: Math.max(0, ((new Date(now + VN).getUTCHours() - 7) * row)) }); }, []);
+  // On open, land near "now" (one screen-hour back) or the earliest event shown.
+  useEffect(() => {
+    const nowTop = ((minutesInDay(new Date(now).toISOString()) - HOURS[0] * 60) / 60) * row;
+    const earliest = Math.min(...days.flatMap((key) => (byDay.get(key) || []).map((i) => topOf(minutesInDay(i.starts_at)))), Infinity);
+    const target = days.includes(today) ? nowTop - row * 1.25 : Number.isFinite(earliest) ? earliest - row * 0.5 : 0;
+    body.current?.scrollTo({ top: Math.max(0, target) });
+  }, []);
   // Keep the same hour at the top when zooming.
   const lastRow = useRef(row);
   useEffect(() => { const b = body.current; if (b && lastRow.current !== row) b.scrollTop = (b.scrollTop / lastRow.current) * row; lastRow.current = row; }, [row]);
@@ -306,15 +352,18 @@ function TimeGrid({ days, byDay, today, now, lang, row, free, onZoom, onOpen, on
               {free && freeRuns(free, (new Date(startOfDay(key) + VN).getUTCDay() + 6) % 7).map(([a, b]) => (
                 <span key={a} className="cal-free" style={{ top: topOf(a * 60), height: (b - a) * row }}><small>{t("Rảnh")} {clock(a * 60)}–{clock(b * 60)}</small></span>
               ))}
-              {(byDay.get(key) || []).map((item) => {
+              {(() => { const laid = layoutDay(byDay.get(key) || []); return (byDay.get(key) || []).map((item) => {
                 const top = topOf(minutesInDay(item.starts_at)), height = heightOf(item.minutes);
                 const past = Date.parse(item.starts_at) + item.minutes * 60000 < now;
                 const pending = past && item.lesson?.outcome === "pending";
                 const end = new Date(Date.parse(item.starts_at) + item.minutes * 60000).toISOString();
+                const place = laid.get(item.key) || { left: 0, width: 1 };
                 return (
                   <button type="button" key={item.key} className="cal-event" data-kind={item.kind} data-color={item.color} data-past={past || undefined} data-attention={pending || undefined}
-                    data-dragging={ghost?.key === item.key || undefined} data-new={item.event && item.event.id < 0 || undefined}
-                    style={{ top, height }} aria-label={`${item.title}, ${timeOf(item.starts_at)}–${timeOf(end)}${pending ? `, ${t("cần xác nhận")}` : ""}`}
+                    data-dragging={ghost?.key === item.key || undefined} data-new={item.event && item.event.id < 0 || undefined} data-narrow={place.width < (days.length >= 7 ? 0.30 : days.length === 3 ? 0.15 : 0.05) || undefined}
+                    style={{ top, height, left: `calc(${(place.left * 100).toFixed(2)}% + 3px)`, width: `calc(${(place.width * 100).toFixed(2)}% - 6px)` }}
+                    title={`${item.title} · ${timeOf(item.starts_at)}–${timeOf(end)}`}
+                    aria-label={`${item.title}, ${timeOf(item.starts_at)}–${timeOf(end)}${pending ? `, ${t("cần xác nhận")}` : ""}`}
                     onPointerDown={(e) => onPointerDown(e, item)} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.lesson ? onOpen(item.lesson, e.currentTarget) : onOpenEvent(item.event!, e.currentTarget); } }}>
                     <strong>{item.title}</strong>
@@ -322,7 +371,7 @@ function TimeGrid({ days, byDay, today, now, lang, row, free, onZoom, onOpen, on
                     {item.kind === "event" && canDrag && <span className="cal-resize" aria-hidden="true" onPointerDown={(e) => onPointerDown(e, item, true)} />}
                   </button>
                 );
-              })}
+              }); })()}
               {ghost && ghost.day === i && <span className="cal-ghost" style={{ top: topOf(ghost.from), height: heightOf(ghost.to - ghost.from) }}>{clock(ghost.from)}–{clock(ghost.to)}</span>}
               {draft && draft.day === i && <span className="cal-draft" style={{ top: topOf(draft.from), height: heightOf(draft.to - draft.from) }}><strong>{t("Sự kiện mới")}</strong>{clock(draft.from)}–{clock(draft.to)}</span>}
               {key === today && nowTop >= 0 && nowTop <= HOURS.length * row && <span className="cal-now" style={{ top: nowTop }} aria-hidden="true" />}

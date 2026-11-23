@@ -3538,3 +3538,34 @@ button.admin-row-title:hover strong { text-decoration: underline; }
   .wallet-adjust { grid-template-columns: minmax(0, 1fr); }
   .audit-table th, .audit-table td { white-space: nowrap; }
 }
+/* Conversation list tools: search + kind filters (Apple Messages-like). */
+.conversation-tools { position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 8px; background: var(--background); border-bottom: 1px solid var(--border); }
+.conversation-search { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 34px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--muted-foreground); }
+.conversation-search:focus-within { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 25%, transparent); }
+.conversation-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: inherit; font-size: 13px; color: var(--foreground); }
+.conversation-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+.conversation-filter button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-size: 12px; color: var(--muted-foreground); }
+.conversation-filter button[aria-pressed="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--card)); color: var(--primary); font-weight: 600; }
+.conversation-none { padding: 18px 14px; font-size: 12px; color: var(--muted-foreground); }
+.conversation-list > button { align-items: center; padding: 12px 14px; }
+.conversation-list > button > div { flex: 1; }
+.conversation-list > button > div > strong { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; }
+.conversation-list > button > div > strong[data-unread] { font-weight: 700; }
+.conversation-list > button > div > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.conversation-list > button > div > small { font-variant-numeric: tabular-nums; }
+.conversation-unread { flex-shrink: 0; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 11px; font-weight: 600; font-style: normal; display: grid; place-items: center; }
+/* Day separators + system event cards inside the chat flow. */
+.chat-day { display: flex; justify-content: center; margin: 14px 0 6px; }
+.chat-day > span { padding: 3px 10px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-size: 11px; font-weight: 500; }
+.chat-more { display: flex; justify-content: center; padding-bottom: 4px; }
+.chat-event { display: flex; gap: 8px; align-items: flex-start; width: min(420px, 100%); margin: 6px auto; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--muted-foreground); }
+.chat-event > svg { flex-shrink: 0; margin-top: 2px; color: var(--primary); }
+.chat-event-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.chat-event-body > span { font-size: 12.5px; color: var(--foreground); }
+.chat-event-body > time { font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.chat-event .message-context { margin: 0; }
+/* Deep-linked message pulse. */
+[data-flash].flash [data-slot="bubble-content"], .chat-event.flash { animation: chat-flash 1.6s ease-out; }
+@keyframes chat-flash { 0% { outline: 2px solid var(--primary); outline-offset: 2px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
+@media (prefers-reduced-motion: reduce) { .chat-event.flash, [data-flash].flash [data-slot="bubble-content"] { animation: none; outline: 2px solid var(--primary); } }
+.chat-event-link { color: var(--primary); font-size: 12px; font-weight: 500; width: fit-content; }

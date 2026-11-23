@@ -126,7 +126,7 @@ test("parent and tutor move between their shared schedule, private messages and 
   await page.getByRole("button", { name: "Gửi", exact: true }).click();
   await tutor.goto(`/app/bookings?offer=${offer.id}`);
   await tutor.locator(".schedule-next").getByRole("link", { name: "Nhắn tin", exact: true }).click();
-  await expect(tutor.getByText("Nhờ cô giao bài tập để gia đình cùng theo dõi.", { exact: true })).toBeVisible();
+  await expect(tutor.locator(".conversation-body").getByText("Nhờ cô giao bài tập để gia đình cùng theo dõi.", { exact: true })).toBeVisible();
   await expect(tutor.getByRole("link", { name: "Xem hồ sơ", exact: true })).toHaveCount(0);
   await tutor.getByRole("link", { name: "Xem lịch dạy", exact: true }).click();
   await expect(tutor).toHaveURL(new RegExp(`bookings\\?inquiry=${offer.inquiry_id}`));

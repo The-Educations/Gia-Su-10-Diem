@@ -26,17 +26,17 @@ test("students, parents and tutors get pinned admin support with private two-way
     const question = `Hỗ trợ riêng cho ${slug}`;
     await page.getByRole("textbox", { name: "Tin nhắn", exact: true }).fill(question);
     await page.getByRole("button", { name: "Gửi", exact: true }).click();
-    await expect(page.getByText(question, { exact: true })).toBeVisible();
+    await expect(page.locator(".conversation-body").getByText(question, { exact: true })).toBeVisible();
     await admin.goto("/app/messages");
-    await admin.locator(".conversation-list button").filter({ hasText: user.name }).filter({ hasText: "Hỗ trợ" }).click();
-    await expect(admin.getByText(question, { exact: true })).toBeVisible();
+    await admin.locator(".conversation-list > button").filter({ hasText: user.name }).filter({ hasText: "Hỗ trợ" }).click();
+    await expect(admin.locator(".conversation-body").getByText(question, { exact: true })).toBeVisible();
     await admin.getByRole("textbox", { name: "Tin nhắn", exact: true }).fill(`Đã hỗ trợ ${slug}`);
     await admin.getByRole("button", { name: "Gửi", exact: true }).click();
     await page.reload();
-    await expect(page.getByText(`Đã hỗ trợ ${slug}`, { exact: true })).toBeVisible();
+    await expect(page.locator(".conversation-body").getByText(`Đã hỗ trợ ${slug}`, { exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Cuộc trò chuyện", exact: true }).click();
-    await expect(page.locator(".conversation-list button").first()).toContainText("Hỗ trợ Gia Sư 10 Điểm");
+    await expect(page.locator(".conversation-list > button").first()).toContainText("Hỗ trợ Gia Sư 10 Điểm");
     await context.close();
   }
   await adminContext.close();

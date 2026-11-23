@@ -3,6 +3,7 @@ import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { move, settings } from "./wallet.js";
 import { childrenOf } from "./family.js";
+import { sessionChatEvent } from "./chat-media.js";
 
 // A class has one tutor, one or more students and a weekly rhythm. Each student
 // brings their own package (an accepted offer): a number of lessons paid in
@@ -203,6 +204,7 @@ export function registerClasses(app, db, auth, audit) {
         if (now.tutor_confirmed_at && now.student_confirmed_at) run(db, "UPDATE session_members SET outcome='confirmed' WHERE session_id=? AND member_id=?", id, r.member_id);
         else notify(db, tutor ? r.student_id : r.tutor_id, "session_confirm", { actor: req.user.name, subject: r.title, link: `/classes/${r.class_id}` });
       }
+      sessionChatEvent(db, id, req.user, "đã xác nhận buổi học");
     });
     upkeep(db);
     res.json({ ok: true });
@@ -218,6 +220,7 @@ export function registerClasses(app, db, auth, audit) {
       const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", req.user.id);
       run(db, "INSERT INTO support_messages(thread_id,sender_id,body) VALUES (?,?,?)", thread.id, req.user.id, `Báo vấn đề buổi học #${id} (${session.title}): ${reason}`);
       for (const a of all(db, "SELECT id FROM users WHERE role='admin' AND status='active'")) notify(db, a.id, "session_disputed", { actor: req.user.name, subject: session.title, link: "/admin?tab=classes" });
+      sessionChatEvent(db, id, req.user, "đã báo vấn đề buổi học");
     });
     res.json({ ok: true });
   });
@@ -236,6 +239,7 @@ export function registerClasses(app, db, auth, audit) {
       }
       if (tutor || !one(db, "SELECT 1 FROM session_members WHERE session_id=? AND outcome='pending'", id)) run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=?", id);
       if (tutor && late) run(db, "UPDATE tutors SET violations=violations+1 WHERE user_id=?", req.user.id);
+      sessionChatEvent(db, id, req.user, "đã hủy buổi học");
       result = { outcome, late };
     });
     upkeep(db);
@@ -252,6 +256,7 @@ export function registerClasses(app, db, auth, audit) {
       run(db, "INSERT INTO session_moves(session_id,requested_by,starts_at) VALUES (?,?,?)", id, req.user.id, starts_at);
       for (const uid of tutor ? [...new Set(rows.map((r) => r.student_id).filter(Boolean))] : [session.tutor_id])
         notify(db, uid, "session_move", { actor: req.user.name, subject: session.title, link: `/classes/${session.class_id}` });
+      sessionChatEvent(db, id, req.user, "đã đề nghị dời buổi học");
     });
     res.status(201).json({ ok: true });
   });
@@ -265,6 +270,7 @@ export function registerClasses(app, db, auth, audit) {
       if (mv.requested_by === req.user.id) fail(403, "Bên còn lại cần đồng ý.");
       run(db, "UPDATE session_moves SET status=? WHERE id=?", accept ? "accepted" : "declined", id);
       if (accept) run(db, "UPDATE class_sessions SET moved_from=COALESCE(moved_from,starts_at),starts_at=? WHERE id=?", mv.starts_at, mv.session_id);
+      sessionChatEvent(db, mv.session_id, req.user, accept ? "đã đồng ý dời buổi học" : "đã từ chối dời buổi học");
       notify(db, mv.requested_by, accept ? "session_moved" : "session_move_declined", { actor: req.user.name, subject: session.title, link: `/classes/${session.class_id}` });
     });
     res.json({ ok: true });

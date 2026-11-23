@@ -2,7 +2,7 @@ import { all, one } from "./db.js";
 import { z } from "./validation.js";
 
 export const messageContextSchema = z.object({
-  kind: z.enum(["offer", "lesson", "weekly-request"]),
+  kind: z.enum(["offer", "lesson", "weekly-request", "proposal"]),
   id: z.number().int().positive(),
 }).strict();
 
@@ -10,6 +10,7 @@ const sources = {
   offer: { table: "offers", fields: "r.start_date,r.end_date,r.blocks" },
   lesson: { table: "bookings", fields: "r.starts_at,r.duration_minutes" },
   "weekly-request": { table: "weekly_requests", fields: "r.blocks" },
+  proposal: { table: "proposals", fields: "r.start_date,r.sessions,r.minutes" },
 };
 function query(kind) {
   const source = sources[kind];
