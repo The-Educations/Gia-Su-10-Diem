@@ -7,6 +7,7 @@ import { api, dateTime, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { celebrate } from "@/lib/celebrate";
 import type { Deposit, Wallet } from "@/lib/types";
+import { BANKS } from "@/lib/banks";
 import { ErrorState, Heading, Loading, Page, Submit } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,7 +189,6 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
   );
 }
 
-const BANKS = ["Vietcombank", "VietinBank", "BIDV", "Agribank", "Techcombank", "MB Bank", "ACB", "VPBank", "TPBank", "Sacombank", "VIB", "HDBank", "SHB", "OCB", "MSB", "SeABank", "Eximbank", "LPBank", "Nam A Bank", "Bac A Bank", "ABBANK", "Cake by VPBank", "Timo"];
 type Payee = { bank_name: string; account_number: string; account_name: string };
 
 function WithdrawDialog({ open, onOpenChange, available, saved, onDone }: { open: boolean; onOpenChange: (v: boolean) => void; available: number; saved: Payee[]; onDone: () => void }) {
@@ -241,7 +241,7 @@ function WithdrawDialog({ open, onOpenChange, available, saved, onDone }: { open
                   <FieldLabel htmlFor="w-bank">{t("Ngân hàng")}</FieldLabel>
                   <select id="w-bank" className="native-select" required value={payee.bank_name} onChange={set("bank_name")}>
                     <option value="" disabled>{t("Chọn ngân hàng")}</option>
-                    {[...new Set([...BANKS, ...saved.map((s) => s.bank_name)])].map((b) => <option key={b} value={b}>{b}</option>)}
+                    {[...new Set([...BANKS.map((b) => b.name), ...saved.map((s) => s.bank_name)])].map((b) => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </Field>
                 <Field><FieldLabel htmlFor="w-number">{t("Số tài khoản")}</FieldLabel><Input id="w-number" inputMode="numeric" pattern="\d{6,20}" required value={payee.account_number} onChange={set("account_number")} aria-describedby="w-number-hint" /><small id="w-number-hint" className="field-hint">{t("6–20 chữ số")}</small></Field>
