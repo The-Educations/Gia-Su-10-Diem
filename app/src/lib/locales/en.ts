@@ -508,3 +508,37 @@ const enWalletStore = {
   "Đã nhận {amount} vào số dư": "{amount} received into your balance",
 };
 for (const [vi, text] of Object.entries(enWalletStore)) en[vi] = text;
+
+// Session C: vietqr-inline
+const enVietQr: Record<string, string> = {
+  "Chọn số tiền rồi chuyển khoản đúng số tiền và nội dung trên mã QR.": "Pick an amount, then transfer the exact amount and memo shown on the QR code.",
+  "Đang chờ chuyển khoản — hệ thống tự ghi nhận khi tiền về.": "Waiting for the transfer — it is recorded automatically when money arrives.",
+  "Chuyển đúng số tiền và giữ nguyên nội dung chuyển khoản để được ghi nhận tự động.": "Transfer the exact amount and keep the memo unchanged for automatic crediting.",
+  "Ngân hàng": "Bank",
+  "Chép nội dung chuyển khoản": "Copy transfer memo",
+  "Nạp tiền chưa sẵn sàng": "Top-ups not ready yet",
+  "Kênh chuyển khoản ngân hàng đang được thiết lập. Lệnh nạp {code} đã được giữ lại.": "The bank-transfer channel is being set up. Order {code} has been kept.",
+  "Tải ảnh QR": "Download QR image",
+  "Chưa tải được ảnh QR.": "Could not download the QR image.",
+  "Chưa tải được mã QR — thông tin chuyển khoản bên dưới vẫn dùng được.": "The QR code could not load — the transfer details below still work.",
+  "Tải lại": "Retry",
+  "Mã QR còn {time}": "QR expires in {time}",
+  "Mã QR nên dùng trong 15 phút — nếu chưa chuyển, hãy đổi số tiền để tạo lệnh mới.": "Use the QR within 15 minutes — if it has lapsed, change the amount to create a new order.",
+  "Tạo lệnh nạp {amount}": "Create top-up of {amount}",
+  "Quét bằng ứng dụng ngân hàng": "Scan with your banking app",
+  "Mã lệnh": "Order code",
+  "Chép mã lệnh": "Copy order code",
+  "Chép số tài khoản": "Copy account number",
+  "Đổi số tiền": "Change amount",
+  "Mã QR của lệnh {code}": "QR code for order {code}",
+  "Số tiền nạp": "Top-up amount",
+  "Số tiền gợi ý": "Suggested amounts",
+  "Tối thiểu {amount}": "Minimum {amount}",
+  "Số tài khoản": "Account number",
+  "Chủ tài khoản": "Account holder",
+  "Nội dung chuyển khoản": "Transfer memo",
+  "Nạp tiền cho con": "Top up for your child",
+  "Đã nhận {amount}": "Received {amount}",
+  "Xong": "Done",
+};
+for (const [vi, text] of Object.entries(enVietQr)) en[vi] = text;

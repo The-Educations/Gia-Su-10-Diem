@@ -18,7 +18,8 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
   await student.getByRole("button", { name: "1.000.000 ₫" }).click();
   await student.getByRole("button", { name: "Tạo lệnh nạp 1.000.000 ₫" }).click();
   await expect(student.locator(".deposit-code")).toHaveText(/^GSD[A-Z0-9]{8}$/);
-  await expect(student.getByRole("img", { name: /Mã QR của lệnh/ })).toBeVisible();
+  // No bank account is configured locally: the dialog says so instead of a QR.
+  await expect(student.getByText("Nạp tiền chưa sẵn sàng")).toBeVisible();
   await student.getByRole("button", { name: /Giả lập tiền đã về/ }).click();
   await expect(student.getByRole("status").filter({ hasText: "Đã nhận" })).toBeVisible();
   await student.getByRole("button", { name: "Xong" }).click();
@@ -132,4 +133,26 @@ test("a simulated transfer updates the balance chip and toasts without a reload"
   const id2 = (await pending())[0].id;
   await page.request.post(`/api/wallet/deposits/${id2}/simulate`, { data: {} });
   await expect(chip).toContainText("2.100.000 ₫", { timeout: 8000 });
+});
+
+test("top-up shows an inline VietQR, never a SePay link, and simulates to Đã nhận", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await login(page, "student");
+  await page.goto("/app/wallet");
+  await page.getByRole("button", { name: "Nạp tiền", exact: true }).click();
+  await page.getByRole("button", { name: "1.000.000 ₫" }).click();
+  await page.getByRole("button", { name: "Tạo lệnh nạp 1.000.000 ₫" }).click();
+  // Locally there is no bank account: the order is kept and the dialog says so,
+  // and nothing on the page links out to SePay.
+  await expect(page.getByText("Nạp tiền chưa sẵn sàng")).toBeVisible();
+  await expect(page.getByText(/đã được giữ lại/)).toBeVisible();
+  expect(await page.locator('a[href*="sepay.vn"], [href*="pay.sepay"], form[action*="sepay"]').count()).toBe(0);
+  await page.getByRole("button", { name: /Giả lập tiền đã về/ }).click();
+  await expect(page.getByText(/Đã nhận 1.000.000/)).toBeVisible();
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  expect(errors).toEqual([]);
 });

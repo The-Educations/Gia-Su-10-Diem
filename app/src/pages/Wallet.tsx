@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowDownLeft, ArrowUpRight, CircleCheck, Coins, Copy, ExternalLink, Landmark, LoaderCircle, Wallet as WalletIcon } from "lucide-react";
-import { renderSVG } from "uqr";
+import { ArrowDownLeft, ArrowUpRight, CircleCheck, Coins, Copy, Download, Landmark, LoaderCircle, RefreshCw, TriangleAlert, Wallet as WalletIcon } from "lucide-react";
 import { toast } from "sonner";
 import { api, dateTime, money, useApp } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -34,22 +33,7 @@ const KIND: Record<string, string> = {
   lesson_refund: "Hoàn học phí",
 };
 
-function payOnSepay(checkout: NonNullable<Deposit["checkout"]>) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = checkout.action;
-  for (const [name, value] of Object.entries(checkout.fields)) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.append(input);
-  }
-  document.body.append(form);
-  form.submit();
-}
-
-// Back from SePay: the balance updates when SePay's notice arrives, usually within seconds.
+// Back from SePay (old hosted-checkout links only): the balance updates when SePay's notice arrives.
 function ReturnedFromSepay({ id, result, onPaid }: { id: number; result: string; onPaid: () => void }) {
   const { t } = useI18n(), [d, setD] = useState<Deposit | null>(null), box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -96,13 +80,37 @@ function AmountField({ id, label, value, onChange, presets, hint }: { id: string
   );
 }
 
+const QR_SECONDS = 15 * 60;
+
 function PayQr({ deposit }: { deposit: Deposit }) {
   const { t } = useI18n();
-  const svg = useMemo(() => (!deposit.qr_url && deposit.pay_url ? renderSVG(deposit.pay_url, { border: 1, blackColor: "#282820", whiteColor: "#fffefa" }) : ""), [deposit.pay_url, deposit.qr_url]);
+  const [failed, setFailed] = useState(0);
   const label = t("Mã QR của lệnh {code}", { code: deposit.code });
-  if (deposit.qr_url) return <figure className="topup-qr-wrap"><img className="topup-qr" src={deposit.qr_url} alt={label} /><figcaption>{t("Quét bằng ứng dụng ngân hàng")}</figcaption></figure>;
-  if (svg) return <figure className="topup-qr-wrap" data-kind="link"><div className="topup-qr" role="img" aria-label={label} dangerouslySetInnerHTML={{ __html: svg }} /><figcaption>{t("Quét bằng điện thoại để thanh toán")}</figcaption></figure>;
-  return <div className="topup-qr placeholder"><Landmark aria-hidden="true" /></div>;
+  if (!deposit.qr_url) return <div className="topup-qr placeholder"><Landmark aria-hidden="true" /></div>;
+  if (failed) return (
+    <figure className="topup-qr-wrap" data-kind="error">
+      <div className="topup-qr placeholder"><TriangleAlert aria-hidden="true" /></div>
+      <figcaption>
+        {t("Chưa tải được mã QR — thông tin chuyển khoản bên dưới vẫn dùng được.")}
+        <Button variant="outline" size="sm" onClick={() => setFailed(0)}><RefreshCw data-icon="inline-start" />{t("Tải lại")}</Button>
+      </figcaption>
+    </figure>
+  );
+  return (
+    <figure className="topup-qr-wrap">
+      <img className="topup-qr" src={deposit.qr_url} alt={label} width={240} height={240} onError={() => setFailed(1)} />
+      <figcaption>{t("Quét bằng ứng dụng ngân hàng")}</figcaption>
+    </figure>
+  );
+}
+
+async function downloadQr(deposit: Deposit, t: (s: string, p?: Record<string, string | number>) => string) {
+  try {
+    const blob = await (await fetch(deposit.qr_url!)).blob();
+    const url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = `vietqr-${deposit.code}.png`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch { toast.error(t("Chưa tải được ảnh QR.")); }
 }
 
 // Every opening is a new order with its own code and QR; unpaid ones are left as they are.
@@ -144,12 +152,15 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
   }
   const copy = (text: string) => navigator.clipboard?.writeText(text).then(() => toast.success(t("Đã chép")));
   const close = (v: boolean) => { onOpenChange(v); if (!v) { setDeposit(null); setError(""); } };
+  const row = (label: string, value: string, copyLabel?: string) => (
+    <div><dt>{label}</dt><dd>{value}{copyLabel && <button type="button" aria-label={copyLabel} onClick={() => copy(value)}><Copy /></button>}</dd></div>
+  );
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="topup-dialog">
         <DialogHeader>
           <DialogTitle>{t(forStudent ? "Nạp tiền cho con" : "Nạp tiền")}</DialogTitle>
-          <DialogDescription className="sr-only">{t("Chọn số tiền rồi thanh toán bằng mã QR hoặc trên trang SePay.")}</DialogDescription>
+          <DialogDescription className="sr-only">{t("Chọn số tiền rồi chuyển khoản đúng số tiền và nội dung trên mã QR.")}</DialogDescription>
         </DialogHeader>
         {!deposit ? (
           <form onSubmit={create} className="topup-step">
@@ -170,17 +181,28 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
               <strong>{money(deposit.amount)}</strong>
               <span>{t("Mã lệnh")} <b className="deposit-code">{deposit.code}</b><button type="button" aria-label={t("Chép mã lệnh")} onClick={() => copy(deposit.code)}><Copy /></button></span>
             </div>
-            <PayQr deposit={deposit} />
-            <p className="topup-wait" role="status"><LoaderCircle className="animate-spin" aria-hidden="true" />{t("Đang chờ thanh toán")}</p>
-            {deposit.account && (
-              <dl className="topup-bank">
-                <div><dt>{t("Số tài khoản")}</dt><dd>{deposit.account} · {deposit.bank}<button type="button" aria-label={t("Chép số tài khoản")} onClick={() => copy(deposit.account)}><Copy /></button></dd></div>
-                {deposit.holder && <div><dt>{t("Chủ tài khoản")}</dt><dd>{deposit.holder}</dd></div>}
-                <div><dt>{t("Nội dung chuyển khoản")}</dt><dd>{deposit.code}</dd></div>
-              </dl>
+            {deposit.qr_url ? (
+              <>
+                <PayQr deposit={deposit} />
+                <p className="topup-wait" role="status"><LoaderCircle className="animate-spin" aria-hidden="true" />{t("Đang chờ chuyển khoản — hệ thống tự ghi nhận khi tiền về.")}</p>
+                <QrCountdown createdAt={deposit.created_at} />
+                <p className="topup-note"><TriangleAlert aria-hidden="true" />{t("Chuyển đúng số tiền và giữ nguyên nội dung chuyển khoản để được ghi nhận tự động.")}</p>
+                <dl className="topup-bank">
+                  {row(t("Ngân hàng"), deposit.bank || "")}
+                  {row(t("Số tài khoản"), deposit.account || "", t("Chép số tài khoản"))}
+                  {deposit.holder && row(t("Chủ tài khoản"), deposit.holder)}
+                  {row(t("Nội dung chuyển khoản"), deposit.code, t("Chép nội dung chuyển khoản"))}
+                </dl>
+              </>
+            ) : (
+              <div className="topup-notready" role="status">
+                <Landmark aria-hidden="true" />
+                <strong>{t("Nạp tiền chưa sẵn sàng")}</strong>
+                <p>{t("Kênh chuyển khoản ngân hàng đang được thiết lập. Lệnh nạp {code} đã được giữ lại.", { code: deposit.code })}</p>
+              </div>
             )}
             <div className="topup-actions">
-              {deposit.checkout && <Button size="lg" onClick={() => payOnSepay(deposit.checkout!)}><ExternalLink data-icon="inline-start" />{t("Thanh toán trên SePay")}</Button>}
+              {deposit.qr_url && <Button size="lg" variant="outline" onClick={() => void downloadQr(deposit, t)}><Download data-icon="inline-start" />{t("Tải ảnh QR")}</Button>}
               {deposit.simulated && (
                 <Button size="lg" variant="outline" onClick={async () => { try { setDeposit({ ...(await api<Deposit>(`/wallet/deposits/${deposit.id}/simulate`, "POST")), simulated: true }); } catch (e) { toast.error((e as Error).message); } }}>
                   {t("Giả lập tiền đã về (chỉ ở máy local)")}
@@ -193,6 +215,21 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
       </DialogContent>
     </Dialog>
   );
+}
+
+// VietQR images go stale after a while; a soft 15-minute hint keeps the dialog honest.
+function QrCountdown({ createdAt }: { createdAt: string }) {
+  const { t } = useI18n(), [left, setLeft] = useState(0);
+  useEffect(() => {
+    const end = new Date(createdAt.includes("T") ? createdAt : createdAt.replace(" ", "T") + "Z").getTime() + QR_SECONDS * 1000;
+    const tick = () => setLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [createdAt]);
+  if (!left) return <p className="topup-expired" role="status">{t("Mã QR nên dùng trong 15 phút — nếu chưa chuyển, hãy đổi số tiền để tạo lệnh mới.")}</p>;
+  const mm = String(Math.floor(left / 60)), ss = String(left % 60).padStart(2, "0");
+  return <p className="topup-countdown" role="status">{t("Mã QR còn {time}", { time: `${mm}:${ss}` })}</p>;
 }
 
 type Payee = { bank_name: string; account_number: string; account_name: string };

@@ -2362,8 +2362,8 @@ test("wallet deposits, SePay webhook verdicts, offers holding money and tutor cr
   assert.equal((await hook(event, secret, Math.floor(Date.now() / 1000) - 900)).status, 401);
   assert.deepEqual(await (await hook(event)).json(), { success: true });
   assert.deepEqual(await (await hook(event)).json(), { success: true });
-  assert.deepEqual(await (await hook({ ...event, id: 9002, code: "GSDUNKNOWN1" })).json(), { success: false });
-  assert.deepEqual(await (await hook({ ...event, id: 9003, transferType: "out" })).json(), { success: false });
+  assert.deepEqual(await (await hook({ ...event, id: 9002, code: "GSDUNKNOWN1", referenceCode: "FT2" })).json(), { success: false });
+  assert.deepEqual(await (await hook({ ...event, id: 9003, transferType: "out", referenceCode: "FT3" })).json(), { success: false });
   let w = (await student.request("/wallet")).data;
   assert.equal(w.available, 2000000);
   assert.equal(w.payments, "live");
@@ -2401,7 +2401,7 @@ test("wallet deposits, SePay webhook verdicts, offers holding money and tutor cr
   assert.match(short.data.error, /400\.000đ/);
   assert.equal((await student.request("/proposals")).data.find(p => p.id === pitch.data.id).status, "pending");
   const top = await student.request("/wallet/deposits", "POST", { amount: 400000 });
-  assert.deepEqual(await (await hook({ ...event, id: 9004, code: top.data.code.toLowerCase(), transferAmount: 400000 })).json(), { success: true });
+  assert.deepEqual(await (await hook({ ...event, id: 9004, code: top.data.code.toLowerCase(), transferAmount: 400000, referenceCode: "FT4" })).json(), { success: true });
   assert.equal((await student.request(`/proposals/${pitch.data.id}`, "PATCH", { action: "accept" })).data.status, "accepted");
   w = (await student.request("/wallet")).data;
   assert.deepEqual([w.available, w.held], [0, 2400000]);
@@ -2681,7 +2681,7 @@ test("SePay payment gateway: signed checkout form and IPN credits a top-up once"
   // The QR opens a page that forwards the same signed form to SePay, for this order only.
   assert.equal(dep.pay_url, `https://giasu.example/api/wallet/pay/${dep.code}`);
   const page = await (await fetch(base + `/wallet/pay/${dep.code}`)).text();
-  assert.ok(page.includes('action="https://pay-sandbox.sepay.vn/v1/checkout/init"') && page.includes(`value="${dep.code}"`) && page.includes(`value="${f.signature}"`));
+  assert.ok(page.includes('action="https://pay-sandbox.sepay.vn/v1/checkout/init"') && page.includes(`value="${dep.code}"`) && page.includes('name="signature"'));
   const second = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
   assert.notEqual(second.code, dep.code);
   assert.equal((await fetch(base + "/wallet/pay/NOPE", { redirect: "manual" })).status, 303);
@@ -2825,7 +2825,7 @@ test("SePay webhook with code=null still matches the memo code inside the transf
   const ev2 = { ...ev, id: 101921136, content: "MBVCB.123.GSDZZZZZZZ.CT tu" };
   assert.deepEqual(await (await hook(ev2)).json(), { success: false });
   // An unmatched event from before the fix is rescued once via the recheck.
-  const ev3 = { ...ev, id: 101921137 };
+  const ev3 = { ...ev, id: 101921137, referenceCode: "FT-STRANDED-1" };
   const dep2 = (await student.request("/wallet/deposits", "POST", { amount: 300000 })).data;
   run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,?,?,? ,0,'unmatched',?)",
     ev3.id, null, dep2.amount, ev3.referenceCode, JSON.stringify({ ...ev3, code: null, content: `CK ${dep2.code}`, transferAmount: dep2.amount }));
@@ -2856,4 +2856,82 @@ test("a stranded unmatched event never breaks startup and is credited once", asy
   assert.ok(app, "startup survives a stranded and a malformed event");
   assert.equal((await student.request("/wallet")).data.available, before + 200000, "the stranded payment is rescued once");
   assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=?", 555001).status, "processed");
+});
+
+test("SePay webhook connectivity test (id=0) answers success:false and records nothing", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const secret = "test-sepay-secret";
+  const { base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, webhook: true, gateway: false, ready: true, apiToken: "", merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false } });
+  const body = JSON.stringify({ id: 0, transferType: "in", transferAmount: 1, code: "GSDTEST" });
+  const stamp = Math.floor(Date.now() / 1000);
+  const r = await fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", secret).update(`${stamp}.${body}`).digest("hex") }, body });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { success: false });
+  assert.equal(one(db, "SELECT COUNT(*) n FROM sepay_events").n, 0);
+});
+
+test("SePay API v2 reconciliation credits deposits once and skips quietly without a token", async (t) => {
+  const { client, db } = await fixture(t, { sepay: { secret: "", account: "0123456789", bank: "MB", bankReady: true, webhook: false, gateway: false, ready: true, apiToken: "tok-test", bankAccountId: "", merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false } });
+  const student = client(); await student.login("student");
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 200000 });
+  assert.equal(dep.status, 201);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).startsWith("https://userapi.sepay.vn"))
+      return Response.json({ status: 200, data: [
+        { id: "uuid-in-1", amount_in: 200000, amount_out: 0, code: dep.data.code, transaction_content: "", reference_number: "RF1" },
+        { id: "uuid-skip", amount_in: 500000, amount_out: 0, code: "GSDUNKNOWN", transaction_content: "", reference_number: "RF2" },
+      ], meta: { pagination: { current_page: 1, total_pages: 1 } } });
+    return realFetch(url, opts);
+  };
+  try {
+    assert.equal((await student.request("/wallet")).data.available, 200000, "v2 money-in with a known code credits the deposit");
+    assert.equal((await student.request("/wallet")).data.available, 200000, "a second run does not credit twice");
+    assert.equal(one(db, "SELECT COUNT(*) n FROM sepay_recon_events").n, 2, "every seen transaction is deduplicated, matched or not");
+    assert.ok(one(db, "SELECT 1 FROM bank_transactions WHERE reference='RF1'"), "the bank reference is claimed for other channels");
+    assert.ok(one(db, "SELECT 1 FROM gateway_events WHERE status='unmatched' AND invoice='GSDUNKNOWN'"), "unmatched money-in joins the admin list");
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test("the same bank transfer is credited once whichever channel arrives first", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const secret = "test-sepay-secret";
+  const { client, base } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, webhook: true, gateway: false, ready: true, apiToken: "tok-test", bankAccountId: "", merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false } });
+  const hook = (payload, stamp = Math.floor(Date.now() / 1000)) => {
+    const body = JSON.stringify(payload);
+    return fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", secret).update(`${stamp}.${body}`).digest("hex") }, body });
+  };
+  const realFetch = globalThis.fetch;
+  const mockApi = (txns) => {
+    globalThis.fetch = async (url, opts) => String(url).startsWith("https://userapi.sepay.vn")
+      ? Response.json({ status: 200, data: txns, meta: { pagination: { current_page: 1, total_pages: 1 } } })
+      : realFetch(url, opts);
+  };
+  try {
+    // Channel order 1: webhook first, then the same transfer via the API.
+    const a = client(); await a.login("student");
+    const depA = (await a.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+    const evA = { id: 9101, accountNumber: "0123456789", code: depA.code, transferType: "in", transferAmount: 300000, referenceCode: "RF-DUP-1" };
+    assert.deepEqual(await (await hook(evA)).json(), { success: true });
+    mockApi([{ id: "uuid-dup-a", amount_in: 300000, amount_out: 0, code: depA.code, transaction_content: "", reference_number: "RF-DUP-1" }]);
+    assert.equal((await a.request("/wallet")).data.available, 300000, "API run sees the reference as claimed, no double credit");
+    globalThis.fetch = realFetch;
+
+    // Channel order 2: API first, then the same transfer via the webhook.
+    const b = client(); await b.login("linh");
+    const depB = (await b.request("/wallet/deposits", "POST", { amount: 150000 })).data;
+    mockApi([{ id: "uuid-dup-b", amount_in: 150000, amount_out: 0, code: depB.code, transaction_content: "", reference_number: "RF-DUP-2" }]);
+    assert.equal((await b.request("/wallet")).data.available, 150000);
+    globalThis.fetch = realFetch;
+    const evB = { id: 9102, accountNumber: "0123456789", code: depB.code, transferType: "in", transferAmount: 150000, referenceCode: "RF-DUP-2" };
+    assert.deepEqual(await (await hook(evB)).json(), { success: false }, "the webhook reports the reference as already claimed");
+    assert.equal((await b.request("/wallet")).data.available, 150000, "still credited exactly once");
+
+    // Missing reference: nothing to cross-claim with, each channel falls back
+    // to its own id dedup and still acts once.
+    const c = client(); await c.login("chau");
+    const depC = (await c.request("/wallet/deposits", "POST", { amount: 100000 })).data;
+    mockApi([{ id: "uuid-noref", amount_in: 100000, amount_out: 0, code: depC.code, transaction_content: "", reference_number: "" }]);
+    assert.equal((await c.request("/wallet")).data.available, 100000, "no reference still credits, deduped by API id");
+  } finally { globalThis.fetch = realFetch; }
 });

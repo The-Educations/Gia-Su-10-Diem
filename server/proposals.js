@@ -49,13 +49,6 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
     expireProposals();
     const people = [req.user.id, ...childrenOf(db, req.user.id)];
     const rows = all(db, `${select} WHERE p.student_id IN (${people.map(() => "?").join(",")}) OR p.tutor_id=? ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END, p.id DESC LIMIT 200`, ...people, req.user.id);
-    // An expiry has no actor; the card lands once in the pair's conversation.
-    for (const p of rows.filter((r) => r.status === "expired")) {
-      run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", p.student_id, p.tutor_id);
-      const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", p.student_id, p.tutor_id);
-      if (!one(db, "SELECT 1 FROM inquiry_messages WHERE inquiry_id=? AND context_kind='proposal' AND context_id=? AND body='đề nghị đã hết hạn'", thread.id, p.id))
-        insertChatEvent(db, "inquiry", thread.id, { id: p.sender === "tutor" ? p.tutor_id : p.student_id }, "đề nghị đã hết hạn", { kind: "proposal", id: p.id });
-    }
     res.json(proposalView(db, rows, req.user).map((p) => ({ ...p, incoming: p.incoming || (p.sender === "tutor" && people.includes(p.student_id)) })));
   });
 

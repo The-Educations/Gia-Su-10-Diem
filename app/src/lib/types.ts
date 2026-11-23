@@ -301,7 +301,7 @@ export type Wallet = {
   settings: { offer_credits: number; credit_packs: { credits: number; price: number }[]; min_deposit: number; fee_percent: number };
   payments: "live" | "simulated" | "off";
 };
-export type Deposit = { id: number; code: string; amount: number; received: number; status: string; qr_url: string | null; pay_url?: string | null; account: string; bank: string; holder: string; simulated?: boolean; checkout?: { action: string; fields: Record<string, string> } | null };
+export type Deposit = { id: number; code: string; amount: number; received: number; status: string; created_at: string; qr_url: string | null; pay_url?: string | null; account: string; bank: string; holder: string; simulated?: boolean; checkout?: { action: string; fields: Record<string, string> } | null };
 export type Proposal = {
   id: number;
   sender: "student" | "tutor";
