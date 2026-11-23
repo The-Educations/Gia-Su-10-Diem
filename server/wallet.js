@@ -57,6 +57,9 @@ export function migrateWallet(db) {
     status TEXT NOT NULL DEFAULT 'requested', note TEXT NOT NULL DEFAULT '', handled_by INTEGER, handled_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE IF NOT EXISTS platform_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  -- Operational timestamps the admin health page reads; platform_settings is
+  -- strictly for business settings (settings() merges every row).
+  CREATE TABLE IF NOT EXISTS system_events (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE IF NOT EXISTS proposals (
     id INTEGER PRIMARY KEY, sender TEXT NOT NULL CHECK(sender IN ('student','tutor')),
     student_id INTEGER NOT NULL REFERENCES users(id), tutor_id INTEGER NOT NULL REFERENCES users(id),
@@ -74,6 +77,8 @@ export function migrateWallet(db) {
   for (const [name, type] of [["code", "TEXT"], ["bank_ref", "TEXT NOT NULL DEFAULT ''"], ["paid_via", "TEXT NOT NULL DEFAULT ''"], ["receipt_id", "TEXT"]])
     if (!cols.includes(name)) db.exec(`ALTER TABLE withdrawals ADD COLUMN ${name} ${type}`);
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS withdrawals_code ON withdrawals(code)");
+  // Webhook timestamps used to live in platform_settings; remove them.
+  db.exec("DELETE FROM platform_settings WHERE key IN ('last_sepay_webhook','last_sepay_ipn')");
 }
 
 const bankCode = (name) => banks.find((b) => b.name.toLowerCase() === String(name).toLowerCase())?.code || "";
@@ -479,16 +484,21 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
         `api:${tid}`, code, inAmount, JSON.stringify(t));
   }
 
+  // Operational timestamps for the health page; recorded only after auth, so a
+  // junk POST never looks like a healthy webhook.
+  const mark = (key) => run(db, "INSERT INTO system_events(key,value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP", key, new Date().toISOString());
+
   // Payment gateway IPN: SePay calls this once the buyer has paid on the hosted page.
   app.post("/api/sepay/ipn", (req, res) => {
-    run(db, "INSERT INTO platform_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", "last_sepay_ipn", JSON.stringify(new Date().toISOString()));
     const key = req.get("X-Secret-Key") || "";
     if (!sepay.ipnSecret) return res.status(503).json({ success: false });
     if (key.length !== sepay.ipnSecret.length || !timingSafeEqual(Buffer.from(key), Buffer.from(sepay.ipnSecret))) {
+      mark("last_sepay_rejected");
       // Kept for Admin → Finance so a wrong IPN key in SePay is easy to spot.
       run(db, "INSERT OR IGNORE INTO gateway_events(id,invoice,amount,verdict,status,payload) VALUES (?,?,?,0,'rejected_key','{}')", `rejected:${Date.now()}:${randomInt(1e9)}`, String(req.body?.order?.order_invoice_number || ""), Math.round(Number(req.body?.order?.order_amount) || 0));
       return res.status(401).json({ success: false });
     }
+    mark("last_sepay_ipn");
     const e = req.body || {}, order = e.order || {}, tx = e.transaction || {};
     const eventId = String(tx.id || order.id || "");
     if (!eventId) return res.status(400).json({ success: false });
@@ -508,13 +518,15 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
 
   // SePay webhook with "Dùng để xác thực thanh toán": the reply is the verdict.
   app.post("/api/sepay/webhook", (req, res) => {
-    run(db, "INSERT INTO platform_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", "last_sepay_webhook", JSON.stringify(new Date().toISOString()));
     if (!sepay.secret) return res.status(503).json({ success: false });
     const stamp = req.get("X-SePay-Timestamp") || "", signature = (req.get("X-SePay-Signature") || "").replace(/^sha256=/, "");
     const expected = createHmac("sha256", sepay.secret).update(`${stamp}.${req.rawBody || ""}`).digest("hex");
     const fresh = Math.abs(Date.now() / 1000 - Number(stamp)) < 300;
-    if (!fresh || signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected)))
+    if (!fresh || signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+      mark("last_sepay_rejected");
       return res.status(401).json({ success: false });
+    }
+    mark("last_sepay_webhook");
     const e = req.body || {};
     const id = Number(e.id), amount = Number(e.transferAmount) || 0, code = eventCode(e);
     // id=0 is SePay's connectivity test; answer success:false without recording it.

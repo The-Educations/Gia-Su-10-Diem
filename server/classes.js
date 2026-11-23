@@ -416,7 +416,8 @@ export function registerClasses(app, db, auth, audit) {
     const day = Date.now() - 86400000, since = new Date(day).toISOString();
     const lastEvent = one(db, "SELECT created_at,status,verdict FROM sepay_events ORDER BY created_at DESC LIMIT 1")
       || one(db, "SELECT created_at,status,verdict FROM gateway_events ORDER BY created_at DESC LIMIT 1");
-    const lastReceived = ["last_sepay_ipn", "last_sepay_webhook"].map((k) => one(db, "SELECT value FROM platform_settings WHERE key=?", k)?.value).filter(Boolean).map((v) => { try { return JSON.parse(v); } catch { return v; } }).sort().pop() || null;
+    const evts = Object.fromEntries(all(db, "SELECT key,value FROM system_events").map((r) => [r.key, r.value]));
+    const lastReceived = [evts.last_sepay_ipn, evts.last_sepay_webhook].filter(Boolean).sort().pop() || null;
     const pendingDeposits = one(db, "SELECT COUNT(*) n FROM deposits WHERE status='pending'").n;
     const unmatched = one(db, "SELECT (SELECT COUNT(*) FROM sepay_events WHERE status='unmatched')+(SELECT COUNT(*) FROM gateway_events WHERE status='unmatched') n").n;
     const rejected24 = one(db, "SELECT (SELECT COUNT(*) FROM sepay_events WHERE status='rejected_key' AND created_at>?)+(SELECT COUNT(*) FROM gateway_events WHERE status='rejected_key' AND created_at>?) n", since, since).n;
@@ -435,6 +436,7 @@ export function registerClasses(app, db, auth, audit) {
       sandbox: !!sepay.sandbox,
       simulated: !(sepay.secret || sepay.merchant),
       last_received: lastReceived,
+      last_rejected: evts.last_sepay_rejected || null,
       last_event: lastEvent || null,
       rejected_24h: rejected24,
       pending_deposits: pendingDeposits,
@@ -472,7 +474,7 @@ export function registerClasses(app, db, auth, audit) {
       payments,
       email: { pending: outbox?.pending || 0, attempts: outbox?.tries || 0, failed: failed.map((m) => ({ ...m, email: maskMail(m.email) })), latest_error: latestMailErr ? { attempts: latestMailErr.attempts, email: maskMail(latestMailErr.email) } : null },
       calendar: { connections: cals.length, errors: calErrs, last_synced: cals.map((c) => c.last_synced).filter(Boolean).sort().pop() || null },
-      data: { user_version: one(db, "PRAGMA user_version")?.user_version ?? null, counts, commit: process.env.GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || "", deployed_at: process.env.DEPLOYED_AT || "" },
+      data: { user_version: one(db, "PRAGMA user_version")?.user_version ?? null, counts, commit: process.env.GIT_COMMIT || process.env.GITHUB_SHA || "", deployed_at: process.env.DEPLOYED_AT || "" },
       ledger,
       warnings,
     });

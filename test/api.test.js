@@ -2956,16 +2956,18 @@ test("masked contact never reaches participants; admin thread keeps the original
   // Flagged for admin; the safety view returns the original and audits the look.
   assert.equal(one(db, "SELECT flagged FROM inquiry_messages WHERE inquiry_id=? AND flagged=1", thread).flagged, 1);
   assert.ok(JSON.stringify((await admin.request(`/admin/safety/thread/inquiry/${thread}`)).data).includes(SECRET));
+});
 test("admin health: shape, resend resets the outbox row, no secret leaks", async (t) => {
   const { client, db } = await fixture(t), admin = client(), student = client();
   await admin.login("admin"); await student.login("student");
-  // A webhook hit (even unauthenticated) is timestamped; a failed email exists.
+  // A webhook hit without a secret configured is rejected before marking; a failed email exists.
   await student.request("/sepay/webhook", "POST", {});
   run(db, "INSERT INTO email_outbox(user_id,kind,subject,link,attempts,sending_until) VALUES ((SELECT id FROM users LIMIT 1),'notice','Hi','',5,0)");
   const h = (await admin.request("/admin/health")).data;
   assert.deepEqual(Object.keys(h), ["payments", "email", "calendar", "data", "ledger", "warnings"]);
   assert.ok(h.payments.simulated && !h.payments.bank_webhook && !h.payments.gateway);
-  assert.ok(h.payments.last_received);
+  assert.equal(h.payments.last_received, null);
+  assert.equal(h.payments.last_rejected, null);
   assert.ok(!JSON.stringify(h).includes("SECRET"));
   const failed = h.email.failed[0];
   assert.ok(failed && failed.attempts >= 5 && !failed.email.includes("demo.giasu.test".slice(0, 8)) === false); // masked email
@@ -2988,4 +2990,34 @@ test("admin health ledger reports clean then flags a planted mismatch", async (t
   assert.equal(h2.ledger.ok, false, "planted mismatch detected");
   assert.ok(h2.ledger.wallet.some((w) => w.user_id === uid && w.d_avail === 1), "the off user is listed with the diff");
   assert.ok(h2.warnings.some((w) => w.kind === "ledger"), "a ledger warning reaches the today banner");
+});
+
+test("webhook timestamps live in system_events, recorded only after signature", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const { settings } = await import("../server/wallet.js");
+  const secret = "test-sepay-secret";
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
+  const admin = client(); await admin.login("admin");
+  const evts = () => Object.fromEntries(all(db, "SELECT key,value FROM system_events").map((r) => [r.key, r.value]));
+  const hook = (payload, key = secret, stamp = Math.floor(Date.now() / 1000)) => {
+    const body = JSON.stringify(payload);
+    return fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", key).update(`${stamp}.${body}`).digest("hex") }, body });
+  };
+  // A junk POST counts as a rejection, never as a healthy receipt.
+  assert.equal((await hook({ id: 991 }, "wrong-secret")).status, 401);
+  assert.ok(evts().last_sepay_rejected, "rejected attempt recorded");
+  assert.equal(evts().last_sepay_webhook, undefined, "verified time untouched by bad signature");
+  // A correctly signed webhook is recorded.
+  assert.equal((await hook({ id: 991, transferType: "in", transferAmount: 1 })).status, 200);
+  assert.ok(evts().last_sepay_webhook, "verified receipt recorded");
+  // The keys stay out of business settings and the finance payload.
+  const saved = all(db, "SELECT key FROM platform_settings").map((r) => r.key);
+  assert.ok(!saved.some((k) => k.startsWith("last_sepay")), "no system keys in platform_settings");
+  const fin = await admin.request("/admin/finance");
+  assert.ok(!JSON.stringify(fin.data).includes("last_sepay"), "no system keys in finance payload");
+  assert.equal(Object.keys(settings(db)).some((k) => k.startsWith("last_sepay")), false, "settings() stays clean");
+  // Settings form still saves.
+  const s0 = settings(db);
+  const put = await admin.request("/admin/settings", "PUT", { fee_percent: s0.fee_percent });
+  assert.equal(put.status, 200, "settings form save still works");
 });
