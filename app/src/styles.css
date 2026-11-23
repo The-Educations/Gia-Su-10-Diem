@@ -2436,7 +2436,12 @@
 .news-article, .news-editor { max-width: 760px; margin-inline: auto; overflow-wrap: anywhere; }
 .news-article h1 { margin: 24px 0 16px; font-size: clamp(26px, 4vw, 38px); }
 .news-summary { font-size: 18px; margin-bottom: 32px; }
-.news-body { white-space: pre-wrap; line-height: 1.8; }
+.news-body { line-height: 1.8; }
+.news-text { white-space: pre-wrap; }
+.news-figure { margin: 0 0 24px; }
+.news-figure[hidden] { display: none; }
+.news-figure img { display: block; width: 100%; height: auto; max-height: 520px; object-fit: cover; border-radius: 12px; background: var(--muted); }
+.news-figure figcaption { margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
 .news-editor h2 { margin-bottom: 24px; }
 .post-publish { display: flex; align-items: center; gap: 12px; min-height: 44px; }
 .verification-entry { display: grid; gap: 20px; }

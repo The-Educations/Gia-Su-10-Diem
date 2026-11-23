@@ -1,7 +1,10 @@
 // Gói gửi lên web. Mỗi hàm TỰ ĐỨNG MỘT MÌNH (xem ghi chú ở select.js).
 
-export function buildPostBody(d) {
-  return { title: d.title, summary: d.summary, body: d.body, published: false };
+export function buildPostBody(d, image) {
+  // Ảnh nằm ở đầu bài dạng markdown một dòng + dòng "Ảnh: <nguồn>"; web dựng thành <figure>.
+  const alt = String(d.title).replace(/[\[\]]/g, "").trim();
+  const head = image && image.url ? `![${alt}](${image.url})\nẢnh: ${image.credit}\n\n` : "";
+  return { title: d.title, summary: d.summary, body: head + d.body, published: false };
 }
 
 export function extractSessionCookie(setCookie) {

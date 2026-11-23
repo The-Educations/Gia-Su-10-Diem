@@ -137,7 +137,7 @@ export default {
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://vietqr.app; connect-src 'self' https://cloudflareinsights.com; frame-src https://www.youtube-nocookie.com https://drive.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://pay.sepay.vn https://pay-sandbox.sepay.vn",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://vietqr.app https://*.vnu.edu.vn https://vju.ac.vn https://*.hcmus.edu.vn https://*.cdneverest.net https://*.thanhnien.vn https://*.cdnchinhphu.vn https://*.vtv.vn https://*.tuoitre.vn; connect-src 'self' https://cloudflareinsights.com; frame-src https://www.youtube-nocookie.com https://drive.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://pay.sepay.vn https://pay-sandbox.sepay.vn",
     );
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     headers.set("X-Frame-Options", "DENY");

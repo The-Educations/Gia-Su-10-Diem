@@ -36,6 +36,28 @@ export function todayVN(now) {
   }).format(now);
 }
 
+// Tên hiển thị và thứ tự ưu tiên của nguồn: trường thuộc ĐHQG (0), Thanh Niên (1),
+// báo nhà nước Chính phủ/VTV (2), Tuổi Trẻ (3), còn lại (9). rank thấp được chọn trước.
+export function sourceInfo(link) {
+  const known = [
+    [/(^|\.)uet\.vnu\.edu\.vn$/, "Trường ĐH Công nghệ - ĐHQGHN", 0],
+    [/(^|\.)ulis\.vnu\.edu\.vn$/, "Trường ĐH Ngoại ngữ - ĐHQGHN", 0],
+    [/(^|\.)law\.vnu\.edu\.vn$/, "Trường ĐH Luật - ĐHQGHN", 0],
+    [/(^|\.)vju\.ac\.vn$/, "Trường ĐH Việt Nhật - ĐHQGHN", 0],
+    [/(^|\.)vnu\.edu\.vn$/, "Đại học Quốc gia Hà Nội", 0],
+    [/(^|\.)hcmus\.edu\.vn$/, "Trường ĐH Khoa học Tự nhiên - ĐHQG-HCM", 0],
+    [/(^|\.)vnuhcm\.edu\.vn$/, "Đại học Quốc gia TP.HCM", 0],
+    [/(^|\.)thanhnien\.vn$/, "Thanh Niên", 1],
+    [/(^|\.)baochinhphu\.vn$/, "Báo điện tử Chính phủ", 2],
+    [/(^|\.)vtv\.vn$/, "VTV", 2],
+    [/(^|\.)tuoitre\.vn$/, "Tuổi Trẻ", 3],
+  ];
+  const host = (String(link).match(/^https?:\/\/(?:www\.)?([^/:?#]+)/) || [])[1];
+  if (!host) return { name: "Nguồn khác", rank: 9 };
+  const hit = known.find(([re]) => re.test(host.toLowerCase()));
+  return hit ? { name: hit[1], rank: hit[2] } : { name: host, rank: 9 };
+}
+
 export function pickNew(items, state, opts) {
   const seen = new Set(state.seen);
   const byLink = new Map();
@@ -45,7 +67,10 @@ export function pickNew(items, state, opts) {
     byLink.set(it.link, it);
   }
   const time = (it) => (Date.parse(it.isoDate) || 0);
-  const unseen = [...byLink.values()].sort((a, b) => time(b) - time(a));
+  const rank = (it) => (Number.isFinite(it.rank) ? it.rank : 0);
+  const oldest = opts.maxAgeDays && opts.nowMs ? opts.nowMs - opts.maxAgeDays * 86400000 : 0;
+  const fresh = [...byLink.values()].filter((it) => !oldest || !time(it) || time(it) >= oldest);
+  const unseen = fresh.sort((a, b) => rank(a) - rank(b) || time(b) - time(a));
   const usedToday = state.daily.date === opts.today ? state.daily.count : 0;
   const quota = Math.max(0, Math.min(opts.perRun, opts.perDay - usedToday));
   const firstRun = state.seen.length === 0;

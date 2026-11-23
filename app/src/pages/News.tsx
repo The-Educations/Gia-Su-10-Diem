@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useLoad } from "@/lib/api";
 import type { Post } from "@/lib/types";
 import { Page, Heading, Loading, ErrorState, Blank } from "@/components/common";
+import { parseNewsBody } from "@/lib/news-body";
 
 export default function News() {
   const { id } = useParams();
@@ -12,7 +13,13 @@ export default function News() {
   if (id && detail.data) return <Page><article className="news-article">
     <Link className="text-link" to="/news">← Tin tức</Link>
     <h1>{detail.data.title}</h1><p className="news-summary">{detail.data.summary}</p>
-    <div className="news-body">{detail.data.body}</div>
+    <div className="news-body">{parseNewsBody(detail.data.body).map((part, i) => part.kind === "text"
+      ? <div className="news-text" key={i}>{part.text}</div>
+      : <figure className="news-figure" key={i}>
+          <img src={part.url} alt={part.alt} loading="lazy" decoding="async" referrerPolicy="no-referrer"
+            onError={(e) => { const box = e.currentTarget.closest("figure"); if (box) box.hidden = true; }} />
+          {part.credit && <figcaption>Ảnh: {part.credit}</figcaption>}
+        </figure>)}</div>
   </article></Page>;
   return <Page><Heading title="Tin tức" />
     {!list.data?.length ? <Blank title="Chưa có bài viết" /> : <div className="news-list">{list.data.map(post =>
