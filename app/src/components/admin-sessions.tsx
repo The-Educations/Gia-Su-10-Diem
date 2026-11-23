@@ -186,7 +186,7 @@ export function AdminSessions({ standalone = false }: { standalone?: boolean }) 
               </span>
               <span className="admin-row-state">
                 <span className="session-state" data-state={["cancelled", "declined"].includes(s.status) || (s.source === "lesson" && s.status === "cancelled") ? "cancelled" : isAttention(s) ? "attention" : "ok"}>{t(stateOf(s))}</span>
-                <span className="session-source" data-source={s.source}>{t(s.source === "booking" ? "Đặt lịch lẻ" : "Lớp học")}</span>
+                <span className="session-source" data-source={s.source}>{lang === "en" ? (s.source === "booking" ? "Single booking" : "Class") : t(s.source === "booking" ? "Đặt lịch lẻ" : "Lớp học")}</span>
                 {s.source === "lesson" && s.class_status !== "active" && <span className="admin-flag">{t("Lớp đã kết thúc")}</span>}
                 {s.members.some((m) => m.note) && <small className="danger-text">{s.members.find((m) => m.note)?.note}</small>}
                 {s.source === "booking" && s.note && <small>{s.note}</small>}
