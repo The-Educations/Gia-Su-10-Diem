@@ -2837,3 +2837,20 @@ test("SePay webhook with code=null still matches the memo code inside the transf
   assert.equal(dep3.checkout, null);
   assert.equal(dep3.pay_url, null);
 });
+
+test("a stranded unmatched event never breaks startup and is credited once", async (t) => {
+  const sepay = { secret: "s", account: "0123456789", bank: "MB", bankReady: true, webhook: true, gateway: false, ready: true, merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false };
+  const { client, db } = await fixture(t, { sepay });
+  const student = client(); await student.login("student");
+  const dep = (await student.request("/wallet/deposits", "POST", { amount: 200000 })).data;
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,NULL,?,?,0,'unmatched',?)",
+    555001, dep.amount, "FT-BOOT-1", JSON.stringify({ transferType: "in", code: null, content: `MBVCB.1.${dep.code}.CT tu`, transferAmount: dep.amount }));
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,NULL,?,? ,0,'unmatched','{not json')",
+    555002, 1, "FT-BOOT-2");
+  const before = (await student.request("/wallet")).data.available;
+  // The real startup path: createApi runs registerWallet, which rematches.
+  const app = createApi(db, { processPhoto, limit: false, sendEmail: async () => {}, sepay });
+  assert.ok(app, "startup survives a stranded and a malformed event");
+  assert.equal((await student.request("/wallet")).data.available, before + 200000, "the stranded payment is rescued once");
+  assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=?", 555001).status, "processed");
+});
