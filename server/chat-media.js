@@ -1,4 +1,5 @@
 import express from "express";
+import { scanChatText } from "./trust-safety.js";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
@@ -57,10 +58,15 @@ export function unreadCount(db, kind, threadId, userId) {
   return one(db, `SELECT COUNT(*) AS n FROM ${table} WHERE ${column}=? AND id>? AND sender_id<>?`, threadId, read, userId).n;
 }
 // ?before=<messageId>&limit=<n>: the newest n rows before a cursor, oldest first.
+// Never returns admin-only columns: original_body (the unmasked contact
+// detail) and flagged stay server-side; `masked` only says the text was cut.
 export function chatPage(db, kind, threadId, req) {
   const q = z.object({ before: z.coerce.number().int().positive().optional(), limit: z.coerce.number().int().min(1).max(200).optional() }).parse(req.query);
   const [, table, column] = threads[kind];
-  const base = `SELECT m.*,u.name FROM ${table} m JOIN users u ON u.id=m.sender_id WHERE ${column}=?`;
+  const cols = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+  const optional = ["context_kind", "context_id", "event_href", "is_event"].filter((c) => cols.has(c)).map((c) => `m.${c}`).join(",");
+  const masked = cols.has("original_body") ? ",(m.original_body IS NOT NULL) AS masked" : ",0 AS masked";
+  const base = `SELECT m.id,m.${column},m.sender_id,m.body,m.created_at,${optional}${masked},u.name FROM ${table} m JOIN users u ON u.id=m.sender_id WHERE ${column}=?`;
   if (!q.limit) return { messages: all(db, `${base} ORDER BY m.id`, threadId), hasMore: false };
   const rows = all(db, `${base} ${q.before ? "AND m.id<?" : ""} ORDER BY m.id DESC LIMIT ?`, threadId, ...(q.before ? [q.before] : []), q.limit + 1);
   return { messages: rows.slice(0, q.limit).reverse(), hasMore: rows.length > q.limit };
@@ -69,11 +75,15 @@ export function insertChatMessage(db, kind, threadId, user, input, context = nul
   return transaction(db, () => {
     participant(db, user, kind, threadId, true);
     const { body, attachment_id } = chatMessageSchema.parse(input);
+    // Off-platform contact detail is masked for readers and flagged for admin.
+    const scan = kind === "support" ? { flagged: false, masked: body, reason: null } : scanChatText(body);
     if (attachment_id && !one(db, "SELECT id FROM chat_attachments WHERE id=? AND owner_id=? AND thread_kind=? AND thread_id=? AND message_id IS NULL", attachment_id, user.id, kind, threadId)) fail(400, "Tệp không thuộc cuộc trò chuyện này hoặc đã được gửi.");
     const [, table, column] = threads[kind];
     const result = kind === "inquiry"
-      ? run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id) VALUES (?,?,?,?,?)`, threadId, user.id, body, context?.kind || null, context?.id || null)
-      : run(db, `INSERT INTO ${table}(${column},sender_id,body) VALUES (?,?,?)`, threadId, user.id, body);
+      ? run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,flagged,original_body) VALUES (?,?,?,?,?,?,?)`, threadId, user.id, scan.masked, context?.kind || null, context?.id || null, scan.flagged ? 1 : 0, scan.flagged ? body : null)
+      : kind === "support"
+        ? run(db, `INSERT INTO ${table}(${column},sender_id,body) VALUES (?,?,?)`, threadId, user.id, body)
+        : run(db, `INSERT INTO ${table}(${column},sender_id,body,flagged,original_body) VALUES (?,?,?,?,?)`, threadId, user.id, scan.masked, scan.flagged ? 1 : 0, scan.flagged ? body : null);
     const id = Number(result.lastInsertRowid);
     if (attachment_id) run(db, "UPDATE chat_attachments SET message_id=? WHERE id=?", id, attachment_id);
     const thread = one(db, `SELECT * FROM ${threads[kind][0]} WHERE id=?`, threadId);

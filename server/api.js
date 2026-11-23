@@ -649,7 +649,7 @@ export function createApi(
     const rows = (
       all(
         db,
-        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,${pairReview("rating")} AS reviewed,${pairReview("body")} AS review_body,
+        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,${pairReview("rating")} AS reviewed,${pairReview("body")} AS review_body,${pairReview("hidden")} AS review_hidden,${pairReview("reply")} AS review_reply,
         (SELECT body FROM messages WHERE booking_id=b.id ORDER BY id DESC LIMIT 1) AS last_message,
         (SELECT created_at FROM messages WHERE booking_id=b.id ORDER BY id DESC LIMIT 1) AS last_message_at,
         (SELECT u.name FROM messages m JOIN users u ON u.id=m.sender_id WHERE m.booking_id=b.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
@@ -859,6 +859,13 @@ export function createApi(
       d.body,
     );
     res.status(201).json({ ok: true, updated: false });
+  });
+  app.post("/api/bookings/:id/report", auth("student", "tutor"), (req, res) => {
+    const b = booking(req);
+    const d = z.object({ reason: z.string().min(1).max(300) }).parse(req.body);
+    if (!one(db, "SELECT 1 FROM reviews WHERE booking_id=?", b.id)) fail(404, "Chưa có đánh giá cho buổi học này.");
+    run(db, "UPDATE reviews SET reported=1,reported_reason=?,reported_by=? WHERE booking_id=?", d.reason, req.user.id, b.id);
+    res.status(201).json({ ok: true });
   });
   const resourceRows = (admin) =>
     all(

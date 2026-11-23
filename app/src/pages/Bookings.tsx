@@ -121,7 +121,10 @@ export default function Bookings() {
         ? <><span className="muted">{t("Bạn chấm {n}★", { n: b.my_rating })}</span>{b.rating_editable && <Button variant="ghost" onClick={() => { setView(null); setLessonRating(b); }}>{t("Sửa")}</Button>}</>
         : b.rating_editable && <Button onClick={() => { setView(null); setLessonRating(b); }}>Chấm buổi học</Button>)}
       {user?.role === "student" && b.status === "completed" && !b.offer_id && !b.reviewed && <Button onClick={() => openReview(b)}>Đánh giá</Button>}
-      {b.status === "completed" && !b.offer_id && !!b.reviewed && <span className="muted">Đã đánh giá {b.reviewed}/5</span>}
+      {b.status === "completed" && !b.offer_id && !!b.reviewed && <span className="muted">{b.review_hidden ? "Đánh giá đã bị ẩn" : `Đã đánh giá ${b.reviewed}/5`}{b.review_reply ? ` · Phản hồi: ${b.review_reply}` : ""}</span>}
+      {b.status === "completed" && !b.offer_id && !!b.reviewed && user?.role === "tutor" && (
+        <Button variant="ghost" onClick={async () => { const reason = prompt("Lý do báo cáo"); if (reason) { await api(`/bookings/${b.id}/report`, "POST", { reason }); refresh(); } }}>Báo cáo</Button>
+      )}
       {user?.role === "student" && b.status === "completed" && !b.offer_id && !!b.reviewed && latestCompleted(b) && <Button variant="ghost" onClick={() => openReview(b)}>Sửa đánh giá</Button>}
     </>;
   }

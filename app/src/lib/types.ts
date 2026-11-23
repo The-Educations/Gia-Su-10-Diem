@@ -144,6 +144,8 @@ export type Booking = {
   started_at?: string | null;
   reviewed: number | null;
   review_body?: string | null;
+  review_hidden?: number | null;
+  review_reply?: string | null;
   my_rating?: number | null;
   my_tags?: string[];
   rating_open_until?: string | null;
@@ -194,6 +196,7 @@ export type Message = {
   context_kind?: MessageContext["kind"] | null;
   is_event?: number;
   event_href?: string | null;
+  masked?: number;
 };
 export type AdminData = {
   theme_catalog: ProfileTheme[];

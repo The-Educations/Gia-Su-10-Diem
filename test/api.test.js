@@ -883,8 +883,10 @@ test("rich demo seeding is repeatable and preserves profile edits", async (t) =>
       "tutor_uploads",
     ].map((table) => one(db, `SELECT count(*) AS n FROM ${table}`).n);
   const before = counts();
-  assert.equal(before[0], 3);
-  assert.equal(before[2], 1);
+  // showcase-safety adds one completed booking (with its review, flagged
+  // message and flagged inquiry message); the other tables only gain rows.
+  assert.equal(before[0], 4);
+  assert.equal(before[2], 2);
   assert.equal(before[5], 6);
   run(db, "UPDATE tutors SET bio='Tutor edited this profile' WHERE user_id=3");
   await seedDemo(db, "TestStudy2026!", { activity: true });
@@ -2934,4 +2936,24 @@ test("the same bank transfer is credited once whichever channel arrives first", 
     mockApi([{ id: "uuid-noref", amount_in: 100000, amount_out: 0, code: depC.code, transaction_content: "", reference_number: "" }]);
     assert.equal((await c.request("/wallet")).data.available, 100000, "no reference still credits, deduped by API id");
   } finally { globalThis.fetch = realFetch; }
+});
+
+test("masked contact never reaches participants; admin thread keeps the original", async (t) => {
+  const emails = [];
+  const { client, db } = await fixture(t, { sendEmail: async (m) => emails.push(m) });
+  const student = client(), tutor = client(), admin = client();
+  const u = await tutor.login("chau");
+  await student.login("student"); await admin.login("admin");
+  const thread = (await student.request("/inquiries", "POST", { tutor_id: u.id, body: "Chào cô" })).data.id;
+  assert.equal((await student.request(`/inquiries/${thread}/messages`, "POST", { body: "Gọi em 0901 234 567 nhé" })).status, 201);
+  const SECRET = "0901 234 567";
+  // Recipient, sender, inbox preview, notifications and queued mail: no raw digits.
+  assert.ok(!JSON.stringify((await tutor.request(`/inquiries/${thread}/messages`)).data).includes(SECRET));
+  assert.ok(!JSON.stringify((await student.request(`/inquiries/${thread}/messages`)).data).includes(SECRET));
+  assert.ok(!JSON.stringify((await tutor.request("/inquiries")).data).includes(SECRET));
+  assert.ok(!JSON.stringify(all(db, "SELECT * FROM notifications")).includes(SECRET));
+  assert.ok(!JSON.stringify(emails).includes(SECRET));
+  // Flagged for admin; the safety view returns the original and audits the look.
+  assert.equal(one(db, "SELECT flagged FROM inquiry_messages WHERE inquiry_id=? AND flagged=1", thread).flagged, 1);
+  assert.ok(JSON.stringify((await admin.request(`/admin/safety/thread/inquiry/${thread}`)).data).includes(SECRET));
 });

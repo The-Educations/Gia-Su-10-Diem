@@ -53,9 +53,9 @@ export function withCourseState(db, offers, user) {
 function courseReviewRows(db, tutorId = null) {
   const filter = tutorId === null ? "" : " WHERE tutor_id=?", args = tutorId === null ? [] : [tutorId];
   const rows = all(db, `SELECT * FROM (
-    SELECT o.student_id,o.tutor_id,cr.rating,cr.body,cr.created_at,cr.offer_id AS ref,1 AS fresh FROM course_reviews cr JOIN offers o ON o.id=cr.offer_id
+    SELECT o.student_id,o.tutor_id,cr.rating,cr.body,NULL AS reply,cr.created_at,cr.offer_id AS ref,1 AS fresh FROM course_reviews cr JOIN offers o ON o.id=cr.offer_id
     UNION ALL
-    SELECT b.student_id,b.tutor_id,r.rating,r.body,r.created_at,r.booking_id AS ref,0 AS fresh FROM reviews r JOIN bookings b ON b.id=r.booking_id
+    SELECT b.student_id,b.tutor_id,r.rating,r.body,r.reply,r.created_at,r.booking_id AS ref,0 AS fresh FROM reviews r JOIN bookings b ON b.id=r.booking_id WHERE r.hidden=0
   )${filter}`, ...args);
   rows.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.fresh - a.fresh || b.ref - a.ref));
   const latest = new Map();
@@ -108,7 +108,7 @@ export function publicReviews(db, tutorId) {
   return latest.map(r => {
     const u = one(db, "SELECT role,learner_type,display_name,profile_code FROM users WHERE id=?", r.student_id) || {};
     const lessons = one(db, "SELECT COUNT(*) AS n FROM bookings WHERE student_id=? AND tutor_id=? AND status='completed'", r.student_id, r.tutor_id).n;
-    return { rating: r.rating, body: r.body || "", created_at: r.created_at, lessons, author: authorLabel(u).label };
+    return { rating: r.rating, body: r.body || "", created_at: r.created_at, lessons, author: authorLabel(u).label, ...(r.reply ? { reply: r.reply } : {}) };
   }).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 }
 
