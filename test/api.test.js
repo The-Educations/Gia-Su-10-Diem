@@ -2934,6 +2934,8 @@ test("the same bank transfer is credited once whichever channel arrives first", 
     mockApi([{ id: "uuid-noref", amount_in: 100000, amount_out: 0, code: depC.code, transaction_content: "", reference_number: "" }]);
     assert.equal((await c.request("/wallet")).data.available, 100000, "no reference still credits, deduped by API id");
   } finally { globalThis.fetch = realFetch; }
+});
+
 test("masked contact never reaches participants; admin thread keeps the original", async (t) => {
   const emails = [];
   const { client, db } = await fixture(t, { sendEmail: async (m) => emails.push(m) });

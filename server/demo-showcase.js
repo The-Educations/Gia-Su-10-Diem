@@ -261,4 +261,26 @@ export async function seedShowcase(db, hash) {
     notify(db, chau, "credential_approved", { actor: "Quản trị viên", subject: "Sư phạm Toán", link: "/studio" });
     notify(db, student, "session_remind", { actor: "Quản trị viên", subject: "Tiếng Anh · Nguyễn Gia Bảo", link: "/classes" });
   });
+
+  // Flagged chat + a reported review so the An toàn tab has work to show.
+  mark("showcase-safety-v2", () => {
+    const inq = one(db, "SELECT id,student_id FROM inquiries WHERE student_id=? LIMIT 1", student);
+    if (inq) run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,original_body,flagged) VALUES (?,?,?,?,1)",
+      inq.id, inq.student_id, "Em có vài thắc mắc ngoài giờ, cô ơi cho em hỏi qua [đã ẩn liên hệ] được không ạ?",
+      "Em có vài thắc mắc ngoài giờ, cô ơi cho em hỏi qua zalo 0901 234 567 được không ạ?");
+    let b = one(db, "SELECT id,student_id,tutor_id FROM bookings WHERE student_id=? LIMIT 1", student);
+    if (!b && chau && student) {
+      const sub = one(db, "SELECT id FROM subjects LIMIT 1");
+      const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes,source,available) VALUES (?,?,60,'demo',0)", chau, iso(-2)).lastInsertRowid);
+      b = { id: Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,status) VALUES (?,?,?,?,?,?,'online','Buổi demo an toàn','completed')", student, chau, slot, sub?.id || "toan", iso(-2), 180000).lastInsertRowid), student_id: student, tutor_id: chau };
+    }
+    if (b) {
+      run(db, "INSERT INTO messages(booking_id,sender_id,body,original_body,flagged) VALUES (?,?,?,?,1)",
+        b.id, b.student_id, "Mẹ em muốn đổi giờ học, cô gọi cho mẹ em qua [đã ẩn liên hệ] nhé ạ.",
+        "Mẹ em muốn đổi giờ học, cô gọi cho mẹ em qua 0918 777 222 nhé ạ.");
+      run(db, `INSERT INTO reviews(booking_id,rating,body,reported,reported_reason,reported_by) VALUES (?,?,?,?,?,?)
+        ON CONFLICT(booking_id) DO UPDATE SET reported=1,reported_reason=excluded.reported_reason,reported_by=excluded.reported_by`,
+        b.id, 4, "Buổi học ổn nhưng đánh giá có ghi thông tin riêng.", 1, "Đánh giá có thông tin cá nhân của gia đình em, em nhờ ẩn giúp ạ.", b.tutor_id);
+    }
+  });
 }
