@@ -28,6 +28,7 @@ import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
 import { registerPosts } from "./posts.js";
+import { registerNewsImages } from "./news-images.js";
 import { isGoogleAdmin } from "./admin-access.js";
 import { registerGallery, galleryMetadata } from "./gallery.js";
 import { registerGoogleAuth } from "./google-auth.js";
@@ -97,7 +98,7 @@ export function createApi(
         !(
           (req.method === "PUT" && /^\/community\/me\/(avatar|cover)$/.test(req.path)) ||
           (req.method === "PUT" && /^\/tutor\/uploads\/(photo|banner|cv)$/.test(req.path)) ||
-          (req.method === "POST" && (["/tutor/gallery", "/community/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path) || req.path === "/account/verification/files"))
+          (req.method === "POST" && (["/tutor/gallery", "/community/images", "/admin/news/images"].includes(req.path) || /^\/chat\/(inquiry|lesson|support)\/\d+\/attachments$/.test(req.path) || /^\/tutor\/credentials\/\d+\/files$/.test(req.path) || req.path === "/account/verification/files"))
         ) &&
         !req.is("application/json")
       )
@@ -265,6 +266,7 @@ export function createApi(
   registerChatMedia(app, db, auth, processPhoto);
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
+  registerNewsImages(app, db, auth, audit, processPhoto);
   registerCommunity(app, db, auth, audit, processPhoto, { sendAdminEmail, origin });
   registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
