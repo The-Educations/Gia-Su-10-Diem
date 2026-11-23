@@ -5,7 +5,7 @@ export const siteOrigin = "https://giasudiem10.online";
 export const robots = `User-agent: *\nAllow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`;
 export const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(pages).map(path => `<url><loc>${siteOrigin}${path}</loc></url>`).join("")}</urlset>`;
 const escape = (value) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const privateRoutes = new Set(["/app/community/write", "/app/community/mine", "/app/auth", "/app/verify-email", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/calendar", "/app/offers", "/app/messages", "/app/settings", "/app/availability", "/app/studio", "/app/admin", "/app/favorites"]);
+const privateRoutes = new Set(["/app", "/app/community/write", "/app/community/mine", "/app/auth", "/app/verify-email", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/calendar", "/app/offers", "/app/proposals", "/app/wallet", "/app/schedule", "/app/family", "/app/classes", "/app/messages", "/app/settings", "/app/availability", "/app/studio", "/app/admin", "/app/favorites"]);
 
 // News paths are /app/news/<id>[-<slug>]; the slug is only ever a-z, 0-9 and dashes.
 export const NEWS_PATH = /^\/app\/news\/(\d+)(?:-[a-z0-9-]*)?$/;
@@ -35,7 +35,7 @@ export function pageSeo(path, post = null, community = null) {
     : canonicalNews
     ? { title: `${post.title} | Gia Sư 10 Điểm`, description: post.summary }
     : Object.hasOwn(pages, path) ? pages[path] : null;
-  const known = page || /^\/app\/community\/members\/[^/]+$/.test(path) || privateRoutes.has(path) || /^\/app\/tutors\/\d+$/.test(path);
+  const known = page || /^\/app\/community\/members\/[^/]+$/.test(path) || privateRoutes.has(path) || /^\/app\/(?:tutors|classes)\/\d+$/.test(path);
   return {
     title: page?.title || (known ? "Tài khoản | Gia Sư 10 Điểm" : "Không tìm thấy trang | Gia Sư 10 Điểm"),
     description: page?.description || "Gia Sư 10 Điểm — kết nối học sinh và gia sư.",

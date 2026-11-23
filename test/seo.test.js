@@ -130,3 +130,17 @@ test("sitemap lists canonical news URLs with lastmod from the latest revision", 
   assert.match(map, /<loc>https:\/\/giasudiem10\.online\/app\/news\/12-lich-thi-2027<\/loc><lastmod>2026-11-23T08:00:00Z<\/lastmod>/);
   assert.match(map, /<loc>https:\/\/giasudiem10\.online\/app\/news\/13<\/loc><lastmod>2026-12-01T01:02:03Z<\/lastmod>/);
 });
+
+test("every route in app/src/main.tsx answers 200, so a new route can never be forgotten", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../app/src/main.tsx", import.meta.url), "utf8");
+  const paths = [...source.matchAll(/<Route[^>]*path="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(paths.length > 20, "the route table was parsed");
+  const article = { id: 1, slug: "bai-viet", title: "Bài viết", summary: "Tóm tắt", published_at: "2026-11-01 00:00:00", cover_url: "" };
+  const community = { id: 1, title: "Bài cộng đồng", body: "Nội dung", author: { name_part: "A" }, published_at: "2026-11-01 00:00:00", updated_at: "2026-11-01 00:00:00" };
+  for (const raw of paths) {
+    if (raw === "*") continue; // catch-all: unknown paths must stay 404 (see the test above)
+    const concrete = ("/app" + (raw === "/" ? "" : raw)).replace(/:(\w+)\??/g, (_, name) => name === "idSlug" ? "1-bai-viet" : name === "code" ? "abc" : "1").replace(/\?/g, "");
+    assert.equal(pageSeo(concrete, article, community).status, 200, `${raw} (${concrete}) returns "Không tìm thấy trang"`);
+  }
+});
