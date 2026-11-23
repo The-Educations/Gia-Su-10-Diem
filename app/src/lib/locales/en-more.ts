@@ -1494,4 +1494,11 @@ export const enMore: Record<string, string> = {
   "Thu phóng lịch": "Zoom the calendar",
   "Thu nhỏ": "Zoom out",
   "Phóng to": "Zoom in",
+  "Nạp tiền thành công": "Successful top-ups",
+  "Người nạp → tài khoản nhận": "Payer → receiving account",
+  "Mã lệnh": "Code",
+  "Cách thanh toán": "Payment method",
+  "Chuyển khoản": "Bank transfer",
+  "Thẻ": "Card",
+  "Giả lập": "Simulated",
 };
