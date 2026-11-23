@@ -45,6 +45,8 @@ export class Marketplace extends DurableObject {
       clientIp: (req) => req.headers["x-giasu-client-ip"] || "unknown",
       sepay: sepayConfig(env),
       wakeCalendar: async () => { if (!await ctx.storage.getAlarm()) await ctx.storage.setAlarm(Date.now() + 1000); },
+      // The alarm sends queued notice emails right after the request that queued them.
+      wakeMail: () => ctx.waitUntil((async () => { if (!await ctx.storage.getAlarm()) await ctx.storage.setAlarm(Date.now() + 500); })()),
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
@@ -71,11 +73,12 @@ export class Marketplace extends DurableObject {
       },
     });
     this.calendarSync = api.locals.calendarSync;
+    this.flushMail = api.locals.flushMail;
     if (this.calendarSync.hasConnections()) ctx.waitUntil((async () => { if (!await ctx.storage.getAlarm()) await ctx.storage.setAlarm(Date.now() + 1000); })());
     this.handler = httpServerHandler(createServer(api));
   }
   async alarm() {
-    try { await this.calendarSync.syncDue(); }
+    try { await this.flushMail(); await this.calendarSync.syncDue(); }
     finally { if (this.calendarSync.hasConnections()) await this.ctx.storage.setAlarm(Date.now() + 60000); }
   }
   fetch(request) {
