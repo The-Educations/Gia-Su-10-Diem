@@ -125,7 +125,7 @@ test("a simulated transfer updates the balance chip and toasts without a reload"
   // And a reload while pending still picks the payment up afterwards.
   const dialog = page.locator(".topup-dialog");
   await page.getByRole("button", { name: "Nạp tiền", exact: true }).click();
-  await dialog.getByRole("button", { name: "1.000.000 ₫" }).click();
+  await dialog.getByRole("button", { name: "1.000.000 ₫" }).first().click();
   await dialog.getByRole("button", { name: /Tạo lệnh nạp 1.000.000 ₫/ }).click();
   await page.waitForSelector(".deposit-code");
   await page.reload();
