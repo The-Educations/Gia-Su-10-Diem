@@ -7,6 +7,16 @@ export function migrateNotifications(db) {
     kind TEXT NOT NULL, actor_name TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, read_at TEXT);
     CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, read_at, id);`);
+  if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "email_prefs"))
+    db.exec("ALTER TABLE users ADD COLUMN email_prefs TEXT NOT NULL DEFAULT '{}'");
+}
+
+// Which important events also arrive by email. Everything is on until the person turns it off.
+export const EMAIL_TOPICS = ["proposals", "money", "lessons"];
+export function emailPrefs(db, userId) {
+  let stored = {};
+  try { stored = JSON.parse(one(db, "SELECT email_prefs FROM users WHERE id=?", userId)?.email_prefs || "{}"); } catch { /* keep defaults */ }
+  return Object.fromEntries(EMAIL_TOPICS.map((k) => [k, stored[k] !== false]));
 }
 
 // The client turns `kind` into words, so every language reads the same row.
@@ -26,6 +36,12 @@ export function registerNotifications(app, db, auth) {
   });
   app.get("/api/notifications/unread-count", auth(), (req, res) => {
     res.json(one(db, "SELECT COUNT(*) count FROM notifications WHERE user_id=? AND read_at IS NULL", req.user.id));
+  });
+  app.get("/api/account/notifications", auth(), (req, res) => res.json(emailPrefs(db, req.user.id)));
+  app.put("/api/account/notifications", auth(), (req, res) => {
+    const d = z.object(Object.fromEntries(EMAIL_TOPICS.map((k) => [k, z.boolean()]))).partial().strict().parse(req.body);
+    run(db, "UPDATE users SET email_prefs=? WHERE id=?", JSON.stringify({ ...emailPrefs(db, req.user.id), ...d }), req.user.id);
+    res.json(emailPrefs(db, req.user.id));
   });
   app.post("/api/notifications/read", auth(), (req, res) => {
     const d = z.union([z.object({ id: z.number().int().positive() }).strict(), z.object({ all: z.literal(true) }).strict()]).parse(req.body);
