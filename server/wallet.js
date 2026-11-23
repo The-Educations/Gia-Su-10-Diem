@@ -171,7 +171,21 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     });
   }
 
-  app.get("/api/wallet", auth(), (req, res) => { expireProposals(); res.json(view(req.user.id)); });
+  // Pending top-ups from the last 7 days are checked with SePay, so a missed IPN still lands.
+  const recheck = async (rows) => { for (const d of rows) await checkWithSepay(d); };
+  const recent = () => new Date(Date.now() - 7 * 86400000).toISOString().replace("T", " ").slice(0, 19);
+  app.get("/api/wallet", auth(), async (req, res) => {
+    expireProposals();
+    await recheck(all(db, "SELECT * FROM deposits WHERE (user_id=? OR payer_id=?) AND status='pending' AND created_at>? ORDER BY id DESC LIMIT 5", req.user.id, req.user.id, recent()));
+    res.json(view(req.user.id));
+  });
+  app.post("/api/admin/deposits/recheck", auth("admin"), async (req, res) => {
+    const rows = all(db, "SELECT * FROM deposits WHERE status='pending' AND created_at>? ORDER BY id DESC LIMIT 100", recent());
+    await recheck(rows);
+    const paid = rows.filter((d) => one(db, "SELECT status FROM deposits WHERE id=?", d.id).status === "paid").length;
+    audit(req.user.id, "deposits.recheck", paid);
+    res.json({ checked: rows.length, paid });
+  });
   app.post("/api/wallet/deposits", auth("student", "tutor"), (req, res) => {
     const s = settings(db);
     const { amount, student_id } = z.object({ amount: z.number().int().min(s.min_deposit).max(50000000), student_id: z.number().int().positive().optional() }).parse(req.body);

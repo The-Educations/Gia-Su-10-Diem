@@ -53,6 +53,13 @@ export function AdminFinance() {
   }
   return (
     <div className="admin-finance">
+      <div className="actions">
+        <Button variant="outline" disabled={busy === -1} onClick={async () => {
+          setBusy(-1);
+          try { const r = await api<{ checked: number; paid: number }>("/admin/deposits/recheck", "POST"); toast.success(t("Đã kiểm tra {checked} lệnh nạp, cộng {paid} lệnh", r)); refresh(); }
+          catch (e) { toast.error((e as Error).message); } finally { setBusy(0); }
+        }}>{t("Kiểm tra lại với SePay")}</Button>
+      </div>
       <p className="finance-status" data-state={f.payments}>{t(f.payments === "live" ? "Thanh toán SePay đang chạy" : f.payments === "simulated" ? "Đang giả lập nạp tiền (môi trường local)" : "Nạp tiền đang tắt: chưa có khóa SePay")}</p>
       <dl className="finance-totals">
         <div><dt>{t("Đã nạp")}</dt><dd>{money(f.totals.deposited)}</dd></div>

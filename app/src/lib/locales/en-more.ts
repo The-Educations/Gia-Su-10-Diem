@@ -1489,4 +1489,6 @@ export const enMore: Record<string, string> = {
   "Chỉ học sinh gửi được yêu cầu học thử.": "Only students can ask for a trial.",
   "Học phí tối thiểu 50.000đ / buổi.": "The minimum fee is 50,000đ per lesson.",
   "Gửi yêu cầu học thử": "Request a free trial",
+  "Kiểm tra lại với SePay": "Check again with SePay",
+  "Đã kiểm tra {checked} lệnh nạp, cộng {paid} lệnh": "Checked {checked} top-ups, credited {paid}",
 };
