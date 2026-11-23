@@ -13,14 +13,18 @@ import {
 export default function ResourceEditor({
   resource,
   subjects,
+  subjectId,
+  categories = [],
   onSaved,
 }: {
   resource: Resource | null;
   subjects: Subject[];
+  subjectId?: string;
+  categories?: string[];
   onSaved: () => void;
 }) {
   const [subject, setSubject] = useState(
-      resource?.subject_id || subjects[0]?.id || "",
+      resource?.subject_id || subjectId || subjects[0]?.id || "",
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -82,9 +86,11 @@ export default function ResourceEditor({
                 id="category"
                 name="category"
                 defaultValue={resource?.category}
+                list="category-options"
                 required
                 maxLength={80}
               />
+              <datalist id="category-options">{categories.map((c) => <option key={c} value={c} />)}</datalist>
             </Field>
             <Field>
               <FieldLabel htmlFor="level">Lớp / Cấp học</FieldLabel>

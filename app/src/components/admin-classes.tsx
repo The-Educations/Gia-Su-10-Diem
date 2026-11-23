@@ -1,8 +1,13 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays } from "lucide-react";
-import { money, dateTime, useLoad } from "@/lib/api";
+import { toast } from "sonner";
+import { api, money, dateTime, fold, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { ErrorState, Loading } from "./common";
+import { Blank, ErrorState, Loading } from "./common";
+import { AdminSearch, AdminToolbar, FilterChips } from "./admin-kit";
+import { Input } from "./ui/input";
+import { Field, FieldLabel } from "./ui/field";
 import { dayOf, timeOf } from "./session-actions";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -12,26 +17,36 @@ import "@/money.css";
 type Row = { id: number; title: string; color: string; status: string; tutor_id: number; tutor_name: string; students: string | null; upcoming: number; disputes: number; next_at: string | null };
 
 export function AdminClasses() {
-  const { t } = useI18n(), result = useLoad<Row[]>("/admin/classes");
+  const { t } = useI18n(), result = useLoad<Row[]>("/admin/classes"), [q, setQ] = useState(""), [show, setShow] = useState("");
   if (result.loading) return <Loading />;
   if (result.error) return <ErrorState error={result.error} retry={result.reload} />;
+  const found = (result.data || []).filter((c) => fold(`${c.title} ${c.tutor_name} ${c.students || ""}`).includes(fold(q)));
+  const pick = (c: Row, v: string) => !v || (v === "disputes" ? c.disputes > 0 : v === "active" ? c.upcoming > 0 : c.upcoming === 0);
+  const rows = found.filter((c) => pick(c, show));
   return (
-    <div className="admin-finance">
-      <div className="actions"><Button asChild variant="outline"><Link to="/schedule"><CalendarDays data-icon="inline-start" />{t("Lịch toàn hệ thống")}</Link></Button></div>
-      <table className="finance-table">
-        <thead><tr><th>{t("Lớp")}</th><th>{t("Gia sư")}</th><th>{t("Học sinh")}</th><th>{t("Buổi tiếp theo")}</th><th className="num">{t("Sắp tới")}</th></tr></thead>
-        <tbody>
-          {(result.data || []).map((c) => (
-            <tr key={c.id} data-color={c.color}>
-              <td><Link to={`/classes/${c.id}`} className="admin-class-link">{c.title}</Link>{c.disputes > 0 && <small className="danger-text">{t("{n} báo cáo cần xử lý", { n: c.disputes })}</small>}</td>
-              <td>{c.tutor_name}</td>
-              <td>{c.students || "—"}</td>
-              <td>{c.next_at ? `${dayOf(c.next_at)} ${timeOf(c.next_at)}` : "—"}</td>
-              <td className="num">{c.upcoming}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="admin-pane">
+      <AdminToolbar>
+        <AdminSearch value={q} onChange={setQ} placeholder="Tìm lớp, gia sư hoặc học sinh…" />
+        <FilterChips label="Trạng thái lớp" value={show} onChange={setShow} options={[["", "Tất cả"], ["active", "Còn buổi sắp tới"], ["done", "Hết buổi"], ["disputes", "Có báo cáo"]].map(([value, label]) => ({ value, label, count: found.filter((c) => pick(c, value)).length }))} />
+        <span className="admin-bar-gap" />
+        <Button asChild variant="outline"><Link to="/schedule"><CalendarDays data-icon="inline-start" />{t("Lịch toàn hệ thống")}</Link></Button>
+      </AdminToolbar>
+      {rows.length ? (
+        <table className="finance-table">
+          <thead><tr><th>{t("Lớp")}</th><th>{t("Gia sư")}</th><th>{t("Học sinh")}</th><th>{t("Buổi tiếp theo")}</th><th className="num">{t("Buổi sắp tới")}</th></tr></thead>
+          <tbody>
+            {rows.map((c) => (
+              <tr key={c.id} data-color={c.color}>
+                <td><Link to={`/classes/${c.id}`} className="admin-class-link">{c.title}</Link>{c.disputes > 0 ? <small className="danger-text">{t("{n} báo cáo cần xử lý", { n: c.disputes })}</small> : c.status !== "active" && <small>{t("Đã kết thúc")}</small>}</td>
+                <td><Link to={`/tutors/${c.tutor_id}`} className="text-link">{c.tutor_name}</Link></td>
+                <td>{c.students || "—"}</td>
+                <td>{c.next_at ? `${dayOf(c.next_at)} ${timeOf(c.next_at)}` : "—"}</td>
+                <td className="num">{c.upcoming}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <Blank title={t(found.length || q ? "Không có lớp phù hợp" : "Chưa có lớp học nào")} action={(q || show) ? <Button variant="outline" onClick={() => { setQ(""); setShow(""); }}>{t("Xóa bộ lọc")}</Button> : undefined} />}
     </div>
   );
 }
@@ -72,6 +87,7 @@ export function AdminUserOverview({ userId, onClose }: { userId: number | null; 
               <div><dt>{t("Credit")}</dt><dd>{o.wallet.credits_free + o.wallet.credits_paid}</dd></div>
               <div><dt>{t("Vi phạm")}</dt><dd>{o.violations}</dd></div>
             </dl>
+            <Adjust userId={o.user.id} onDone={result.reload} />
             <div className="actions">
               <Button asChild size="sm" variant="outline"><Link to={`/schedule?user=${o.user.id}`} onClick={onClose}>{t("Xem lịch")}</Link></Button>
               {o.user.role === "tutor" && <Button asChild size="sm" variant="outline"><Link to={`/tutors/${o.user.id}`} onClick={onClose}>{t("Hồ sơ công khai")}</Link></Button>}
@@ -88,5 +104,31 @@ export function AdminUserOverview({ userId, onClose }: { userId: number | null; 
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Adds to or takes from a balance by hand (a bank transfer outside SePay, a goodwill refund).
+// Every change is a ledger row with its reason; a balance never goes below zero.
+function Adjust({ userId, onDone }: { userId: number; onDone: () => void }) {
+  const { t } = useI18n(), [amount, setAmount] = useState(""), [note, setNote] = useState(""), [busy, setBusy] = useState(false);
+  const n = Math.trunc(Number(amount.replace(/[^\d-]/g, "")));
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!n) return;
+    if (!confirm(t("{action} {amount} vào số dư?", { action: t(n > 0 ? "Cộng" : "Trừ"), amount: money(Math.abs(n)) }))) return;
+    setBusy(true);
+    try {
+      await api(`/admin/wallets/${userId}/adjust`, "POST", { amount: n, note });
+      toast.success(t("Đã điều chỉnh số dư"));
+      setAmount(""); setNote(""); onDone();
+    } catch (err) { toast.error((err as Error).message); }
+    finally { setBusy(false); }
+  }
+  return (
+    <form className="wallet-adjust" onSubmit={save}>
+      <Field><FieldLabel htmlFor="adjust-amount">{t("Điều chỉnh số dư (VND, số âm để trừ)")}</FieldLabel><Input id="adjust-amount" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="200000" required /></Field>
+      <Field><FieldLabel htmlFor="adjust-note">{t("Lý do")}</FieldLabel><Input id="adjust-note" value={note} onChange={(e) => setNote(e.target.value)} minLength={3} maxLength={300} required /></Field>
+      <Button type="submit" variant="outline" disabled={busy || !n || note.trim().length < 3}>{t(n < 0 ? "Trừ {amount}" : "Cộng {amount}", { amount: money(Math.abs(n) || 0) })}</Button>
+    </form>
   );
 }
