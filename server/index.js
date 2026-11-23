@@ -1,7 +1,7 @@
 import { communitySitemap, publicCommunityPost } from "./community.js";
 import { pathToFileURL } from "node:url";
 import { createMailflareSender } from "./email-verification.js";
-import { pageSeo, renderSeo, robots, newsSitemap } from "./seo.js";
+import { NEWS_PATH, pageSeo, renderSeo, robots, newsSitemap } from "./seo.js";
 import { all, one } from "./db.js";
 import { processPhoto } from "./photo.js";
 import express from "express";
@@ -40,16 +40,18 @@ app.get(["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"], (req, res)
 });
 app.get(["/app", "/app/"], (req, res) => res.redirect("/"));
 app.get("/robots.txt", (req, res) => res.type("text/plain").send(robots));
-app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(newsSitemap(all(db, "SELECT id FROM posts WHERE published=1"), communitySitemap(db))));
+app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(newsSitemap(all(db, "SELECT id,slug,published_at,updated_at,revised_at FROM posts WHERE published=1 ORDER BY published_at DESC,id DESC"), communitySitemap(db))));
 app.get(["/privacy", "/terms"], (req, res) => res.sendFile(path.resolve(`dist/legal${req.path}.html`)));
 app.get("/index.html", (req, res) => res.redirect(308, "/"));
 app.get("/", (req, res) => res.sendFile(path.resolve("index.html")));
 const sendApp = (req, res, html) => {
-  const match = req.path.match(/^\/app\/news\/(\d+)$/);
-  const post = match ? one(db, "SELECT title,summary FROM posts WHERE id=? AND published=1", match[1]) : null;
+  const match = req.path.match(NEWS_PATH);
+  const post = match ? one(db, "SELECT id,slug,title,summary,cover_url,cover_alt,published_at,updated_at,revised_at FROM posts WHERE id=? AND published=1", match[1]) : null;
   const communityMatch = req.path.match(/^\/app\/community\/(\d+)$/);
   const community = communityMatch ? publicCommunityPost(db, communityMatch[1]) : null;
   const seo = pageSeo(req.path, post, community);
+  // Old id-only and wrong-slug links go to the canonical address.
+  if (seo.redirect) return res.redirect(301, seo.redirect + req.url.slice(req.path.length));
   res.set("X-Robots-Tag", seo.robots).set("Cache-Control", "no-cache")
     .status(seo.status).type("html").send(renderSeo(html, req.path, post, community));
 };

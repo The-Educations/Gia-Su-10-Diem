@@ -1,5 +1,5 @@
 import { createMailflareSender } from "../server/email-verification.js";
-import { pageSeo, renderSeo, robots, newsSitemap } from "../server/seo.js";
+import { NEWS_PATH, pageSeo, renderSeo, robots, newsSitemap } from "../server/seo.js";
 import { DurableObject } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import { createServer } from "node:http";
@@ -153,7 +153,7 @@ export default {
     )
       headers.set("Cache-Control", "no-cache");
     if (headers.get("content-type")?.includes("text/html")) {
-      const match = url.pathname.match(/^\/app\/news\/(\d+)$/);
+      const match = url.pathname.match(NEWS_PATH);
       let post = null;
       if (match) {
         const result = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL(`/api/posts/${match[1]}`, request.url)));
@@ -168,6 +168,7 @@ export default {
         else if (result.status !== 404) return new Response("Temporarily unavailable", { status: 503 });
       }
       const seo = pageSeo(url.pathname, post, community);
+      if (seo.redirect) return Response.redirect(url.origin + seo.redirect + url.search, 301);
       headers.set("X-Robots-Tag", seo.robots);
       headers.delete("Content-Length");
       headers.delete("ETag");
