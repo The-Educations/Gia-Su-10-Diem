@@ -66,6 +66,7 @@ jobs:
         run: |
           cp -R dist/site/app dist/app
           cp -R dist/site/legal dist/legal
+          cp dist/site/index.html index.html
       - name: Use the runner's Chrome, install it only when missing
         run: command -v google-chrome || npx playwright install --with-deps chrome
       - name: Test student, tutor and admin journeys

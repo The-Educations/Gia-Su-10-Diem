@@ -6,7 +6,8 @@ import { execSync } from 'node:child_process';
 
 console.log('--- Running Automated Verification Suite for 10 Points Tutor Academy ---');
 
-// 1. Verify index.html exists
+// 1. Verify index.html exists (it is generated — build it if this checkout lacks one)
+if (!fs.existsSync('index.html')) execSync('node scripts/build-page.js', { stdio: 'inherit' });
 assert.ok(fs.existsSync('index.html'), 'index.html must exist');
 const html = fs.readFileSync('index.html', 'utf8');
 assert.ok(html.includes("<html lang='vi'>"), 'Landing declares Vietnamese');
