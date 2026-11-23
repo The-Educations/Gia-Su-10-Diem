@@ -107,31 +107,35 @@ export function AdminSessions() {
         </p>
       )}
       {shown.length ? (
-        <table className="finance-table session-table">
-          <thead><tr><th className="session-check"><span className="sr-only">{t("Chọn")}</span></th><th>{t("Thời gian")}</th><th>{t("Lớp")}</th><th>{t("Gia sư")}</th><th>{t("Học sinh")}</th><th>{t("Trạng thái")}</th><th className="num">{t("Học phí/buổi")}</th><th /></tr></thead>
-          <tbody>
-            {shown.map((s) => (
-              <tr key={s.id} data-attention={isAttention(s) || undefined} className="session-row" onClick={() => open(s)}>
-                <td className="session-check" onClick={(e) => e.stopPropagation()}>
-                  {remindable(s) ? <input type="checkbox" aria-label={t("Chọn buổi {day} {time}", { day: dayOf(s.starts_at), time: timeOf(s.starts_at) })} checked={picked.has(s.id)} onChange={(e) => pick(s, e.target.checked)} /> : null}
-                </td>
-                <td>{dayOf(s.starts_at)} {timeOf(s.starts_at)}{s.moved_from ? <small>{t("Đã dời lịch")}</small> : null}</td>
-                <td data-color={s.color}><Link to={`/classes/${s.class_id}`} className="admin-class-link" onClick={(e) => e.stopPropagation()}>{s.title}</Link>{s.class_status !== "active" && <small>{t("Lớp đã kết thúc")}</small>}</td>
-                <td><Link to={`/tutors/${s.tutor_id}`} className="text-link" onClick={(e) => e.stopPropagation()}>{s.tutor_name}</Link></td>
-                <td>{s.members.map((m) => m.student_name).join(", ") || "—"}</td>
-                <td><span className="session-state" data-state={s.status === "cancelled" ? "cancelled" : isAttention(s) ? "attention" : "ok"}>{t(stateOf(s))}</span>{s.members.some((m) => m.note) && <small>{s.members.find((m) => m.note)?.note}</small>}</td>
-                <td className="num">{s.members.length ? money(s.members.reduce((a, m) => a + (m.rate || 0), 0)) : "—"}</td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <RowMenu label={t("Thao tác buổi {day} {time}", { day: dayOf(s.starts_at), time: timeOf(s.starts_at) })} items={[
-                    { label: "Chi tiết buổi học", onSelect: () => open(s) },
-                    { label: "Mở trên lịch", onSelect: () => navigate(`/schedule?user=${s.tutor_id}`) },
-                    { label: "Hủy buổi học", danger: true, hidden: s.status !== "scheduled" || Date.parse(s.starts_at) <= Date.now(), onSelect: () => setCancelOf(s) },
-                  ]} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="admin-list admin-rows session-rows">
+          {shown.map((s) => (
+            <article key={s.id} data-attention={isAttention(s) || undefined} className="session-row">
+              <span className="session-check">
+                {remindable(s) ? <input type="checkbox" aria-label={t("Chọn buổi {day} {time}", { day: dayOf(s.starts_at), time: timeOf(s.starts_at) })} checked={picked.has(s.id)} onChange={(e) => pick(s, e.target.checked)} /> : null}
+              </span>
+              <button type="button" className="admin-row-title" onClick={() => open(s)}>
+                <strong>{s.title}</strong>
+                <small>{dayOf(s.starts_at)} {timeOf(s.starts_at)} · {s.minutes} {t("phút")}{s.moved_from ? ` · ${t("Đã dời lịch")}` : ""}</small>
+              </button>
+              <span className="admin-row-meta">
+                {s.tutor_name}
+                <small>{s.members.map((m) => m.student_name).join(", ") || "—"}</small>
+              </span>
+              <span className="admin-row-state">
+                <span className="session-state" data-state={s.status === "cancelled" ? "cancelled" : isAttention(s) ? "attention" : "ok"}>{t(stateOf(s))}</span>
+                {s.class_status !== "active" && <span className="admin-flag">{t("Lớp đã kết thúc")}</span>}
+                {s.members.some((m) => m.note) && <small className="danger-text">{s.members.find((m) => m.note)?.note}</small>}
+              </span>
+              <span className="session-fee">{s.members.length ? money(s.members.reduce((a, m) => a + (m.rate || 0), 0)) : "—"}</span>
+              <RowMenu label={t("Thao tác buổi {day} {time}", { day: dayOf(s.starts_at), time: timeOf(s.starts_at) })} items={[
+                { label: "Chi tiết buổi học", onSelect: () => open(s) },
+                { label: "Mở lớp học", onSelect: () => navigate(`/classes/${s.class_id}`) },
+                { label: "Mở trên lịch", onSelect: () => navigate(`/schedule?user=${s.tutor_id}`) },
+                { label: "Hủy buổi học", danger: true, hidden: s.status !== "scheduled" || Date.parse(s.starts_at) <= Date.now(), onSelect: () => setCancelOf(s) },
+              ]} />
+            </article>
+          ))}
+        </div>
       ) : <Blank title={t(found.length || q ? "Không có buổi học phù hợp" : "Không có buổi nào trong mục này")} action={scope || q || onlyClass || onlyMember ? <Button variant="outline" onClick={() => { setQ(""); setParams({ tab: "sessions" }); }}>{t("Xem tất cả buổi học")}</Button> : undefined} />}
       <SessionDrawer id={openId} onClose={() => open(null)} onChanged={() => { result.reload(); refresh(); }} onOverview={setOverview} />
       <CancelDialog s={cancelOf} onClose={() => setCancelOf(null)} onDone={() => { setCancelOf(null); result.reload(); refresh(); }} />
@@ -168,26 +172,26 @@ function SessionDrawer({ id, onClose, onChanged, onOverview }: { id: number | nu
             </div>
             <section>
               <h2>{t("Học sinh và học phí")}</h2>
-              <table className="finance-table">
-                <tbody>
-                  {d.students.map((m) => (
-                    <tr key={m.member_id}>
-                      <td>
-                        <button type="button" className="text-link" onClick={() => onOverview(m.student_id!)}>{m.student_name}</button>
-                        <small>{t("Gói {n} buổi · còn giữ {held}", { n: m.sessions_total, held: money(m.held) })}{m.settled ? ` · ${t("Đã đối chiếu")}` : ""}</small>
-                        {m.note ? <small className="danger-text">{t("Báo cáo")}: {m.note}</small> : null}
-                      </td>
-                      <td>
-                        <span className="session-state" data-state={m.outcome === "disputed" ? "attention" : m.outcome === "confirmed" || m.outcome === "charged" ? "ok" : ""}>{t(OUTCOME[m.outcome || ""] || m.outcome || "—")}</span>
-                        <small>{[m.tutor_confirmed_at && t("Gia sư đã xác nhận"), m.student_confirmed_at && t("Học sinh đã xác nhận"), m.rating && t("Chấm {n} sao", { n: m.rating })].filter(Boolean).join(" · ")}</small>
-                      </td>
-                      <td className="num">{money(m.rate || 0)}</td>
-                      <td>
+              <div className="session-people">
+                {d.students.map((m) => (
+                  <div key={m.member_id} className="session-person">
+                    <div className="session-person-main">
+                      <button type="button" className="text-link" onClick={() => onOverview(m.student_id!)}>{m.student_name}</button>
+                      <small>{t("Gói {n} buổi · còn giữ {held}", { n: m.sessions_total, held: money(m.held) })}{m.settled ? ` · ${t("Đã đối chiếu")}` : ""}</small>
+                      {m.note ? <small className="danger-text">{t("Báo cáo")}: {m.note}</small> : null}
+                    </div>
+                    <div className="session-person-side">
+                      <span className="session-state" data-state={m.outcome === "disputed" ? "attention" : m.outcome === "confirmed" || m.outcome === "charged" ? "ok" : ""}>{t(OUTCOME[m.outcome || ""] || m.outcome || "—")}</span>
+                      <small>{[m.tutor_confirmed_at && t("Gia sư đã xác nhận"), m.student_confirmed_at && t("Học sinh đã xác nhận"), m.rating && t("Chấm {n} sao", { n: m.rating })].filter(Boolean).join(" · ")}</small>
+                      <span className="session-fee">{money(m.rate || 0)}</span>
+                    </div>
+                    {(m.outcome === "disputed" || (m.outcome === "pending" && m.status === "active")) && (
+                      <span className="actions">
                         {m.outcome === "disputed" && (
-                          <span className="actions">
+                          <>
                             <Button size="xs" disabled={busy === m.member_id} onClick={() => act(() => api(`/admin/sessions/${id}/resolve`, "POST", { member_id: m.member_id, outcome: "confirmed" }), m.member_id!, "Đã ghi nhận buổi đã diễn ra")}>{t("Buổi đã diễn ra")}</Button>
                             <Button size="xs" variant="outline" disabled={busy === m.member_id} onClick={() => act(() => api(`/admin/sessions/${id}/resolve`, "POST", { member_id: m.member_id, outcome: "refunded" }), m.member_id!, "Đã hoàn tiền buổi này")}>{t("Hoàn tiền")}</Button>
-                          </span>
+                          </>
                         )}
                         {m.outcome === "pending" && m.status === "active" && (
                           <Button size="xs" variant="ghost" disabled={busy === m.member_id} onClick={() => {
@@ -195,11 +199,11 @@ function SessionDrawer({ id, onClose, onChanged, onOverview }: { id: number | nu
                               void act(() => api(`/admin/members/${m.member_id}/end`, "POST"), m.member_id!, "Đã kết thúc gói học");
                           }}>{t("Kết thúc gói")}</Button>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </section>
             {(d.history.length > 0 || d.moves.length > 0) && (
               <section>
@@ -221,12 +225,15 @@ function SessionDrawer({ id, onClose, onChanged, onOverview }: { id: number | nu
 // Cancel the lesson (refund rule spelled out) or nudge its unconfirmed parties.
 function SessionActions({ s, ended, onDone }: { s: Ses; ended: boolean; onDone: () => void }) {
   const { t } = useI18n(), [open, setOpen] = useState(false);
+  const canCancel = s.status === "scheduled" && !ended;
+  const canRemind = s.status === "scheduled" && ended && s.members.some((m) => m.outcome === "pending");
+  if (!canCancel && !canRemind) return null;
   return (
     <section className="session-admin">
       <h2>{t("Thao tác của quản trị viên")}</h2>
       <div className="actions">
-        {s.status === "scheduled" && !ended && <Button size="sm" variant="destructive" onClick={() => setOpen(true)}>{t("Hủy buổi học")}</Button>}
-        {s.status === "scheduled" && ended && s.members.some((m) => m.outcome === "pending") && <RemindButton id={s.id} onDone={onDone} />}
+        {canCancel && <Button size="sm" variant="destructive" onClick={() => setOpen(true)}>{t("Hủy buổi học")}</Button>}
+        {canRemind && <RemindButton id={s.id} onDone={onDone} />}
       </div>
       <CancelDialog s={open ? s : null} onClose={() => setOpen(false)} onDone={() => { setOpen(false); onDone(); }} />
     </section>

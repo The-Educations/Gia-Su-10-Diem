@@ -33,7 +33,7 @@ test("admin session worklist: queues, detail drawer, actions and audit deep link
   await expect(disputedRow).toHaveCount(1);
 
   // Detail drawer: people, money, history; resolve the report as "lesson happened".
-  await disputedRow.click();
+  await disputedRow.locator(".admin-row-title").click();
   const drawer = admin.getByRole("dialog").first();
   await expect(drawer).toContainText("Học sinh và học phí");
   await expect(drawer).toContainText("Gia sư không vào lớp");
@@ -48,7 +48,7 @@ test("admin session worklist: queues, detail drawer, actions and audit deep link
 
   // A future lesson is cancelled from its drawer with the refund spelt out.
   await admin.getByRole("button", { name: /^Sắp tới/ }).click();
-  await admin.locator(".session-row").first().click();
+  await admin.locator(".session-row .admin-row-title").first().click();
   await drawer.getByRole("button", { name: "Hủy buổi học", exact: true }).click();
   const confirmDlg = admin.getByRole("dialog").last();
   await expect(confirmDlg).toContainText("hoàn về số dư");

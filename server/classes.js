@@ -415,8 +415,8 @@ export function registerClasses(app, db, auth, audit) {
         if (!rows.length || Date.parse(rows[0].starts_at) + rows[0].minutes * 60000 > Date.now()) continue;
         let sent = false;
         for (const r of rows.filter((x) => x.member_id && x.outcome === "pending")) {
-          if (!r.student_confirmed_at) { notify(db, r.student_id, "session_confirm", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
-          if (!r.tutor_confirmed_at) { notify(db, r.tutor_id, "session_confirm", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
+          if (!r.student_confirmed_at) { notify(db, r.student_id, "session_remind", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
+          if (!r.tutor_confirmed_at) { notify(db, r.tutor_id, "session_remind", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
         }
         if (sent) { audit(req.user.id, "session.remind", id); reminded++; }
       }

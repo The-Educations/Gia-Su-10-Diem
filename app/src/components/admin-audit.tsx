@@ -17,7 +17,7 @@ const ACTIONS: Record<string, string> = {
   "withdrawal.paid": "Đã chuyển tiền rút", "withdrawal.rejected": "Từ chối rút tiền", "withdrawal.receipt": "Thêm biên lai", "wallet.adjust": "Điều chỉnh số dư",
   "deposits.recheck": "Kiểm tra lại lệnh nạp", "settings.update": "Đổi cài đặt kinh doanh",
   "session.admin_cancel": "Hủy buổi học", "session.remind": "Nhắc xác nhận buổi học", "session.resolve.confirmed": "Xử lý báo cáo: buổi đã diễn ra", "session.resolve.refunded": "Xử lý báo cáo: hoàn tiền", "member.admin_end": "Kết thúc gói học",
-  "proposal.created": "Gửi đề nghị", "proposal.accepted": "Nhận đề nghị", "proposal.declined": "Từ chối đề nghị", "proposal.withdrawn": "Rút đề nghị",
+  "proposal.created": "Gửi đề nghị", "proposal.accept": "Nhận đề nghị", "proposal.decline": "Từ chối đề nghị", "proposal.withdraw": "Rút đề nghị",
   "subject.save": "Lưu môn học", "subject.removed": "Bỏ môn học", "resource.create": "Thêm kỳ thi", "resource.update": "Sửa kỳ thi", "resource.removed": "Bỏ kỳ thi",
   "community.rules.update": "Sửa quy tắc cộng đồng", "community.post.delete": "Xóa bài cộng đồng", "community.comment.delete": "Gỡ bình luận", "community.comment.remove": "Gỡ bình luận",
   "community.announcement.create": "Đăng thông báo", "community.announcement.update": "Sửa thông báo", "community.report.resolve": "Xử lý báo cáo cộng đồng", "community.user.lock": "Khóa quyền cộng đồng", "community.user.unlock": "Mở quyền cộng đồng",

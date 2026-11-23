@@ -1758,4 +1758,6 @@ export const enMore: Record<string, string> = {
   "Xử lý báo cáo cộng đồng": "Resolved a community report", "Khóa quyền cộng đồng": "Locked community access", "Mở quyền cộng đồng": "Unlocked community access",
   "Duyệt bản sửa bài viết": "Approved a post revision", "Từ chối bản sửa bài viết": "Rejected a post revision",
   "Duyệt bài cộng đồng": "Approved a community post", "Từ chối bài cộng đồng": "Rejected a community post", "Ẩn bài cộng đồng": "Hid a community post",
+  "Các buổi học": "Sessions", "Các gia sư": "Tutors", "Các học sinh": "Students", "Các tài khoản": "Accounts",
+  "{actor} nhắc bạn xác nhận buổi {subject}": "{actor} reminds you to confirm the {subject} lesson",
 };

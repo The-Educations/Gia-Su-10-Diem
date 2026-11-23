@@ -3570,16 +3570,9 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) { .chat-event.flash, [data-flash].flash [data-slot="bubble-content"] { animation: none; outline: 2px solid var(--primary); } }
 .chat-event-link { color: var(--primary); font-size: 12px; font-weight: 500; width: fit-content; }
 /* Buổi học pane: clickable worklist rows, state words, a quiet history list. */
-.session-table { table-layout: fixed; }
-.session-table th:nth-child(1), .session-table td:nth-child(1) { width: 2.25rem; }
-.session-table th:nth-child(2), .session-table td:nth-child(2) { width: 9rem; }
-.session-table th:nth-child(6), .session-table td:nth-child(6) { width: 10rem; }
-.session-table th:nth-child(7), .session-table td:nth-child(7) { width: 7rem; }
-.session-table th:nth-child(8), .session-table td:nth-child(8) { width: 2.5rem; }
-.session-table .session-check input { accent-color: var(--primary); }
-.session-row { cursor: pointer; }
-.session-row:hover { background: var(--surface-hover); }
-.session-row td small { display: block; font-size: 12px; color: var(--muted-foreground); }
+.session-check { width: 36px; }
+.session-check input { accent-color: var(--primary); }
+.session-fee { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .session-state { display: inline-block; font-size: 12px; font-weight: 500; }
 .session-state[data-state="attention"] { color: var(--warning); }
 .session-state[data-state="cancelled"] { color: var(--muted-foreground); }
@@ -3593,3 +3586,16 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 [data-highlight] { outline: 2px solid var(--primary); outline-offset: -2px; animation: admin-hl 2.6s ease-out; }
 @keyframes admin-hl { 0%, 60% { background: color-mix(in srgb, var(--primary) 12%, transparent); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { [data-highlight] { animation: none; } }
+
+/* People inside the lesson drawer stack, so names stay readable at any width. */
+.session-people { display: grid; }
+.session-person { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--border); }
+.session-person:first-child { border-top: 0; }
+.session-person small { font-size: 12px; color: var(--muted-foreground); }
+.session-person-side { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.session-person-side .session-fee { margin-left: auto; }
+.session-person > .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+@media (max-width: 640px) {
+  .session-rows .session-check { grid-area: who; align-self: start; padding-top: 4px; }
+  .session-rows .session-fee { grid-area: action; justify-self: end; }
+}

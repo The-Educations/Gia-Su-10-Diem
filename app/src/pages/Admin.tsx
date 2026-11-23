@@ -52,10 +52,10 @@ export default function Admin() {
           <TabsList variant="line" className="admin-tabs">
             {trigger("today", "Hôm nay", waiting)}
             {trigger("classes", "Lớp học")}
-            {trigger("sessions", "Buổi học", today ? today.disputes.length + today.sessions_waiting : undefined)}
-            {trigger("tutors", "Gia sư", today?.tutors)}
-            {trigger("students", "Học sinh", today?.students)}
-            {trigger("users", "Tài khoản")}
+            {trigger("sessions", "Các buổi học", today ? today.disputes.length + today.sessions_waiting : undefined)}
+            {trigger("tutors", "Các gia sư", today?.tutors)}
+            {trigger("students", "Các học sinh", today?.students)}
+            {trigger("users", "Các tài khoản")}
             {trigger("catalog", "Danh mục")}
             {trigger("posts", "Tin tức")}
             {trigger("community", "Cộng đồng", today?.community)}
