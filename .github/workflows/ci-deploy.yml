@@ -80,11 +80,18 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Pull requests only: branch protection requires them to be up to date with main,
+  # so the commit that lands on main is the one these journeys already passed.
   browser:
-    name: Browser journeys
+    name: Browser journeys (${{ matrix.shard }}/4)
     needs: build
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -100,13 +107,14 @@ jobs:
         run: |
           cp -R dist/site/app dist/app
           cp -R dist/site/legal dist/legal
-      - run: npx playwright install --with-deps chrome
+      - name: Use the runner's Chrome, install it only when missing
+        run: command -v google-chrome || npx playwright install --with-deps chrome
       - name: Test student, tutor and admin journeys
-        run: npx playwright test
+        run: npx playwright test --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: browser-failures-${{ github.sha }}
+          name: browser-failures-${{ github.sha }}-${{ matrix.shard }}
           path: test-results
           retention-days: 7
 
@@ -166,10 +174,11 @@ jobs:
           BUILD_RESULT: ${{ needs.build.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
           WORKER_RESULT: ${{ needs.worker.result }}
+          EVENT: ${{ github.event_name }}
         run: |
           test "$BUILD_RESULT" = success
-          test "$BROWSER_RESULT" = success
           test "$WORKER_RESULT" = success
+          if [ "$EVENT" = pull_request ]; then test "$BROWSER_RESULT" = success; else test "$BROWSER_RESULT" = skipped; fi
 
   deploy:
     name: Deploy Cloudflare
@@ -214,7 +223,15 @@ jobs:
           path: dist/site
       - name: Deploy the verified build
         if: steps.revision.outputs.current == 'true' && vars.CLOUDFLARE_NATIVE_BUILDS != 'true'
-        run: npx wrangler deploy --durable-objects-code-update-mode immediate
+        shell: bash
+        # A dropped connection to Cloudflare is retried; a real error fails all three tries.
+        run: |
+          for attempt in 1 2 3; do
+            npx wrangler deploy --durable-objects-code-update-mode immediate && exit 0
+            echo "::warning::wrangler deploy attempt $attempt failed"
+            sleep $((attempt * 15))
+          done
+          exit 1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Promote the verified commit and wait for Cloudflare
