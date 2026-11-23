@@ -142,3 +142,13 @@ test('repair refuses a different repository connection', () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /unexpected repository/);
 });
+
+// Production runs on Durable Object SQLite, which rejects a compound SELECT of more than
+// 5 terms ("too many terms in compound SELECT"); Node's SQLite allows 500, so API tests miss it.
+test('no server query chains more than 5 terms in one compound SELECT', () => {
+  const { readdirSync, readFileSync } = require('node:fs');
+  const dir = resolve(__dirname, '../server');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.js')))
+    for (const sql of readFileSync(resolve(dir, file), 'utf8').match(/`[^`]*`|"[^"\n]*"/g) || [])
+      assert.ok((sql.match(/\b(UNION|INTERSECT|EXCEPT)\b/gi) || []).length < 5, `${file}: ${sql.slice(0, 80)}…`);
+});
