@@ -22,6 +22,12 @@ export default function PendingMail() {
         } catch (e) { setError((e as Error).message); }
         finally { setBusy(null); }
       }}>{busy === item.id ? "Đang gửi…" : "Gửi lại email"}</Button>
+      <Button variant="ghost" disabled={busy !== null} onClick={async () => {
+        setBusy(item.id); setError("");
+        try { await api(`/admin/community/mail/${item.id}`, "DELETE"); result.reload(); }
+        catch (e) { setError((e as Error).message); }
+        finally { setBusy(null); }
+      }}>Bỏ qua</Button>
     </div>)}
     <div className="actions"><Button variant="ghost" disabled={page === 1 || busy !== null} onClick={() => setPage(p => p - 1)}>Trước</Button><span>Trang {page}</span><Button variant="ghost" disabled={result.data?.length !== 20 || busy !== null} onClick={() => setPage(p => p + 1)}>Tiếp</Button></div>
     {error && <ErrorState error={error} />}

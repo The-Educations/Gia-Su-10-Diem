@@ -37,5 +37,14 @@ export function registerCommunityMail(app, db, auth, audit, { sendAdminEmail, or
     if (!row.sent_at && row.attempted_at > Date.now() - 60000) return res.status(429).json({ error: "Vui lòng đợi một phút trước khi gửi lại." });
     res.json({ ok: true, ...await deliver(id, req.user.id) });
   });
+  app.delete("/api/admin/community/mail/:id", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const row = one(db, "SELECT id,sent_at,sending_until FROM community_mail WHERE id=?", id);
+    if (!row) return res.status(404).json({ error: "Không tìm thấy thông báo email." });
+    if (row.sent_at || row.sending_until > Date.now()) return res.status(409).json({ error: "Email đã gửi hoặc đang được gửi." });
+    run(db, "DELETE FROM community_mail WHERE id=?", id);
+    audit(req.user.id, "community.mail.dismiss", id);
+    res.json({ ok: true });
+  });
   return { enqueue, deliver };
 }
