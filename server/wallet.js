@@ -137,7 +137,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     return {
       available: w.available, held: w.held, credits_free: w.credits_free, credits_paid: w.credits_paid,
       entries: all(db, "SELECT id,kind,amount,held,credits,ref,note,created_at FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50", userId),
-      withdrawals: all(db, "SELECT id,amount,bank_name,substr(account_number,-4) AS account_last4,status,note,created_at FROM withdrawals WHERE user_id=? ORDER BY id DESC LIMIT 20", userId),
+      withdrawals: all(db, "SELECT id,amount,bank_name,account_number,account_name,substr(account_number,-4) AS account_last4,status,note,created_at,handled_at FROM withdrawals WHERE user_id=? ORDER BY id DESC LIMIT 20", userId),
       settings: (({ offer_credits, credit_packs, min_deposit, fee_percent }) => ({ offer_credits, credit_packs, min_deposit, fee_percent }))(settings(db)),
       payments: sepay.ready ? "live" : simulate ? "simulated" : "off",
     };
@@ -145,7 +145,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   const qr = (d) => sepay.webhook
     ? `https://vietqr.app/img?${new URLSearchParams({ acc: sepay.account, bank: sepay.bank, amount: String(d.amount), des: d.code, template: "compact" })}`
     : null;
-  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), account: sepay.webhook ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: checkout(d) });
+  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: sepay.gateway || simulate ? `${origin}/api/wallet/pay/${d.code}` : null, account: sepay.webhook ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: checkout(d) });
   // A signed form the browser posts to SePay's hosted checkout page.
   const checkout = (d) => {
     if (!sepay.gateway || d.status !== "pending") return null;
@@ -207,6 +207,17 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (!d) fail(404, "Không tìm thấy lệnh nạp.");
     await checkWithSepay(d);
     res.json(deposit(one(db, "SELECT * FROM deposits WHERE id=?", id)));
+  });
+  // The QR on the top-up screen opens this on a phone: it forwards to SePay's page for that one order.
+  app.get("/api/wallet/pay/:code", (req, res) => {
+    const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", String(req.params.code).slice(0, 20));
+    const form = d && checkout(d);
+    if (!form) return res.redirect(303, d ? `${origin}/app/wallet?deposit=${d.id}` : `${origin}/app/wallet`);
+    const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    res.type("html").send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SePay</title>
+<form id="f" method="post" action="${esc(form.action)}">${Object.entries(form.fields).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("")}
+<button style="font:600 17px system-ui;margin:40vh auto 0;display:block;padding:14px 24px;border:0;border-radius:999px;background:#852f36;color:#fff">Thanh toán ${d.amount.toLocaleString("vi-VN")}đ trên SePay</button></form>
+<script>document.getElementById("f").submit()</script>`);
   });
   // Local development only: stands in for the bank transfer and SePay's webhook.
   app.post("/api/wallet/deposits/:id/simulate", auth(), (req, res) => {
@@ -331,7 +342,11 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   app.get("/api/admin/finance", auth("admin"), (req, res) => {
     res.json({
       withdrawals: all(db, "SELECT w.*,u.name FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE w.status WHEN 'requested' THEN 0 ELSE 1 END, w.id DESC LIMIT 200"),
-      deposits: all(db, "SELECT d.id,d.code,d.amount,d.received,d.status,d.created_at,d.paid_at,u.name FROM deposits d JOIN users u ON u.id=d.user_id ORDER BY d.id DESC LIMIT 200"),
+      // Paid top-ups with who paid, for whom and how, to trace a transfer quickly.
+      deposits: all(db, `SELECT d.id,d.code,d.amount,d.received,d.status,d.created_at,d.paid_at,d.user_id,d.payer_id,
+        u.name, u.email, p.name AS payer_name, p.email AS payer_email,
+        (SELECT note FROM wallet_entries WHERE ref='deposit:' || d.id AND kind='deposit' LIMIT 1) AS method
+        FROM deposits d JOIN users u ON u.id=d.user_id JOIN users p ON p.id=d.payer_id WHERE d.status='paid' ORDER BY d.paid_at DESC LIMIT 200`),
       unmatched: all(db, `SELECT id,code,amount,reference,created_at FROM (
         SELECT CAST(id AS TEXT) id,code,amount,reference,created_at FROM sepay_events WHERE status='unmatched'
         UNION ALL SELECT id,invoice AS code,amount,CASE status WHEN 'rejected_key' THEN 'Sai khóa IPN' ELSE '' END AS reference,created_at FROM gateway_events WHERE status IN ('unmatched','rejected_key')) ORDER BY created_at DESC LIMIT 100`),

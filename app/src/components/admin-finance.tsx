@@ -10,7 +10,7 @@ import "@/money.css";
 
 type Finance = {
   withdrawals: { id: number; name: string; amount: number; bank_name: string; account_number: string; account_name: string; status: string; note: string; created_at: string }[];
-  deposits: { id: number; name: string; code: string; amount: number; received: number; status: string; created_at: string }[];
+  deposits: { id: number; name: string; email: string; payer_name: string; payer_email: string; user_id: number; payer_id: number; code: string; amount: number; received: number; status: string; created_at: string; paid_at: string | null; method: string | null }[];
   unmatched: { id: number; code: string | null; amount: number; reference: string; created_at: string }[];
   totals: { deposited: number; balances: number; credit_revenue: number; fee_revenue: number };
   settings: Record<string, number | { credits: number; price: number }[]>;
@@ -101,9 +101,17 @@ export function AdminFinance() {
         </section>
       )}
       <section>
-        <h2>{t("Lệnh nạp gần đây")}</h2>
+        <h2>{t("Nạp tiền thành công")}</h2>
         <table className="finance-table">
-          <tbody>{f.deposits.slice(0, 30).map((d) => <tr key={d.id}><td>{d.name}<small>{dateTime(d.created_at)}</small></td><td>{d.code}</td><td className="num">{money(d.received || d.amount)}</td><td>{t(d.status === "paid" ? "Đã nhận" : "Chờ chuyển khoản")}</td></tr>)}</tbody>
+          <thead><tr><th>{t("Người nạp → tài khoản nhận")}</th><th>{t("Mã lệnh")}</th><th>{t("Cách thanh toán")}</th><th className="num">{t("Số tiền")}</th></tr></thead>
+          <tbody>{f.deposits.map((d) => (
+            <tr key={d.id}>
+              <td>{d.payer_name}{d.payer_id !== d.user_id && <> → {d.name}</>}<small>{d.payer_email} · {dateTime(d.paid_at || d.created_at)}</small></td>
+              <td>{d.code}</td>
+              <td>{t(/BANK_TRANSFER/.test(d.method || "") ? "Chuyển khoản" : /CARD/.test(d.method || "") ? "Thẻ" : /NAPAS/.test(d.method || "") ? "NAPAS" : /simulated/.test(d.method || "") ? "Giả lập" : "SePay")}</td>
+              <td className="num">{money(d.received || d.amount)}</td>
+            </tr>
+          ))}</tbody>
         </table>
       </section>
       <section>

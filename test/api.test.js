@@ -2340,6 +2340,7 @@ test("wallet deposits, SePay webhook verdicts, offers holding money and tutor cr
   const wd = await tutor.request("/wallet/withdrawals", "POST", { amount: 100000, bank_name: "MB Bank", account_number: "0987654321", account_name: "Nguyen Minh Chau" });
   assert.equal(wd.status, 201);
   assert.deepEqual([wd.data.available, wd.data.held], [0, 100000]);
+  assert.deepEqual((({ bank_name, account_number, account_name, status }) => ({ bank_name, account_number, account_name, status }))(wd.data.withdrawals[0]), { bank_name: "MB Bank", account_number: "0987654321", account_name: "NGUYEN MINH CHAU", status: "requested" });
   const support = (await tutor.request("/support")).data[0];
   assert.match((await tutor.request(`/support/${support.id}/messages`)).data.at(-1).body, /Yêu cầu rút tiền #\d+: 100\.000đ về MB Bank \*\*\*\*4321/);
   assert.equal((await tutor.request(`/admin/withdrawals/${wd.data.id}`, "PATCH", { status: "paid" })).status, 403);
@@ -2525,6 +2526,13 @@ test("SePay payment gateway: signed checkout form and IPN credits a top-up once"
   assert.equal(f.signature, createHmac("sha256", "spsk_test_x").update(signed).digest("base64"));
   assert.equal(f.order_invoice_number, dep.code);
   assert.ok(f.success_url.startsWith("https://giasu.example/app/wallet?deposit="));
+  // The QR opens a page that forwards the same signed form to SePay, for this order only.
+  assert.equal(dep.pay_url, `https://giasu.example/api/wallet/pay/${dep.code}`);
+  const page = await (await fetch(base + `/wallet/pay/${dep.code}`)).text();
+  assert.ok(page.includes('action="https://pay-sandbox.sepay.vn/v1/checkout/init"') && page.includes(`value="${dep.code}"`) && page.includes(`value="${f.signature}"`));
+  const second = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  assert.notEqual(second.code, dep.code);
+  assert.equal((await fetch(base + "/wallet/pay/NOPE", { redirect: "manual" })).status, 303);
   const ipn = (body, key = sepay.ipnSecret) => fetch(base + "/sepay/ipn", { method: "POST", headers: { "Content-Type": "application/json", "X-Secret-Key": key }, body: JSON.stringify(body) });
   const paid = { timestamp: 1, notification_type: "ORDER_PAID", order: { id: "o-1", order_status: "CAPTURED", order_amount: "300000.00", order_invoice_number: dep.code }, transaction: { id: "tx-1", transaction_status: "APPROVED", transaction_type: "PAYMENT", payment_method: "BANK_TRANSFER" } };
   assert.equal((await ipn(paid, "wrong-secret-1234567")).status, 401);
@@ -2534,6 +2542,8 @@ test("SePay payment gateway: signed checkout form and IPN credits a top-up once"
   assert.deepEqual(await (await ipn({ ...paid, transaction: { ...paid.transaction, id: "tx-2" } })).json(), { success: false });
   assert.equal((await s.request("/wallet")).data.available, 300000);
   assert.equal((await s.request(`/wallet/deposits/${dep.id}`)).data.checkout, null);
+  assert.equal((await fetch(base + `/wallet/pay/${dep.code}`, { redirect: "manual" })).headers.get("location"), `https://giasu.example/app/wallet?deposit=${dep.id}`);
+  assert.equal((await s.request(`/wallet/deposits/${second.id}`)).data.status, "pending");
 });
 test("personal calendar events belong to their owner and validate times", async (t) => {
   const { client } = await fixture(t), a = client(), b = client();

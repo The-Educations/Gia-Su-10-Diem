@@ -16,12 +16,39 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
   const before = (await (await student.request.get("/api/wallet")).json()).available;
   await student.getByRole("button", { name: "Nạp tiền", exact: true }).click();
   await student.getByRole("button", { name: "1.000.000 ₫" }).click();
-  await student.getByRole("button", { name: "Tạo mã chuyển khoản" }).click();
-  await expect(student.locator(".deposit-code")).toHaveText(/^GSD[A-Z0-9]{8}/);
+  await student.getByRole("button", { name: "Tạo lệnh nạp 1.000.000 ₫" }).click();
+  await expect(student.locator(".deposit-code")).toHaveText(/^GSD[A-Z0-9]{8}$/);
+  await expect(student.getByRole("img", { name: /Mã QR của lệnh/ })).toBeVisible();
   await student.getByRole("button", { name: /Giả lập tiền đã về/ }).click();
   await expect(student.getByRole("status").filter({ hasText: "Đã nhận" })).toBeVisible();
   await student.getByRole("button", { name: "Xong" }).click();
   expect((await (await student.request.get("/api/wallet")).json()).available).toBe(before + 1000000);
+
+  // Every opening is a new order with its own code; an unpaid one is left alone.
+  await student.getByRole("button", { name: "Nạp tiền", exact: true }).click();
+  await student.getByLabel("Số tiền nạp").fill("200000");
+  await student.getByRole("button", { name: "Tạo lệnh nạp 200.000 ₫" }).click();
+  const first = await student.locator(".deposit-code").textContent();
+  await student.keyboard.press("Escape");
+  await student.getByRole("button", { name: "Nạp tiền", exact: true }).click();
+  await student.getByRole("button", { name: /Tạo lệnh nạp/ }).click();
+  await expect(student.locator(".deposit-code")).not.toHaveText(first!);
+  await student.keyboard.press("Escape");
+
+  // Withdrawing: amount, receiving account, a preview, then the request's status.
+  await student.getByRole("button", { name: "Rút tiền", exact: true }).click();
+  await student.getByLabel("Số tiền rút").fill("100000");
+  await student.getByLabel("Ngân hàng").selectOption("MB Bank");
+  await student.getByLabel("Số tài khoản").fill("0987654321");
+  await student.getByLabel("Tên chủ tài khoản").fill("Nguyen Minh Anh");
+  await student.getByRole("button", { name: "Xem trước" }).click();
+  await expect(student.locator(".withdraw-preview")).toContainText("NGUYEN MINH ANH");
+  await student.getByRole("button", { name: "Gửi yêu cầu rút 100.000 ₫" }).click();
+  await expect(student.locator(".withdrawals")).toContainText("Đang chờ chuyển");
+  await student.getByRole("button", { name: "Rút tiền", exact: true }).click();
+  await expect(student.getByRole("button", { name: "MB Bank ····4321" })).toHaveAttribute("data-checked", "true");
+  await student.keyboard.press("Escape");
+  expect((await (await student.request.get("/api/wallet")).json()).available).toBe(before + 900000);
 
   // The offer composer shows the total and holds it on sending.
   await student.goto(`/app/tutors/${linh.user_id}`);
