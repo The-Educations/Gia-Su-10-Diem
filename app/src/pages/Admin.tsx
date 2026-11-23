@@ -72,7 +72,7 @@ export default function Admin() {
           <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="finance"><AdminFinance /></TabsContent>
-          <TabsContent value="audit">{withData((d) => <AdminAudit audit={d.audit} />)}</TabsContent>
+          <TabsContent value="audit"><AdminAudit /></TabsContent>
         </Tabs>
       </div>
     </Page>

@@ -212,13 +212,14 @@ export function createApi(
     });
     return publicUser(user);
   };
-  const audit = (actor, action, target) =>
+  const audit = (actor, action, target, detail) =>
     run(
       db,
-      "INSERT INTO audit(actor_id,action,target) VALUES (?,?,?)",
+      "INSERT INTO audit(actor_id,action,target,detail) VALUES (?,?,?,?)",
       actor,
       action,
       String(target),
+      detail ? JSON.stringify(detail) : null,
     );
   const ensureSubjects = (ids) => {
     if (ids.some((id) => !one(db, "SELECT id FROM subjects WHERE id=? AND archived=0", id)))
@@ -863,7 +864,7 @@ export function createApi(
     all(
       db,
       `SELECT r.*,s.name AS subject_name FROM resources r JOIN subjects s ON s.id=r.subject_id WHERE r.archived=0 ${admin ? "" : "AND published=1"} ORDER BY r.id`,
-    );
+    ).map((r) => ({ ...r, published: !!r.published }));
   app.get("/api/resources", (req, res) => res.json(resourceRows(false)));
   app.get("/api/admin", auth("admin"), (req, res) =>
     res.json({
@@ -897,6 +898,41 @@ export function createApi(
       ),
     }),
   );
+  // Full audit trail: paged by an id cursor, filterable by action group, actor,
+  // affected user, target or free text (searches the JSON detail too).
+  app.get("/api/admin/audit", auth("admin"), (req, res) => {
+    const q = z.object({
+      before: z.coerce.number().int().positive().optional(),
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      action: z.string().trim().max(80).optional(),
+      actor: z.string().trim().max(120).optional(),
+      target: z.string().trim().max(120).optional(),
+      target_user: z.coerce.number().int().positive().optional(),
+      from: z.string().trim().max(20).optional(),
+      to: z.string().trim().max(20).optional(),
+      q: z.string().trim().max(120).optional(),
+    }).parse(req.query);
+    const where = ["1=1"], args = [];
+    if (q.before) { where.push("a.id < ?"); args.push(q.before); }
+    if (q.action) { where.push("a.action LIKE ?"); args.push(q.action.includes("%") ? q.action : q.action); }
+    if (q.actor) { where.push("u.name LIKE ?"); args.push(`%${q.actor}%`); }
+    if (q.target) { where.push("a.target = ?"); args.push(q.target); }
+    if (q.target_user) {
+      where.push("(a.target = ? OR a.detail LIKE ? OR a.detail LIKE ? OR a.detail LIKE ?)");
+      args.push(String(q.target_user), `%"user_id":${q.target_user}%`, `%"tutor_id":${q.target_user}%`, `%"student_id":${q.target_user}%`);
+    }
+    if (q.from) { where.push("a.created_at >= ?"); args.push(q.from); }
+    if (q.to) { where.push("a.created_at <= ?"); args.push(q.to); }
+    if (q.q) { where.push("(a.action LIKE ? OR a.target LIKE ? OR a.detail LIKE ?)"); args.push(`%${q.q}%`, `%${q.q}%`, `%${q.q}%`); }
+    const rows = all(
+      db,
+      `SELECT a.*,u.name,
+      (SELECT c.tutor_id FROM tutor_credentials c WHERE a.action LIKE 'credential.%' AND c.id=CAST(a.target AS INTEGER)) AS credential_tutor
+      FROM audit a JOIN users u ON u.id=a.actor_id WHERE ${where.join(" AND ")} ORDER BY a.id DESC LIMIT ?`,
+      ...args, q.limit + 1,
+    );
+    res.json({ rows: rows.slice(0, q.limit), next: rows.length > q.limit ? rows[q.limit - 1].id : null });
+  });
   registerTutorReview(app, db, auth, audit, { sendEmail: sendAdminEmail || sendEmail, origin });
   app.patch("/api/admin/users/:id/role", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
@@ -909,7 +945,7 @@ export function createApi(
       if (user.role === "admin") return;
       run(db, "UPDATE users SET role='admin',onboarding_step=3 WHERE id=?", id);
       run(db, "DELETE FROM sessions WHERE user_id=?", id);
-      audit(req.user.id, "user.promoted_to_admin", id);
+      audit(req.user.id, "user.promoted_to_admin", id, { user_id: id, email: user.email });
     });
     res.json({ ok: true });
   });
@@ -924,7 +960,7 @@ export function createApi(
     run(db, "UPDATE users SET status=? WHERE id=?", d.status, u.id);
     if (d.status === "suspended")
       run(db, "DELETE FROM sessions WHERE user_id=?", u.id);
-    audit(req.user.id, `user.${d.status}`, u.id);
+    audit(req.user.id, `user.${d.status}`, u.id, { user_id: u.id, email: u.email, status: d.status });
     res.json({ ok: true });
   });
   registerCatalogRemoval(app, db, auth, audit);
@@ -939,7 +975,7 @@ export function createApi(
       d.stage,
       d.description,
     );
-    audit(req.user.id, "subject.save", d.id);
+    audit(req.user.id, "subject.save", d.id, { title: d.name });
     res.json({ ok: true });
   });
   app.post("/api/admin/resources", auth("admin"), (req, res) => {
@@ -960,7 +996,7 @@ export function createApi(
         Number(d.published),
       ).lastInsertRowid,
     );
-    audit(req.user.id, "resource.create", id);
+    audit(req.user.id, "resource.create", id, { title: d.title, published: d.published });
     res.status(201).json({ id });
   });
   app.put("/api/admin/resources/:id", auth("admin"), (req, res) => {
@@ -982,7 +1018,7 @@ export function createApi(
       Number(d.published),
       req.params.id,
     );
-    audit(req.user.id, "resource.update", req.params.id);
+    audit(req.user.id, "resource.update", req.params.id, { title: d.title, published: d.published });
     res.json({ ok: true });
   });
   app.use("/api", (req, res) =>

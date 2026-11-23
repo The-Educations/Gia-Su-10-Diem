@@ -418,7 +418,7 @@ export function registerClasses(app, db, auth, audit) {
           if (!r.student_confirmed_at) { notify(db, r.student_id, "session_remind", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
           if (!r.tutor_confirmed_at) { notify(db, r.tutor_id, "session_remind", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
         }
-        if (sent) { audit(req.user.id, "session.remind", id); reminded++; }
+        if (sent) { audit(req.user.id, "session.remind", id, { session: rows[0].title }); reminded++; }
       }
     });
     res.json({ reminded });
@@ -458,10 +458,11 @@ export function registerClasses(app, db, auth, audit) {
     const { note } = z.object({ note: z.string().trim().min(3).max(300) }).parse(req.body);
     transaction(db, () => {
       if (!run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=? AND status='scheduled'", id).changes) fail(409, "Buổi học không còn hoạt động.");
+      const refunded = all(db, "SELECT m.student_id, m.rate AS amount FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome IN ('pending','disputed')", id);
       run(db, "UPDATE session_members SET outcome='refunded',note=? WHERE session_id=? AND outcome IN ('pending','disputed')", note, id);
       for (const r of all(db, "SELECT DISTINCT m.student_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=?", id))
         for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "session_cancelled", { actor: "Quản trị viên", subject: r.title, link: "/schedule" });
-      audit(req.user.id, "session.admin_cancel", id);
+      audit(req.user.id, "session.admin_cancel", id, { note, refunded });
     });
     upkeep(db);
     res.json({ ok: true });
@@ -469,8 +470,10 @@ export function registerClasses(app, db, auth, audit) {
   app.post("/api/admin/members/:id/end", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     transaction(db, () => {
+      const member = one(db, "SELECT student_id,rate FROM class_members WHERE id=?", id);
+      const future = one(db, "SELECT COUNT(*) AS n FROM session_members WHERE member_id=? AND outcome='pending' AND session_id IN (SELECT id FROM class_sessions WHERE starts_at>?)", id, new Date().toISOString());
       run(db, "UPDATE session_members SET outcome='refunded' WHERE member_id=? AND outcome='pending' AND session_id IN (SELECT id FROM class_sessions WHERE starts_at>?)", id, new Date().toISOString());
-      audit(req.user.id, "member.admin_end", id);
+      audit(req.user.id, "member.admin_end", id, { user_id: member?.student_id, refunded: (future?.n || 0) * (member?.rate || 0) });
     });
     upkeep(db);
     res.json({ ok: true });
@@ -482,7 +485,7 @@ export function registerClasses(app, db, auth, audit) {
     if (!r) fail(404, "Không tìm thấy báo cáo.");
     run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
     for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: "/classes" });
-    audit(req.user.id, `session.resolve.${d.outcome}`, id);
+    audit(req.user.id, `session.resolve.${d.outcome}`, id, { member_id: d.member_id, outcome: d.outcome, user_id: r.student_id });
     upkeep(db);
     res.json({ ok: true });
   });

@@ -14,16 +14,16 @@ function compiled() {
   if (patterns) return patterns;
   patterns = Object.entries(en)
     .filter(([k]) => /\{\w+\}/.test(k))
+    // Keys with under 3 literal chars ("T{n}") cannot anchor a pattern: they
+    // would swallow any word sharing their first letter ("Thứ" → "Mhứ"). Skip.
+    .filter(([k]) => k.replace(/\{\w+\}/g, "").length >= 3)
     .map(([k, out]) => {
-      // A nearly-bare key like "T{n}" must not swallow whole words ("Thứ" →
-      // "Mhứ"): with under 2 literal chars, captures stay numeric only.
-      const narrow = k.replace(/\{\w+\}/g, "").length < 2;
       const names: string[] = [];
       const source = k.split(/(\{\w+\})/).map((part) => {
         const m = part.match(/^\{(\w+)\}$/);
         if (!m) return escape(part);
         names.push(m[1]);
-        return narrow ? "(\\d+)" : "(.+?)";
+        return "(.+?)";
       }).join("");
       return { re: new RegExp(`^${source}$`, "s"), names, out };
     })

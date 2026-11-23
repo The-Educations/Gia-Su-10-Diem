@@ -65,7 +65,7 @@ export const resourceSchema = z.object({
   description: text(2000),
   source_name: text(200),
   source_url: z.url().refine((s) => s.startsWith("https://")),
-  published: z.boolean(),
+  published: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform((v) => !!v),
 });
 export const subjectSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]{1,50}$/),

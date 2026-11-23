@@ -62,14 +62,14 @@ test("admin session worklist: queues, detail drawer, actions and audit deep link
   // Audit rows deep-link to the exact record.
   await admin.goto("/app/admin?tab=audit");
   const auditRows = admin.locator(".audit-table tbody tr");
-  await auditRows.filter({ hasText: "Hủy buổi học" }).first().getByRole("link", { name: "Xem buổi học" }).click();
+  await auditRows.filter({ hasText: "Hủy buổi học" }).first().getByRole("link").first().click();
   await expect(drawer).toContainText("Đã hủy");
   await drawer.getByRole("button", { name: "Đóng" }).click();
   await admin.getByRole("tab", { name: "Nhật ký" }).click();
   await auditRows.filter({ hasText: "Điều chỉnh số dư" }).first().getByRole("button", { name: "Xem tài khoản" }).click();
   await expect(drawer).toContainText(me.name);
   await drawer.getByRole("button", { name: "Đóng" }).click();
-  await auditRows.filter({ hasText: "Nhắc xác nhận buổi học" }).first().getByRole("link", { name: "Xem buổi học" }).click();
+  await auditRows.filter({ hasText: "Nhắc xác nhận buổi học" }).first().getByRole("link").first().click();
   await expect(drawer).toContainText("Học sinh và học phí");
 
   for (const width of [390, 1280]) {

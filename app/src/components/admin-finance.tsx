@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, dateTime, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { ErrorState, Loading } from "./common";
-import { Waiting } from "./admin-kit";
+import { Waiting , AdminAuditTrail} from "./admin-kit";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "./ui/field";
@@ -17,7 +17,8 @@ type Finance = {
   months: { month: string; deposits: number; payouts: number; payouts_confirmed: number; fees: number; credits: number }[];
   payout_check: boolean;
   deposits: { id: number; name: string; email: string; payer_name: string; payer_email: string; user_id: number; payer_id: number; code: string; amount: number; received: number; status: string; created_at: string; paid_at: string | null; method: string | null }[];
-  unmatched: { id: number; code: string | null; amount: number; reference: string; created_at: string }[];
+  unmatched: { id: string; code: string | null; amount: number; reference: string; created_at: string; source: "sepay" | "gateway" }[];
+  dismissed: { id: string; code: string | null; amount: number; reference: string; created_at: string; source: "sepay" | "gateway" }[];
   totals: { deposited: number; balances: number; credit_revenue: number; fee_revenue: number };
   settings: Record<string, number | { credits: number; price: number }[]>;
   payments: "live" | "simulated" | "off";
@@ -66,6 +67,18 @@ export function AdminFinance() {
     try { await api(`/admin/withdrawals/${id}`, "PATCH", { status: "rejected", note }); refresh(); }
     catch (e) { toast.error((e as Error).message); }
     finally { setBusy(0); }
+  }
+  async function assignUnmatched(u: Finance["unmatched"][number]) {
+    const code = (prompt(t("Mã lệnh nạp (ví dụ GSD123456)")) || "").trim();
+    if (!code) return;
+    try { await api("/admin/deposits/unmatched/assign", "POST", { source: u.source, id: u.id, code }); toast.success(t("Đã ghi nhận vào lệnh {code}", { code })); refresh(); }
+    catch (e) { toast.error((e as Error).message); }
+  }
+  async function dismissUnmatched(u: Finance["unmatched"][number]) {
+    const reason = (prompt(t("Lý do bỏ qua khoản tiền này")) || "").trim();
+    if (reason.length < 3) return;
+    try { await api("/admin/deposits/unmatched/dismiss", "POST", { source: u.source, id: u.id, reason }); toast.success(t("Đã bỏ qua khoản tiền")); refresh(); }
+    catch (e) { toast.error((e as Error).message); }
   }
   return (
     <div className="admin-finance">
@@ -119,9 +132,27 @@ export function AdminFinance() {
             <section>
               <h2>{t("Tiền về chưa khớp mã")}</h2>
               <table className="finance-table">
-                <tbody>{f.unmatched.map((u) => <tr key={u.id}><td>#{u.id}<small>{dateTime(u.created_at)}</small></td><td>{u.code || t("Không có mã")}<small>{u.reference}</small></td><td className="num">{money(u.amount)}</td></tr>)}</tbody>
+                <tbody>{f.unmatched.map((u) => (
+                  <tr key={`${u.source}-${u.id}`}>
+                    <td>#{u.id}<small>{dateTime(u.created_at)}</small></td>
+                    <td>{u.code || t("Không có mã")}<small>{u.reference}</small></td>
+                    <td className="num">{money(u.amount)}</td>
+                    <td className="num">
+                      <Button size="xs" variant="outline" onClick={() => assignUnmatched(u)}>{t("Gán cho lệnh nạp…")}</Button>{" "}
+                      <Button size="xs" variant="ghost" onClick={() => dismissUnmatched(u)}>{t("Bỏ qua")}</Button>
+                    </td>
+                  </tr>
+                ))}</tbody>
               </table>
             </section>
+          )}
+          {f.dismissed.length > 0 && (
+            <details className="finance-dismissed">
+              <summary>{t("Đã bỏ qua ({n})", { n: f.dismissed.length })}</summary>
+              <table className="finance-table">
+                <tbody>{f.dismissed.map((u) => <tr key={`${u.source}-${u.id}`}><td>#{u.id}<small>{dateTime(u.created_at)}</small></td><td>{u.code || t("Không có mã")}<small>{u.reference}</small></td><td className="num">{money(u.amount)}</td></tr>)}</tbody>
+              </table>
+            </details>
           )}
           <section>
             <header className="finance-head">
@@ -252,6 +283,7 @@ function PayoutCard({ w, busy, onPaid, onReject, hl }: { w: Payout; busy: boolea
           <Button size="sm" disabled={busy} onClick={onPaid}><Receipt data-icon="inline-start" />{t("Đã chuyển")}</Button>
           <Button size="sm" variant="ghost" disabled={busy} onClick={onReject}>{t("Từ chối")}</Button>
         </div>
+        <AdminAuditTrail target={w.id} />
       </div>
     </article>
   );
@@ -311,10 +343,10 @@ function PayoutDialog({ w, onClose, onDone }: { w: Payout | null; onClose: () =>
 
 // Six months of money in, money out and revenue, drawn as bars with the figures beside them.
 function MonthReport({ months, balances }: { months: Finance["months"]; balances: number }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const now = months.at(-1)!, revenue = (m: Finance["months"][number]) => m.fees + m.credits;
   const max = Math.max(1, ...months.flatMap((m) => [m.deposits, m.payouts, revenue(m)]));
-  const label = (m: string) => t("T{n}", { n: Number(m.slice(5)) });
+  const label = (m: string) => new Intl.DateTimeFormat(lang === "en" ? "en-US" : "vi-VN", { month: "short" }).format(new Date(2024, Number(m.slice(5)) - 1, 1));
   return (
     <section className="month-report">
       <h2>{t("Tháng {month}", { month: `${Number(now.month.slice(5))}/${now.month.slice(0, 4)}` })}</h2>

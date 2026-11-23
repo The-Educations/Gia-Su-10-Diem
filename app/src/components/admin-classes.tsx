@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, money, dateTime, fold, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Blank, ErrorState, Loading } from "./common";
-import { AdminSearch, AdminToolbar, FilterChips } from "./admin-kit";
+import { AdminSearch, AdminToolbar, FilterChips , AdminAuditTrail} from "./admin-kit";
 import { Input } from "./ui/input";
 import { Field, FieldLabel } from "./ui/field";
 import { dayOf, timeOf } from "./session-actions";
@@ -100,6 +100,7 @@ export function AdminUserOverview({ userId, onClose }: { userId: number | null; 
             <section><h2>{t("Lịch sử")}</h2>
               <table className="finance-table"><tbody>{o.entries.map((e) => <tr key={e.id}><td>{t(KIND[e.kind] || e.kind)}<small>{dateTime(e.created_at)}</small></td><td>{e.note}</td><td className="num">{e.amount ? money(e.amount) : e.credits ? `${e.credits} credit` : ""}</td></tr>)}</tbody></table>
             </section>
+            <AdminAuditTrail targetUser={userId} />
           </div>
         )}
       </DialogContent>

@@ -26,7 +26,7 @@ export function registerAccountDeletion(app, db, auth, audit) {
       for (const table of ["bookings", "weekly_requests", "offers"]) run(db, `UPDATE ${table} SET status='cancelled' WHERE (student_id=? OR tutor_id=?) AND status IN ('pending','accepted')`, id, id);
       run(db, `UPDATE tutors SET headline='',bio='',province_code='',ward_code='',location='',education='',education_history='[]',profile_sections='[]',intro_video='',sample_video='',subjects='[]',levels='[]',goals='[]',teaching_style='',lesson_plan='',moderation_note='',profile_theme='paper',status='rejected',published=NULL WHERE user_id=?`, id);
       run(db, `UPDATE users SET name='Tài khoản đã xóa',email=?,password='',status='deleted',school='',province_code='',ward_code='',goal='',display_name='',bio='',timezone='Asia/Ho_Chi_Minh',community_lock_reason='',email_verified_at=NULL WHERE id=?`, `deleted-${id}@account.invalid`, id);
-      audit(req.user.id, "user.deleted", id);
+      audit(req.user.id, "user.deleted", id, { user_id: id });
     });
     res.json({ ok: true });
   });
