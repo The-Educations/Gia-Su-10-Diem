@@ -1804,7 +1804,6 @@ export const enMore: Record<string, string> = {
   "7 ngày": "7 days",
   "Tháng này": "This month",
   "Gia sư / Học sinh": "Tutor / Student",
-  "Trạng thái": "Status",
   "Chỉ nhắc được buổi quá giờ chưa xác nhận": "Only overdue unconfirmed lessons can be reminded",
   "Từ": "From",
   "Đến": "To",
