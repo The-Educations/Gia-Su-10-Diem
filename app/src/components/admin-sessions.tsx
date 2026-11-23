@@ -136,19 +136,27 @@ export function AdminSessions({ standalone = false }: { standalone?: boolean }) 
     <div className="admin-pane">
       {standalone && summary.data && (
         <p className="sessions-track">
-          {t("Hôm nay {n} buổi", { n: summary.data.today })} · {t("đang diễn ra {n}", { n: summary.data.running })} · {t("cần xử lý {n}", { n: summary.data.waiting })}
-          {rate7 !== null && <> · {t("{r}% buổi đã xác nhận trong 7 ngày", { r: rate7 })}</>}
+          {t("Hôm nay")} <strong>{summary.data.today}</strong> · {t("đang diễn ra")} <strong>{summary.data.running}</strong> ·{" "}
+          <button type="button" className="text-link" onClick={() => choose("scope", "attention")}>{t("cần xử lý")} <strong>{summary.data.waiting}</strong></button>
+          {rate7 !== null && <> · {t("xác nhận 7 ngày")} <strong>{rate7}% ({summary.data.confirmed7}/{summary.data.ended7})</strong></>}
         </p>
       )}
       <AdminToolbar>
         <AdminSearch value={q} onChange={setQ} placeholder="Tìm buổi, lớp, gia sư hoặc học sinh…" />
         <FilterChips label="Giai đoạn buổi học" value={scope} onChange={(v) => choose("scope", v)} options={SCOPES.map(([value, label]) => ({ value, label, count: found.filter((s) => (value === "today" ? vnDay(s.starts_at) === vnDay(new Date().toISOString()) : scopeOf(s) === value) || (!value && true)).length }))} />
         {standalone && (
-          <>
-            <Input type="date" value={from} aria-label={t("Từ ngày")} onChange={(e) => choose("from", e.target.value)} />
-            <Input type="date" value={to} aria-label={t("Đến ngày")} onChange={(e) => choose("to", e.target.value)} />
+          <span className="session-range">
+            <label>{t("Từ")}<Input type="date" value={from} aria-label={t("Từ ngày")} onChange={(e) => choose("from", e.target.value)} /></label>
+            <label>{t("Đến")}<Input type="date" value={to} aria-label={t("Đến ngày")} onChange={(e) => choose("to", e.target.value)} /></label>
+            {!!(from || to) && <button type="button" className="text-link" onClick={() => mutate((n) => { n.delete("from"); n.delete("to"); })}>{t("Xóa lọc ngày")}</button>}
+            {[[t("Hôm nay"), 0], [t("7 ngày"), -6], [t("Tháng này"), "month"]].map(([label, a]) => (
+              <button key={String(label)} type="button" className="text-link" onClick={() => mutate((n) => {
+                const now = new Date(), start = a === "month" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(Date.now() + (a as number) * 86400000);
+                n.set("from", start.toISOString().slice(0, 10)); n.set("to", new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+              })}>{label}</button>
+            ))}
             <Button size="sm" variant="outline" onClick={exportCsv} disabled={!shown.length}><Download data-icon="inline-start" />{t("Xuất CSV ({n})", { n: shown.length })}</Button>
-          </>
+          </span>
         )}
         {picked.size > 0 && <Button size="sm" variant="outline" disabled={busy} onClick={remind}>{t("Nhắc xác nhận ({n})", { n: picked.size })}</Button>}
       </AdminToolbar>
@@ -160,9 +168,12 @@ export function AdminSessions({ standalone = false }: { standalone?: boolean }) 
       )}
       {shown.length ? (
         <div className="admin-list admin-rows session-rows">
+          <div className="session-head" aria-hidden="true">
+            <span /><span>{t("Buổi học")}</span><span>{t("Gia sư / Học sinh")}</span><span>{t("Trạng thái")}</span><span>{t("Học phí")}</span><span />
+          </div>
           {shown.map((s) => (
             <article key={`${s.source}${s.id}`} data-attention={isAttention(s) || undefined} className="session-row">
-              <span className="session-check">
+              <span className="session-check" title={remindable(s) ? undefined : t("Chỉ nhắc được buổi quá giờ chưa xác nhận")}>
                 {remindable(s) ? <input type="checkbox" aria-label={t("Chọn buổi {day} {time}", { day: dayOf(s.starts_at), time: timeOf(s.starts_at) })} checked={picked.has(`${s.source}${s.id}`)} onChange={(e) => pick(s, e.target.checked)} /> : null}
               </span>
               <button type="button" className="admin-row-title" onClick={() => open(s)}>
@@ -170,12 +181,12 @@ export function AdminSessions({ standalone = false }: { standalone?: boolean }) 
                 <small>{dayOf(s.starts_at, lang)} {timeOf(s.starts_at)} · {s.minutes} {t("phút")}{s.moved_from ? ` · ${t("Đã dời lịch")}` : ""}</small>
               </button>
               <span className="admin-row-meta">
-                {s.tutor_name}
-                <small>{s.members.map((m) => m.student_name).join(", ") || s.student_name || "—"}</small>
+                <small className="session-who">{t("GS")} {s.tutor_name}</small>
+                <small>{t("HS")} {s.members.map((m) => m.student_name).join(", ") || s.student_name || "—"}</small>
               </span>
               <span className="admin-row-state">
                 <span className="session-state" data-state={["cancelled", "declined"].includes(s.status) || (s.source === "lesson" && s.status === "cancelled") ? "cancelled" : isAttention(s) ? "attention" : "ok"}>{t(stateOf(s))}</span>
-                <span className="admin-flag">{t(s.source === "booking" ? "Đặt lịch lẻ" : "Lớp học")}</span>
+                <span className="session-source" data-source={s.source}>{t(s.source === "booking" ? "Đặt lịch lẻ" : "Lớp học")}</span>
                 {s.source === "lesson" && s.class_status !== "active" && <span className="admin-flag">{t("Lớp đã kết thúc")}</span>}
                 {s.members.some((m) => m.note) && <small className="danger-text">{s.members.find((m) => m.note)?.note}</small>}
                 {s.source === "booking" && s.note && <small>{s.note}</small>}

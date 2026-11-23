@@ -1797,4 +1797,13 @@ export const enMore: Record<string, string> = {
   "Quản trị viên hủy buổi đặt lịch": "Admin cancelled the booking",
   "{n} việc cần xử lý": "{n} items to handle",
   "Đặt lịch": "Booking",
+  "đang diễn ra": "running",
+  "cần xử lý": "to handle",
+  "xác nhận 7 ngày": "confirmed in 7 days",
+  "Xóa lọc ngày": "Clear dates",
+  "7 ngày": "7 days",
+  "Tháng này": "This month",
+  "Gia sư / Học sinh": "Tutor / Student",
+  "Trạng thái": "Status",
+  "Chỉ nhắc được buổi quá giờ chưa xác nhận": "Only overdue unconfirmed lessons can be reminded",
 };
