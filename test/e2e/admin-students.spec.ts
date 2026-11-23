@@ -8,11 +8,14 @@ test("admins review school records in their own tab: zoom, ask for more, verify,
   const email = "profile-student@demo.giasu.test";
   expect((await student.request.post("/api/auth/login", { data: { email, password: "BrowserStudy2026!" } })).ok()).toBe(true);
   const name = (await (await student.request.get("/api/auth/me")).json()).user?.name as string;
+  // E2E students start verified: withdraw that first so this one sends a fresh record.
+  expect((await admin.request.post("/api/auth/login", { data: { email: "admin@demo.giasu.test", password: "BrowserStudy2026!" } })).ok()).toBe(true);
+  const me = (await (await student.request.get("/api/auth/me")).json()).user;
+  expect((await admin.request.patch(`/api/admin/verifications/${me.id}`, { data: { status: "rejected", note: "Gửi lại học bạ" } })).ok()).toBe(true);
   const png = await sharp({ create: { width: 600, height: 420, channels: 3, background: "#eef2ea" } }).png().toBuffer();
   expect((await student.request.post("/api/account/verification/files", { headers: { "Content-Type": "image/png" }, data: png })).ok()).toBe(true);
   expect((await student.request.put("/api/account/verification", { data: { school: "THCS Nguyễn Du", grade: "Lớp 9", student_code: `HB${Date.now()}` } })).ok()).toBe(true);
 
-  expect((await admin.request.post("/api/auth/login", { data: { email: "admin@demo.giasu.test", password: "BrowserStudy2026!" } })).ok()).toBe(true);
   await admin.goto("/app/admin");
   await admin.getByRole("tab", { name: /^Học sinh \(\d+\)$/ }).click();
   const card = admin.locator(".student-checks li").filter({ hasText: email });

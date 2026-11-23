@@ -72,7 +72,7 @@ export function AdminStudents({ query = "" }: { query?: string }) {
                     <div><dt>{t("Email")}</dt><dd>{v.email}</dd></div>
                     <div><dt>{t("Trường đang học")}</dt><dd>{v.school} · {v.grade}</dd></div>
                     <div><dt>{t("Mã học sinh")}</dt><dd>{v.student_code}</dd></div>
-                    <div><dt>{t(v.status === "pending" ? "Gửi lúc" : "Duyệt lúc")}</dt><dd>{dateTime((v.status === "pending" ? v.submitted_at : v.reviewed_at) || v.submitted_at || "")}</dd></div>
+                    {(v.status === "pending" ? v.submitted_at : v.reviewed_at || v.submitted_at) && <div><dt>{t(v.status === "pending" ? "Gửi lúc" : "Duyệt lúc")}</dt><dd>{dateTime((v.status === "pending" ? v.submitted_at : v.reviewed_at || v.submitted_at)!)}</dd></div>}
                   </dl>
                   {v.status === "rejected" && v.note && <p className="credential-note">{v.note}</p>}
                   <span className="actions">
