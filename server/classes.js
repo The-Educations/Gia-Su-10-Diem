@@ -50,6 +50,9 @@ export function migrateClasses(db) {
   if (!sm.includes("comment")) db.exec("ALTER TABLE session_members ADD COLUMN comment TEXT NOT NULL DEFAULT ''");
   if (!db.prepare("PRAGMA table_info(tutors)").all().some((c) => c.name === "violations"))
     db.exec("ALTER TABLE tutors ADD COLUMN violations INTEGER NOT NULL DEFAULT 0");
+  const cm = db.prepare("PRAGMA table_info(class_members)").all().map((c) => c.name);
+  for (const [col, ddl] of [["reported", "INTEGER NOT NULL DEFAULT 0"], ["reported_reason", "TEXT"], ["reported_by", "INTEGER"], ["hidden", "INTEGER NOT NULL DEFAULT 0"], ["reply", "TEXT"], ["reply_at", "TEXT"]])
+    if (!cm.includes(col)) db.exec(`ALTER TABLE class_members ADD COLUMN ${col} ${ddl}`);
 }
 
 // Lesson start times from a weekly rhythm, in Vietnam time, from a start date.
@@ -357,7 +360,7 @@ export function registerClasses(app, db, auth, audit) {
       community: one(db, "SELECT COUNT(*) n FROM community_posts WHERE status='pending'").n,
       violations: all(db, "SELECT t.user_id,u.name,t.violations FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.violations>=3 ORDER BY t.violations DESC"),
       flagged_messages: one(db, "SELECT (SELECT COUNT(*) FROM messages WHERE flagged=1)+(SELECT COUNT(*) FROM inquiry_messages WHERE flagged=1) n").n,
-      reported_reviews: one(db, "SELECT COUNT(*) n FROM reviews WHERE reported=1 AND hidden=0").n,
+      reported_reviews: one(db, "SELECT (SELECT COUNT(*) FROM reviews WHERE reported=1 AND hidden=0)+(SELECT COUNT(*) FROM class_members WHERE reported=1 AND hidden=0) n").n,
       disputes: all(db, `SELECT sm.session_id,sm.member_id,sm.note,cs.starts_at,c.id AS class_id,c.title,u.name AS student_name,t.name AS tutor_name
         FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN classes c ON c.id=cs.class_id
         JOIN class_members m ON m.id=sm.member_id JOIN users u ON u.id=m.student_id JOIN users t ON t.id=c.tutor_id WHERE sm.outcome='disputed' ORDER BY cs.starts_at`),
@@ -398,15 +401,25 @@ export function registerClasses(app, db, auth, audit) {
   // Reported reviews queue + moderation.
   app.get("/api/admin/reviews/queue", auth("admin"), (req, res) => res.json(reviewQueue(db)));
   app.post("/api/admin/reviews/:bookingId/visibility", auth("admin"), (req, res) => {
-    const d = z.object({ hidden: z.boolean() }).parse(req.body);
-    run(db, "UPDATE reviews SET hidden=?,reported=0 WHERE booking_id=?", d.hidden ? 1 : 0, Number(req.params.bookingId));
-    audit(req.user.id, d.hidden ? "review.hidden" : "review.shown", `booking:${req.params.bookingId}`, {});
+    const d = z.object({ hidden: z.boolean(), kind: z.enum(["member"]).optional() }).parse(req.body);
+    if (d.kind === "member") {
+      if (!run(db, "UPDATE class_members SET hidden=?,reported=0 WHERE id=?", d.hidden ? 1 : 0, Number(req.params.bookingId)).changes) fail(404, "Không tìm thấy đánh giá.");
+      audit(req.user.id, d.hidden ? "review.hidden" : "review.shown", `member:${req.params.bookingId}`, {});
+    } else {
+      run(db, "UPDATE reviews SET hidden=?,reported=0 WHERE booking_id=?", d.hidden ? 1 : 0, Number(req.params.bookingId));
+      audit(req.user.id, d.hidden ? "review.hidden" : "review.shown", `booking:${req.params.bookingId}`, {});
+    }
     res.json({ ok: true });
   });
   app.post("/api/admin/reviews/:bookingId/reply", auth("admin"), (req, res) => {
-    const d = z.object({ body: z.string().min(1).max(500) }).parse(req.body);
-    run(db, "UPDATE reviews SET reply=?,reply_at=CURRENT_TIMESTAMP WHERE booking_id=?", d.body, Number(req.params.bookingId));
-    audit(req.user.id, "review.reply", `booking:${req.params.bookingId}`, { body: d.body.slice(0, 80) });
+    const d = z.object({ body: z.string().min(1).max(500), kind: z.enum(["member"]).optional() }).parse(req.body);
+    if (d.kind === "member") {
+      if (!run(db, "UPDATE class_members SET reply=?,reply_at=CURRENT_TIMESTAMP WHERE id=?", d.body, Number(req.params.bookingId)).changes) fail(404, "Không tìm thấy đánh giá.");
+      audit(req.user.id, "review.reply", `member:${req.params.bookingId}`, { body: d.body.slice(0, 80) });
+    } else {
+      run(db, "UPDATE reviews SET reply=?,reply_at=CURRENT_TIMESTAMP WHERE booking_id=?", d.body, Number(req.params.bookingId));
+      audit(req.user.id, "review.reply", `booking:${req.params.bookingId}`, { body: d.body.slice(0, 80) });
+    }
     res.json({ ok: true });
   });
   // The sessions worklist: one row per (lesson, student) pair; the client groups them back by lesson.
@@ -674,14 +687,23 @@ export function registerClasses(app, db, auth, audit) {
     run(db, "UPDATE class_members SET review=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?", body, m.id);
     res.json({ ok: true });
   });
+  // Report a class review for moderation — same mechanism as booking reviews.
+  app.post("/api/members/:id/report", auth("student", "tutor"), (req, res) => {
+    const d = z.object({ reason: z.string().min(1).max(300) }).parse(req.body);
+    const m = one(db, "SELECT m.*,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND (m.student_id=? OR c.tutor_id=?)", req.params.id, req.user.id, req.user.id);
+    if (!m) fail(404, "Không tìm thấy gói học.");
+    if (!m.review && m.published_rating === null) fail(404, "Chưa có đánh giá cho gói học này.");
+    run(db, "UPDATE class_members SET reported=1,reported_reason=?,reported_by=? WHERE id=?", d.reason, req.user.id, m.id);
+    res.status(201).json({ ok: true });
+  });
 }
 
 // Public stars: the average of each finished package's private lesson ratings.
 export function classRatings(db) {
   const map = new Map();
-  for (const r of all(db, `SELECT c.tutor_id, m.published_rating AS rating, m.review, m.ended_at, u.display_name, u.name,
+  for (const r of all(db, `SELECT c.tutor_id, m.published_rating AS rating, m.review, m.reply, m.ended_at, u.display_name, u.name,
     (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome IN ('confirmed','charged')) AS lessons
-    FROM class_members m JOIN classes c ON c.id=m.class_id JOIN users u ON u.id=m.student_id WHERE m.status='ended' AND m.published_rating IS NOT NULL ORDER BY m.ended_at DESC`)) {
+    FROM class_members m JOIN classes c ON c.id=m.class_id JOIN users u ON u.id=m.student_id WHERE m.status='ended' AND m.published_rating IS NOT NULL AND m.hidden=0 ORDER BY m.ended_at DESC`)) {
     if (!map.has(r.tutor_id)) map.set(r.tutor_id, []);
     map.get(r.tutor_id).push(r);
   }
@@ -689,6 +711,6 @@ export function classRatings(db) {
     const rows = map.get(tutorId) || [];
     const avg = rows.length ? Math.round((rows.reduce((s, r) => s + r.rating, 0) / rows.length) * 10) / 10 : null;
     const counts = [5, 4, 3, 2, 1].map((star) => rows.filter((r) => Math.round(r.rating) === star).length);
-    return { average: avg, count: rows.length, counts, reviews: rows.slice(0, 20).map((r) => ({ rating: r.rating, body: r.review, lessons: r.lessons, author: r.display_name || "Học sinh", ended_at: r.ended_at })) };
+    return { average: avg, count: rows.length, counts, reviews: rows.slice(0, 20).map((r) => ({ rating: r.rating, body: r.review, lessons: r.lessons, author: r.display_name || "Học sinh", ended_at: r.ended_at, ...(r.reply ? { reply: r.reply } : {}) })) };
   };
 }

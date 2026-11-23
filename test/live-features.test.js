@@ -283,3 +283,34 @@ test("new-flow ratings alone clear the 'new' threshold and move the score", asyn
   const pub = trustReader(db).public(teacher.id);
   assert.ok(pub.score !== null && !("detail" in pub));
 });
+
+test("class review moderation: report, safety queue, hide removes it from public and trust", async (t) => {
+  const { db, client } = await fixture(t);
+  const tutor = client(), admin = client(), student = client();
+  const teacher = await tutor.login("chau"), learner = await student.login("student");
+  await admin.login("admin");
+  const { session, member } = await makeClass(db, student, tutor, learner.id, teacher.id);
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - 7200000).toISOString(), session.id);
+  run(db, "UPDATE session_members SET outcome='confirmed' WHERE session_id=?", session.id);
+  assert.equal((await student.request(`/sessions/${session.id}/rating`, "PUT", { rating: 5, answers: {}, comment: "" })).status, 200);
+  assert.equal((await student.request(`/members/${member.id}/end`, "POST", {})).status, 200);
+  assert.equal((await student.request(`/members/${member.id}/review`, "PUT", { body: "Gia sư đến trễ nhiều lần." })).status, 200);
+  const before = trustReader(db).full(teacher.id);
+  // Tutor reports the review → it lands in the admin safety queue as a member row.
+  assert.equal((await tutor.request(`/members/${member.id}/report`, "POST", { reason: "Sai sự thật" })).status, 201);
+  const queue = (await admin.request("/admin/reviews/queue")).data;
+  const row = queue.find((r) => r.kind === "member" && r.booking_id === member.id);
+  assert.ok(row && row.reported_reason === "Sai sự thật", JSON.stringify(row));
+  // Admin hides → review leaves the public profile and stops feeding trust.
+  assert.equal((await admin.request(`/admin/reviews/${member.id}/visibility`, "POST", { hidden: true, kind: "member" })).status, 200);
+  const after = trustReader(db).full(teacher.id);
+  assert.ok(after.detail.rating_count < before.detail.rating_count, "hidden review still counted");
+  const page = (await client().request(`/tutors/${teacher.id}`)).data;
+  assert.ok(!JSON.stringify(page).includes("đến trễ nhiều lần"), "hidden review still public");
+  // Admin replies publicly and restores it → review returns to the queue sources.
+  assert.equal((await admin.request(`/admin/reviews/${member.id}/reply`, "POST", { body: "Đã kiểm tra, đánh giá hợp lệ.", kind: "member" })).status, 200);
+  assert.equal((await admin.request(`/admin/reviews/${member.id}/visibility`, "POST", { hidden: false, kind: "member" })).status, 200);
+  const restored = trustReader(db).full(teacher.id);
+  assert.equal(restored.detail.rating_count, before.detail.rating_count);
+  await new Promise((r) => setTimeout(r, 50));
+});

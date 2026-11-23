@@ -57,8 +57,8 @@ function courseReviewRows(db, tutorId = null) {
     UNION ALL
     SELECT b.student_id,b.tutor_id,r.rating,r.body,r.reply,r.created_at,r.booking_id AS ref,0 AS fresh FROM reviews r JOIN bookings b ON b.id=r.booking_id WHERE r.hidden=0
     UNION ALL
-    SELECT m.student_id,c.tutor_id,m.published_rating AS rating,m.review AS body,NULL AS reply,COALESCE(m.reviewed_at,m.ended_at) AS created_at,m.id AS ref,1 AS fresh
-      FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.status='ended' AND m.published_rating IS NOT NULL
+    SELECT m.student_id,c.tutor_id,m.published_rating AS rating,m.review AS body,m.reply AS reply,COALESCE(m.reviewed_at,m.ended_at) AS created_at,m.id AS ref,2 AS fresh
+      FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.status='ended' AND m.published_rating IS NOT NULL AND m.hidden=0
   )${filter}`, ...args);
   rows.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.fresh - a.fresh || b.ref - a.ref));
   const latest = new Map();
@@ -114,12 +114,12 @@ export function trustReader(db) {
 }
 
 // One public review per student-tutor pair: their latest end-of-course review.
-export function publicReviews(db, tutorId) {
+export function publicReviews(db, tutorId, forTutor = false) {
   const { latest } = courseReviewRows(db, tutorId);
   return latest.map(r => {
     const u = one(db, "SELECT role,learner_type,display_name,profile_code FROM users WHERE id=?", r.student_id) || {};
     const lessons = one(db, "SELECT COUNT(*) AS n FROM bookings WHERE student_id=? AND tutor_id=? AND status='completed'", r.student_id, r.tutor_id).n;
-    return { rating: r.rating, body: r.body || "", created_at: r.created_at, lessons, author: authorLabel(u).label, ...(r.reply ? { reply: r.reply } : {}) };
+    return { rating: r.rating, body: r.body || "", created_at: r.created_at, lessons, author: authorLabel(u).label, ...(forTutor ? { kind: r.fresh === 2 ? "member" : "booking", ref: r.ref } : {}), ...(r.reply ? { reply: r.reply } : {}) };
   }).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 }
 
@@ -195,7 +195,7 @@ export function registerTrust(app, db, auth, audit) {
       progress: { ratings: detail.rating_count, raters: detail.rater_count, need_ratings: NEW_MIN_RATINGS, need_raters: NEW_MIN_RATERS },
       tag_counts: LESSON_TAGS.map(tag => ({ ...tag, count: tag_counts[tag.code] || 0 })),
       bad_breakdown: tutorBad(db, tutorId),
-      reviews: publicReviews(db, tutorId),
+      reviews: publicReviews(db, tutorId, true),
       policy: { PRIOR_MEAN, PRIOR_WEIGHT, COURSE_WEIGHT, QUALITY_SHARE, RELIABILITY_SHARE, LATE_CANCEL_HOURS, NEW_MIN_RATINGS, NEW_MIN_RATERS, PUNCTUALITY_MIN_LESSONS, PUBLIC_TAG_MIN },
     };
   };

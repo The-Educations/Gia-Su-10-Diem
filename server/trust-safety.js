@@ -61,11 +61,18 @@ export function flaggedThread(db, kind, threadId) {
 
 export function reviewQueue(db) {
   return all(db, `
-    SELECT r.booking_id,r.rating,r.body,r.hidden,r.reply,r.reported_reason,r.created_at,b.student_id,b.tutor_id,
+    SELECT 'booking' AS kind,r.booking_id,r.rating,r.body,r.hidden,r.reply,r.reported_reason,r.created_at,b.student_id,b.tutor_id,
       s.name AS student_name,t.name AS tutor_name
     FROM reviews r JOIN bookings b ON b.id=r.booking_id
     JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id
-    WHERE r.reported=1 OR r.hidden=1 ORDER BY r.created_at DESC,r.booking_id DESC LIMIT 100`);
+    WHERE r.reported=1 OR r.hidden=1
+    UNION ALL
+    SELECT 'member' AS kind,m.id AS booking_id,m.published_rating AS rating,m.review AS body,m.hidden,m.reply,m.reported_reason,
+      COALESCE(m.reviewed_at,m.ended_at) AS created_at,m.student_id,c.tutor_id,s.name AS student_name,t.name AS tutor_name
+    FROM class_members m JOIN classes c ON c.id=m.class_id
+    JOIN users s ON s.id=m.student_id JOIN users t ON t.id=c.tutor_id
+    WHERE (m.reported=1 OR m.hidden=1) AND m.published_rating IS NOT NULL
+    ORDER BY created_at DESC,booking_id DESC LIMIT 100`);
 }
 
 export function warnThread(db, admin, kind, threadId, note) {
