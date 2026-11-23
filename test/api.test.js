@@ -2350,7 +2350,8 @@ test("wallet deposits, SePay webhook verdicts, offers holding money and tutor cr
   const finance = (await admin.request("/admin/finance")).data;
   assert.equal(finance.totals.deposited, 2400000);
   assert.equal(finance.totals.credit_revenue, 50000);
-  assert.equal(finance.unmatched.length, 2);
+  // Money leaving the bank is not "money in without a code": only the unknown incoming one is listed.
+  assert.equal(finance.unmatched.length, 1);
 });
 test("payouts: a memo code and VietQR for the admin, SePay confirms money leaving the bank, receipts reach the user", async (t) => {
   const { createHmac } = await import("node:crypto");
