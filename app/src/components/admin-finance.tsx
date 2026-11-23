@@ -17,7 +17,7 @@ type Finance = {
   months: { month: string; deposits: number; payouts: number; payouts_confirmed: number; fees: number; credits: number }[];
   payout_check: boolean;
   deposits: { id: number; name: string; email: string; payer_name: string; payer_email: string; user_id: number; payer_id: number; code: string; amount: number; received: number; status: string; created_at: string; paid_at: string | null; method: string | null }[];
-  unmatched: { id: string; code: string | null; amount: number; reference: string; created_at: string; source: "sepay" | "gateway" }[];
+  unmatched: { id: string; code: string | null; amount: number; reference: string; created_at: string; source: "sepay" | "gateway"; status: string }[];
   dismissed: { id: string; code: string | null; amount: number; reference: string; created_at: string; source: "sepay" | "gateway" }[];
   totals: { deposited: number; balances: number; credit_revenue: number; fee_revenue: number };
   settings: Record<string, number | { credits: number; price: number }[]>;
@@ -71,8 +71,13 @@ export function AdminFinance() {
   async function assignUnmatched(u: Finance["unmatched"][number]) {
     const code = (prompt(t("Mã lệnh nạp (ví dụ GSD123456)")) || "").trim();
     if (!code) return;
-    try { await api("/admin/deposits/unmatched/assign", "POST", { source: u.source, id: u.id, code }); toast.success(t("Đã ghi nhận vào lệnh {code}", { code })); refresh(); }
-    catch (e) { toast.error((e as Error).message); }
+    try {
+      const dep = await api<{ name: string; email: string; amount: number; status: string }>(`/admin/deposits/find?code=${encodeURIComponent(code)}`);
+      const warn = dep.amount !== u.amount ? `\n⚠ ${t("Số tiền lệnh nạp ({dep}) KHÔNG khớp khoản tiền về ({amt}).", { dep: money(dep.amount), amt: money(u.amount) })}` : "";
+      if (!confirm(`${t("Sẽ cộng {amt} cho {name} ({email}), lệnh {code} {dep}.", { amt: money(u.amount), name: dep.name, email: dep.email, code, dep: money(dep.amount) })}${warn}`)) return;
+      await api("/admin/deposits/unmatched/assign", "POST", { source: u.source, id: u.id, code });
+      toast.success(t("Đã ghi nhận vào lệnh {code}", { code })); refresh();
+    } catch (e) { toast.error((e as Error).message); }
   }
   async function dismissUnmatched(u: Finance["unmatched"][number]) {
     const reason = (prompt(t("Lý do bỏ qua khoản tiền này")) || "").trim();
@@ -138,7 +143,9 @@ export function AdminFinance() {
                     <td>{u.code || t("Không có mã")}<small>{u.reference}</small></td>
                     <td className="num">{money(u.amount)}</td>
                     <td className="num">
-                      <Button size="xs" variant="outline" onClick={() => assignUnmatched(u)}>{t("Gán cho lệnh nạp…")}</Button>{" "}
+                      {u.status === "unmatched"
+                        ? <Button size="xs" variant="outline" onClick={() => assignUnmatched(u)}>{t("Gán cho lệnh nạp…")}</Button>
+                        : <small className="muted">{t("Không xác thực được, chỉ bỏ qua")}</small>}{" "}
                       <Button size="xs" variant="ghost" onClick={() => dismissUnmatched(u)}>{t("Bỏ qua")}</Button>
                     </td>
                   </tr>

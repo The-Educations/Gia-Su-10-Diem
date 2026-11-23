@@ -2778,3 +2778,27 @@ test("admin sessions worklist: queues, detail, cancel, remind and audit", async 
   const feed = (await admin.request("/admin")).data.audit;
   assert.ok(feed.some((x) => x.action === "session.remind" && x.target === String(b.id)));
 });
+
+test("unmatched deposit assign is atomic: second assign 409s, balance credited once", async (t) => {
+  const { db, client } = await fixture(t);
+  const admin = client(), student = client();
+  await admin.login("admin"); const me = await student.login("student");
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 50000 });
+  assert.equal(dep.status, 201);
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (900001,NULL,50000,'ref',0,'unmatched','{}')");
+  run(db, "INSERT INTO gateway_events(id,invoice,amount,verdict,status,payload) VALUES ('gw-1','',12000,0,'rejected_key','{}')");
+  const assign = (source, id) => admin.request("/admin/deposits/unmatched/assign", "POST", { source, id, code: dep.data.code });
+  const find = await admin.request(`/admin/deposits/find?code=${dep.data.code}`);
+  assert.equal(find.data.name, me.name);
+  assert.equal((await assign("sepay", "900001")).status, 200);
+  const again = await assign("sepay", "900001");
+  assert.equal(again.status, 409);
+  assert.equal(one(db, "SELECT available FROM wallets WHERE user_id=?", me.id).available, 50000);
+  assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=900001").status, "processed");
+  // rejected_key is unverified payload: dismiss only, never creditable.
+  const bad = await assign("gateway", "gw-1");
+  assert.equal(bad.status, 400);
+  assert.equal(one(db, "SELECT available FROM wallets WHERE user_id=?", me.id).available, 50000);
+  assert.equal((await admin.request("/admin/deposits/unmatched/dismiss", "POST", { source: "gateway", id: "gw-1", reason: "Giao dịch thử" })).status, 200);
+  assert.equal(one(db, "SELECT status FROM gateway_events WHERE id='gw-1'").status, "dismissed");
+});

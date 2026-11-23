@@ -3,6 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+
+// List tabs read as plurals in English only; the Vietnamese labels stay as they are.
+const TAB_EN: Record<string, string> = { "Buổi học": "Sessions", "Gia sư": "Tutors", "Học sinh": "Students", "Tài khoản": "Accounts" };
 import type { AdminData, Subject } from "@/lib/types";
 import { Page, Heading, Loading, ErrorState } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -26,13 +29,13 @@ const TABS = ["today", "classes", "sessions", "tutors", "students", "users", "ca
 const OLD: Record<string, string> = { resources: "catalog", subjects: "catalog" };
 
 export default function Admin() {
-  const { t } = useI18n(), { refresh } = useApp(), [params, setParams] = useSearchParams();
+  const { t, lang } = useI18n(), { refresh } = useApp(), [params, setParams] = useSearchParams();
   const asked = params.get("tab") || "", tab = TABS.includes(OLD[asked] || asked) ? OLD[asked] || asked : "today";
   const result = useLoad<AdminData>("/admin"), subjects = useLoad<Subject[]>("/subjects"), today = useLoad<Today>("/admin/today").data;
   const waiting = today ? today.disputes.length + today.sessions_waiting + today.withdrawals + today.students + today.credentials + today.tutors + today.community : 0;
   const withData = (pane: (d: AdminData) => ReactNode) =>
     result.data ? pane(result.data) : result.error ? <ErrorState error={result.error} retry={result.reload} /> : <Loading />;
-  const trigger = (value: string, label: string, n?: number) => <TabsTrigger value={value}>{t(label)}<Waiting n={n} /></TabsTrigger>;
+  const trigger = (value: string, label: string, n?: number) => <TabsTrigger value={value}>{lang === "en" ? (TAB_EN[label] ?? t(label)) : t(label)}<Waiting n={n} /></TabsTrigger>;
   return (
     <Page>
       <Heading
@@ -52,10 +55,10 @@ export default function Admin() {
           <TabsList variant="line" className="admin-tabs">
             {trigger("today", "Hôm nay", waiting)}
             {trigger("classes", "Lớp học")}
-            {trigger("sessions", "Các buổi học", today ? today.disputes.length + today.sessions_waiting : undefined)}
-            {trigger("tutors", "Các gia sư", today?.tutors)}
-            {trigger("students", "Các học sinh", today?.students)}
-            {trigger("users", "Các tài khoản")}
+            {trigger("sessions", "Buổi học", today ? today.disputes.length + today.sessions_waiting : undefined)}
+            {trigger("tutors", "Gia sư", today?.tutors)}
+            {trigger("students", "Học sinh", today?.students)}
+            {trigger("users", "Tài khoản")}
             {trigger("catalog", "Danh mục")}
             {trigger("posts", "Tin tức")}
             {trigger("community", "Cộng đồng", today?.community)}

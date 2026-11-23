@@ -25,6 +25,13 @@ const GROUP_ACTIONS: Record<string, string> = {
   content: "community.%,%_post,upload_news_image",
 };
 
+// Raw enum words in details, spelled out.
+const WORDS: Record<string, string> = {
+  approved: "đã duyệt", rejected: "từ chối", withdrawn: "đã gỡ", pending: "chờ duyệt",
+  active: "đã mở", suspended: "tạm khóa", confirmed: "đã xác nhận", refunded: "đã hoàn tiền",
+  charged: "đã tính phí", disputed: "đang báo", paid: "đã chuyển",
+};
+
 type Row = {
   id: number; actor_id: number; action: string; target: string; detail: string | null;
   created_at: string; name: string; credential_tutor: number | null;
@@ -45,9 +52,9 @@ function describe(a: Row, t: ReturnType<typeof useI18n>["t"]): string {
   else if (a.action === "deposit.assign") { push(d.code, d.amount && money(d.amount), d.event); }
   else if (a.action === "deposit.dismissed") { push(d.amount && money(d.amount), d.reason); }
   else if (a.action === "session.admin_cancel") { push(d.note, d.refunded?.length && t("hoàn {x} cho {n} học sinh", { x: money(d.refunded.reduce((s: number, r: { amount?: number }) => s + (r.amount || 0), 0)), n: d.refunded.length })); }
-  else if (/^session\.resolve\./.test(a.action)) { push(d.outcome, d.member_id && `#${d.member_id}`); }
+  else if (/^session\.resolve\./.test(a.action)) { push(WORDS[d.outcome] || d.outcome, d.member_id && `#${d.member_id}`); }
   else if (a.action === "member.admin_end") { push(d.refunded && t("hoàn {x}", { x: money(d.refunded) })); }
-  else { push(d.title, d.name, d.email, d.note, d.reason, d.status, d.revision && `r${d.revision}`, d.published !== undefined && (d.published ? t("hiện") : t("ẩn"))); }
+  else { push(d.title, d.name, d.email, d.note, d.reason, WORDS[d.status] || d.status, d.revision && t("(bản {n})", { n: d.revision }), d.published !== undefined && (d.published ? t("hiện") : t("ẩn"))); }
   return parts.filter(Boolean).join(" · ");
 }
 
