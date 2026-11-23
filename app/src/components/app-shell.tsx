@@ -23,11 +23,13 @@ export function Brand({ to, onClick }: { to: string; onClick?: () => void }) {
 }
 
 function Links({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
-  const { t } = useI18n();
-  return items.map(({ to, label, icon: Icon }) => (
+  const { t } = useI18n(), { user } = useApp();
+  const counts = useLoad<{ waiting: number }>(user?.role === "admin" && items.some((i) => i.badge === "sessions") ? "/admin/sessions/summary" : null).data;
+  return items.map(({ to, label, icon: Icon, badge }) => (
     <NavLink key={to} to={to} aria-label={t(label)} title={t(label)} onClick={onNavigate}>
       <Icon aria-hidden="true" />
       <span className="nav-label">{t(label)}</span>
+      {badge === "sessions" && counts?.waiting ? <em className="nav-badge" aria-label={t("{n} việc cần xử lý", { n: counts.waiting })}>{counts.waiting}</em> : null}
     </NavLink>
   ));
 }

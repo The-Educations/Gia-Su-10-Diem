@@ -3607,3 +3607,20 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 .audit-more { display: flex; justify-content: center; padding: 14px 0 4px; }
 .audit-trail h3 { margin: 10px 0 4px; font-size: 13px; color: var(--muted-foreground); }
 .finance-dismissed summary { margin: 14px 0 6px; font-size: 13px; color: var(--muted-foreground); cursor: pointer; }
+
+/* Sessions page: the compact tracking strip and the sidebar count. */
+.sessions-track { margin: 0 0 4px; font-size: 13px; color: var(--muted-foreground); }
+.nav-badge { min-width: 18px; height: 18px; padding: 0 5px; margin-left: auto; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 11px; font-weight: 600; font-style: normal; display: inline-grid; place-items: center; }
+.session-head { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; padding: 6px 0; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--muted-foreground); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.session-head span:nth-child(5) { text-align: right; }
+.session-range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.session-range label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
+.session-range input { width: auto; min-width: 0; }
+.session-who { color: var(--foreground) !important; font-size: 13px !important; }
+.session-source { display: inline-flex; align-items: center; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; color: var(--muted-foreground); background: var(--muted); }
+.session-source[data-source="booking"] { border-color: color-mix(in srgb, var(--warning, #b45309) 40%, transparent); color: #92400e; background: #fef3c7; }
+.session-check input { width: 15px; height: 15px; }
+@media (max-width: 720px) {
+  .session-head { display: none; }
+  .session-range { flex-basis: 100%; }
+}

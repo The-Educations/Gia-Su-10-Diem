@@ -98,8 +98,9 @@ export function AdminAudit() {
     if (a.action === "deposits.recheck" || a.action === "deposit.dismissed") return go("/admin?tab=finance&fin=deposits", a.action === "deposits.recheck" ? t("Kiểm tra nạp") : (d?.event || t("Sự kiện nạp")));
     if (a.action === "deposit.assign") return go(`/admin?tab=finance&fin=deposits&deposit=${num}`, d?.code || t("Lệnh nạp"));
     if (a.action === "settings.update") return go("/admin?tab=finance&fin=settings", t("Cài đặt"));
-    if (/^session\./.test(a.action)) return go(`/admin?tab=sessions&session=${num}`, d?.session || `${t("Buổi")} #${num}`);
-    if (a.action === "member.admin_end") return go(`/admin?tab=sessions&member=${num}`, `${t("Gói")} #${num}`);
+    if (/^session\./.test(a.action)) return go(`/sessions?session=${num}`, d?.session || `${t("Buổi")} #${num}`);
+    if (a.action === "member.admin_end") return go(`/sessions?member=${num}`, `${t("Gói")} #${num}`);
+    if (/^booking\./.test(a.action)) return go(`/sessions?booking=${num}`, d?.subject || `${t("Đặt lịch")} #${num}`);
     if (/^subject\./.test(a.action)) return go(`/admin?tab=catalog&subject=${encodeURIComponent(id)}`, d?.title || id);
     if (/^resource\./.test(a.action)) return go(`/admin?tab=catalog&resource=${num}`, d?.title || `#${num}`);
     if (/^community\./.test(a.action)) return go("/admin?tab=community", d?.title || t("Cộng đồng"));
