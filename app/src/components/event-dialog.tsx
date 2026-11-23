@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -10,6 +10,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "./ui/field";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Popover, PopoverAnchor, PopoverContent } from "./ui/popover";
 
 export const EVENT_COLORS = ["rose", "sky", "sage", "butter", "lilac", "peach", "mint", "sand"];
 const COLOR_NAMES: Record<string, string> = { rose: "Hồng", sky: "Xanh trời", sage: "Xanh lá", butter: "Vàng", lilac: "Tím", peach: "Cam đào", mint: "Bạc hà", sand: "Cát" };
@@ -77,5 +78,54 @@ export function EventDialog({ draft, onClose, onSaved }: { draft: EventDraft | n
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// The small panel beside a block on the calendar, like Apple Calendar: edits are kept when it closes.
+export function EventPopover({ event, anchor, onClose, onChange, onDelete }: {
+  event: CalendarEvent | null; anchor: HTMLElement | null; onClose: () => void;
+  onChange: (next: CalendarEvent) => Promise<boolean>; onDelete: (e: CalendarEvent) => void;
+}) {
+  const { t } = useI18n(),
+    [form, setForm] = useState({ title: "", date: "", start: "", end: "", color: "sky", note: "" }),
+    title = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (event) setForm({ title: event.title, date: localDate(event.starts_at), start: localTime(event.starts_at), end: localTime(event.ends_at), color: event.color || "sky", note: event.note || "" });
+  }, [event?.id, event?.starts_at, event?.ends_at]);
+  if (!event || !anchor) return null;
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  async function close() {
+    const next = { ...event!, title: form.title.trim() || event!.title, note: form.note, color: form.color, starts_at: toIso(form.date, form.start), ends_at: toIso(form.date, form.end) };
+    const changed = (["title", "note", "color", "starts_at", "ends_at"] as const).some((k) => (next[k] || "") !== (event![k] || ""));
+    if (changed && Date.parse(next.ends_at) <= Date.parse(next.starts_at)) return toast.error(t("Giờ kết thúc phải sau giờ bắt đầu."));
+    if (!changed || await onChange(next)) onClose();
+  }
+  return (
+    <Popover open onOpenChange={(v) => !v && close()}>
+      <PopoverAnchor virtualRef={{ current: anchor }} />
+      <PopoverContent className="event-pop" side={matchMedia("(max-width: 760px)").matches ? "bottom" : "right"} align="start" collisionPadding={12} data-color={form.color}
+        onOpenAutoFocus={(e) => { e.preventDefault(); title.current?.focus(); if (event.title === t("Sự kiện mới")) title.current?.select(); }}>
+        <form onSubmit={(e) => { e.preventDefault(); close(); }}>
+          <input ref={title} className="event-pop-title" aria-label={t("Tên sự kiện")} maxLength={120} value={form.title} onChange={set("title")} />
+          <div className="event-pop-time">
+            <input type="date" aria-label={t("Ngày")} required value={form.date} onChange={set("date")} />
+            <input type="time" aria-label={t("Bắt đầu")} step={900} required value={form.start} onChange={set("start")} />
+            <span aria-hidden="true">–</span>
+            <input type="time" aria-label={t("Kết thúc")} step={900} required value={form.end} onChange={set("end")} />
+          </div>
+          <fieldset className="event-colors">
+            <legend className="sr-only">{t("Màu")}</legend>
+            {EVENT_COLORS.map((c) => (
+              <button type="button" key={c} data-color={c} aria-pressed={form.color === c} aria-label={t(COLOR_NAMES[c])} onClick={() => setForm((f) => ({ ...f, color: c }))} />
+            ))}
+          </fieldset>
+          <textarea className="event-pop-note" aria-label={t("Ghi chú")} placeholder={t("Ghi chú")} rows={2} maxLength={1000} value={form.note} onChange={set("note")} />
+          <div className="event-pop-actions">
+            <Button type="button" variant="ghost" size="icon-sm" className="danger-text" aria-label={t("Xóa sự kiện")} onClick={() => onDelete(event)}><Trash2 /></Button>
+            <Button type="submit" size="sm">{t("Xong")}</Button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }

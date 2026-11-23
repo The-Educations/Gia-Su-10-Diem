@@ -8,6 +8,7 @@ import { api, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { Proposal, Subject, Tutor, Wallet } from "@/lib/types";
 import { celebrate } from "@/lib/celebrate";
+import { freeRuns } from "@/lib/free-hours";
 import { ErrorState, Submit } from "./common";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -41,8 +42,7 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
     [trial, setTrial] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  // The tutor's weekly free hours, earliest first in each day, as quick picks.
-  const free = (tutor.weekly_blocks || []).filter((b, i, a) => !a.some((x) => x.weekday === b.weekday && x.hour === b.hour - 1)).slice(0, 8);
+  const free = tutor.weekly_blocks || [];
   const total = trial ? 0 : sessions * rate,
     available = wallet.data?.available ?? 0,
     short = Math.max(0, total - available);
@@ -132,17 +132,8 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
                   ))}
                 </div>
               </FieldSet>
-              {free.length > 0 && (
-                <div className="free-hours" role="group" aria-label={t("Giờ gia sư rảnh")}>
-                  <span>{t("Giờ gia sư rảnh")}</span>
-                  {free.map((b) => {
-                    const label = `${t(WEEKDAYS[b.weekday])} ${timeLabel({ hour: b.hour, minute: 0 })}`;
-                    const on = days.includes(b.weekday) && time === timeLabel({ hour: b.hour, minute: 0 });
-                    return <button type="button" key={`${b.weekday}-${b.hour}`} className="chip" data-checked={on || undefined}
-                      onClick={() => { setTime(timeLabel({ hour: b.hour, minute: 0 })); setDays((v) => (v.includes(b.weekday) ? v : [...v, b.weekday].sort())); }}>{label}</button>;
-                  })}
-                </div>
-              )}
+              {free.length > 0 && <FreeWeek blocks={free} days={days} time={time} minutes={trial ? 60 : minutes}
+                onPick={(weekday, at) => { setTime(at); setDays((v) => (v.includes(weekday) ? v : [...v, weekday].sort())); }} />}
               <div className="form-two">
                 <Field>
                   <FieldLabel htmlFor="p-time">{t("Giờ bắt đầu")}</FieldLabel>
@@ -178,5 +169,42 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// The tutor's free hours as one block per stretch of time, with the chosen lesson drawn on top.
+function FreeWeek({ blocks, days, time, minutes, onPick }: { blocks: { weekday: number; hour: number }[]; days: number[]; time: string; minutes: number; onPick: (weekday: number, time: string) => void }) {
+  const { t } = useI18n(), H = 18;
+  const runs = WEEKDAYS.map((_, d) => freeRuns(blocks, d));
+  const [h, m] = time.split(":").map(Number), start = h + m / 60, end = start + minutes / 60;
+  const all = runs.flat(), lo = Math.min(start, ...all.map((r) => r[0])), hi = Math.max(end, lo + 3, ...all.map((r) => r[1]));
+  const at = (hour: number) => timeLabel({ hour: Math.floor(hour), minute: Math.round((hour % 1) * 60) });
+  const outside = days.filter((d) => !runs[d].some(([a, b]) => a <= start && end <= b));
+  function pick(e: React.MouseEvent<HTMLButtonElement>, weekday: number, [a, b]: [number, number]) {
+    const box = e.currentTarget.getBoundingClientRect(), y = e.detail ? (e.clientY - box.top) / H : 0;
+    const chosen = Math.max(a, Math.min(b - minutes / 60, a + Math.floor(y * 2) / 2));
+    onPick(weekday, at(Math.max(a, chosen)));
+  }
+  return (
+    <div className="free-week" role="group" aria-label={t("Giờ gia sư rảnh")}>
+      <span className="free-week-title">{t("Giờ gia sư rảnh")}</span>
+      <div className="free-week-grid" style={{ "--track": `${(hi - lo) * H}px` } as React.CSSProperties}>
+        <span className="free-week-hours" aria-hidden="true">{[...new Set([Math.ceil(lo), Math.round((lo + hi) / 2), Math.floor(hi)])].map((x) => <small key={x} style={{ top: (x - lo) * H }}>{at(x)}</small>)}</span>
+        {WEEKDAYS.map((d, i) => (
+          <div key={d} className="free-week-day">
+            <small>{t(d)}</small>
+            <div className="free-week-track">
+              {runs[i].map((r) => (
+                <button type="button" key={r[0]} style={{ top: (r[0] - lo) * H, height: (r[1] - r[0]) * H }} aria-label={t("Chọn giờ {weekday} {time}", { weekday: t(d), time: at(r[0]) })} onClick={(e) => pick(e, i, r)}>
+                  {(r[1] - r[0]) * H >= 30 && <span>{at(r[0])}–{at(r[1])}</span>}
+                </button>
+              ))}
+              {days.includes(i) && <span className="free-week-slot" data-fits={runs[i].some(([a, b]) => a <= start && end <= b) || undefined} style={{ top: (start - lo) * H, height: (minutes / 60) * H }} />}
+            </div>
+          </div>
+        ))}
+      </div>
+      {days.length > 0 && <p className="free-week-verdict" data-fits={!outside.length || undefined} aria-live="polite">{outside.length ? t("{days} nằm ngoài giờ rảnh", { days: outside.map((d) => t(WEEKDAYS[d])).join(", ") }) : t("Buổi học trùng giờ rảnh")}</p>}
+    </div>
   );
 }

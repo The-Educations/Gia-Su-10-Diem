@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import type { CalendarEvent, ClassSession } from "@/lib/types";
-import { EventDialog, type EventDraft } from "@/components/event-dialog";
+import type { CalendarEvent, ClassSession, Tutor } from "@/lib/types";
+import { EventDialog, EventPopover, type EventDraft } from "@/components/event-dialog";
 import { ErrorState, Heading, Page } from "@/components/common";
 import { SessionActions, timeOf } from "@/components/session-actions";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { freeRuns } from "@/lib/free-hours";
 import "@/calendar.css";
 
 type View = "day" | "week" | "month";
 const HOURS = Array.from({ length: 17 }, (_, i) => 6 + i); // 06:00–22:00
-const ROW = 48; // px per hour
+const ZOOM = [32, 48, 72, 96]; // px per hour
 const DAY = 86400000;
 const VN = 7 * 3600000;
 // Calendar maths in Vietnam time: a "day" is a UTC date shifted by +7h.
@@ -47,22 +48,50 @@ export default function Schedule() {
   const only = new URLSearchParams(location.search).get("user");
   const result = useLoad<ClassSession[]>(`${user?.role === "admin" ? "/admin/schedule" : "/schedule"}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${only ? `&user=${only}` : ""}`);
   const events = useLoad<CalendarEvent[]>(user && user.role !== "admin" ? `/calendar-events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : null),
-    [editing, setEditing] = useState<EventDraft | null>(null);
+    [editing, setEditing] = useState<EventDraft | null>(null),
+    [mine, setMine] = useState<CalendarEvent[]>([]),
+    [picked, setPicked] = useState<{ id: number; el: HTMLElement } | null>(null),
+    [zoom, setZoom] = useState(() => Math.min(ZOOM.length - 1, Math.max(0, Number(localStorage.getItem("cal-zoom") ?? 1)))),
+    profile = useLoad<Tutor>(user?.role === "tutor" ? "/tutor/profile" : null);
+  // Personal events are edited in place, then saved; the list follows the server after each reload.
+  useEffect(() => { setMine(events.data || []); }, [events.data]);
+  useEffect(() => { localStorage.setItem("cal-zoom", String(zoom)); }, [zoom]);
+  const free = profile.data?.weekly_schedule?.blocks;
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id); }, []);
   const byDay = useMemo(() => {
     const map = new Map<string, Item[]>();
     // One block per lesson even when a group lesson has several students.
     const lessons = (result.data || []).filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
-    for (const item of asItems(lessons, events.data || []).sort((a, b) => a.starts_at.localeCompare(b.starts_at))) {
+    for (const item of asItems(lessons, mine).sort((a, b) => a.starts_at.localeCompare(b.starts_at))) {
       const key = vnDate(Date.parse(item.starts_at));
       map.set(key, [...(map.get(key) || []), item]);
     }
     return map;
-  }, [result.data, events.data]);
-  async function moveEvent(e: CalendarEvent, startsAt: number) {
+  }, [result.data, mine]);
+  async function saveEvent(next: CalendarEvent) {
+    const before = mine;
+    setMine((list) => list.map((e) => (e.id === next.id ? next : e)));
+    try { await api(`/calendar-events/${next.id}`, "PUT", next); return true; }
+    catch (err) { setMine(before); toast.error((err as Error).message); return false; }
+  }
+  const moveEvent = (e: CalendarEvent, startsAt: number) => {
     const length = Date.parse(e.ends_at) - Date.parse(e.starts_at);
-    try { await api(`/calendar-events/${e.id}`, "PUT", { ...e, starts_at: new Date(startsAt).toISOString(), ends_at: new Date(startsAt + length).toISOString() }); events.reload(); }
-    catch (err) { toast.error((err as Error).message); }
+    return saveEvent({ ...e, starts_at: new Date(startsAt).toISOString(), ends_at: new Date(startsAt + length).toISOString() });
+  };
+  // Dragging on empty time makes the block at once; a click on it opens its panel.
+  async function createEvent(start: number, end: number) {
+    const temp: CalendarEvent = { id: -Date.now(), title: t("Sự kiện mới"), color: "sky", note: "", starts_at: new Date(start).toISOString(), ends_at: new Date(end).toISOString() };
+    setMine((list) => [...list, temp]);
+    try {
+      const saved = await api<CalendarEvent>("/calendar-events", "POST", temp);
+      setMine((list) => list.map((e) => (e.id === temp.id ? saved : e)));
+    } catch (err) { setMine((list) => list.filter((e) => e.id !== temp.id)); toast.error((err as Error).message); }
+  }
+  async function deleteEvent(e: CalendarEvent) {
+    setPicked(null);
+    setMine((list) => list.filter((x) => x.id !== e.id));
+    try { await api(`/calendar-events/${e.id}`, "DELETE"); toast.success(t("Đã xóa sự kiện")); }
+    catch (err) { toast.error((err as Error).message); events.reload(); }
   }
   const newEvent = () => {
     const start = Math.ceil(Date.now() / 1800000) * 1800000;
@@ -96,6 +125,12 @@ export default function Schedule() {
           <Button variant="ghost" size="icon" aria-label={t("Sau")} onClick={() => shift(1)}><ChevronRight /></Button>
           <h2>{title}</h2>
         </div>
+        {view !== "month" && (
+          <div className="cal-zoom" role="group" aria-label={t("Thu phóng lịch")}>
+            <Button variant="ghost" size="icon-sm" aria-label={t("Thu nhỏ")} disabled={zoom === 0} onClick={() => setZoom((z) => Math.max(0, z - 1))}><Minus /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={t("Phóng to")} disabled={zoom === ZOOM.length - 1} onClick={() => setZoom((z) => Math.min(ZOOM.length - 1, z + 1))}><Plus /></Button>
+          </div>
+        )}
         <div className="segmented" role="group" aria-label={t("Chế độ xem")}>
           {(["day", "week", "month"] as View[]).map((v) => (
             <button type="button" key={v} aria-pressed={view === v} onClick={() => setView(v)}>{t(v === "day" ? "Ngày" : v === "week" ? "Tuần" : "Tháng")}</button>
@@ -120,14 +155,17 @@ export default function Schedule() {
               ))}
             </div>
           ) : (
-            <TimeGrid days={days} byDay={byDay} today={today} now={now} lang={lang} onOpen={(s, el) => setOpen({ s, el })} onDrop={propose}
-              onOpenEvent={(e) => setEditing(e)} onMoveEvent={moveEvent}
-              onCreate={(a, b) => setEditing({ starts_at: new Date(a).toISOString(), ends_at: new Date(b).toISOString() })} canDrag={!!user && user.role !== "admin"} />
+            <TimeGrid days={days} byDay={byDay} today={today} now={now} lang={lang} row={ZOOM[zoom]} free={free} onZoom={(n) => setZoom((z) => Math.min(ZOOM.length - 1, Math.max(0, z + n)))}
+              onOpen={(s, el) => setOpen({ s, el })} onDrop={propose}
+              onOpenEvent={(e, el) => e.id > 0 && setPicked({ id: e.id, el })} onMoveEvent={moveEvent}
+              onResizeEvent={(e, end) => saveEvent({ ...e, ends_at: new Date(end).toISOString() })}
+              onCreate={createEvent} canDrag={!!user && user.role !== "admin"} />
           )}
         </motion.div>
       </AnimatePresence>
       {view !== "month" && !result.loading && !byDay.size && <p className="cal-empty">{t("Chưa có gì trong khoảng này. Kéo trên lịch để thêm sự kiện.")}</p>}
       <EventDialog draft={editing} onClose={() => setEditing(null)} onSaved={events.reload} />
+      <EventPopover event={mine.find((e) => e.id === picked?.id) || null} anchor={picked?.el || null} onClose={() => setPicked(null)} onChange={saveEvent} onDelete={deleteEvent} />
       <Popover open={!!open} onOpenChange={(v) => !v && setOpen(null)}>
         {open && <PopoverAnchor virtualRef={{ current: open.el }} />}
         <PopoverContent className="cal-popover" side="right" align="start">
@@ -153,48 +191,73 @@ export const asItems = (lessons: ClassSession[], events: CalendarEvent[]): Item[
   ...events.map((e) => ({ key: `e${e.id}`, kind: "event" as const, title: e.title, color: e.color, starts_at: e.starts_at, minutes: Math.round((Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60000), event: e })),
 ];
 
-function TimeGrid({ days, byDay, today, now, lang, onOpen, onDrop, onOpenEvent, onMoveEvent, onCreate, canDrag }: {
-  days: string[]; byDay: Map<string, Item[]>; today: string; now: number; lang: string;
+type Drag = { item: Item; y: number; x: number; moved: boolean; resize?: boolean };
+function TimeGrid({ days, byDay, today, now, lang, row, free, onZoom, onOpen, onDrop, onOpenEvent, onMoveEvent, onResizeEvent, onCreate, canDrag }: {
+  days: string[]; byDay: Map<string, Item[]>; today: string; now: number; lang: string; row: number; free?: { weekday: number; hour: number }[]; onZoom: (n: number) => void;
   onOpen: (s: ClassSession, el: HTMLElement) => void; onDrop: (s: ClassSession, startsAt: number) => void;
-  onOpenEvent: (e: CalendarEvent) => void; onMoveEvent: (e: CalendarEvent, startsAt: number) => void; onCreate: (start: number, end: number) => void; canDrag: boolean;
+  onOpenEvent: (e: CalendarEvent, el: HTMLElement) => void; onMoveEvent: (e: CalendarEvent, startsAt: number) => void;
+  onResizeEvent: (e: CalendarEvent, endsAt: number) => void; onCreate: (start: number, end: number) => void; canDrag: boolean;
 }) {
   const { t } = useI18n(), body = useRef<HTMLDivElement>(null),
-    drag = useRef<{ item: Item; y: number; x: number; moved: boolean } | null>(null),
+    drag = useRef<Drag | null>(null),
     making = useRef<{ day: number; from: number } | null>(null);
-  const [ghost, setGhost] = useState<{ key: string; day: number; top: number; height: number } | null>(null);
+  const [ghost, setGhost] = useState<{ key: string; day: number; from: number; to: number } | null>(null);
   const [draft, setDraft] = useState<{ day: number; from: number; to: number } | null>(null);
-  useEffect(() => { body.current?.scrollTo({ top: Math.max(0, ((new Date(now + VN).getUTCHours() - 7) * ROW)) }); }, []);
-  const nowTop = ((minutesInDay(new Date(now).toISOString()) - HOURS[0] * 60) / 60) * ROW;
-  const topOf = (minutes: number) => ((minutes - HOURS[0] * 60) / 60) * ROW;
+  useEffect(() => { body.current?.scrollTo({ top: Math.max(0, ((new Date(now + VN).getUTCHours() - 7) * row)) }); }, []);
+  // Keep the same hour at the top when zooming.
+  const lastRow = useRef(row);
+  useEffect(() => { const b = body.current; if (b && lastRow.current !== row) b.scrollTop = (b.scrollTop / lastRow.current) * row; lastRow.current = row; }, [row]);
+  // Pinch on a trackpad (or Ctrl/⌘ + wheel) zooms the hours.
+  useEffect(() => {
+    const b = body.current;
+    if (!b) return;
+    let acc = 0;
+    const wheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      acc += e.deltaY;
+      if (Math.abs(acc) > 40) { onZoom(acc < 0 ? 1 : -1); acc = 0; }
+    };
+    b.addEventListener("wheel", wheel, { passive: false });
+    return () => b.removeEventListener("wheel", wheel);
+  }, [onZoom]);
+  const nowTop = ((minutesInDay(new Date(now).toISOString()) - HOURS[0] * 60) / 60) * row;
+  const topOf = (minutes: number) => ((minutes - HOURS[0] * 60) / 60) * row;
+  const heightOf = (minutes: number) => Math.max(18, (minutes / 60) * row - 3);
   function geometry(e: React.PointerEvent, step = 30) {
     const grid = body.current!.querySelector(".cal-columns")!.getBoundingClientRect();
     const day = Math.max(0, Math.min(days.length - 1, Math.floor(((e.clientX - grid.left) / grid.width) * days.length)));
-    const minutes = Math.round((((e.clientY - grid.top) / ROW) * 60) / step) * step + HOURS[0] * 60;
+    const minutes = Math.round((((e.clientY - grid.top) / row) * 60) / step) * step + HOURS[0] * 60;
     return { day, minutes: Math.max(HOURS[0] * 60, Math.min(23 * 60, minutes)) };
   }
-  function onPointerDown(e: React.PointerEvent, item: Item) {
+  function onPointerDown(e: React.PointerEvent, item: Item, resize = false) {
     e.stopPropagation();
+    drag.current = { item, y: e.clientY, x: e.clientX, moved: false, resize };
     const movable = item.kind === "event" || Date.parse(item.starts_at) > Date.now();
-    if (!canDrag || !movable || e.button !== 0) { drag.current = { item, y: e.clientY, x: e.clientX, moved: false }; return; }
-    drag.current = { item, y: e.clientY, x: e.clientX, moved: false };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (canDrag && movable && e.button === 0) (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
   function onPointerMove(e: React.PointerEvent) {
     const d = drag.current;
-    if (!d || (d.item.kind === "lesson" && Date.parse(d.item.starts_at) <= Date.now())) return;
+    if (!d || !canDrag || (d.item.kind === "lesson" && Date.parse(d.item.starts_at) <= Date.now())) return;
     if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
     d.moved = true;
+    const start = minutesInDay(d.item.starts_at);
+    if (d.resize) {
+      const { minutes } = geometry(e, 15);
+      return setGhost({ key: d.item.key, day: days.indexOf(vnDate(Date.parse(d.item.starts_at))), from: start, to: Math.max(start + 15, minutes) });
+    }
     const { day, minutes } = geometry(e, d.item.kind === "event" ? 15 : 30);
-    setGhost({ key: d.item.key, day, top: topOf(minutes), height: (d.item.minutes / 60) * ROW - 3 });
+    setGhost({ key: d.item.key, day, from: minutes, to: minutes + d.item.minutes });
   }
   function onPointerUp(e: React.PointerEvent) {
-    const d = drag.current;
+    const d = drag.current, g = ghost;
     drag.current = null;
     setGhost(null);
     if (!d) return;
-    if (!d.moved) return d.item.lesson ? onOpen(d.item.lesson, e.currentTarget as HTMLElement) : onOpenEvent(d.item.event!);
-    const { day, minutes } = geometry(e, d.item.kind === "event" ? 15 : 30);
-    const at = startOfDay(days[day]) + minutes * 60000;
+    const el = (e.currentTarget as HTMLElement).closest(".cal-event") as HTMLElement;
+    if (!d.moved || !g) return d.item.lesson ? onOpen(d.item.lesson, el) : onOpenEvent(d.item.event!, el);
+    if (d.resize) return onResizeEvent(d.item.event!, startOfDay(days[g.day]) + g.to * 60000);
+    const at = startOfDay(days[g.day]) + g.from * 60000;
     if (at === Date.parse(d.item.starts_at)) return;
     if (d.item.lesson) onDrop(d.item.lesson, at);
     else onMoveEvent(d.item.event!, at);
@@ -202,6 +265,7 @@ function TimeGrid({ days, byDay, today, now, lang, onOpen, onDrop, onOpenEvent, 
   // Drag down an empty part of a day to block out a new event, like Apple Calendar.
   function startMaking(e: React.PointerEvent, day: number) {
     if (!canDrag || e.button !== 0 || e.target !== e.currentTarget) return;
+    e.preventDefault();
     const { minutes } = geometry(e, 15);
     making.current = { day, from: minutes };
     setDraft({ day, from: minutes, to: minutes + 60 });
@@ -223,7 +287,7 @@ function TimeGrid({ days, byDay, today, now, lang, onOpen, onDrop, onOpenEvent, 
   }
   const clock = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   return (
-    <div className="cal-grid" style={{ "--cols": days.length } as React.CSSProperties}>
+    <div className="cal-grid" style={{ "--cols": days.length, "--row": `${row}px` } as React.CSSProperties} data-compact={row < 40 || undefined}>
       <div className="cal-head">
         <span />
         {days.map((key) => (
@@ -234,29 +298,34 @@ function TimeGrid({ days, byDay, today, now, lang, onOpen, onDrop, onOpenEvent, 
         ))}
       </div>
       <div className="cal-body" ref={body}>
-        <div className="cal-hours">{HOURS.map((h) => <span key={h} style={{ height: ROW }}>{String(h).padStart(2, "0")}:00</span>)}</div>
-        <div className="cal-columns" style={{ height: HOURS.length * ROW }}>
+        <div className="cal-hours">{HOURS.map((h) => <span key={h} style={{ height: row }}>{String(h).padStart(2, "0")}:00</span>)}</div>
+        <div className="cal-columns" style={{ height: HOURS.length * row }}>
           {days.map((key, i) => (
             <div key={key} className="cal-col" data-today={key === today || undefined} data-weekend={i >= 5 && days.length === 7 || undefined}
               onPointerDown={(e) => startMaking(e, i)} onPointerMove={moveMaking} onPointerUp={endMaking} onPointerCancel={() => { making.current = null; setDraft(null); }}>
+              {free && freeRuns(free, (new Date(startOfDay(key) + VN).getUTCDay() + 6) % 7).map(([a, b]) => (
+                <span key={a} className="cal-free" style={{ top: topOf(a * 60), height: (b - a) * row }}><small>{t("Rảnh")} {clock(a * 60)}–{clock(b * 60)}</small></span>
+              ))}
               {(byDay.get(key) || []).map((item) => {
-                const top = topOf(minutesInDay(item.starts_at)), height = Math.max(22, (item.minutes / 60) * ROW - 3);
+                const top = topOf(minutesInDay(item.starts_at)), height = heightOf(item.minutes);
                 const past = Date.parse(item.starts_at) + item.minutes * 60000 < now;
                 const pending = past && item.lesson?.outcome === "pending";
+                const end = new Date(Date.parse(item.starts_at) + item.minutes * 60000).toISOString();
                 return (
                   <button type="button" key={item.key} className="cal-event" data-kind={item.kind} data-color={item.color} data-past={past || undefined} data-attention={pending || undefined}
-                    data-dragging={ghost?.key === item.key || undefined}
-                    style={{ top, height }} aria-label={`${item.title}, ${timeOf(item.starts_at)}${pending ? `, ${t("cần xác nhận")}` : ""}`}
+                    data-dragging={ghost?.key === item.key || undefined} data-new={item.event && item.event.id < 0 || undefined}
+                    style={{ top, height }} aria-label={`${item.title}, ${timeOf(item.starts_at)}–${timeOf(end)}${pending ? `, ${t("cần xác nhận")}` : ""}`}
                     onPointerDown={(e) => onPointerDown(e, item)} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.lesson ? onOpen(item.lesson, e.currentTarget) : onOpenEvent(item.event!); } }}>
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.lesson ? onOpen(item.lesson, e.currentTarget) : onOpenEvent(item.event!, e.currentTarget); } }}>
                     <strong>{item.title}</strong>
-                    <span>{timeOf(item.starts_at)}</span>
+                    <span>{timeOf(item.starts_at)}–{timeOf(end)}</span>
+                    {item.kind === "event" && canDrag && <span className="cal-resize" aria-hidden="true" onPointerDown={(e) => onPointerDown(e, item, true)} />}
                   </button>
                 );
               })}
-              {ghost && ghost.day === i && <span className="cal-ghost" style={{ top: ghost.top, height: ghost.height }} />}
-              {draft && draft.day === i && <span className="cal-draft" style={{ top: topOf(draft.from), height: Math.max(18, ((draft.to - draft.from) / 60) * ROW - 2) }}>{clock(draft.from)}–{clock(draft.to)}</span>}
-              {key === today && nowTop >= 0 && nowTop <= HOURS.length * ROW && <span className="cal-now" style={{ top: nowTop }} aria-hidden="true" />}
+              {ghost && ghost.day === i && <span className="cal-ghost" style={{ top: topOf(ghost.from), height: heightOf(ghost.to - ghost.from) }}>{clock(ghost.from)}–{clock(ghost.to)}</span>}
+              {draft && draft.day === i && <span className="cal-draft" style={{ top: topOf(draft.from), height: heightOf(draft.to - draft.from) }}><strong>{t("Sự kiện mới")}</strong>{clock(draft.from)}–{clock(draft.to)}</span>}
+              {key === today && nowTop >= 0 && nowTop <= HOURS.length * row && <span className="cal-now" style={{ top: nowTop }} aria-hidden="true" />}
             </div>
           ))}
         </div>
