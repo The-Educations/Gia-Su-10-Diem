@@ -9,7 +9,7 @@ test("chat contact masking + admin safety queue + flagged thread", async ({ brow
   const errors: string[] = [];
   for (const p of [admin, student]) p.on("pageerror", (e) => errors.push(e.message));
   await login(admin, "admin"); await login(student, "student");
-  const tag = `lienhe-${Date.now()}`;
+  const tag = `e2e${Math.random().toString(36).slice(2, 10)}`;
 
   // Student starts an inquiry with a tutor and sends contact detail.
   const tutors = await (await student.request.get("/api/tutors")).json();

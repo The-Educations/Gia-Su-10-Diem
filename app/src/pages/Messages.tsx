@@ -319,7 +319,7 @@ export default function Messages() {
       lastSender: b.last_sender, lastIsEvent: b.last_is_event,
     })),
   ];
-  threads.sort((a, b) => msgDate(b.lastAt).getTime() - msgDate(a.lastAt).getTime());
+  threads.sort((a, b) => (a.kind === "support" ? 0 : 1) - (b.kind === "support" ? 0 : 1) || msgDate(b.lastAt).getTime() - msgDate(a.lastAt).getTime());
   const needle = q.trim().toLowerCase();
   const visible = threads.filter((th) => (filter === "all" || th.kind === filter) && (!needle || th.name.toLowerCase().includes(needle) || th.last.toLowerCase().includes(needle)));
   const selected = threads.find((th) => params.get("c") === th.key) || threads.find((th) => params.get(th.kind) === String(th.id)) || (!params.size && user?.role !== "admin" ? threads.find((th) => th.kind === "support") : undefined),
