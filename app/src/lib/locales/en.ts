@@ -854,3 +854,43 @@ const enTutor404: Record<string, string> = {
   "Hồ sơ chưa được công bố.": "This profile is not published yet.",
 };
 for (const [vi, text] of Object.entries(enTutor404)) en[vi] = text;
+for (const [vi, text] of Object.entries(enTutor404)) en[vi] = text;
+
+// Session J: admin sessions worklist + shell (keys added by #126/#125 merged after J)
+const enAdminSessions: Record<string, string> = {
+  "7 ngày": "7 days",
+  "Buổi đặt lịch sẽ chuyển sang Đã hủy; hai bên nhận được thông báo kèm lý do. Buổi đặt lịch lẻ không giữ tiền nên không có khoản nào cần hoàn.": "The session will be marked Cancelled; both sides get a notification with the reason. One-off sessions hold no funds, so nothing is refunded.",
+  "Chi tiết buổi đặt lịch": "Session details",
+  "Chỉ nhắc được buổi quá giờ chưa xác nhận": "Only overdue unconfirmed sessions can be reminded",
+  "Gia sư / Học sinh": "Tutor / Student",
+  "Giữ buổi đặt lịch": "Keep session",
+  "Hai bên tham gia": "Both participants",
+  "Hủy buổi đặt lịch": "Cancel session",
+  "Hủy buổi đặt lịch?": "Cancel this session?",
+  "Nhận xét buổi học": "Lesson feedback",
+  "Tháng này": "This month",
+  "Từ": "From",
+  "Xuất CSV ({n})": "Export CSV ({n})",
+  "Xóa lọc ngày": "Clear date filter",
+  "cần xử lý": "needs attention",
+  "xác nhận 7 ngày": "confirmed 7 days",
+  "{n} việc cần xử lý": "{n} items need attention",
+  "Đã hủy buổi đặt lịch": "Session cancelled",
+  "Đã mở lớp": "Class created",
+  "Đặt lịch lẻ": "One-off booking",
+  "Đặt lịch": "Booking",
+  "Đến": "To",
+  "đang diễn ra": "in progress",
+  "Nhận buổi học": "Accept lesson",
+  "đ": "đ",
+  "Chấm buổi học": "Rate lesson",
+  "Đánh giá": "Review",
+  "Đánh giá đã bị ẩn": "Review hidden",
+  "Đã đánh giá {n}/5": "Reviewed {n}/5",
+  "Phản hồi": "Reply",
+  "Báo cáo": "Report",
+  "Lý do báo cáo": "Report reason",
+  "Chi tiết buổi học": "Lesson details",
+  "Giờ Việt Nam · UTC+7": "Vietnam time · UTC+7",
+};
+for (const [vi, text] of Object.entries(enAdminSessions)) en[vi] = text;

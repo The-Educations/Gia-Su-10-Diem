@@ -35,7 +35,7 @@ export default function Onboarding() {
     finally { setBusy(false); }
   }
   return <Page><section className="account-entry setup-quick" aria-busy={busy}>
-    <span className="brand-mark" aria-hidden="true">10<span>đ</span></span>
+    <span className="brand-mark" aria-hidden="true">10<span>{t("đ")}</span></span>
     <h1 ref={heading} tabIndex={-1}>{step === 0 ? t("Bạn muốn bắt đầu thế nào?") : t("Thông tin cơ bản")}</h1>
     <form onSubmit={save}><FieldGroup>
       {step === 0 ? <ToggleGroup type="single" orientation="vertical" spacing={2} variant="outline" value={role} onValueChange={v => { if (v) setRole(v); }} className="setup-roles" aria-label={t("Vai trò của bạn")}>
