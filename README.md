@@ -19,15 +19,19 @@ Mở **http://127.0.0.1:4174/app/**. Bỏ qua `seed:demo` nếu muốn bắt đ�
 | Vai trò mẫu | Email |
 | --- | --- |
 | Học sinh (đã xác minh) | `student@demo.giasu.test` |
+| Học sinh (chờ xác minh, có học bạ) | `bao@demo.giasu.test` |
+| Học sinh (chưa xác minh) | `nhi@demo.giasu.test` |
 | Phụ huynh (liên kết với học sinh trên) | `parent@demo.giasu.test` |
 | Gia sư | `chau@demo.giasu.test` |
+| Gia sư chờ duyệt hồ sơ mới | `tuan@demo.giasu.test` |
+| Gia sư chờ duyệt bản sửa | `trang@demo.giasu.test` |
 | Quản trị | `admin@demo.giasu.test` |
 
 Ở local, trang đăng nhập có nút **Đăng nhập nhanh** cho từng vai trò (không có trên production).
 
 Mật khẩu mặc định cho các tài khoản minh họa: `DemoStudy2026!`. Có thể đặt `DEMO_PASSWORD` trước lần seed đầu tiên; seed lại không đổi mật khẩu hoặc đặt lại dữ liệu tài khoản đã tồn tại. Các hồ sơ đều hư cấu và có nhãn mẫu. Seed demo bị chặn trong production.
 
-Demo gồm 6 gia sư có minh chứng đã xác minh, một lớp Toán đang học (có buổi đã xác nhận, buổi chờ xác nhận, bài giảng), số dư, một offer đang chờ gia sư, một offer gia sư gửi học sinh, phụ huynh liên kết, favorites và hội thoại tư vấn. Seed có dấu mốc để chạy lại không nhân đôi dữ liệu hoặc ghi đè hồ sơ đã sửa. Các test dùng hồ sơ mẫu nhưng tắt activity để kiểm tra lifecycle riêng.
+Demo gồm 8 gia sư (6 đã duyệt kèm minh chứng, 1 hồ sơ mới chờ duyệt, 1 bản sửa chờ duyệt), lớp 1-1 và lớp nhóm với buổi học ở mọi trạng thái (sắp tới, hôm nay, đã xong, đã hủy, tranh chấp, quá giờ chưa xác nhận, trùng giờ), đề nghị ở mọi trạng thái cùng một offer học thử, ví và Xu khác 0, lệnh nạp/rút ở mọi trạng thái (kèm một tiền về chưa khớp mã và một dòng sai khóa IPN), hơn 30 dòng nhật ký có chi tiết, bài cộng đồng và tin tức đã đăng/chờ duyệt/bị báo cáo/nháp, hội thoại tư vấn, tin hỗ trợ và thông báo chưa đọc. Seed có dấu mốc để chạy lại không nhân đôi dữ liệu hoặc ghi đè hồ sơ đã sửa. Các test dùng hồ sơ mẫu nhưng tắt activity để kiểm tra lifecycle riêng.
 
 ## Hồ sơ gia sư và liên hệ
 

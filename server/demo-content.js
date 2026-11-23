@@ -5,6 +5,7 @@ import { saveUpload } from "./uploads.js";
 import { normalizeCredential } from "./credentials.js";
 import { startClass } from "./classes.js";
 import { move, wallet } from "./wallet.js";
+import { seedShowcase } from "./demo-showcase.js";
 
 const profiles = [
   [
@@ -202,7 +203,7 @@ function seedClasses(db) {
     throw e;
   }
 }
-export async function enrichDemo(db, { activity = false } = {}) {
+export async function enrichDemo(db, { activity = false, hash = "" } = {}) {
   for (const [i, [slug, , , bio]] of profiles.entries()) {
     const tutor = one(
       db,
@@ -237,7 +238,10 @@ export async function enrichDemo(db, { activity = false } = {}) {
       throw e;
     }
   }
-  if (activity) seedClasses(db);
+  if (activity) {
+    seedClasses(db);
+    await seedShowcase(db, hash);
+  }
   if (
     !activity ||
     one(db, "SELECT key FROM demo_seeds WHERE key='activity-v1'")
