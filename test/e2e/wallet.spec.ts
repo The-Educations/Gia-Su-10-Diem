@@ -101,3 +101,35 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
   expect(errors).toEqual([]);
   await sc.close(); await tc.close();
 });
+
+test("a simulated transfer updates the balance chip and toasts without a reload", async ({ page }) => {
+  await login(page, "student");
+  await page.goto("/app/wallet");
+  await page.getByRole("button", { name: "Nạp tiền", exact: true }).click();
+  await page.getByRole("button", { name: "1.000.000 ₫" }).click();
+  await page.getByRole("button", { name: /Tạo lệnh nạp 1.000.000 ₫/ }).click();
+  await page.waitForSelector(".deposit-code");
+  // The pending order is tracked even after the dialog closes.
+  const pending = async () => (await page.evaluate(() => JSON.parse(sessionStorage.getItem("giasu.pendingDeposits") || "[]"))) as { id: number }[];
+  expect((await pending()).length).toBe(1);
+  await page.keyboard.press("Escape");
+  const chip = page.locator(".balance-chip");
+  await expect(chip).toContainText("100.000 ₫");
+  const id = (await pending())[0].id;
+  const toast = page.getByText(/Đã nhận\s+1\.000\.000\s*₫\s*vào số dư/);
+  await page.request.post(`/api/wallet/deposits/${id}/simulate`, { data: {} });
+  await expect(toast).toBeVisible({ timeout: 8000 });
+  await expect(chip).toContainText("1.100.000 ₫", { timeout: 8000 });
+  expect((await pending()).length).toBe(0);
+
+  // And a reload while pending still picks the payment up afterwards.
+  const dialog = page.locator(".topup-dialog");
+  await page.getByRole("button", { name: "Nạp tiền", exact: true }).click();
+  await dialog.getByRole("button", { name: "1.000.000 ₫" }).click();
+  await dialog.getByRole("button", { name: /Tạo lệnh nạp 1.000.000 ₫/ }).click();
+  await page.waitForSelector(".deposit-code");
+  await page.reload();
+  const id2 = (await pending())[0].id;
+  await page.request.post(`/api/wallet/deposits/${id2}/simulate`, { data: {} });
+  await expect(chip).toContainText("2.100.000 ₫", { timeout: 8000 });
+});

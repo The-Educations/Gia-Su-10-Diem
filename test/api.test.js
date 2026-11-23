@@ -2342,7 +2342,7 @@ test("tutor credentials need proof, stay private and show only approved labels p
 test("wallet deposits, SePay webhook verdicts, offers holding money and tutor credits", async (t) => {
   const { createHmac } = await import("node:crypto");
   const secret = "test-sepay-secret";
-  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
   const student = client(), tutor = client(), admin = client();
   const s = await student.login("student"), u = await tutor.login("chau"); await admin.login("admin");
   const hook = (payload, key = secret, stamp = Math.floor(Date.now() / 1000)) => {
@@ -2354,6 +2354,8 @@ test("wallet deposits, SePay webhook verdicts, offers holding money and tutor cr
   assert.equal(dep.status, 201);
   assert.match(dep.data.code, /^GSD[A-Z0-9]{8}$/);
   assert.ok(dep.data.qr_url.startsWith("https://vietqr.app/img?"));
+  assert.equal(dep.data.pay_url, null, "a bank-ready order never links out to SePay");
+  assert.equal(dep.data.checkout, null, "and never carries a hosted-checkout form");
   assert.equal((await student.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST")).status, 404);
   const event = { id: 9001, gateway: "MBBank", transactionDate: "2026-11-22 10:00:00", accountNumber: "0123456789", subAccount: "", code: dep.data.code, content: `${dep.data.code} nap tien`, transferType: "in", description: "", transferAmount: 2000000, accumulated: 0, referenceCode: "FT1" };
   assert.equal((await hook(event, "wrong")).status, 401);
@@ -2664,10 +2666,11 @@ test("students verify with a school record; one record and one student code per 
 });
 test("SePay payment gateway: signed checkout form and IPN credits a top-up once", async (t) => {
   const { createHmac } = await import("node:crypto");
-  const sepay = { secret: "", account: "", bank: "", holder: "", prefix: "GSD", merchant: "SP-TEST-1", merchantSecret: "spsk_test_x", ipnSecret: "ipn-secret-1234567890", sandbox: true, webhook: false, gateway: true, ready: true };
+  const sepay = { secret: "", account: "", bank: "", bankReady: false, holder: "", prefix: "GSD", merchant: "SP-TEST-1", merchantSecret: "spsk_test_x", ipnSecret: "ipn-secret-1234567890", sandbox: true, webhook: false, gateway: true, ready: true };
   const { client, base } = await fixture(t, { sepay, origin: "https://giasu.example" });
   const s = client(); await s.login("student");
   const dep = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  // Gateway-only (no bank account): the hosted checkout and pay link still work.
   assert.equal(dep.checkout.action, "https://pay-sandbox.sepay.vn/v1/checkout/init");
   const f = dep.checkout.fields;
   assert.deepEqual(Object.keys(f), ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url", "lang", "signature"]);
