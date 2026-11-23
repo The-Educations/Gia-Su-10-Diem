@@ -96,7 +96,7 @@ jobs:
         # A dropped connection to Cloudflare is retried; a real error fails all three tries.
         run: |
           for attempt in 1 2 3; do
-            npx wrangler deploy --durable-objects-code-update-mode immediate && exit 0
+            npx wrangler deploy --durable-objects-code-update-mode immediate --var GIT_COMMIT:$GITHUB_SHA --var DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ) && exit 0
             echo "::warning::wrangler deploy attempt $attempt failed"
             sleep $((attempt * 15))
           done
