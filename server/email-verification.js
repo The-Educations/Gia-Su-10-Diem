@@ -20,7 +20,21 @@ ${content}
 
 export function createMailflareSender({ url = "https://mail.giasudiem10.online", key, mailboxId, from = "contact@giasudiem10.online" } = {}) {
   if (!key || !mailboxId) return null;
-  return async ({ to, link, code, kind = "verification", detail, reason, occurredAt }) => {
+  return async ({ to, link, code, kind = "verification", detail, reason, occurredAt, subject: noticeSubject, message: noticeMessage, action: noticeAction, settings }) => {
+    // An important event in the app (offer, money, lesson), with one button back to it.
+    if (kind === "notice") {
+      const footer = `Bạn nhận email này vì đã bật thông báo qua email. <a href="${escapeHtml(settings || link)}" style="color:#73766c">Tắt trong Cài đặt → Thông báo</a>.`;
+      const content = `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#55594f">${escapeHtml(noticeMessage)}</p><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="background:#852f36;border-radius:8px"><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 22px;font-size:14px;font-weight:700;line-height:1.4;color:#ffffff;text-decoration:none">${escapeHtml(noticeAction)}</a></td></tr></table>`;
+      const response = await fetch(`${url}/api/v1/send`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ mailboxId, from, to: [to], subject: `${noticeSubject} — Gia Sư 10 Điểm`, undoSend: false, trackOpens: false,
+          text: `${noticeMessage}\n${link}\n\nTắt email thông báo: ${settings || link}`, html: emailFrame(noticeSubject, content, footer) }),
+      });
+      if (!response.ok) throw new Error("Mail delivery unavailable");
+      return;
+    }
     const signup = kind === "signup";
     const update = kind === "profile_update";
     const moderation = kind === "community_moderation";
