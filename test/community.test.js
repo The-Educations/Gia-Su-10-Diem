@@ -1034,3 +1034,56 @@ test("draft images stay private and survive upload cleanup until publication", a
   );
   assert.equal((await imageRequest(null, url)).status, 200);
 });
+
+test("admin deletes hidden posts, undoes, purges, and expired posts clean up lazily", async (t) => {
+  const { call, create, approve, db, ids } = await fixture(t);
+  const id = await create();
+  await approve(id);
+  const post = (pid) => one(db, "SELECT * FROM community_posts WHERE id=?", pid);
+  const audits = (action) =>
+    db.prepare("SELECT COUNT(*) n FROM audit WHERE action=?").get(action).n;
+  const notes = () =>
+    db.prepare("SELECT COUNT(*) n FROM community_notifications").get().n;
+
+  assert.equal((await call("admin", `/admin/community/posts/${id}/delete`, "POST")).status, 409);
+  assert.equal(post(id).status, "approved");
+
+  await call("parent", `/community/posts/${id}/comments`, "POST", { body: "Học đều nhé" });
+  await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
+  const before = notes();
+  assert.equal((await call("student", `/admin/community/posts/${id}/delete`, "POST")).status, 403);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/delete`, "POST")).status, 200);
+  assert.equal(post(id).status, "deleted");
+  assert.equal((await call(null, `/community/posts/${id}`)).status, 404);
+  assert.equal(notes(), before);
+  assert.equal(audits("community.post.delete"), 1);
+
+  assert.equal((await call("admin", `/admin/community/posts/${id}/undelete`, "POST")).status, 200);
+  assert.equal(post(id).status, "hidden");
+  assert.equal((await call("admin", `/admin/community/posts/${id}/undelete`, "POST")).status, 409);
+  assert.equal((await call("admin", `/admin/community/posts/${id}`, "DELETE")).status, 409);
+
+  await call("admin", `/admin/community/posts/${id}/delete`, "POST");
+  assert.equal((await call("student", `/admin/community/posts/${id}`, "DELETE")).status, 403);
+  assert.equal((await call("admin", `/admin/community/posts/${id}`, "DELETE")).status, 200);
+  assert.equal(post(id), undefined);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM community_comments WHERE post_id=?").get(id).n, 0);
+  assert.equal(audits("community.post.purge"), 1);
+
+  const age = async (pid, days) => {
+    await call("admin", `/admin/community/posts/${pid}/hide`, "POST", { note: "x" });
+    await call("admin", `/admin/community/posts/${pid}/delete`, "POST");
+    run(db, "UPDATE community_posts SET updated_at=datetime('now',?) WHERE id=?", `-${days} days`, pid);
+  };
+  const young = await create(), old = await create();
+  await approve(young);
+  await approve(old);
+  await age(young, 29);
+  await age(old, 31);
+  const list = (await call("admin", "/admin/community/posts?status=deleted")).data;
+  assert.deepEqual(list.items.map((p) => p.id), [young]);
+  assert.equal(list.items[0].days_left, 1);
+  assert.equal(post(old), undefined);
+  assert.equal(audits("community.post.purge"), 2);
+  assert.equal((await call("admin", `/admin/community/posts/${young}/undelete`, "POST")).status, 200);
+});
