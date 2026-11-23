@@ -1,4 +1,5 @@
 import {
+  CalendarCheck,
   CalendarDays,
   Heart,
   House,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import type { User } from "./types";
 
-export type NavItem = { to: string; label: string; icon: LucideIcon; short?: string };
+export type NavItem = { to: string; label: string; icon: LucideIcon; short?: string; badge?: string };
 export type NavModel = {
   home: string;
   primary: NavItem[];
@@ -38,12 +39,12 @@ const schedule = item("/schedule", "Lịch", CalendarDays);
 export function navigationFor(user: User | null): NavModel {
   if (!user) return { home: "/tutors", primary: [find, community, news], groups: [], bar: [find, community, news] };
   if (user.role === "admin") {
-    const admin = item("/admin", "Quản trị", ShieldCheck);
+    const admin = item("/admin", "Quản trị", ShieldCheck), sessions = { ...item("/sessions", "Buổi học", CalendarCheck), badge: "sessions" };
     return {
       home: "/admin",
-      primary: [admin, schedule, messages],
+      primary: [admin, sessions, schedule, messages],
       groups: [{ label: "Khám phá", items: [find, community, news] }],
-      bar: [admin, schedule, messages, community],
+      bar: [admin, sessions, schedule, messages, community],
     };
   }
   const overview = item("/workspace", "Tổng quan", House);

@@ -3607,3 +3607,7 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 .audit-more { display: flex; justify-content: center; padding: 14px 0 4px; }
 .audit-trail h3 { margin: 10px 0 4px; font-size: 13px; color: var(--muted-foreground); }
 .finance-dismissed summary { margin: 14px 0 6px; font-size: 13px; color: var(--muted-foreground); cursor: pointer; }
+
+/* Sessions page: the compact tracking strip and the sidebar count. */
+.sessions-track { margin: 0 0 4px; font-size: 13px; color: var(--muted-foreground); }
+.nav-badge { min-width: 18px; height: 18px; padding: 0 5px; margin-left: auto; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 11px; font-weight: 600; font-style: normal; display: inline-grid; place-items: center; }

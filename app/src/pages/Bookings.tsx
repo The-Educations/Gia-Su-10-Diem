@@ -4,7 +4,7 @@ import { type StudyOffer } from "@/lib/offers";
 import { LessonExport } from "@/components/lesson-export";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { MessageCircle, ExternalLink, CalendarDays, List, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, money, dateTime } from "@/lib/api";
@@ -33,6 +33,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 export default function Bookings() {
+  const { user: me } = useApp();
+  if (me?.role === "admin") return <Navigate to="/sessions" replace />;
   const [params, setParams] = useSearchParams();
   const filter = params.get("status") || "";
   const offerId = params.get("offer") || "";

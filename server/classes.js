@@ -364,7 +364,15 @@ export function registerClasses(app, db, auth, audit) {
         AND NOT EXISTS(SELECT 1 FROM session_members x WHERE x.session_id=sm.session_id AND x.outcome='disputed')`).n,
     });
   });
-  // The sessions worklist: one row per (lesson, student) pair; the client groups them back by lesson.
+  // Booking rows shaped like session rows so one worklist can show both flows.
+  const bookingSql = `SELECT b.id,'booking' AS source,NULL AS class_id,b.starts_at,b.duration_minutes AS minutes,b.status,NULL AS moved_from,
+    (sub.name || ' · ' || su.name) AS title,'amber' AS color,b.status AS class_status,b.tutor_id,tu.name AS tutor_name,
+    NULL AS member_id,b.student_id,'active' AS member_status,b.rate,NULL AS held,NULL AS sessions_total,
+    NULL AS outcome,b.note,NULL AS tutor_confirmed_at,NULL AS student_confirmed_at,NULL AS rating,NULL AS settled,
+    su.name AS student_name
+    FROM bookings b JOIN users su ON su.id=b.student_id JOIN users tu ON tu.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id`;
+  // The sessions worklist: one row per (lesson, student) pair plus one row per
+  // standalone booking; the client groups lessons back by lesson.
   app.get("/api/admin/sessions", auth("admin"), (req, res) => {
     upkeep(db);
     const q = z.object({
@@ -372,12 +380,18 @@ export function registerClasses(app, db, auth, audit) {
       member: z.coerce.number().int().positive().optional(),
       tutor: z.coerce.number().int().positive().optional(),
       student: z.coerce.number().int().positive().optional(),
+      from: z.string().max(30).optional(),
+      to: z.string().max(30).optional(),
     }).parse(req.query);
     const [where, args] = [
-      [q.class && "cs.class_id=?", q.member && "sm.member_id=?", q.tutor && "c.tutor_id=?", q.student && "m.student_id=?"].filter(Boolean).join(" AND "),
-      [q.class, q.member, q.tutor, q.student].filter((v) => v !== undefined),
+      [q.class && "cs.class_id=?", q.member && "sm.member_id=?", q.tutor && "c.tutor_id=?", q.student && "m.student_id=?", q.from && "cs.starts_at>=?", q.to && "cs.starts_at<?"].filter(Boolean).join(" AND "),
+      [q.class, q.member, q.tutor, q.student, q.from, q.to].filter((v) => v !== undefined),
     ];
-    res.json(all(db, `SELECT cs.id,cs.class_id,cs.starts_at,cs.minutes,cs.status,cs.moved_from,
+    const [bwhere, bargs] = [
+      [q.tutor && "b.tutor_id=?", q.student && "b.student_id=?", q.from && "b.starts_at>=?", q.to && "b.starts_at<?"].filter(Boolean).join(" AND "),
+      [q.tutor, q.student, q.from, q.to].filter((v) => v !== undefined),
+    ];
+    const lessons = all(db, `SELECT cs.id,'lesson' AS source,cs.class_id,cs.starts_at,cs.minutes,cs.status,cs.moved_from,
       c.title,c.color,c.status AS class_status,c.tutor_id,tu.name AS tutor_name,
       m.id AS member_id,m.student_id,m.status AS member_status,m.rate,m.held,m.sessions_total,
       sm.outcome,sm.note,sm.tutor_confirmed_at,sm.student_confirmed_at,sm.rating,sm.settled,
@@ -385,7 +399,56 @@ export function registerClasses(app, db, auth, audit) {
       FROM class_sessions cs JOIN classes c ON c.id=cs.class_id JOIN users tu ON tu.id=c.tutor_id
       LEFT JOIN session_members sm ON sm.session_id=cs.id
       LEFT JOIN class_members m ON m.id=sm.member_id LEFT JOIN users su ON su.id=m.student_id
-      ${where ? `WHERE ${where}` : ""} ORDER BY cs.starts_at DESC LIMIT 500`, ...args));
+      ${where ? `WHERE ${where}` : ""} ORDER BY cs.starts_at DESC LIMIT 500`, ...args);
+    const bookings = q.class || q.member ? [] : all(db, `${bookingSql}${bwhere ? ` WHERE ${bwhere}` : ""} ORDER BY b.starts_at DESC LIMIT 500`, ...bargs);
+    res.json([...lessons, ...bookings].sort((a, b) => b.starts_at.localeCompare(a.starts_at)).slice(0, 500));
+  });
+  // Small numbers for the tracking bar and the sidebar badge.
+  app.get("/api/admin/sessions/summary", auth("admin"), (req, res) => {
+    upkeep(db);
+    const vnDaySql = (col) => `substr(datetime(${col},'+7 hours'),1,10)`;
+    const lessons = one(db, `SELECT
+      COUNT(*) FILTER (WHERE ${vnDaySql("cs.starts_at")}=${vnDaySql("'now'")}) AS today,
+      COUNT(*) FILTER (WHERE cs.status='scheduled' AND datetime(cs.starts_at)<=datetime('now') AND datetime(cs.starts_at,'+'||cs.minutes||' minutes')>datetime('now')) AS running,
+      COUNT(*) FILTER (WHERE sm.outcome='disputed' OR (sm.outcome='pending' AND cs.status='scheduled' AND datetime(cs.starts_at,'+'||cs.minutes||' minutes')<datetime('now'))) AS waiting,
+      COUNT(*) FILTER (WHERE sm.outcome='confirmed' AND datetime(cs.starts_at,'+'||cs.minutes||' minutes')>datetime('now','-7 days')) AS confirmed7,
+      COUNT(*) FILTER (WHERE datetime(cs.starts_at,'+'||cs.minutes||' minutes')>datetime('now','-7 days') AND datetime(cs.starts_at,'+'||cs.minutes||' minutes')<datetime('now') AND sm.outcome IN ('confirmed','charged','refunded')) AS ended7
+      FROM class_sessions cs LEFT JOIN session_members sm ON sm.session_id=cs.id`);
+    const bookings = one(db, `SELECT
+      COUNT(*) FILTER (WHERE ${vnDaySql("starts_at")}=${vnDaySql("'now'")}) AS today,
+      COUNT(*) FILTER (WHERE status='accepted' AND datetime(starts_at)<=datetime('now') AND datetime(starts_at,'+'||duration_minutes||' minutes')>datetime('now')) AS running,
+      COUNT(*) FILTER (WHERE status IN ('missed','tutor_missed')) AS waiting,
+      COUNT(*) FILTER (WHERE status='completed' AND datetime(starts_at,'+'||duration_minutes||' minutes')>datetime('now','-7 days')) AS confirmed7,
+      COUNT(*) FILTER (WHERE datetime(starts_at,'+'||duration_minutes||' minutes')>datetime('now','-7 days') AND datetime(starts_at,'+'||duration_minutes||' minutes')<datetime('now') AND status IN ('completed','missed','tutor_missed')) AS ended7
+      FROM bookings`);
+    const merged = { today: 0, running: 0, waiting: 0, confirmed7: 0, ended7: 0 };
+    for (const r of [lessons, bookings]) for (const k of Object.keys(merged)) merged[k] += r[k] || 0;
+    res.json(merged);
+  });
+  // One standalone booking: people, money, messages and the audit trail.
+  app.get("/api/admin/bookings/:id", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const b = one(db, `SELECT b.*,su.name AS student_name,su.email AS student_email,tu.name AS tutor_name,tu.email AS tutor_email,sub.name AS subject_name
+      FROM bookings b JOIN users su ON su.id=b.student_id JOIN users tu ON tu.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id WHERE b.id=?`, id);
+    if (!b) fail(404, "Không tìm thấy buổi đặt lịch.");
+    res.json({
+      booking: b,
+      history: all(db, "SELECT a.id,a.action,a.created_at,u.name FROM audit a JOIN users u ON u.id=a.actor_id WHERE a.target=? ORDER BY a.id DESC LIMIT 20", String(id)),
+    });
+  });
+  // Admin cancels a standalone booking the same way a participant could.
+  app.post("/api/admin/bookings/:id/cancel", auth("admin"), (req, res) => {
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const { note } = z.object({ note: z.string().trim().min(3).max(300) }).parse(req.body);
+    transaction(db, () => {
+      const b = one(db, `SELECT b.*,su.name AS student_name,tu.name AS tutor_name,sub.name AS subject_name FROM bookings b
+        JOIN users su ON su.id=b.student_id JOIN users tu ON tu.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id WHERE b.id=?`, id);
+      if (!b || !["pending", "accepted"].includes(b.status)) fail(409, "Buổi đặt lịch không còn hủy được.");
+      run(db, "UPDATE bookings SET status='cancelled',cancelled_by=?,cancelled_at=? WHERE id=? AND status IN ('pending','accepted')", req.user.id, new Date().toISOString(), id);
+      for (const uid of [b.student_id, b.tutor_id]) notify(db, uid, "lesson_cancelled", { actor: "Quản trị viên", subject: b.subject_name || "", link: `/bookings?lesson=${id}` });
+      audit(req.user.id, "booking.admin_cancel", id, { note, student: b.student_name, tutor: b.tutor_name, subject: b.subject_name, starts_at: b.starts_at, rate: b.rate });
+    });
+    res.json({ ok: true });
   });
   // One lesson in full: students and their money, move requests and the admin actions already taken.
   app.get("/api/admin/sessions/:id", auth("admin"), (req, res) => {

@@ -121,6 +121,9 @@ app.post("/__test/session-class", express.json(), (req, res) => {
       return sid;
     };
     const disputed = mk(-3, "disputed", `Gia sư không vào lớp ${slug}`), waiting = mk(-2, "pending", ""), upcoming = mk(26, "pending", "");
-    res.json({ class_id: cid, slug, disputed, waiting, upcoming, member_id: mid, student_id: student.id, student_name: student.name });
+    const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at) VALUES (?,?)", tutor.id, new Date(Date.now() + 30 * 3600000).toISOString()).lastInsertRowid);
+    const booking = Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,status,duration_minutes) VALUES (?,?,?,?,?,?,?,?,?,?)",
+      student.id, tutor.id, slot, "vat-li", new Date(Date.now() + 30 * 3600000).toISOString(), 180000, "online", `Lịch lẻ ${slug}`, "accepted", 60).lastInsertRowid);
+    res.json({ class_id: cid, slug, disputed, waiting, upcoming, member_id: mid, booking_id: booking, student_id: student.id, student_name: student.name });
   } finally { db.close(); }
 });

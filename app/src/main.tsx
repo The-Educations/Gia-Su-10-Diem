@@ -32,6 +32,7 @@ const Offers = lazy(() => import("./pages/Offers"));
 const Proposals = lazy(() => import("./pages/Proposals"));
 const WalletPage = lazy(() => import("./pages/Wallet"));
 const Schedule = lazy(() => import("./pages/Schedule"));
+const SessionsPage = lazy(() => import("./pages/SessionsPage"));
 const FamilyPage = lazy(() => import("./pages/Family"));
 const ClassList = lazy(() => import("./pages/Classes").then((m) => ({ default: m.ClassList })));
 const ClassDetail = lazy(() => import("./pages/Classes").then((m) => ({ default: m.ClassDetail })));
@@ -173,6 +174,14 @@ function Shell() {
                   element={
                     <Require>
                       <Dashboard />
+                    </Require>
+                  }
+                />
+                <Route
+                  path="/sessions"
+                  element={
+                    <Require>
+                      <SessionsPage />
                     </Require>
                   }
                 />
