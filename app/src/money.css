@@ -440,10 +440,6 @@
 @media (prefers-reduced-motion: reduce) { .today-next { transition: none; } }
 
 .admin-students { display: grid; gap: 16px; }
-.student-filter { margin: 0; }
-.student-filter button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: none; font: inherit; font-size: 14px; color: var(--muted-foreground); cursor: pointer; }
-.student-filter button[aria-pressed="true"] { background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: 0 1px 2px rgb(40 40 32 / 8%); }
-.student-filter button span { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--surface-active); font-size: 12px; font-variant-numeric: tabular-nums; }
 .student-checks { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .student-checks li { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
 .student-check-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
