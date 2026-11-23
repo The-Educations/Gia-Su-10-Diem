@@ -51,7 +51,7 @@ export function ClassList() {
           })}
         </div>
       ) : (
-        <Blank title={t(user?.role === "tutor" ? "Chưa có lớp. Nhận một offer để mở lớp đầu tiên." : "Chưa có lớp. Gửi offer cho gia sư để bắt đầu.")}
+        <Blank title={t(user?.role === "tutor" ? "Chưa có lớp. Nhận một đề nghị để mở lớp đầu tiên." : "Chưa có lớp. Gửi đề nghị cho gia sư để bắt đầu.")}
           action={<Button asChild><Link to={user?.role === "tutor" ? "/proposals" : "/tutors"}>{t(user?.role === "tutor" ? "Xem offer" : "Tìm gia sư")}</Link></Button>} />
       )}
     </Page>

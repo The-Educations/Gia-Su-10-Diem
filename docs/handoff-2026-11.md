@@ -39,6 +39,8 @@ Tài liệu này mô tả những gì đang chạy trên production sau các PR 
 
 ## Ngôn ngữ
 
+- Thuật ngữ trong giao diện tiếng Việt: **Đề nghị** (trước đây "offer") và **Xu** (trước đây "credit"). Tên kỹ thuật trong mã (`proposals`, `credits_*`) giữ nguyên.
+
 - Tiếng Việt là ngôn ngữ gốc. Chế độ English dịch toàn bộ giao diện bằng `app/src/lib/page-translator.ts` và từ điển `app/src/lib/locales/en.ts` + `en-more.ts`. Nội dung người dùng viết không bị dịch.
 - Thêm chữ mới: viết tiếng Việt như bình thường, rồi thêm một dòng `"Tiếng Việt": "English"` vào `en-more.ts`. Trang giới thiệu dùng cùng từ điển (lọc lúc build trong `scripts/build-page.js`).
 - Kiểm tra: `test/e2e/language.spec.ts`; script quét chữ sót nằm trong lịch sử phát triển (`.taste-skill/scan-en.mjs`, không commit).

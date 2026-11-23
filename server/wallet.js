@@ -106,7 +106,7 @@ export function move(db, userId, kind, { amount = 0, held = 0, ref = "", note = 
 
 export function spendCredits(db, userId, count, ref) {
   const w = wallet(db, userId), free = Math.min(w.credits_free, count), paid = count - free;
-  if (paid > w.credits_paid) fail(402, `Cần ${count} credit. Mua thêm credit để gửi offer.`);
+  if (paid > w.credits_paid) fail(402, `Cần ${count} Xu. Mua thêm Xu để gửi đề nghị.`);
   run(db, "UPDATE wallets SET credits_free=credits_free-?,credits_paid=credits_paid-? WHERE user_id=? AND credits_free>=? AND credits_paid>=?", free, paid, userId, free, paid);
   run(db, "INSERT INTO wallet_entries(user_id,kind,credits,ref) VALUES (?,?,?,?)", userId, "credits_spent", -count, ref);
 }
@@ -385,7 +385,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   app.post("/api/credits/purchase", auth("tutor"), (req, res) => {
     const { credits } = z.object({ credits: z.number().int().positive() }).parse(req.body);
     const pack = settings(db).credit_packs.find((p) => p.credits === credits);
-    if (!pack) fail(400, "Gói credit không tồn tại.");
+    if (!pack) fail(400, "Gói Xu không tồn tại.");
     transaction(db, () => {
       move(db, req.user.id, "credits_purchased", { amount: -pack.price, ref: `credits:${credits}` });
       run(db, "UPDATE wallets SET credits_paid=credits_paid+? WHERE user_id=?", credits, req.user.id);

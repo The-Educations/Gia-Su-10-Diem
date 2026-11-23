@@ -2211,6 +2211,35 @@ test("notifications reach the other party, collapse per conversation and stay pr
   assert.equal((await tutor.request("/notifications/unread-count")).data.count, 0);
   assert.equal((await tutor.request("/notifications/read", "POST", {})).status, 400);
   assert.equal((await client().request("/notifications")).status, 401);
+  // Email for important events is on until turned off, per topic.
+  assert.deepEqual((await tutor.request("/account/notifications")).data, { proposals: true, money: true, lessons: true });
+  assert.deepEqual((await tutor.request("/account/notifications", "PUT", { money: false })).data, { proposals: true, money: false, lessons: true });
+  assert.equal((await tutor.request("/account/notifications", "PUT", { spam: true })).status, 400);
+  assert.equal((await tutor.request("/account/notifications")).data.money, false);
+});
+test("important notices also arrive by email after the request, unless turned off", async (t) => {
+  const { client, emails } = await fixture(t), s = client(), tu = client();
+  await s.login("student"); const u = await tu.login("chau");
+  const settle = () => new Promise((r) => setTimeout(r, 80));
+  const notices = (to) => emails.filter((e) => e.kind === "notice" && e.to === to);
+  const dep = await s.request("/wallet/deposits", "POST", { amount: 2000000 });
+  await s.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
+  await settle();
+  const money = notices("student@demo.giasu.test");
+  assert.equal(money.length, 1);
+  assert.match(money[0].subject, /Đã nhận 2\.000\.000đ vào số dư/);
+  assert.ok(money[0].link.endsWith("/app/wallet") && money[0].settings.endsWith("/app/settings?section=notifications"));
+  const start = new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10);
+  assert.equal((await s.request("/proposals", "POST", { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 4, minutes: 90, rate: 200000, schedule: [{ weekday: 1, hour: 19, minute: 0 }], start_date: start, message: "Ôn thi" })).status, 201);
+  await settle();
+  assert.match(notices("chau@demo.giasu.test")[0].subject, /gửi bạn đề nghị học/);
+  // Turning a topic off stops those emails; the in-app notice still arrives.
+  await s.request("/account/notifications", "PUT", { money: false });
+  const again = await s.request("/wallet/deposits", "POST", { amount: 100000 });
+  await s.request(`/wallet/deposits/${again.data.id}/simulate`, "POST");
+  await settle();
+  assert.equal(notices("student@demo.giasu.test").length, 1);
+  assert.equal((await s.request("/notifications")).data.filter((n) => n.kind === "deposit_received").length, 2);
 });
 test("tutor credentials need proof, stay private and show only approved labels publicly", async (t) => {
   const { client, base } = await fixture(t), tutor = client(), other = client(), student = client(), admin = client();
@@ -2567,6 +2596,16 @@ test("students verify with a school record; one record and one student code per 
   const dep = await a.request("/wallet/deposits", "POST", { amount: 200000 });
   await a.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST");
   assert.equal((await a.request("/proposals", "POST", offer)).status, 201);
+  // Decided records stay listed by status, and an approval can be withdrawn.
+  assert.equal((await admin.request("/admin/verifications")).data.length, 0);
+  const approved = (await admin.request("/admin/verifications?status=approved")).data.filter((v) => v.email === "hs-a@example.test");
+  assert.deepEqual([approved.length, approved[0].status, approved[0].files.length], [1, "approved", 1]);
+  assert.ok((await admin.request("/admin/verifications?status=all")).data.some((v) => v.email === "hs-a@example.test"));
+  assert.equal((await admin.request(`/admin/verifications/${approved[0].user_id}`, "PATCH", { status: "approved" })).status, 404);
+  assert.equal((await admin.request(`/admin/verifications/${approved[0].user_id}`, "PATCH", { status: "rejected", note: "Ảnh mờ, chụp lại giúp" })).status, 200);
+  assert.equal((await a.request("/proposals", "POST", { ...offer, start_date: start })).status, 403);
+  assert.equal((await admin.request("/admin/verifications?status=rejected")).data.find((v) => v.email === "hs-a@example.test").note, "Ảnh mờ, chụp lại giúp");
+  assert.equal((await admin.request(`/admin/verifications/${approved[0].user_id}`, "PATCH", { status: "approved" })).status, 200);
   // Tutors: one proof file and one candidate number per tutor.
   const mine = (await tutor.request("/tutor/credentials", "POST", { kind: "certificate", catalog_id: "ielts-academic", detail: { score: "8.0", reference: "VN123456" } })).data;
   const proof = Buffer.from("%PDF-1.4 IELTS của Châu");

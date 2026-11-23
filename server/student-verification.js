@@ -97,15 +97,20 @@ export function registerStudentVerification(app, db, auth, audit, processPhoto) 
     const data = Buffer.concat(all(db, "SELECT data FROM verification_file_chunks WHERE file_id=? ORDER BY part", f.id).map((c) => Buffer.from(c.data)));
     res.set("Content-Type", f.mime).set("Content-Security-Policy", "default-src 'none'; sandbox").set("Cache-Control", "private, no-store").send(data);
   });
+  // Every submitted record, newest first per status; drafts never reach the administrators.
   app.get("/api/admin/verifications", auth("admin"), (req, res) => {
-    res.json(all(db, `SELECT v.*,u.name,u.email FROM student_verifications v JOIN users u ON u.id=v.user_id WHERE v.status='pending' ORDER BY v.submitted_at`)
-      .map((v) => ({ ...v, files: all(db, "SELECT id,mime FROM verification_files WHERE user_id=?", v.user_id) })));
+    const status = z.enum(["pending", "approved", "rejected", "all"]).default("pending").parse(req.query.status || undefined);
+    res.json(all(db, `SELECT v.*,u.name,u.email FROM student_verifications v JOIN users u ON u.id=v.user_id
+      WHERE v.status<>'draft' AND (?='all' OR v.status=?) ORDER BY CASE v.status WHEN 'pending' THEN 0 ELSE 1 END, COALESCE(v.reviewed_at, v.submitted_at) DESC LIMIT 300`, status, status)
+      .map((v) => ({ ...v, files: all(db, "SELECT id,mime FROM verification_files WHERE user_id=? ORDER BY created_at", v.user_id) })));
   });
   app.patch("/api/admin/verifications/:id", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     const d = z.object({ status: z.enum(["approved", "rejected"]), note: z.string().trim().max(500).default("") }).parse(req.body);
     if (d.status === "rejected" && !d.note) fail(400, "Ghi lý do để học sinh biết cần bổ sung gì.");
-    if (!run(db, "UPDATE student_verifications SET status=?,note=?,reviewed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='pending'", d.status, d.note, id).changes) fail(404, "Không tìm thấy yêu cầu xác minh.");
+    // A decision can be changed later: approve after a fix, or withdraw an approval.
+    if (d.status === "approved" && !one(db, "SELECT 1 FROM verification_files WHERE user_id=?", id)) fail(409, "Học sinh chưa gửi ảnh học bạ.");
+    if (!run(db, "UPDATE student_verifications SET status=?,note=?,reviewed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status IN ('pending','approved','rejected') AND status<>?", d.status, d.note, id, d.status).changes) fail(404, "Không tìm thấy yêu cầu xác minh.");
     notify(db, id, `verification_${d.status}`, { subject: d.note, link: "/settings" });
     audit(req.user.id, `student.verification.${d.status}`, id);
     res.json({ ok: true });

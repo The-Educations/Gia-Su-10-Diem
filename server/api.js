@@ -5,6 +5,7 @@ import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
 import { registerNotifications, notify } from "./notifications.js";
+import { createNoticeMailer } from "./notice-mail.js";
 import { registerCredentials, verifiedCredentials } from "./credentials.js";
 import { registerWallet, sepayConfig } from "./wallet.js";
 import { registerProposals } from "./proposals.js";
@@ -71,6 +72,7 @@ export function createApi(
     limit = true,
     google = {},
     wakeCalendar,
+    wakeMail,
     processPhoto,
     clientIp,
     sendEmail,
@@ -81,6 +83,13 @@ export function createApi(
   const app = express();
   app.disable("x-powered-by");
   app.use("/api", (req, res, next) => { res.set("X-Robots-Tag", "noindex, nofollow"); next(); });
+  // Emails queued by a request go out once its response has been sent.
+  const mailer = createNoticeMailer(db, { sendEmail, origin });
+  app.locals.flushMail = mailer.flush;
+  app.use("/api", (req, res, next) => {
+    if (req.method !== "GET") res.on("finish", () => { if (mailer.pending()) (wakeMail ? wakeMail() : setTimeout(() => void mailer.flush(), 0)); });
+    next();
+  });
   app.use("/api", helmet({ contentSecurityPolicy: false }));
   app.use("/api", express.json({
     limit: "300kb",

@@ -1,17 +1,59 @@
 import { StudentCode } from "@/pages/Family";
 import { StudentVerification } from "@/components/student-verification";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { Bell, ShieldCheck, UserRound, Users, BadgeCheck, type LucideIcon } from "lucide-react";
 import { AddressFields } from "@/components/address-fields";
 import { TimezoneField } from "@/components/tutor-timezone";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, useApp, useLoad } from "@/lib/api";
 import type { User } from "@/lib/types";
-import { Page, Heading, Submit, ErrorState } from "@/components/common";
+import { Page, Heading, Submit, ErrorState, Person } from "@/components/common";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+type Section = "profile" | "verify" | "family" | "security" | "notifications";
+const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
+  { id: "profile", label: "Hồ sơ", icon: UserRound },
+  { id: "verify", label: "Xác minh học sinh", icon: BadgeCheck },
+  { id: "family", label: "Gia đình", icon: Users },
+  { id: "security", label: "Bảo mật", icon: ShieldCheck },
+  { id: "notifications", label: "Thông báo", icon: Bell },
+];
+const EMAIL_TOPICS: { id: "proposals" | "money" | "lessons"; label: string }[] = [
+  { id: "proposals", label: "Đề nghị học mới và câu trả lời" },
+  { id: "money", label: "Tiền vào số dư và rút tiền" },
+  { id: "lessons", label: "Buổi học cần xác nhận" },
+];
+
+// Email for the events that matter; in-app notices are always on.
+function NotificationSettings() {
+  const prefs = useLoad<Record<string, boolean>>("/account/notifications"),
+    [saving, setSaving] = useState("");
+  if (prefs.error) return <ErrorState error={prefs.error} retry={prefs.reload} />;
+  async function toggle(id: string, value: boolean) {
+    setSaving(id);
+    try { await api("/account/notifications", "PUT", { [id]: value }); prefs.reload(); toast.success("Đã lưu"); }
+    catch (e) { toast.error((e as Error).message); }
+    finally { setSaving(""); }
+  }
+  return (
+    <section className="settings-card" aria-labelledby="notify-title">
+      <h2 id="notify-title">Gửi email cho tôi khi có</h2>
+      <ul className="settings-switches">
+        {EMAIL_TOPICS.map((topic) => (
+          <li key={topic.id}>
+            <label htmlFor={`notify-${topic.id}`}>{topic.label}</label>
+            <input id={`notify-${topic.id}`} type="checkbox" role="switch" className="switch" disabled={!prefs.data || saving === topic.id}
+              checked={prefs.data?.[topic.id] ?? true} onChange={(e) => toggle(topic.id, e.target.checked)} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function Settings() {
   const methods = useLoad<{
     password: boolean;
@@ -23,6 +65,11 @@ export default function Settings() {
     [error, setError] = useState("");
   const [address, setAddress] = useState({ province_code: user?.province_code || "", ward_code: user?.ward_code || "" });
   const [timezone, setTimezone] = useState(user?.timezone || "Asia/Ho_Chi_Minh");
+  const [params, setParams] = useSearchParams();
+  const student = user?.role === "student" && user.learner_type !== "parent", parent = user?.learner_type === "parent";
+  const sections = SECTIONS.filter((s) => (s.id === "verify" ? student : s.id === "family" ? user?.role === "student" : true));
+  const section = sections.find((s) => s.id === params.get("section"))?.id || "profile";
+  useEffect(() => { document.querySelector(".settings-nav [aria-current]")?.scrollIntoView({ block: "nearest", inline: "center" }); }, [section]);
   async function save(e: React.SubmitEvent<HTMLFormElement>, password = false) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -56,98 +103,83 @@ export default function Settings() {
   return (
     <Page>
       <Heading title="Tài khoản của tôi" />
-      <Link className="text-link" to={`/community/members/${user?.profile_code}`}>Hồ sơ cộng đồng của tôi</Link>
-      {error && <ErrorState error={error} />}
-      {user?.role === "student" && user.learner_type !== "parent" && <><StudentVerification /><StudentCode /></>}
-      <section className="settings-section">
-        <div>
-          <h2>Thông tin cá nhân</h2>
-          <p>{user?.email}</p>
-        </div>
-        <form onSubmit={(e) => save(e)}>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="account-name">Họ và tên</FieldLabel>
-              <Input
-                id="account-name"
-                name="name"
-                defaultValue={user?.name}
-                required
-                maxLength={80}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="account-goal">{user?.learner_type === "parent" ? "Mục tiêu học tập của con" : "Mục tiêu học tập"}</FieldLabel>
-              <Textarea
-                id="account-goal"
-                name="goal"
-                defaultValue={user?.goal}
-                maxLength={1000}
-              />
-            </Field>
-            {user?.role === "student" && <>
-              <Field><FieldLabel htmlFor="account-school">{user.learner_type === "parent" ? "Trường của con" : "Trường đang học"}</FieldLabel><Input id="account-school" name="school" defaultValue={user.school} required maxLength={160} /></Field>
-              <AddressFields value={address} onChange={setAddress} />
-            </>}
-            <TimezoneField value={timezone} onChange={setTimezone} />
-            <Submit busy={busy === "profile"}>Lưu thông tin</Submit>
-          </FieldGroup>
-        </form>
-      </section>
-      <section className="settings-section">
-        <div>
-          <h2>Đăng nhập Google</h2>
-        </div>
-        <div>
-          {methods.error ? (
-            <ErrorState error={methods.error} retry={methods.reload} />
-          ) : methods.data?.google ? (
-            <p>Đã liên kết Google</p>
-          ) : methods.data?.googleAvailable ? (
-            <Button asChild variant="outline">
-              <a href="/api/auth/google/start?intent=link">Liên kết Google</a>
-            </Button>
-          ) : (
-            <p className="muted">Chưa bật đăng nhập Google</p>
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Mục cài đặt">
+          {sections.map(({ id, label, icon: Icon }) => (
+            <button type="button" key={id} aria-current={section === id ? "page" : undefined} onClick={() => setParams(id === "profile" ? {} : { section: id }, { replace: true })}>
+              <Icon aria-hidden="true" /><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="settings-panel">
+          {error && <ErrorState error={error} />}
+          {section === "profile" && (
+            <>
+              <header className="settings-who">
+                <Person name={user?.name || ""} id={user?.id} large />
+                <div><strong>{user?.name}</strong><span>{user?.email}</span></div>
+                <Link className="text-link" to={`/community/members/${user?.profile_code}`}>Hồ sơ cộng đồng của tôi</Link>
+              </header>
+              <form className="settings-card" onSubmit={(e) => save(e)}>
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="account-name">Họ và tên</FieldLabel>
+                    <Input id="account-name" name="name" defaultValue={user?.name} required maxLength={80} />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="account-goal">{parent ? "Mục tiêu học tập của con" : "Mục tiêu học tập"}</FieldLabel>
+                    <Textarea id="account-goal" name="goal" defaultValue={user?.goal} maxLength={1000} />
+                  </Field>
+                  {user?.role === "student" && <>
+                    <Field><FieldLabel htmlFor="account-school">{parent ? "Trường của con" : "Trường đang học"}</FieldLabel><Input id="account-school" name="school" defaultValue={user.school} required maxLength={160} /></Field>
+                    <AddressFields value={address} onChange={setAddress} />
+                  </>}
+                  <TimezoneField value={timezone} onChange={setTimezone} />
+                  <Submit busy={busy === "profile"}>Lưu thông tin</Submit>
+                </FieldGroup>
+              </form>
+            </>
           )}
+          {section === "verify" && <StudentVerification />}
+          {section === "family" && (parent
+            ? <section className="settings-card"><h2>Con của tôi</h2><p className="muted">Xem lịch học, lớp và số dư của con, hoặc liên kết thêm con bằng mã 6 ký tự.</p><Button asChild variant="outline"><Link to="/family">Mở trang Con của tôi</Link></Button></section>
+            : <StudentCode />)}
+          {section === "security" && (
+            <>
+              <section className="settings-card">
+                <h2>Đăng nhập Google</h2>
+                {methods.error ? (
+                  <ErrorState error={methods.error} retry={methods.reload} />
+                ) : methods.data?.google ? (
+                  <p className="settings-ok"><BadgeCheck aria-hidden="true" />Đã liên kết Google</p>
+                ) : methods.data?.googleAvailable ? (
+                  <Button asChild variant="outline"><a href="/api/auth/google/start?intent=link">Liên kết Google</a></Button>
+                ) : (
+                  <p className="muted">Chưa bật đăng nhập Google</p>
+                )}
+              </section>
+              {methods.data?.password && (
+                <form className="settings-card" onSubmit={(e) => save(e, true)}>
+                  <h2>Đổi mật khẩu</h2>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="current">Mật khẩu hiện tại</FieldLabel>
+                      <Input id="current" name="current" type="password" autoComplete="current-password" required maxLength={128} />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="new-password">Mật khẩu mới</FieldLabel>
+                      <Input id="new-password" name="password" type="password" autoComplete="new-password" minLength={10} maxLength={128} required aria-describedby="new-password-hint" />
+                      <small id="new-password-hint" className="field-hint">Tối thiểu 10 ký tự</small>
+                    </Field>
+                    <Submit busy={busy === "password"}>Đổi mật khẩu</Submit>
+                  </FieldGroup>
+                </form>
+              )}
+            </>
+          )}
+          {section === "notifications" && <NotificationSettings />}
         </div>
-      </section>
-      {methods.data?.password && (
-        <section className="settings-section">
-          <div>
-            <h2>Đổi mật khẩu</h2>
-            <p>Tối thiểu 10 ký tự.</p>
-          </div>
-          <form onSubmit={(e) => save(e, true)}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="current">Mật khẩu hiện tại</FieldLabel>
-                <Input
-                  id="current"
-                  name="current"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  maxLength={128}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="new-password">Mật khẩu mới</FieldLabel>
-                <Input
-                  id="new-password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={10}
-                  maxLength={128}
-                  required
-                />
-              </Field>
-              <Submit busy={busy === "password"}>Đổi mật khẩu</Submit>
-            </FieldGroup>
-          </form>
-        </section>
-      )}
+      </div>
     </Page>
   );
 }

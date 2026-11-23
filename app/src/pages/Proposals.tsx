@@ -34,7 +34,7 @@ function Card({ p, focused, onChanged }: { p: Proposal; focused: boolean; onChan
     try {
       await api(`/proposals/${p.id}`, "PATCH", { action });
       if (action === "accept") celebrate(target);
-      toast.success(t(action === "accept" ? "Đã nhận offer" : action === "decline" ? "Đã từ chối offer" : "Đã rút offer"));
+      toast.success(t(action === "accept" ? "Đã nhận đề nghị" : action === "decline" ? "Đã từ chối đề nghị" : "Đã rút đề nghị"));
       onChanged();
     } catch (e) {
       toast.error((e as Error).message);
@@ -71,10 +71,10 @@ function Card({ p, focused, onChanged }: { p: Proposal; focused: boolean; onChan
             {p.incoming ? (
               <>
                 <Button variant="outline" disabled={!!busy} onClick={(e) => act("decline", e.currentTarget)}>{t("Từ chối")}</Button>
-                <Button disabled={!!busy} onClick={(e) => act("accept", e.currentTarget)}>{t(user?.role === "student" ? "Nhận & thanh toán" : "Nhận offer")}</Button>
+                <Button disabled={!!busy} onClick={(e) => act("accept", e.currentTarget)}>{t(user?.role === "student" ? "Nhận & thanh toán" : "Nhận đề nghị")}</Button>
               </>
             ) : (
-              <Button variant="ghost" className="danger-text" disabled={!!busy} onClick={(e) => act("withdraw", e.currentTarget)}>{t("Rút offer")}</Button>
+              <Button variant="ghost" className="danger-text" disabled={!!busy} onClick={(e) => act("withdraw", e.currentTarget)}>{t("Rút đề nghị")}</Button>
             )}
           </div>
         )}
@@ -102,8 +102,8 @@ export default function Proposals() {
   const tab = (params.get("tab") as keyof typeof groups) || (focused ? (focused.status !== "pending" ? "done" : focused.incoming ? "inbox" : "sent") : groups.inbox.length ? "inbox" : "sent");
   return (
     <Page>
-      <Heading title={t("Offer")} action={user?.role === "student" ? <Button asChild variant="outline"><Link to="/tutors">{t("Tìm gia sư")}</Link></Button> : <Button asChild variant="outline"><Link to="/community">{t("Tìm học sinh")}</Link></Button>} />
-      <nav className="segmented" aria-label={t("Nhóm offer")}>
+      <Heading title={t("Đề nghị")} action={user?.role === "student" ? <Button asChild variant="outline"><Link to="/tutors">{t("Tìm gia sư")}</Link></Button> : <Button asChild variant="outline"><Link to="/community">{t("Tìm học sinh")}</Link></Button>} />
+      <nav className="segmented" aria-label={t("Nhóm đề nghị")}>
         {TABS.map((x) => (
           <Link key={x.id} to={`/proposals?tab=${x.id}`} aria-current={tab === x.id ? "page" : undefined} onClick={(e) => { e.preventDefault(); setParams({ tab: x.id }); }}>
             {t(x.label)}{groups[x.id].length > 0 && <span className="segmented-count">{groups[x.id].length}</span>}
@@ -113,7 +113,7 @@ export default function Proposals() {
       {groups[tab].length ? (
         <div className="proposal-list">{groups[tab].map((p) => <Card key={p.id} p={p} focused={p.id === focus} onChanged={result.reload} />)}</div>
       ) : (
-        <Blank title={t(tab === "inbox" ? "Không có offer cần trả lời" : tab === "sent" ? "Chưa có offer đang chờ" : "Chưa có offer nào")} />
+        <Blank title={t(tab === "inbox" ? "Không có đề nghị cần trả lời" : tab === "sent" ? "Chưa có đề nghị đang chờ" : "Chưa có đề nghị nào")} />
       )}
     </Page>
   );
