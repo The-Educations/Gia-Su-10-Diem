@@ -3319,7 +3319,9 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
 .verified-badge svg { width: 12px; height: 12px; }
 
 /* Blog-style editor */
-.community-editor-tools { position: sticky; top: calc(var(--topbar-height, 64px) + 4px); z-index: 3; flex-wrap: wrap; backdrop-filter: none; }
+.community-editor-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--muted); }
+.community-editor { display: flex; flex-direction: column; overflow: hidden; }
+.community-editor > .tiptap, .community-editor > div:has(> .community-editor-content) { flex: 1; }
 .community-editor-tools [data-group-start] { margin-left: 10px; position: relative; }
 .community-editor-tools [data-group-start]::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 1px; background: var(--border); }
 .community-editor-content { min-height: 360px; padding: 20px 22px; font-size: 16px; line-height: 1.75; }
