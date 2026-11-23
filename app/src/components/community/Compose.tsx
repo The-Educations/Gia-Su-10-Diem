@@ -53,7 +53,8 @@ export default function Compose({
         : post?.body_html) ||
       plainToHtml(post?.body || ""),
   );
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState(false),
+    [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -200,7 +201,7 @@ export default function Compose({
             </Field>
           )}
           <Field data-invalid={!!fields.title}>
-            <FieldLabel htmlFor={`${id}-title`}>Tiêu đề</FieldLabel>
+            <FieldLabel htmlFor={`${id}-title`} className={page ? "sr-only" : undefined}>Tiêu đề</FieldLabel>
             <Input
               className={page ? "compose-title" : undefined}
               placeholder={page ? "Tiêu đề bài viết" : undefined}
@@ -227,7 +228,20 @@ export default function Compose({
             <span className="community-counter">{title.length}/120</span>
           </Field>
           <Field data-invalid={!!fields.body}>
-            <FieldLabel htmlFor={`${id}-body`}>Nội dung</FieldLabel>
+            <FieldLabel htmlFor={`${id}-body`} className={page ? "sr-only" : undefined}>Nội dung</FieldLabel>
+            {page && (
+              <div className="segmented compose-mode" role="group" aria-label="Chế độ soạn">
+                <button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>Viết</button>
+                <button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>Xem trước</button>
+              </div>
+            )}
+            {preview && (
+              <article className="compose-preview">
+                <h2>{title || "Chưa có tiêu đề"}</h2>
+                <div className="community-rich" dangerouslySetInnerHTML={{ __html: html }} />
+              </article>
+            )}
+            <div hidden={preview} className="compose-editor-wrap">
             <RichEditor
               id={`${id}-body`}
               initial={html}
@@ -240,6 +254,7 @@ export default function Compose({
                 setBody(text);
               }}
             />
+            </div>
             {fields.body && (
               <p
                 id={`${id}-body-error`}
