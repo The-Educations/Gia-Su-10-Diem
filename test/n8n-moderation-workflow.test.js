@@ -438,3 +438,37 @@ test("Kiểm tra khoá dừng với lỗi rõ ràng khi đang bị khoá, chạy
   store["Đọc trạng thái"] = items({ stdout: "" });
   assert.equal((await run()).length, 1);
 });
+
+test("luật cứng: AI lỡ trả approve cho bài lôi kéo ra ngoài nền tảng thì vẫn không được duyệt, chuyển admin kèm lý do", async (t) => {
+  const home = makeHome();
+  const { db, call } = await fixture(t);
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  // Claude giả mặc định trả approve cho mọi bài không có từ khoá riêng.
+  const bad = await newPost(call, "student", "Học riêng cho đỡ tốn", "Web thu phí đắt, ai muốn học chui không qua web thì nhắn riêng mình nhé.");
+  const good = await newPost(call, "other", "Mẹo học Toán lớp 9");
+  const r = await runChain({ home, call });
+  assert.deepEqual(r.applied.map((a) => [a.id, a.action, a.status]), [[good, "approve", 200]]);
+  assert.equal(status(db, bad).status, "pending", "bài vi phạm phải còn chờ admin, không được tự duyệt");
+  assert.equal(stateOf(home).graded[`${bad}:0`].outcome, "escalated");
+  const row = logOf(home).find((l) => l.id === bad);
+  assert.equal(row.decision, "escalate");
+  assert.match(row.reason, /giao dịch ngoài nền tảng/);
+});
+
+test("nhật ký ghi lại lý do web báo khi lệnh bị từ chối (409), để biết bài đã bị đổi trước khi workflow kịp xử lý", async (t) => {
+  const home = makeHome();
+  const { db, call } = await fixture(t);
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const id = await newPost(call, "student", "Bài sẽ được admin duyệt tay trước");
+  await runChain({
+    home, call,
+    beforeActions: async () => {
+      const a = await call("admin", `/admin/community/posts/${id}/approve`, "POST");
+      assert.equal(a.status, 200, JSON.stringify(a.data));
+    },
+  });
+  assert.equal(status(db, id).status, "approved");
+  const row = logOf(home).find((l) => l.id === id);
+  assert.equal(row.result, "conflict");
+  assert.match(row.webMessage, /không còn chờ duyệt/);
+});

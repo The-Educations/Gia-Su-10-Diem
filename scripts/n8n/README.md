@@ -86,7 +86,8 @@ Test chạy cả chuỗi như n8n (ô Code thật, lệnh shell thật với `cl
 - **Chế độ** ở ô `Cài đặt` → `mode`: `shadow` (mặc định: chỉ ghi nhật ký), `approve_only` (tự duyệt), `full` (tự duyệt và tự từ chối). Giá trị lạ coi là `shadow`.
 - **Trần mỗi ngày** (giờ Việt Nam): `capApprove` 40, `capReject` 15; vượt thì để admin.
 - Hai bài liên tiếp lỗi trong một lượt thì **dừng cả lượt** (thường là hết hạn mức hoặc mất đăng nhập `claude`).
-- Tác giả vừa sửa bài thì web trả 409: bỏ qua, bài được chấm lại ở lần sau.
+- **Luật cứng chạy song song với AI** (`riskSignals`): thấy số điện thoại, email, Zalo/Facebook/Telegram, lời mời học "chui"/"không qua web"/nhắn riêng, link rút gọn hoặc lời quảng cáo thì bài KHÔNG bao giờ được tự duyệt, dù AI trả approve: chuyển admin kèm lý do trong nhật ký. Luật này chỉ chặn duyệt, không bao giờ tự từ chối, nên không làm mất bài tốt.
+- Tác giả vừa sửa bài hoặc admin vừa xử lý bài thì web trả 409: bỏ qua, bài được chấm lại ở lần sau. Nhật ký ghi thêm `webMessage` (ví dụ "Bài không còn chờ duyệt") để biết lý do.
 - Lý do từ chối gửi tác giả = **câu mẫu cố định** của nhóm + một câu của Claude đã làm sạch (bỏ link, email, ký tự lạ, cắt 200 ký tự) + "Bạn có thể sửa bài rồi gửi lại.".
 - Lỗi đăng nhập hoặc lấy hàng đợi: workflow **nhả khoá rồi mới báo lỗi đỏ** với lý do rõ ràng; lần sau tự thử lại.
 
