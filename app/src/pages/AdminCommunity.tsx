@@ -353,6 +353,11 @@ export default function AdminCommunity() {
               { value: "deleted", label: "Đã xóa" },
             ]}
           />
+          {status === "deleted" && (
+            <p className="text-muted-foreground">
+              Bài đã xóa tự mất sau 30 ngày.
+            </p>
+          )}
           {posts.data?.items.length === 0 && (
             <Blank title="Không có bài viết" />
           )}
@@ -366,6 +371,11 @@ export default function AdminCommunity() {
                 </Badge>
                 <PostBody text={p.body} html={p.body_html} />
                 {p.review_note && <p>{p.review_note}</p>}
+                {p.status === "deleted" && p.days_left !== undefined && (
+                  <p className="text-muted-foreground">
+                    Còn {p.days_left} ngày
+                  </p>
+                )}
                 <div className="community-actions">
                   {p.status !== "deleted" && (
                     <Link className="text-link" to={`/community/${p.id}`}>
@@ -373,11 +383,41 @@ export default function AdminCommunity() {
                     </Link>
                   )}
                   {p.status === "hidden" ? (
-                    <Button
-                      onClick={() => review(p.id, "restore", "Khôi phục bài")}
-                    >
-                      Khôi phục
-                    </Button>
+                    <>
+                      <Button
+                        onClick={() => review(p.id, "restore", "Khôi phục bài")}
+                      >
+                        Khôi phục
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => review(p.id, "delete", "Xóa bài")}
+                      >
+                        Xóa
+                      </Button>
+                    </>
+                  ) : p.status === "deleted" ? (
+                    <>
+                      <Button
+                        onClick={() =>
+                          review(p.id, "undelete", "Khôi phục về Đã ẩn")
+                        }
+                      >
+                        Khôi phục về Đã ẩn
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() =>
+                          setAction({
+                            title: "Xóa vĩnh viễn (không hoàn tác được)",
+                            path: `/admin/community/posts/${p.id}`,
+                            method: "DELETE",
+                          })
+                        }
+                      >
+                        Xóa vĩnh viễn
+                      </Button>
+                    </>
                   ) : p.status === "approved" ? (
                     <Button
                       variant="outline"
