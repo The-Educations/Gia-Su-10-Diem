@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { todayVN } from "./lib/select.js";
 import { extractSessionCookie } from "./lib/web.js";
 import {
-  parseModState, reviewKey, extractLinks, hasImage, looksLikeInjection, topicLabel, pickPending,
+  parseModState, reviewKey, extractLinks, hasImage, looksLikeInjection, riskSignals, topicLabel, pickPending,
   buildModerationPrompt, parseVerdict, decideModeration, settleModeration, buildClaudeCommand, buildWriteCommand,
 } from "./lib/moderation.js";
 
@@ -43,7 +43,7 @@ if (!cookie) {
 return [{ json: { cookie } }];
 `,
 
-  "Chọn bài chấm": `${inline(parseModState, reviewKey, extractLinks, hasImage, looksLikeInjection, topicLabel, pickPending, buildModerationPrompt, buildClaudeCommand)}
+  "Chọn bài chấm": `${inline(parseModState, reviewKey, extractLinks, hasImage, looksLikeInjection, riskSignals, topicLabel, pickPending, buildModerationPrompt, buildClaudeCommand)}
 
 const RUBRIC = ${JSON.stringify(RUBRIC)};
 const cfg = $('Cài đặt').first().json;
@@ -96,7 +96,7 @@ if (!fatal) {
     if (!(i in raw)) return;
     const verdict = parseVerdict(raw[i]);
     const ai = verdict ? { verdict: verdict.verdict, category: verdict.category, detail: String(verdict.detail).slice(0, 200) } : null;
-    const d = decideModeration(verdict, { mode: cfg.mode, daily, today, caps });
+    const d = decideModeration(verdict, { mode: cfg.mode, daily, today, caps, risk: c.risk });
     if (d.action === "error") {
       outcomes.push({ key: c.key, kind: "error" });
       logLines.push(logRow(c, ai, "error", d.reason, false));
@@ -140,6 +140,8 @@ acts.forEach((a, i) => {
   logLines.push(JSON.stringify({
     t: new Date().toISOString(), id: a.id, version: a.version, kind: a.revision ? "revision" : "new", title: a.title, ai: a.ai,
     decision: a.action, reason: a.reason, done: status === 200, result: status === 409 ? "conflict" : status === 200 ? "ok" : "error HTTP " + (status ?? "?"),
+    // Lý do web trả về (ví dụ "Bài không còn chờ duyệt") để biết ai/cái gì đã đổi bài trước khi workflow kịp xử lý.
+    webMessage: r.body && typeof r.body.error === "string" ? r.body.error.slice(0, 200) : undefined,
   }));
 });
 const state = settleModeration(q.state, outcomes, q.today, Date.now());
