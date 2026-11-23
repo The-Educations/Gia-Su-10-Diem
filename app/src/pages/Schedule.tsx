@@ -343,7 +343,7 @@ function TimeGrid({ days, byDay, today, now, lang, row, free, onZoom, onOpen, on
           </span>
         ))}
       </div>
-      <div className="cal-body" ref={body}>
+      <div className="cal-body" ref={body} tabIndex={0}>
         <div className="cal-hours">{HOURS.map((h) => <span key={h} style={{ height: row }}>{String(h).padStart(2, "0")}:00</span>)}</div>
         <div className="cal-columns" style={{ height: HOURS.length * row }}>
           {days.map((key, i) => (

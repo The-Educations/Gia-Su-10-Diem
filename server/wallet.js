@@ -79,6 +79,11 @@ export function migrateWallet(db) {
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS withdrawals_code ON withdrawals(code)");
   // Webhook timestamps used to live in platform_settings; remove them.
   db.exec("DELETE FROM platform_settings WHERE key IN ('last_sepay_webhook','last_sepay_ipn')");
+  // Hot-path lookups: payment-code dedup, per-user lists, ledger refs.
+  db.exec(`CREATE INDEX IF NOT EXISTS sepay_events_code ON sepay_events(code);
+    CREATE INDEX IF NOT EXISTS gateway_events_invoice ON gateway_events(invoice);
+    CREATE INDEX IF NOT EXISTS wallet_entries_ref ON wallet_entries(ref);
+    CREATE INDEX IF NOT EXISTS deposits_user ON deposits(user_id)`);
 }
 
 const bankCode = (name) => banks.find((b) => b.name.toLowerCase() === String(name).toLowerCase())?.code || "";
