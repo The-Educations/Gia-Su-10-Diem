@@ -22,26 +22,18 @@ import ActionDialog, {
 } from "@/components/community/ActionDialog";
 import { memberImageUrl, postStates, PostBody } from "@/components/community/shared";
 
+export const lockAction = (owner: Pick<CommunityOwner, "id" | "community_locked">): CommunityAction => ({
+  title: owner.community_locked ? "Mở quyền Cộng đồng" : "Khóa quyền Cộng đồng",
+  path: `/admin/community/users/${owner.id}/lock`,
+  method: "PATCH",
+  body: { locked: !owner.community_locked },
+  reasonField: "reason",
+});
 export function CommunityLock({ owner }: { owner: CommunityOwner }) {
-  const navigate = useNavigate();
   const [action, setAction] = useState<CommunityAction | null>(null);
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() =>
-          setAction({
-            title: owner.community_locked
-              ? "Mở quyền Cộng đồng"
-              : "Khóa quyền Cộng đồng",
-            path: `/admin/community/users/${owner.id}/lock`,
-            method: "PATCH",
-            body: { locked: !owner.community_locked },
-            reasonField: "reason",
-          })
-        }
-      >
+      <Button variant="outline" size="sm" onClick={() => setAction(lockAction(owner))}>
         {owner.community_locked ? "Mở quyền Cộng đồng" : "Khóa quyền Cộng đồng"}
       </Button>
       {action && <ActionDialog action={action} close={() => setAction(null)} />}

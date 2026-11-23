@@ -297,6 +297,7 @@
 
 /* Admin finance */
 .admin-finance { display: grid; gap: 24px; }
+.admin-finance > * { min-width: 0; }
 .admin-finance h2 { margin-bottom: 10px; }
 .finance-status { padding: 10px 14px; border-radius: 10px; background: var(--warning-soft); color: var(--warning); font-size: 14px; }
 .finance-status[data-state="live"] { background: var(--positive-soft); color: var(--positive); }
@@ -310,8 +311,34 @@
 .finance-table td { padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: top; }
 .finance-table td small { display: block; font-size: 12px; color: var(--muted-foreground); }
 .finance-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-.finance-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-.finance-settings .actions { grid-column: 1 / -1; }
+.admin-sections { display: flex; gap: 4px; margin-bottom: -8px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.admin-sections a { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 42px; padding: 0 14px; margin-bottom: -1px; border-bottom: 2px solid transparent; font-size: 14px; color: var(--muted-foreground); white-space: nowrap; }
+.admin-sections a:hover { color: var(--foreground); }
+.admin-sections a[aria-current="page"] { border-bottom-color: var(--primary); color: var(--foreground); font-weight: 600; }
+.admin-sections .tab-count { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.finance-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 10px; }
+.admin-finance .finance-head h2 { margin: 0; }
+.finance-settings { display: grid; gap: 0; max-width: 880px; }
+.finance-settings fieldset { gap: 0; padding: 20px 0; border-top: 1px solid var(--border); }
+.finance-settings fieldset:first-child { padding-top: 4px; border-top: 0; }
+.finance-settings legend { float: left; width: 100%; margin-bottom: 14px; font-size: 15px; font-weight: 600; }
+.finance-fields { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 20px; }
+.finance-fields input, .pack-input input { font-variant-numeric: tabular-nums; }
+.pack-list { clear: both; display: grid; margin: 0; padding: 0; list-style: none; }
+.pack-row { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); }
+.pack-row:first-child { border-top: 0; padding-top: 0; }
+.pack-input { position: relative; display: block; }
+.pack-input input { padding-right: 44px; text-align: right; }
+.pack-input span { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); font-size: 13px; color: var(--muted-foreground); pointer-events: none; }
+.pack-input input[aria-invalid] { border-color: var(--destructive); }
+.pack-unit { font-size: 13px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.pack-error { margin: 8px 0 0; font-size: 13px; color: var(--destructive); }
+.pack-add { align-self: flex-start; margin-top: 12px; }
+.finance-save { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 16px; border-top: 1px solid var(--border); }
+.member-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.member-actions:empty { display: none; }
+.member-actions [data-slot="button"] { flex: none; }
+.member-end { color: var(--destructive); }
 @media (max-width: 700px) {
   .balance-card strong { font-size: 32px; }
   .proposal-package { grid-template-columns: 1fr 1fr; }
@@ -320,6 +347,10 @@
   .finance-totals div:nth-child(3) { border-left: 0; }
   .finance-totals div:nth-child(n + 3) { border-top: 1px solid var(--border); }
   .finance-table { display: block; overflow-x: auto; }
+  .pack-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; }
+  .pack-unit { grid-column: 1 / -1; grid-row: 2; margin-top: -4px; }
+  .member-list li:has(.member-end) { grid-template-columns: 40px minmax(0, 1fr); }
+  .member-list li .member-actions { grid-column: 2; justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) {
   .credit-pack, .proposal-card { transition: none; }
@@ -409,10 +440,6 @@
 @media (prefers-reduced-motion: reduce) { .today-next { transition: none; } }
 
 .admin-students { display: grid; gap: 16px; }
-.student-filter { margin: 0; }
-.student-filter button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: none; font: inherit; font-size: 14px; color: var(--muted-foreground); cursor: pointer; }
-.student-filter button[aria-pressed="true"] { background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: 0 1px 2px rgb(40 40 32 / 8%); }
-.student-filter button span { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--surface-active); font-size: 12px; font-variant-numeric: tabular-nums; }
 .student-checks { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .student-checks li { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
 .student-check-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }

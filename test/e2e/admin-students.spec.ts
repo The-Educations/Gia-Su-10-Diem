@@ -17,7 +17,7 @@ test("admins review school records in their own tab: zoom, ask for more, verify,
   expect((await student.request.put("/api/account/verification", { data: { school: "THCS Nguyễn Du", grade: "Lớp 9", student_code: `HB${Date.now()}` } })).ok()).toBe(true);
 
   await admin.goto("/app/admin");
-  await admin.getByRole("tab", { name: /^Học sinh \(\d+\)$/ }).click();
+  await admin.getByRole("tab", { name: /^Học sinh\s*\d+$/ }).click();
   const card = admin.locator(".student-checks li").filter({ hasText: email });
   await expect(card).toContainText("THCS Nguyễn Du · Lớp 9");
   await card.getByRole("button", { name: /Phóng to học bạ 1/ }).click();

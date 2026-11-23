@@ -11,23 +11,28 @@ test("admin can remove subjects and exams with cancellation and historical-safe 
   expect((await page.request.post("/api/admin/resources",{data:{title:"Kỳ thi kiểm tra bỏ",subject_id:id,category:"Kiểm thử",level:"THPT",year:2026,description:"Kỳ thi kiểm tra danh mục",source_name:"Nguồn kiểm thử",source_url:"https://example.com",published:true}})).ok()).toBe(true);
   await page.goto("/");
   await expect(page.locator(`#form-subject option[value=${id}]`)).toHaveText("Môn kiểm tra bỏ");
+  // The old ?tab=resources link still lands on the merged catalog.
   await page.goto("/app/admin?tab=resources");
-  const exam = page.locator(".admin-list article").filter({hasText:"Kỳ thi kiểm tra bỏ"});
-  await exam.getByRole("button",{name:"Bỏ kỳ thi",exact:true}).click();
+  await expect(page.getByRole("tab",{name:"Danh mục",exact:true})).toHaveAttribute("aria-selected","true");
+  const subject = page.getByRole("region",{name:"Môn kiểm tra bỏ"});
+  const exam = subject.locator("li").filter({hasText:"Kỳ thi kiểm tra bỏ"});
+  await exam.getByRole("button",{name:"Thao tác khác",exact:true}).click();
+  await page.getByRole("menuitem",{name:"Bỏ kỳ thi",exact:true}).click();
   await page.getByRole("button",{name:"Giữ lại",exact:true}).click();
   await expect(exam).toBeVisible();
-  await exam.getByRole("button",{name:"Bỏ kỳ thi",exact:true}).click();
+  await exam.getByRole("button",{name:"Thao tác khác",exact:true}).click();
+  await page.getByRole("menuitem",{name:"Bỏ kỳ thi",exact:true}).click();
   await page.getByRole("button",{name:"Bỏ khỏi danh mục",exact:true}).click();
   await expect(exam).toHaveCount(0);
   await page.goto("/app/admin?tab=subjects");
-  const subject = page.locator(".admin-list article").filter({hasText:"Môn kiểm tra bỏ"});
-  await subject.getByRole("button",{name:"Bỏ môn",exact:true}).click();
+  await subject.locator("header").getByRole("button",{name:"Thao tác khác",exact:true}).click();
+  await page.getByRole("menuitem",{name:"Bỏ môn",exact:true}).click();
   await page.getByRole("button",{name:"Bỏ khỏi danh mục",exact:true}).click();
   await expect(subject).toHaveCount(0);
   await page.goto("/");
   await expect(page.locator("#form-subject option[value=toan]")).toHaveCount(1);
   await expect(page.locator(`#form-subject option[value=${id}]`)).toHaveCount(0);
-  await page.goto("/app/admin?tab=subjects");
+  await page.goto("/app/admin?tab=catalog");
   for (const width of [320,768,1440]) {
     await page.setViewportSize({width,height:900});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
