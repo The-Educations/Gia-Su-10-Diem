@@ -29,14 +29,14 @@ Muốn siết hoặc nới: sửa hai biểu thức `blockTitle`, `blockAny`, `a
 
 Đăng nhập nằm TRƯỚC bước Claude: login hỏng thì dừng ngay, không tốn lượt Claude nào.
 
-Quy tắc: bài luôn là nháp (`published: false`); tối đa 5 tin mỗi lần, 10 bài nháp mỗi ngày (giờ Việt Nam); lần chạy đầu chỉ lấy 5 tin mới nhất; lỗi đăng nhập hoặc lỗi Claude thì tin **không** bị đánh dấu nên lần sau thử lại.
+Mỗi bài gửi lên web theo trường có cấu trúc: `topic` (Claude chọn `admissions`/`policy`/`study`, thiếu hoặc sai thì gán `study`), `origin: "auto"` (vào tab **Chờ duyệt**), `cover_url/cover_alt/cover_credit`, `source_name/source_url`; `body` chỉ còn chữ bài, không còn dòng ảnh hay dòng `Nguồn:` (web vẫn nhận kiểu cũ và tự tách). Quy tắc: bài luôn là nháp (`published: false`); tối đa 5 tin mỗi lần, 10 bài nháp mỗi ngày (giờ Việt Nam); lần chạy đầu chỉ lấy 5 tin mới nhất; lỗi đăng nhập hoặc lỗi Claude thì tin **không** bị đánh dấu nên lần sau thử lại.
 
 ## Chạy thật lần đầu (web thật)
 
 1. **Tạo tài khoản bot** (việc của chủ web): đăng ký trên web bằng một email nhận được mã xác nhận (không dùng email admin chính, vì email đó bắt buộc đăng nhập Google), nhập mã xác nhận, rồi dùng admin chính vào **Quản trị → Tài khoản → Cấp quyền quản trị** để nâng quyền.
 2. Mở n8n (`http://localhost:5678`) → **Credentials** → mở credential **News Bot Login** (kiểu Custom Auth) → đặt JSON thành `{ "body": { "email": "<email bot>", "password": "<mật khẩu bot>" } }`. Mật khẩu chỉ nằm ở đây.
 3. Mở workflow **Tin tức tự động** → ô **Cài đặt** → đổi `baseUrl` thành `https://giasudiem10.online`, đặt tạm `perRun` = 1.
-4. Xoá file trạng thái để chạy sạch: `rm ~/.n8n/news-state.json`. Bấm **Execute workflow**. Kết quả mong đợi: đúng một bài nháp ở Admin → Tin tức, chưa hiện ở `/news`. Web không có chức năng xoá bài tin tức, nên bài này cứ để nháp hoặc đăng nếu hợp lý.
+4. Xoá file trạng thái để chạy sạch: `rm ~/.n8n/news-state.json`. Bấm **Execute workflow**. Kết quả mong đợi: đúng một bài ở Admin → Tin tức → **Chờ duyệt**, chưa hiện ở `/news`. Duyệt & đăng hoặc xoá bài thử ngay trong Admin.
 5. Trả `perRun` về 5, rồi bật workflow để lịch 3 giờ hoạt động (n8n 2.x: nút **Publish** ở góc trên bên phải; bản cũ hơn là công tắc **Active**).
 
 ## Danh sách tự kiểm tra

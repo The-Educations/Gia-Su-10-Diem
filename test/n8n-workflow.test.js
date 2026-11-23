@@ -256,7 +256,12 @@ test("Kiểm tra bài: bài ready có ảnh từ og:image ở đầu bài, ghi n
   const metas = items({ stdout: '<meta property="og:image" content="https://images2.thanhnien.vn/x.jpg">' }, { stdout: "" });
   const out = (await run("Kiểm tra bài", { nodes: { "Lấy cookie": picks, "Claude viết bài": claude }, input: metas })).map((o) => o.json);
   assert.deepEqual(out.map((o) => o.kind), ["ready", "ready"]);
-  assert.ok(out[0].postBody.body.startsWith("![Tiêu đề](https://images2.thanhnien.vn/x.jpg)\nẢnh: Thanh Niên\n\n"));
-  assert.ok(!out[1].postBody.body.startsWith("!["));
+  assert.equal(out[0].postBody.cover_url, "https://images2.thanhnien.vn/x.jpg");
+  assert.equal(out[0].postBody.cover_credit, "Thanh Niên");
+  assert.equal(out[1].postBody.cover_url, "");
+  assert.ok(!out[0].postBody.body.includes("![") && !out[0].postBody.body.includes("Nguồn:"));
+  assert.equal(out[0].postBody.source_name, "Thanh Niên");
+  assert.equal(out[0].postBody.source_url, "https://thanhnien.vn/a.htm");
+  assert.equal(out[0].postBody.origin, "auto");
   assert.equal(out[0].postBody.published, false);
 });

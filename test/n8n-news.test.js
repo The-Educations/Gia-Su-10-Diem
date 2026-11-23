@@ -5,6 +5,7 @@ import { isOnTopic } from "../scripts/n8n/lib/topic.js";
 import { findImage } from "../scripts/n8n/lib/image.js";
 import { buildPrompt, parseClaudeOutput, normalizeDraft, validateDraft } from "../scripts/n8n/lib/draft.js";
 import { buildPostBody, extractSessionCookie } from "../scripts/n8n/lib/web.js";
+import topics from "../shared/news-topics.json" with { type: "json" };
 
 const TODAY = "2026-11-22";
 const opts = { perRun: 5, perDay: 10, today: TODAY };
@@ -133,17 +134,38 @@ const goodDraft = (extra = {}) => ({ title: "Tiêu đề bài viết", summary: 
 const draftJson = (d = goodDraft()) => JSON.stringify({ skip: false, ...d });
 
 test("parseClaudeOutput đọc JSON thường", () => {
-  assert.deepEqual(parseClaudeOutput(draftJson()), { skip: false, ...goodDraft() });
+  assert.deepEqual(parseClaudeOutput(draftJson()), { skip: false, ...goodDraft(), topic: "" });
+});
+
+test("parseClaudeOutput giữ chuỗi topic Claude trả về", () => {
+  assert.equal(parseClaudeOutput(draftJson(goodDraft({ topic: "admissions" }))).topic, "admissions");
+  assert.equal(parseClaudeOutput(draftJson(goodDraft({ topic: 5 }))).topic, "");
+});
+
+test("buildPrompt mô tả đủ 3 chủ đề và yêu cầu trường topic trong JSON", () => {
+  const p = buildPrompt(src);
+  for (const topic of ["admissions", "policy", "study"]) assert.ok(p.includes(topic), `thiếu ${topic}`);
+  assert.match(p, /"topic":"admissions\|policy\|study"|"topic":"\.\.\."/);
+  for (const t of topics) assert.ok(p.includes(t.label), `nhãn ${t.label} lệch với shared/news-topics.json`);
+});
+
+test("normalizeDraft: topic hợp lệ được giữ, thiếu hoặc sai thì gán study", () => {
+  const base = { title: "t", summary: "s", body: "b" };
+  assert.equal(normalizeDraft({ ...base, topic: "policy" }).topic, "policy");
+  assert.equal(normalizeDraft({ ...base, topic: " Admissions " }).topic, "admissions");
+  assert.equal(normalizeDraft({ ...base, topic: "thể thao" }).topic, "study");
+  assert.equal(normalizeDraft(base).topic, "study");
+  assert.equal(normalizeDraft({ ...base, topic: undefined }).topic, "study");
 });
 
 test("parseClaudeOutput gỡ rào json và chữ dẫn", () => {
   const raw = `Đây là bài:\n\`\`\`json\n${draftJson()}\n\`\`\`\nHết.`;
-  assert.deepEqual(parseClaudeOutput(raw), { skip: false, ...goodDraft() });
+  assert.deepEqual(parseClaudeOutput(raw), { skip: false, ...goodDraft(), topic: "" });
 });
 
 test("parseClaudeOutput đọc bao result của claude -p", () => {
   const raw = JSON.stringify({ type: "result", is_error: false, result: draftJson() });
-  assert.deepEqual(parseClaudeOutput(raw), { skip: false, ...goodDraft() });
+  assert.deepEqual(parseClaudeOutput(raw), { skip: false, ...goodDraft(), topic: "" });
 });
 
 test("parseClaudeOutput trả null khi is_error", () => {
@@ -195,10 +217,25 @@ test("validateDraft từ chối thiếu dòng Nguồn hoặc Nguồn không ch�
   assert.ok(res.reasons.length > 0);
 });
 
-test("buildPostBody luôn published false và chỉ có 4 khoá", () => {
+const postKeys = ["body", "cover_alt", "cover_credit", "cover_url", "origin", "published", "source_name", "source_url", "summary", "title", "topic"];
+
+test("buildPostBody luôn published false, origin auto và chỉ có các khoá có cấu trúc", () => {
   const body = buildPostBody({ ...goodDraft(), published: true, extra: 1 });
   assert.equal(body.published, false);
-  assert.deepEqual(Object.keys(body).sort(), ["body", "published", "summary", "title"]);
+  assert.equal(body.origin, "auto");
+  assert.deepEqual(Object.keys(body).sort(), postKeys);
+});
+
+test("buildPostBody gửi topic, nguồn có cấu trúc và bỏ dòng Nguồn: khỏi body", () => {
+  const body = buildPostBody(goodDraft({ topic: "policy" }), null, { source: "Báo thử", link: src.link });
+  assert.equal(body.topic, "policy");
+  assert.equal(body.source_name, "Báo thử");
+  assert.equal(body.source_url, src.link);
+  assert.ok(!body.body.includes("Nguồn:"), "dòng Nguồn: đã chuyển sang trường riêng");
+  assert.equal(body.body, goodBody().replace(/\n\nNguồn:.*$/, ""));
+  assert.equal(buildPostBody(goodDraft()).topic, "study");
+  const fromLine = buildPostBody(goodDraft());
+  assert.equal(fromLine.source_url, src.link, "không truyền item thì lấy từ dòng Nguồn:");
 });
 
 test("extractSessionCookie lấy từ mảng set-cookie hoặc chuỗi", () => {
@@ -354,20 +391,23 @@ test("findImage bỏ ứng viên xấu rồi dùng ứng viên tốt kế tiếp
   assert.equal(findImage({ meta: OG("https://evil.example/a.jpg"), enclosure: { url: "https://vtv.vn/ok.jpg" }, link: "https://vtv.vn/x" }), "https://vtv.vn/ok.jpg");
 });
 
-test("buildPostBody chèn ảnh và dòng Ảnh: nguồn lên đầu bài, vẫn published false và 4 khoá", () => {
-  const body = buildPostBody(goodDraft(), { url: "https://images2.thanhnien.vn/a.jpg", credit: "Thanh Niên" });
-  assert.ok(body.body.startsWith("![" ), "ảnh phải ở đầu bài");
-  assert.ok(body.body.includes("](https://images2.thanhnien.vn/a.jpg)\nẢnh: Thanh Niên\n\n"));
-  assert.ok(body.body.endsWith(goodDraft().body));
+test("buildPostBody đưa ảnh vào trường bìa, không chèn dòng ảnh vào body", () => {
+  const body = buildPostBody(goodDraft(), { url: "https://images2.thanhnien.vn/a.jpg", credit: "Thanh Niên" }, { source: "Thanh Niên", link: src.link });
+  assert.equal(body.cover_url, "https://images2.thanhnien.vn/a.jpg");
+  assert.equal(body.cover_credit, "Thanh Niên");
+  assert.equal(body.cover_alt, "Tiêu đề bài viết");
+  assert.ok(!body.body.includes("![") && !body.body.includes("Ảnh:"));
   assert.equal(body.published, false);
-  assert.deepEqual(Object.keys(body).sort(), ["body", "published", "summary", "title"]);
+  assert.deepEqual(Object.keys(body).sort(), postKeys);
 });
 
-test("buildPostBody bỏ ngoặc vuông khỏi chữ mô tả ảnh và không chèn gì khi không có ảnh", () => {
+test("buildPostBody bỏ ngoặc vuông khỏi mô tả ảnh và để trống bìa khi không có ảnh", () => {
   const d = { ...goodDraft(), title: "Tiêu đề [có] ngoặc" };
-  assert.ok(buildPostBody(d, { url: "https://vtv.vn/a.jpg", credit: "VTV" }).body.startsWith("![Tiêu đề có ngoặc]("));
-  assert.equal(buildPostBody(goodDraft(), null).body, goodDraft().body);
-  assert.equal(buildPostBody(goodDraft(), { url: "", credit: "x" }).body, goodDraft().body);
+  assert.equal(buildPostBody(d, { url: "https://vtv.vn/a.jpg", credit: "VTV" }).cover_alt, "Tiêu đề có ngoặc");
+  for (const image of [null, undefined, { url: "", credit: "x" }]) {
+    const none = buildPostBody(goodDraft(), image);
+    assert.deepEqual([none.cover_url, none.cover_alt, none.cover_credit], ["", "", ""]);
+  }
 });
 
 test("buildPrompt nhận nghiên cứu, ngành đào tạo, thành tích và dặn bỏ tin tiêu cực", () => {

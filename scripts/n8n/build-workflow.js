@@ -103,7 +103,7 @@ return picks.map((p, i) => {
   const check = validateDraft(draft, p);
   if (!check.ok) return { json: { ...base, kind: "rejected", reason: check.reasons.join("; ") } };
   const image = findImage({ meta: (metas[i] || {}).stdout, enclosure: { url: p.rssImage }, link: p.link });
-  return { json: { ...base, kind: "ready", hasImage: Boolean(image), postBody: buildPostBody(draft, image ? { url: image, credit: p.source } : null) } };
+  return { json: { ...base, kind: "ready", hasImage: Boolean(image), postBody: buildPostBody(draft, image ? { url: image, credit: p.source } : null, { source: p.source, link: p.link }) } };
 });
 `,
 
