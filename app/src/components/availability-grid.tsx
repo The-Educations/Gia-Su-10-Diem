@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
@@ -11,6 +11,7 @@ export const scheduleKeys = (schedule: WeeklySchedule) => new Set(schedule.block
 
 export const scheduleBlocks = (selected: Set<number>) => [...selected].sort((a, b) => a - b).map(key => ({ weekday: key % 7, hour: Math.floor(key / 7) }));
 export function AvailabilityGrid({ selected, setSelected, busy = false, available, preferred, single = false }: { selected: Set<number>; setSelected: Dispatch<SetStateAction<Set<number>>>; busy?: boolean; available?: Set<number>; preferred?: Set<number>; single?: boolean }) {
+  const [zoom, setZoom] = useState(1);
   const visibleHours = available ? hours.filter(hour => days.some((_, day) => available.has(hour * 7 + day))) : hours;
   const drag = useRef<{ start: number; add: boolean; original: Set<number> } | null>(null);
   const pointerType = useRef("");
@@ -59,7 +60,11 @@ export function AvailabilityGrid({ selected, setSelected, busy = false, availabl
         <Button type="button" variant="ghost" onClick={() => jump(12)}>Chiều</Button>
         <Button type="button" variant="ghost" onClick={() => jump(18)}>Tối</Button>
       </div>}
-      <div ref={scroll} className="availability-scroll" role="region" aria-label="Lịch trống từ thứ 2 đến chủ nhật" tabIndex={0}>
+      <div className="availability-zoom" role="group" aria-label="Thu phóng lịch">
+        <Button type="button" variant="ghost" size="sm" aria-label="Thu nhỏ" onClick={() => setZoom((z) => Math.max(0, z - 1))}>−</Button>
+        <Button type="button" variant="ghost" size="sm" aria-label="Phóng to" onClick={() => setZoom((z) => Math.min(2, z + 1))}>+</Button>
+      </div>
+      <div ref={scroll} className="availability-scroll" data-zoom={zoom} role="region" aria-label="Lịch trống từ thứ 2 đến chủ nhật" tabIndex={0}>
         <table className="availability-grid">
           <thead><tr><th scope="col">Giờ</th>{days.map(day => <th scope="col" key={day}>{day}</th>)}</tr></thead>
           <tbody>{visibleHours.map(hour => <tr key={hour}>
@@ -71,6 +76,8 @@ export function AvailabilityGrid({ selected, setSelected, busy = false, availabl
                 ref={element => { buttons.current[key] = element; }}
                 type="button" disabled={busy || (available !== undefined && !available.has(key))}
                 data-preferred={preferred?.has(key) || undefined}
+                data-join-top={(selected.has(key) && selected.has(key - 7)) || undefined}
+                data-join-bottom={(selected.has(key) && selected.has(key + 7)) || undefined}
                 aria-label={`${day}, ${time(hour)}–${time(hour + 1)}${preferred?.has(key) ? ", trùng lịch của bạn" : ""}`}
                 aria-pressed={selected.has(key)}
                 onPointerDown={e => {

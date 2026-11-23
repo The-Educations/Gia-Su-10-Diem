@@ -1491,4 +1491,7 @@ export const enMore: Record<string, string> = {
   "Gửi yêu cầu học thử": "Request a free trial",
   "Kiểm tra lại với SePay": "Check again with SePay",
   "Đã kiểm tra {checked} lệnh nạp, cộng {paid} lệnh": "Checked {checked} top-ups, credited {paid}",
+  "Thu phóng lịch": "Zoom the calendar",
+  "Thu nhỏ": "Zoom out",
+  "Phóng to": "Zoom in",
 };
