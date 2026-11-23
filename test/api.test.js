@@ -2211,6 +2211,11 @@ test("notifications reach the other party, collapse per conversation and stay pr
   assert.equal((await tutor.request("/notifications/unread-count")).data.count, 0);
   assert.equal((await tutor.request("/notifications/read", "POST", {})).status, 400);
   assert.equal((await client().request("/notifications")).status, 401);
+  // Email for important events is on until turned off, per topic.
+  assert.deepEqual((await tutor.request("/account/notifications")).data, { proposals: true, money: true, lessons: true });
+  assert.deepEqual((await tutor.request("/account/notifications", "PUT", { money: false })).data, { proposals: true, money: false, lessons: true });
+  assert.equal((await tutor.request("/account/notifications", "PUT", { spam: true })).status, 400);
+  assert.equal((await tutor.request("/account/notifications")).data.money, false);
 });
 test("tutor credentials need proof, stay private and show only approved labels publicly", async (t) => {
   const { client, base } = await fixture(t), tutor = client(), other = client(), student = client(), admin = client();
