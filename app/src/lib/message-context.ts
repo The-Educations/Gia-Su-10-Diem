@@ -10,9 +10,9 @@ export function contextHref(context: Pick<MessageContext, "kind" | "id">) {
   if (context.kind === "lesson") return `/bookings?lesson=${context.id}`;
   return `/offers?request=${context.id}`;
 }
-export function contextDetail(context: MessageContext) {
-  if (context.kind === "lesson") return `${dateTime(context.starts_at!)} · ${context.duration_minutes} phút`;
-  if (context.kind === "proposal") return `${calendarDate(context.start_date!)} · ${context.sessions} buổi · ${context.minutes} phút`;
+export function contextDetail(context: MessageContext, t: (s: string, v?: Record<string, string | number>) => string = (s) => s) {
+  if (context.kind === "lesson") return `${dateTime(context.starts_at!)} · ${t("{minutes} phút", { minutes: context.duration_minutes || 0 })}`;
+  if (context.kind === "proposal") return `${calendarDate(context.start_date!)} · ${t("{sessions} buổi · {minutes} phút", { sessions: context.sessions || 0, minutes: context.minutes || 0 })}`;
   if (context.kind === "offer") return `${calendarDate(context.start_date!)} – ${calendarDate(context.end_date!)}`;
   return (context.blocks || []).map(b => `${["T2", "T3", "T4", "T5", "T6", "T7", "CN"][b.weekday]} ${String(b.hour).padStart(2, "0")}:00`).join(" · ");
 }

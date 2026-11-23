@@ -197,7 +197,8 @@ export function migrateDatabase(db) {
       sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request','proposal')), context_id INTEGER,
       is_event INTEGER NOT NULL DEFAULT 0, event_href TEXT);
-    INSERT INTO inquiry_messages_next SELECT id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event,NULL FROM inquiry_messages;
+    INSERT INTO inquiry_messages_next(id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event,event_href)
+    SELECT id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event,NULL FROM inquiry_messages;
     DROP TABLE inquiry_messages; ALTER TABLE inquiry_messages_next RENAME TO inquiry_messages;`);
   } else if (!db.prepare("PRAGMA table_info(inquiry_messages)").all().some(c => c.name === "event_href")) {
     db.exec("ALTER TABLE inquiry_messages ADD COLUMN event_href TEXT");

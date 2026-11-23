@@ -491,3 +491,13 @@ const enChatEvents: Record<string, string> = {
   "Xem chi tiết": "View details",
 };
 for (const [vi, text] of Object.entries(enChatEvents)) en[vi] ??= text;
+
+// Session A round 3: context card labels
+const enCtxCard: Record<string, string> = {
+  "Đề nghị học": "Lesson request",
+  "Giờ VN": "VN time",
+  "{sessions} buổi · {minutes} phút": "{sessions} lessons · {minutes} min",
+  "{minutes} phút": "{minutes} min",
+  "Trả lời về": "Reply to",
+};
+for (const [vi, text] of Object.entries(enCtxCard)) en[vi] = text;

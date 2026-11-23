@@ -360,7 +360,7 @@ function TimeGrid({ days, byDay, today, now, lang, row, free, onZoom, onOpen, on
                 const place = laid.get(item.key) || { left: 0, width: 1 };
                 return (
                   <button type="button" key={item.key} className="cal-event" data-kind={item.kind} data-color={item.color} data-past={past || undefined} data-attention={pending || undefined}
-                    data-dragging={ghost?.key === item.key || undefined} data-new={item.event && item.event.id < 0 || undefined} data-narrow={place.width < 0.34 || undefined}
+                    data-dragging={ghost?.key === item.key || undefined} data-new={item.event && item.event.id < 0 || undefined} data-narrow={place.width < (days.length >= 7 ? 0.30 : days.length === 3 ? 0.15 : 0.05) || undefined}
                     style={{ top, height, left: `calc(${(place.left * 100).toFixed(2)}% + 3px)`, width: `calc(${(place.width * 100).toFixed(2)}% - 6px)` }}
                     title={`${item.title} · ${timeOf(item.starts_at)}–${timeOf(end)}`}
                     aria-label={`${item.title}, ${timeOf(item.starts_at)}–${timeOf(end)}${pending ? `, ${t("cần xác nhận")}` : ""}`}

@@ -521,6 +521,43 @@ test("student cross-tutor collisions, slots, favorites and admin catalogue edits
   );
 });
 
+test("inquiry_messages rebuild keeps rows, attachments and allows proposal contexts", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "giasu-im-")),
+    file = join(dir, "old.sqlite");
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const original = openDatabase(file);
+  seedCatalog(original);
+  run(original, "INSERT INTO users(id,name,email,password,role) VALUES (1,'Học viên','s@t.vn','h','student'),(2,'Gia sư','t@t.vn','h','tutor')");
+  run(original, "INSERT INTO tutors(user_id,headline,subjects) VALUES (2,'t','[\"toan\"]')");
+  run(original, "INSERT INTO inquiries(id,student_id,tutor_id) VALUES (1,1,2)");
+  // Roll the table back to the pre-proposal shape, like a production database.
+  original.exec(`CREATE TABLE im_old (
+    id INTEGER PRIMARY KEY, inquiry_id INTEGER NOT NULL REFERENCES inquiries(id),
+    sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request')), context_id INTEGER,
+    is_event INTEGER NOT NULL DEFAULT 0);
+  INSERT INTO im_old(id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event)
+    SELECT id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event FROM inquiry_messages;
+  DROP TABLE inquiry_messages; ALTER TABLE im_old RENAME TO inquiry_messages;`);
+  run(original, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id) VALUES (1,1,'Tin cũ','offer',5),(1,2,'Trả lời',NULL,NULL)");
+  const mid = Number(one(original, "SELECT MAX(id) id FROM inquiry_messages").id);
+  run(original, "INSERT INTO chat_attachments(id,thread_kind,thread_id,owner_id,message_id,kind,mime,size,name) VALUES ('att-1','inquiry',1,2,?, 'image','image/png',100,'a.png')", mid);
+  original.close();
+  const migrated = openDatabase(file);
+  assert.equal(one(migrated, "SELECT count(*) n FROM inquiry_messages").n, 2);
+  const first = one(migrated, "SELECT id,body,context_kind,context_id FROM inquiry_messages ORDER BY id LIMIT 1");
+  assert.equal(Number(first.id), mid - 1); assert.equal(first.body, "Tin cũ"); assert.equal(first.context_kind, "offer"); assert.equal(Number(first.context_id), 5);
+  const last = one(migrated, "SELECT id,body,context_kind,context_id FROM inquiry_messages ORDER BY id DESC LIMIT 1");
+  assert.equal(Number(last.id), mid); assert.equal(last.body, "Trả lời"); assert.equal(last.context_kind, null);
+  run(migrated, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,context_kind,context_id,event_href) VALUES (1,1,'Đề nghị','proposal',7,'/proposals?id=7')");
+  const att = one(migrated, "SELECT ca.id,m.body FROM chat_attachments ca JOIN inquiry_messages m ON m.id=ca.message_id WHERE ca.id='att-1'");
+  assert.equal(att.body, "Trả lời");
+  migrated.close();
+  const again = openDatabase(file); // second open is a no-op
+  assert.equal(one(again, "SELECT count(*) n FROM inquiry_messages").n, 3);
+  again.close();
+});
+
 test("additive tutor migration preserves existing accounts and profile data", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "giasu-migrate-")),
     file = join(dir, "old.sqlite");
