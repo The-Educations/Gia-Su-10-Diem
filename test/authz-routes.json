@@ -1,0 +1,838 @@
+{
+  "GET /api/account/availability": {
+    "auth": "student",
+    "file": "api.js"
+  },
+  "PUT /api/account/availability": {
+    "auth": "student",
+    "file": "api.js"
+  },
+  "POST /api/account/google-calendar/connect": {
+    "auth": "student,tutor",
+    "file": "google-calendar.js"
+  },
+  "POST /api/account/google-calendar/sync": {
+    "auth": "student,tutor",
+    "file": "google-calendar.js"
+  },
+  "DELETE /api/account/google-calendar": {
+    "auth": "student,tutor",
+    "file": "google-calendar.js"
+  },
+  "GET /api/account/google-calendar": {
+    "auth": "user",
+    "file": "google-calendar.js"
+  },
+  "GET /api/account/notifications": {
+    "auth": "user",
+    "file": "notifications.js"
+  },
+  "PUT /api/account/onboarding": {
+    "auth": "user",
+    "file": "api.js"
+  },
+  "POST /api/account/password": {
+    "auth": "user",
+    "file": "api.js"
+  },
+  "DELETE /api/account/verification/files/{id}": {
+    "auth": "student",
+    "file": "student-verification.js"
+  },
+  "POST /api/account/verification/files": {
+    "auth": "student",
+    "file": "student-verification.js"
+  },
+  "GET /api/account/verification": {
+    "auth": "student",
+    "file": "student-verification.js"
+  },
+  "PATCH /api/account": {
+    "auth": "user",
+    "file": "api.js"
+  },
+  "GET /api/admin/audit": {
+    "auth": "admin",
+    "file": "api.js"
+  },
+  "POST /api/admin/bookings/{id}/cancel": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/bookings/{id}": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/classes": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "POST /api/admin/community/mail/{id}/retry": {
+    "auth": "admin",
+    "file": "community-mail.js"
+  },
+  "GET /api/admin/community/mail": {
+    "auth": "admin",
+    "file": "community-mail.js"
+  },
+  "DELETE /api/admin/community/members/{code}/{part}": {
+    "auth": "admin",
+    "file": "community-profile.js"
+  },
+  "PATCH /api/admin/credentials/{id}": {
+    "auth": "admin",
+    "file": "credentials.js"
+  },
+  "GET /api/admin/credentials/pending": {
+    "auth": "admin",
+    "file": "credentials.js"
+  },
+  "GET /api/admin/deposits/find": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "POST /api/admin/deposits/recheck": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "POST /api/admin/deposits/unmatched/assign": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "POST /api/admin/deposits/unmatched/dismiss": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "GET /api/admin/finance": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "POST /api/admin/members/{id}/end": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "POST /api/admin/news/images": {
+    "auth": "admin",
+    "file": "news-images.js"
+  },
+  "POST /api/admin/posts/{id}/pin": {
+    "auth": "admin",
+    "file": "posts.js"
+  },
+  "POST /api/admin/posts/{id}/unpublish": {
+    "auth": "admin",
+    "file": "posts.js"
+  },
+  "DELETE /api/admin/posts/{id}": {
+    "auth": "admin",
+    "file": "posts.js"
+  },
+  "GET /api/admin/posts/{id}": {
+    "auth": "admin",
+    "file": "posts.js"
+  },
+  "GET /api/admin/posts": {
+    "auth": "admin",
+    "file": "posts.js"
+  },
+  "POST /api/admin/posts": {
+    "auth": "admin",
+    "file": "posts.js"
+  },
+  "PUT /api/admin/resources/{id}": {
+    "auth": "admin",
+    "file": "api.js"
+  },
+  "POST /api/admin/resources": {
+    "auth": "admin",
+    "file": "api.js"
+  },
+  "POST /api/admin/reviews/{bookingId}/reply": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/reviews/queue": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "POST /api/admin/safety/dismiss": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/safety/flagged": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "POST /api/admin/safety/warn": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/schedule": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "POST /api/admin/sessions/{id}/cancel": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "POST /api/admin/sessions/{id}/resolve": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/sessions/{id}": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "POST /api/admin/sessions/remind": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/sessions/summary": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/sessions": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "PUT /api/admin/settings": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "PUT /api/admin/subjects/{id}": {
+    "auth": "admin",
+    "file": "api.js"
+  },
+  "GET /api/admin/today": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "GET /api/admin/tutors/{id}/credentials": {
+    "auth": "admin",
+    "file": "credentials.js"
+  },
+  "PUT /api/admin/tutors/{id}/themes/{theme}": {
+    "auth": "admin",
+    "file": "tutor-themes.js"
+  },
+  "PATCH /api/admin/tutors/{id}": {
+    "auth": "admin",
+    "file": "tutor-review.js"
+  },
+  "GET /api/admin/users/{id}/overview": {
+    "auth": "admin",
+    "file": "classes.js"
+  },
+  "PATCH /api/admin/users/{id}/role": {
+    "auth": "admin",
+    "file": "api.js"
+  },
+  "DELETE /api/admin/users/{id}": {
+    "auth": "admin",
+    "file": "account-deletion.js"
+  },
+  "PATCH /api/admin/users/{id}": {
+    "auth": "admin",
+    "file": "api.js"
+  },
+  "PATCH /api/admin/verifications/{id}": {
+    "auth": "admin",
+    "file": "student-verification.js"
+  },
+  "GET /api/admin/verifications": {
+    "auth": "admin",
+    "file": "student-verification.js"
+  },
+  "POST /api/admin/wallets/{id}/adjust": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "POST /api/admin/withdrawals/{id}/receipt": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "PATCH /api/admin/withdrawals/{id}": {
+    "auth": "admin",
+    "file": "wallet.js"
+  },
+  "GET /api/auth/demo": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "GET /api/auth/google/callback": {
+    "auth": "public",
+    "file": "google-calendar.js"
+  },
+  "GET /api/auth/google/start": {
+    "auth": "public",
+    "file": "google-auth.js"
+  },
+  "POST /api/auth/login": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "POST /api/auth/logout": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "GET /api/auth/providers": {
+    "auth": "public",
+    "file": "google-auth.js"
+  },
+  "POST /api/auth/register": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "POST /api/auth/resend-verification": {
+    "auth": "public",
+    "file": "email-verification.js"
+  },
+  "POST /api/auth/signup/resend": {
+    "auth": "public",
+    "file": "signup-verification.js"
+  },
+  "POST /api/auth/signup/verify": {
+    "auth": "public",
+    "file": "signup-verification.js"
+  },
+  "GET /api/auth/signup": {
+    "auth": "public",
+    "file": "signup-verification.js"
+  },
+  "POST /api/auth/verify-email": {
+    "auth": "public",
+    "file": "email-verification.js"
+  },
+  "PATCH /api/bookings/{id}/lesson": {
+    "auth": "tutor",
+    "file": "api.js"
+  },
+  "GET /api/bookings/{id}/messages": {
+    "auth": "user",
+    "file": "api.js"
+  },
+  "POST /api/bookings/{id}/messages": {
+    "auth": "student,tutor",
+    "file": "api.js"
+  },
+  "PUT /api/bookings/{id}/rating": {
+    "auth": "student",
+    "file": "trust.js"
+  },
+  "POST /api/bookings/{id}/report": {
+    "auth": "student,tutor",
+    "file": "api.js"
+  },
+  "POST /api/bookings/{id}/review": {
+    "auth": "student",
+    "file": "api.js"
+  },
+  "POST /api/bookings/{id}/start": {
+    "auth": "tutor",
+    "file": "api.js"
+  },
+  "PATCH /api/bookings/{id}": {
+    "auth": "user",
+    "file": "api.js"
+  },
+  "GET /api/bookings": {
+    "auth": "user",
+    "file": "api.js"
+  },
+  "POST /api/bookings": {
+    "auth": "student",
+    "file": "api.js"
+  },
+  "DELETE /api/calendar-events/{id}": {
+    "auth": "user",
+    "file": "calendar-events.js"
+  },
+  "PUT /api/calendar-events/{id}": {
+    "auth": "user",
+    "file": "calendar-events.js"
+  },
+  "GET /api/calendar-events": {
+    "auth": "user",
+    "file": "calendar-events.js"
+  },
+  "POST /api/calendar-events": {
+    "auth": "user",
+    "file": "calendar-events.js"
+  },
+  "POST /api/chat/{kind}/{id}/attachments": {
+    "auth": "user",
+    "file": "chat-media.js"
+  },
+  "POST /api/chat/{kind}/{id}/read": {
+    "auth": "user",
+    "file": "chat-media.js"
+  },
+  "DELETE /api/chat/attachments/{id}": {
+    "auth": "user",
+    "file": "chat-media.js"
+  },
+  "GET /api/chat/attachments/{id}": {
+    "auth": "user",
+    "file": "chat-media.js"
+  },
+  "DELETE /api/classes/{id}/materials/{material}": {
+    "auth": "tutor",
+    "file": "classes.js"
+  },
+  "POST /api/classes/{id}/materials": {
+    "auth": "tutor",
+    "file": "classes.js"
+  },
+  "GET /api/classes/{id}": {
+    "auth": "user",
+    "file": "classes.js"
+  },
+  "PATCH /api/classes/{id}": {
+    "auth": "tutor",
+    "file": "classes.js"
+  },
+  "GET /api/classes": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "DELETE /api/community/comments/{id}": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "PATCH /api/community/comments/{id}": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "DELETE /api/community/drafts/{id}": {
+    "auth": "user",
+    "file": "community-drafts.js"
+  },
+  "GET /api/community/drafts/{id}": {
+    "auth": "user",
+    "file": "community-drafts.js"
+  },
+  "GET /api/community/drafts": {
+    "auth": "user",
+    "file": "community-drafts.js"
+  },
+  "GET /api/community/images/{id}": {
+    "auth": "public",
+    "file": "community-images.js"
+  },
+  "POST /api/community/images": {
+    "auth": "user",
+    "file": "community-images.js"
+  },
+  "PUT /api/community/me/display-name": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "GET /api/community/mine": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "POST /api/community/notifications/read": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "GET /api/community/notifications/unread-count": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "GET /api/community/notifications": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "POST /api/community/posts/{id}/close": {
+    "auth": "student",
+    "file": "community-topics.js"
+  },
+  "GET /api/community/posts/{id}/comments": {
+    "auth": "public",
+    "file": "community.js"
+  },
+  "POST /api/community/posts/{id}/comments": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "GET /api/community/posts/{id}/pitches": {
+    "auth": "public",
+    "file": "community-topics.js"
+  },
+  "POST /api/community/posts/{id}/pitches": {
+    "auth": "tutor",
+    "file": "community-topics.js"
+  },
+  "POST /api/community/posts/{id}/react": {
+    "auth": "user",
+    "file": "community-topics.js"
+  },
+  "DELETE /api/community/posts/{id}/revision": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "POST /api/community/posts/{id}/solve": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "DELETE /api/community/posts/{id}": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "GET /api/community/posts/{id}": {
+    "auth": "public",
+    "file": "community.js"
+  },
+  "PUT /api/community/posts/{id}": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "POST /api/community/posts": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "POST /api/community/reports": {
+    "auth": "user",
+    "file": "community.js"
+  },
+  "GET /api/community/requests": {
+    "auth": "tutor,student",
+    "file": "community.js"
+  },
+  "GET /api/community/sitemap": {
+    "auth": "public",
+    "file": "community.js"
+  },
+  "GET /api/credential-files/{id}": {
+    "auth": "user",
+    "file": "credentials.js"
+  },
+  "GET /api/credentials/catalog": {
+    "auth": "public",
+    "file": "credentials.js"
+  },
+  "POST /api/credits/purchase": {
+    "auth": "tutor",
+    "file": "wallet.js"
+  },
+  "DELETE /api/family/{id}": {
+    "auth": "student",
+    "file": "family.js"
+  },
+  "POST /api/family/code": {
+    "auth": "student",
+    "file": "family.js"
+  },
+  "POST /api/family/link": {
+    "auth": "student",
+    "file": "family.js"
+  },
+  "GET /api/family": {
+    "auth": "student",
+    "file": "family.js"
+  },
+  "DELETE /api/favorites/{id}": {
+    "auth": "student",
+    "file": "api.js"
+  },
+  "PUT /api/favorites/{id}": {
+    "auth": "student",
+    "file": "api.js"
+  },
+  "DELETE /api/gallery/{id}/comments/{commentId}": {
+    "auth": "user",
+    "file": "gallery.js"
+  },
+  "POST /api/gallery/{id}/comments": {
+    "auth": "student",
+    "file": "gallery.js"
+  },
+  "DELETE /api/gallery/{id}/like": {
+    "auth": "student",
+    "file": "gallery.js"
+  },
+  "PUT /api/gallery/{id}/like": {
+    "auth": "student",
+    "file": "gallery.js"
+  },
+  "GET /api/gallery/{id}/social": {
+    "auth": "public",
+    "file": "gallery.js"
+  },
+  "GET /api/gallery/{id}": {
+    "auth": "public",
+    "file": "gallery.js"
+  },
+  "GET /api/health": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "GET /api/inquiries/{id}/context/{kind}/{contextId}": {
+    "auth": "student,tutor",
+    "file": "inquiries.js"
+  },
+  "GET /api/inquiries/{id}/messages": {
+    "auth": "student,tutor",
+    "file": "inquiries.js"
+  },
+  "POST /api/inquiries/{id}/messages": {
+    "auth": "student,tutor",
+    "file": "inquiries.js"
+  },
+  "GET /api/inquiries": {
+    "auth": "student,tutor",
+    "file": "inquiries.js"
+  },
+  "POST /api/inquiries": {
+    "auth": "student",
+    "file": "inquiries.js"
+  },
+  "POST /api/members/{id}/end": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "POST /api/members/{id}/remind": {
+    "auth": "tutor",
+    "file": "classes.js"
+  },
+  "POST /api/members/{id}/renew": {
+    "auth": "student",
+    "file": "classes.js"
+  },
+  "PUT /api/members/{id}/review": {
+    "auth": "student",
+    "file": "classes.js"
+  },
+  "PATCH /api/moves/{id}": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "GET /api/news/images/{id}": {
+    "auth": "public",
+    "file": "news-images.js"
+  },
+  "GET /api/news": {
+    "auth": "public",
+    "file": "posts.js"
+  },
+  "POST /api/notifications/read": {
+    "auth": "user",
+    "file": "notifications.js"
+  },
+  "GET /api/notifications/unread-count": {
+    "auth": "user",
+    "file": "notifications.js"
+  },
+  "GET /api/notifications": {
+    "auth": "user",
+    "file": "notifications.js"
+  },
+  "PUT /api/offers/{id}/review": {
+    "auth": "student",
+    "file": "trust.js"
+  },
+  "PATCH /api/offers/{id}": {
+    "auth": "student,tutor",
+    "file": "offers.js"
+  },
+  "POST /api/offers/preview": {
+    "auth": "student",
+    "file": "offers.js"
+  },
+  "GET /api/offers": {
+    "auth": "student,tutor",
+    "file": "offers.js"
+  },
+  "POST /api/offers": {
+    "auth": "student",
+    "file": "offers.js"
+  },
+  "GET /api/posts/{id}": {
+    "auth": "public",
+    "file": "posts.js"
+  },
+  "GET /api/posts": {
+    "auth": "public",
+    "file": "posts.js"
+  },
+  "PATCH /api/proposals/{id}": {
+    "auth": "student,tutor",
+    "file": "proposals.js"
+  },
+  "GET /api/proposals": {
+    "auth": "student,tutor",
+    "file": "proposals.js"
+  },
+  "POST /api/proposals": {
+    "auth": "student,tutor",
+    "file": "proposals.js"
+  },
+  "GET /api/resources": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "GET /api/schedule": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "POST /api/sepay/ipn": {
+    "auth": "public",
+    "file": "wallet.js"
+  },
+  "POST /api/sepay/webhook": {
+    "auth": "public",
+    "file": "wallet.js"
+  },
+  "POST /api/sessions/{id}/cancel": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "POST /api/sessions/{id}/confirm": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "POST /api/sessions/{id}/dispute": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "POST /api/sessions/{id}/move": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
+  "PUT /api/sessions/{id}/rating": {
+    "auth": "student",
+    "file": "classes.js"
+  },
+  "GET /api/subjects": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "GET /api/support/{id}/messages": {
+    "auth": "user",
+    "file": "support.js"
+  },
+  "POST /api/support/{id}/messages": {
+    "auth": "user",
+    "file": "support.js"
+  },
+  "GET /api/support": {
+    "auth": "user",
+    "file": "support.js"
+  },
+  "PUT /api/tutor/availability": {
+    "auth": "tutor",
+    "file": "api.js"
+  },
+  "DELETE /api/tutor/credentials/{id}/files/{file}": {
+    "auth": "tutor",
+    "file": "credentials.js"
+  },
+  "POST /api/tutor/credentials/{id}/files": {
+    "auth": "tutor",
+    "file": "credentials.js"
+  },
+  "DELETE /api/tutor/credentials/{id}": {
+    "auth": "tutor",
+    "file": "credentials.js"
+  },
+  "PUT /api/tutor/credentials/{id}": {
+    "auth": "tutor",
+    "file": "credentials.js"
+  },
+  "POST /api/tutor/credentials": {
+    "auth": "tutor",
+    "file": "credentials.js"
+  },
+  "DELETE /api/tutor/gallery/{id}": {
+    "auth": "tutor",
+    "file": "gallery.js"
+  },
+  "PATCH /api/tutor/gallery/{id}": {
+    "auth": "tutor",
+    "file": "gallery.js"
+  },
+  "POST /api/tutor/gallery": {
+    "auth": "tutor",
+    "file": "gallery.js"
+  },
+  "GET /api/tutor/profile": {
+    "auth": "tutor",
+    "file": "api.js"
+  },
+  "PUT /api/tutor/profile": {
+    "auth": "tutor",
+    "file": "api.js"
+  },
+  "DELETE /api/tutor/slots/{id}": {
+    "auth": "tutor",
+    "file": "api.js"
+  },
+  "POST /api/tutor/slots": {
+    "auth": "tutor",
+    "file": "api.js"
+  },
+  "PUT /api/tutor/theme": {
+    "auth": "tutor",
+    "file": "tutor-themes.js"
+  },
+  "GET /api/tutor/trust": {
+    "auth": "tutor",
+    "file": "trust.js"
+  },
+  "DELETE /api/tutor/uploads/{kind}": {
+    "auth": "tutor",
+    "file": "uploads.js"
+  },
+  "PUT /api/tutor/uploads/{kind}": {
+    "auth": "tutor",
+    "file": "uploads.js"
+  },
+  "GET /api/tutors/{id}": {
+    "auth": "public",
+    "file": "api.js"
+  },
+  "GET /api/uploads/{id}": {
+    "auth": "public",
+    "file": "uploads.js"
+  },
+  "GET /api/verification-files/{id}": {
+    "auth": "user",
+    "file": "student-verification.js"
+  },
+  "POST /api/wallet/deposits/{id}/simulate": {
+    "auth": "user",
+    "file": "wallet.js"
+  },
+  "GET /api/wallet/deposits/{id}": {
+    "auth": "user",
+    "file": "wallet.js"
+  },
+  "POST /api/wallet/deposits": {
+    "auth": "student,tutor",
+    "file": "wallet.js"
+  },
+  "GET /api/wallet/pay/{code}": {
+    "auth": "public",
+    "file": "wallet.js"
+  },
+  "POST /api/wallet/withdrawals": {
+    "auth": "student,tutor",
+    "file": "wallet.js"
+  },
+  "GET /api/wallet": {
+    "auth": "user",
+    "file": "wallet.js"
+  },
+  "PATCH /api/weekly-requests/{id}": {
+    "auth": "student,tutor",
+    "file": "weekly-requests.js"
+  },
+  "GET /api/weekly-requests": {
+    "auth": "student,tutor",
+    "file": "weekly-requests.js"
+  },
+  "POST /api/weekly-requests": {
+    "auth": "student",
+    "file": "weekly-requests.js"
+  }
+}
