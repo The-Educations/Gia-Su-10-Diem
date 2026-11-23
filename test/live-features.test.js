@@ -10,6 +10,7 @@ import { all, one, run } from "../server/db.js";
 import { seedCatalog, seedDemo } from "../server/seed.js";
 import { createApi } from "../server/api.js";
 import { processPhoto } from "../server/photo.js";
+import { trustReader } from "../server/trust.js";
 
 async function fixture(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "giasu-live-")), file = join(dir, "db.sqlite");
@@ -249,4 +250,36 @@ test("trust score stays 'new' until enough ratings from enough students, then dr
   assert.ok(after.label !== "new" || after.count >= 2, JSON.stringify(after));
   const page = (await guest.request(`/tutors/${teacher.id}`)).data;
   assert.ok(page);
+});
+
+test("new-flow ratings alone clear the 'new' threshold and move the score", async (t) => {
+  const { db, client } = await fixture(t);
+  const tutor = client(), guest = client();
+  const teacher = await tutor.login("chau");
+  const baseline = trustReader(db).full(teacher.id);
+  // Two students rate class sessions — no old bookings needed.
+  let rated = 0;
+  for (const [slug, stars] of [["student", 5], ["trust-rater", 4]]) {
+    const s = client();
+    if (slug === "trust-rater") {
+      run(db, "INSERT INTO users(name,email,password,role,status,onboarding_step) SELECT 'Rater','trust-rater@demo.giasu.test',password,role,'active',onboarding_step FROM users WHERE email='student@demo.giasu.test'");
+      run(db, "INSERT INTO student_verifications(user_id,status) SELECT id,'approved' FROM users WHERE email='trust-rater@demo.giasu.test'");
+    }
+    const learner = await s.login(slug);
+    const { session } = await makeClass(db, s, tutor, learner.id, teacher.id);
+    for (const sm of all(db, "SELECT sm.session_id FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id WHERE cs.class_id=? AND sm.member_id IN (SELECT id FROM class_members WHERE student_id=?)", session.class_id, learner.id)) {
+      run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - 7200000).toISOString(), sm.session_id);
+      run(db, "UPDATE session_members SET outcome='confirmed' WHERE session_id=?", sm.session_id);
+      if ((await s.request(`/sessions/${sm.session_id}/rating`, "PUT", { rating: stars, answers: {}, comment: "" })).status === 200) rated++;
+    }
+  }
+  assert.ok(rated >= 2, `only ${rated} sessions rated`);
+  const after = trustReader(db).full(teacher.id);
+  assert.ok(after.detail.rating_count > baseline.detail.rating_count, "session ratings counted");
+  assert.equal(after.is_new, false, `still new: ${JSON.stringify(after.detail)}`);
+  assert.ok(typeof after.score === "number" && after.score > 0);
+  // Reliability counts class sessions too.
+  assert.ok(after.detail.held > baseline.detail.held);
+  const pub = trustReader(db).public(teacher.id);
+  assert.ok(pub.score !== null && !("detail" in pub));
 });

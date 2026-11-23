@@ -56,6 +56,9 @@ function courseReviewRows(db, tutorId = null) {
     SELECT o.student_id,o.tutor_id,cr.rating,cr.body,NULL AS reply,cr.created_at,cr.offer_id AS ref,1 AS fresh FROM course_reviews cr JOIN offers o ON o.id=cr.offer_id
     UNION ALL
     SELECT b.student_id,b.tutor_id,r.rating,r.body,r.reply,r.created_at,r.booking_id AS ref,0 AS fresh FROM reviews r JOIN bookings b ON b.id=r.booking_id WHERE r.hidden=0
+    UNION ALL
+    SELECT m.student_id,c.tutor_id,m.published_rating AS rating,m.review AS body,NULL AS reply,COALESCE(m.reviewed_at,m.ended_at) AS created_at,m.id AS ref,1 AS fresh
+      FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.status='ended' AND m.published_rating IS NOT NULL
   )${filter}`, ...args);
   rows.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.fresh - a.fresh || b.ref - a.ref));
   const latest = new Map();
@@ -71,17 +74,25 @@ function loadFacts(db) {
   const { rows, latest } = courseReviewRows(db);
   for (const r of rows) { const f = of(r.tutor_id); f.ratingCount++; f.raters.add(r.student_id); }
   for (const r of latest) pair(of(r.tutor_id), r.student_id).course = r.rating;
-  for (const r of all(db, "SELECT b.student_id,b.tutor_id,lr.rating,lr.tags FROM lesson_ratings lr JOIN bookings b ON b.id=lr.booking_id WHERE b.status='completed'")) {
+  for (const r of all(db, `SELECT b.student_id,b.tutor_id,lr.rating,lr.tags AS tags FROM lesson_ratings lr JOIN bookings b ON b.id=lr.booking_id WHERE b.status='completed'
+    UNION ALL
+    SELECT m.student_id,c.tutor_id,sm.rating,'[]' AS tags FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.rating IS NOT NULL`)) {
     const f = of(r.tutor_id), p = pair(f, r.student_id);
     p.lessonSum += r.rating; p.lessonN++;
     f.lessonSum += r.rating; f.lessonCount++; f.ratingCount++; f.raters.add(r.student_id);
     for (const code of JSON.parse(r.tags)) f.tagCounts[code] = (f.tagCounts[code] || 0) + 1;
   }
-  for (const r of all(db, "SELECT tutor_id,COUNT(*) AS n FROM bookings WHERE status='completed' GROUP BY tutor_id")) of(r.tutor_id).held = r.n;
+  for (const r of all(db, `SELECT tutor_id,COUNT(*) AS n FROM bookings WHERE status='completed' GROUP BY tutor_id
+    UNION ALL
+    SELECT c.tutor_id,COUNT(*) AS n FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.outcome IN ('confirmed','charged') GROUP BY c.tutor_id`)) of(r.tutor_id).held += r.n;
   // A tutor who cancels late (not because the course was ended) or does not show up.
   for (const r of all(db, `SELECT tutor_id,status,starts_at,cancelled_at FROM bookings WHERE status='tutor_missed'
     OR (status='cancelled' AND cancelled_by=tutor_id AND cancel_reason<>'course_ended' AND cancelled_at IS NOT NULL)`))
     if (r.status === "tutor_missed" || isLateCancel(r)) of(r.tutor_id).bad++;
+  // New flow: late tutor cancels are counted on tutors.violations, and a no-show
+  // the student reports sits at outcome='disputed' until admin resolution.
+  for (const r of all(db, "SELECT user_id AS tutor_id,violations FROM tutors WHERE violations>0")) of(r.tutor_id).bad += r.violations;
+  for (const r of all(db, `SELECT c.tutor_id,COUNT(*) AS n FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.outcome='disputed' GROUP BY c.tutor_id`)) of(r.tutor_id).bad += r.n;
   return facts;
 }
 
