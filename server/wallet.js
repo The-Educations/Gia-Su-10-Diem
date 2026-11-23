@@ -331,7 +331,11 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   app.get("/api/admin/finance", auth("admin"), (req, res) => {
     res.json({
       withdrawals: all(db, "SELECT w.*,u.name FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE w.status WHEN 'requested' THEN 0 ELSE 1 END, w.id DESC LIMIT 200"),
-      deposits: all(db, "SELECT d.id,d.code,d.amount,d.received,d.status,d.created_at,d.paid_at,u.name FROM deposits d JOIN users u ON u.id=d.user_id ORDER BY d.id DESC LIMIT 200"),
+      // Paid top-ups with who paid, for whom and how, to trace a transfer quickly.
+      deposits: all(db, `SELECT d.id,d.code,d.amount,d.received,d.status,d.created_at,d.paid_at,d.user_id,d.payer_id,
+        u.name, u.email, p.name AS payer_name, p.email AS payer_email,
+        (SELECT note FROM wallet_entries WHERE ref='deposit:' || d.id AND kind='deposit' LIMIT 1) AS method
+        FROM deposits d JOIN users u ON u.id=d.user_id JOIN users p ON p.id=d.payer_id WHERE d.status='paid' ORDER BY d.paid_at DESC LIMIT 200`),
       unmatched: all(db, `SELECT id,code,amount,reference,created_at FROM (
         SELECT CAST(id AS TEXT) id,code,amount,reference,created_at FROM sepay_events WHERE status='unmatched'
         UNION ALL SELECT id,invoice AS code,amount,CASE status WHEN 'rejected_key' THEN 'Sai khóa IPN' ELSE '' END AS reference,created_at FROM gateway_events WHERE status IN ('unmatched','rejected_key')) ORDER BY created_at DESC LIMIT 100`),
