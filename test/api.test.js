@@ -2956,4 +2956,36 @@ test("masked contact never reaches participants; admin thread keeps the original
   // Flagged for admin; the safety view returns the original and audits the look.
   assert.equal(one(db, "SELECT flagged FROM inquiry_messages WHERE inquiry_id=? AND flagged=1", thread).flagged, 1);
   assert.ok(JSON.stringify((await admin.request(`/admin/safety/thread/inquiry/${thread}`)).data).includes(SECRET));
+test("admin health: shape, resend resets the outbox row, no secret leaks", async (t) => {
+  const { client, db } = await fixture(t), admin = client(), student = client();
+  await admin.login("admin"); await student.login("student");
+  // A webhook hit (even unauthenticated) is timestamped; a failed email exists.
+  await student.request("/sepay/webhook", "POST", {});
+  run(db, "INSERT INTO email_outbox(user_id,kind,subject,link,attempts,sending_until) VALUES ((SELECT id FROM users LIMIT 1),'notice','Hi','',5,0)");
+  const h = (await admin.request("/admin/health")).data;
+  assert.deepEqual(Object.keys(h), ["payments", "email", "calendar", "data", "ledger", "warnings"]);
+  assert.ok(h.payments.simulated && !h.payments.bank_webhook && !h.payments.gateway);
+  assert.ok(h.payments.last_received);
+  assert.ok(!JSON.stringify(h).includes("SECRET"));
+  const failed = h.email.failed[0];
+  assert.ok(failed && failed.attempts >= 5 && !failed.email.includes("demo.giasu.test".slice(0, 8)) === false); // masked email
+  assert.equal((await admin.request(`/admin/health/email/${failed.id}/resend`, "POST")).status, 200);
+  assert.equal(one(db, "SELECT attempts FROM email_outbox WHERE id=?", failed.id).attempts, 0);
+  assert.ok(one(db, "SELECT id FROM audit WHERE action='health.email_resend'"));
+  // Students cannot read it.
+  assert.equal((await student.request("/admin/health")).status, 403);
+});
+
+test("admin health ledger reports clean then flags a planted mismatch", async (t) => {
+  const { client, db } = await fixture(t);
+  const admin = client(); await admin.login("admin");
+  const h1 = (await admin.request("/admin/health")).data;
+  assert.equal(h1.ledger.ok, true, "clean fixture reports balanced ledger");
+  const uid = one(db, "SELECT id FROM users LIMIT 1").id;
+  run(db, "INSERT OR IGNORE INTO wallets(user_id) VALUES (?)", uid);
+  run(db, "UPDATE wallets SET available=available+1 WHERE user_id=?", uid);
+  const h2 = (await admin.request("/admin/health")).data;
+  assert.equal(h2.ledger.ok, false, "planted mismatch detected");
+  assert.ok(h2.ledger.wallet.some((w) => w.user_id === uid && w.d_avail === 1), "the off user is listed with the diff");
+  assert.ok(h2.warnings.some((w) => w.kind === "ledger"), "a ledger warning reaches the today banner");
 });

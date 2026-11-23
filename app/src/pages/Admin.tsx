@@ -18,12 +18,13 @@ import { AdminAccounts } from "@/components/admin-accounts";
 import { AdminCatalog } from "@/components/admin-catalog";
 import { AdminFinance } from "@/components/admin-finance";
 import { AdminAudit } from "@/components/admin-audit";
+import AdminHealth from "@/components/admin-health";
 import AdminCommunity from "./AdminCommunity";
 import AdminPosts from "./AdminPosts";
 import AdminSafety from "@/components/admin-safety";
 
 type Today = { students: number; tutors: number; credentials: number; withdrawals: number; community: number; disputes: unknown[]; sessions_waiting: number; flagged_messages?: number; reported_reviews?: number };
-const TABS = ["today", "classes", "tutors", "students", "users", "catalog", "posts", "community", "finance", "safety", "audit"];
+const TABS = ["today", "classes", "tutors", "students", "users", "catalog", "posts", "community", "finance", "safety", "system", "audit"];
 // The catalog used to be two tabs; keep their old links working.
 const OLD: Record<string, string> = { resources: "catalog", subjects: "catalog" };
 
@@ -55,6 +56,7 @@ export default function Admin() {
             {trigger("community", "Cộng đồng", today?.community)}
             {trigger("finance", "Tài chính", today?.withdrawals)}
             {trigger("safety", "An toàn", today ? (today.flagged_messages || 0) + (today.reported_reviews || 0) : undefined)}
+            {trigger("system", "Hệ thống")}
             {trigger("audit", "Nhật ký")}
           </TabsList>
           <TabsContent value="today"><AdminToday /></TabsContent>
@@ -67,6 +69,7 @@ export default function Admin() {
           <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="finance"><AdminFinance /></TabsContent>
           <TabsContent value="safety"><AdminSafety /></TabsContent>
+          <TabsContent value="system"><AdminHealth /></TabsContent>
           <TabsContent value="audit"><AdminAudit /></TabsContent>
         </Tabs>
       </div>

@@ -1,7 +1,7 @@
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
-import { move, settings } from "./wallet.js";
+import { move, settings, sepayConfig } from "./wallet.js";
 import { childrenOf } from "./family.js";
 import { sessionChatEvent } from "./chat-media.js";
 import { flaggedList, flaggedThread, reviewQueue, warnThread } from "./trust-safety.js";
@@ -410,6 +410,80 @@ export function registerClasses(app, db, auth, audit) {
     res.json({ ok: true });
   });
   // The sessions worklist: one row per (lesson, student) pair; the client groups them back by lesson.
+  // System health: real operational numbers, read-only except the email resend.
+  app.get("/api/admin/health", auth("admin"), (req, res) => {
+    const sepay = sepayConfig();
+    const day = Date.now() - 86400000, since = new Date(day).toISOString();
+    const lastEvent = one(db, "SELECT created_at,status,verdict FROM sepay_events ORDER BY created_at DESC LIMIT 1")
+      || one(db, "SELECT created_at,status,verdict FROM gateway_events ORDER BY created_at DESC LIMIT 1");
+    const lastReceived = ["last_sepay_ipn", "last_sepay_webhook"].map((k) => one(db, "SELECT value FROM platform_settings WHERE key=?", k)?.value).filter(Boolean).map((v) => { try { return JSON.parse(v); } catch { return v; } }).sort().pop() || null;
+    const pendingDeposits = one(db, "SELECT COUNT(*) n FROM deposits WHERE status='pending'").n;
+    const unmatched = one(db, "SELECT (SELECT COUNT(*) FROM sepay_events WHERE status='unmatched')+(SELECT COUNT(*) FROM gateway_events WHERE status='unmatched') n").n;
+    const rejected24 = one(db, "SELECT (SELECT COUNT(*) FROM sepay_events WHERE status='rejected_key' AND created_at>?)+(SELECT COUNT(*) FROM gateway_events WHERE status='rejected_key' AND created_at>?) n", since, since).n;
+    const outbox = one(db, "SELECT COUNT(*) AS pending, SUM(attempts) AS tries FROM email_outbox WHERE sent_at IS NULL");
+    const failed = all(db, "SELECT o.id,o.attempts,o.sending_until,u.email FROM email_outbox o LEFT JOIN users u ON u.id=o.user_id WHERE o.sent_at IS NULL AND o.attempts>=5 ORDER BY o.id DESC LIMIT 20");
+    const latestMailErr = one(db, "SELECT o.attempts,u.email FROM email_outbox o LEFT JOIN users u ON u.id=o.user_id WHERE o.sent_at IS NULL AND o.attempts>0 ORDER BY o.id DESC LIMIT 1");
+    const maskMail = (e) => e ? e.replace(/^(.{1,2})[^@]*@(.*)$/, "$1***@$2") : null;
+    const cals = all(db, "SELECT user_id,last_synced,error FROM google_calendars");
+    const calErrs = cals.filter((c) => c.error).length;
+    const counts = {};
+    for (const [name, table] of [["users", "users"], ["tutors", "tutors"], ["classes", "classes"], ["bookings", "bookings"], ["deposits", "deposits"], ["audit", "audit"], ["messages", "messages"]])
+      counts[name] = one(db, `SELECT COUNT(*) n FROM ${table}`).n;
+    const payments = {
+      bank_webhook: !!(sepay.secret && sepay.account && sepay.bank),
+      gateway: !!(sepay.merchant && sepay.merchantSecret && sepay.ipnSecret),
+      sandbox: !!sepay.sandbox,
+      simulated: !(sepay.secret || sepay.merchant),
+      last_received: lastReceived,
+      last_event: lastEvent || null,
+      rejected_24h: rejected24,
+      pending_deposits: pendingDeposits,
+      unmatched,
+      recon_v2: !!process.env.SEPAY_API_TOKEN,
+      last_recheck: one(db, "SELECT created_at FROM audit WHERE action='deposits.recheck' ORDER BY created_at DESC LIMIT 1")?.created_at || null,
+    };
+    // Sổ cái: the ledger is the safety net — wallets must equal their entries,
+    // settled money must be released, and no outside event may credit twice.
+    const entries = "(SELECT user_id,SUM(amount) a,SUM(held) h FROM wallet_entries GROUP BY user_id)";
+    const mismatches = all(db, `SELECT w.user_id,u.name,w.available-COALESCE(e.a,0) d_avail,w.held-COALESCE(e.h,0) d_held
+      FROM wallets w LEFT JOIN ${entries} e ON e.user_id=w.user_id LEFT JOIN users u ON u.id=w.user_id
+      WHERE w.available!=COALESCE(e.a,0) OR w.held!=COALESCE(e.h,0) ORDER BY w.user_id LIMIT 20`);
+    const negatives = all(db, "SELECT user_id,available,held FROM wallets WHERE available<0 OR held<0 LIMIT 20");
+    const depositMismatch = all(db, `SELECT d.id,d.code,d.received,COALESCE(e.s,0) ledger
+      FROM deposits d LEFT JOIN (SELECT ref,SUM(amount) s FROM wallet_entries WHERE kind='deposit' GROUP BY ref) e ON e.ref='deposit:'||d.id
+      WHERE d.status='paid' AND d.received!=COALESCE(e.s,0) LIMIT 20`);
+    const doubleCredits = all(db, `SELECT note,COUNT(*) n FROM wallet_entries
+      WHERE kind='deposit' AND (note LIKE 'sepay:%' OR note LIKE 'gateway:%' OR note LIKE 'bank:%' OR note LIKE 'ipn:%')
+      GROUP BY note HAVING COUNT(*)>1 LIMIT 20`);
+    const withdrawalBad = all(db, `SELECT w.id,w.status,w.amount,COALESCE(e.h,0) held
+      FROM withdrawals w LEFT JOIN (SELECT ref,SUM(held) h FROM wallet_entries WHERE ref LIKE 'withdrawal:%' GROUP BY ref) e ON e.ref='withdrawal:'||w.id
+      WHERE (w.status='requested' AND COALESCE(e.h,0)!=w.amount) OR (w.status IN ('paid','rejected') AND COALESCE(e.h,0)!=0) LIMIT 20`);
+    const issues = mismatches.length + negatives.length + depositMismatch.length + doubleCredits.length + withdrawalBad.length;
+    const ledger = { ok: issues === 0, issues, wallet: mismatches, negatives, deposits: depositMismatch, double_credits: doubleCredits, withdrawals: withdrawalBad };
+    const warnings = [];
+    if (!ledger.ok) warnings.push({ kind: "ledger", n: issues, to: "system" });
+    if (!payments.bank_webhook && !payments.gateway) warnings.push({ kind: "payments", n: 0, to: "finance" });
+    if (pendingDeposits > 0 && (!lastReceived || Date.parse(lastReceived) < day)) warnings.push({ kind: "webhook", n: pendingDeposits, to: "finance" });
+    if (unmatched > 0) warnings.push({ kind: "unmatched", n: unmatched, to: "finance" });
+    if (rejected24 > 0) warnings.push({ kind: "signature", n: rejected24, to: "finance" });
+    if (failed.length > 0) warnings.push({ kind: "email", n: failed.length, to: "system" });
+    if (calErrs > 0) warnings.push({ kind: "calendar", n: calErrs, to: "system" });
+    res.json({
+      payments,
+      email: { pending: outbox?.pending || 0, attempts: outbox?.tries || 0, failed: failed.map((m) => ({ ...m, email: maskMail(m.email) })), latest_error: latestMailErr ? { attempts: latestMailErr.attempts, email: maskMail(latestMailErr.email) } : null },
+      calendar: { connections: cals.length, errors: calErrs, last_synced: cals.map((c) => c.last_synced).filter(Boolean).sort().pop() || null },
+      data: { user_version: one(db, "PRAGMA user_version")?.user_version ?? null, counts, commit: process.env.GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || "", deployed_at: process.env.DEPLOYED_AT || "" },
+      ledger,
+      warnings,
+    });
+  });
+  app.post("/api/admin/health/email/:id/resend", auth("admin"), (req, res) => {
+    const row = one(db, "SELECT id FROM email_outbox WHERE id=? AND sent_at IS NULL", Number(req.params.id));
+    if (!row) fail(404, "Email không còn trong hàng đợi.");
+    run(db, "UPDATE email_outbox SET attempts=0,sending_until=0 WHERE id=?", row.id);
+    audit(req.user.id, "health.email_resend", `email:${row.id}`, {});
+    res.json({ ok: true });
+  });
   // The sessions worklist: one row per (lesson, student) pair plus one row per
   // standalone booking; the client groups lessons back by lesson.
   app.get("/api/admin/sessions", auth("admin"), (req, res) => {

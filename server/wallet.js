@@ -481,6 +481,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
 
   // Payment gateway IPN: SePay calls this once the buyer has paid on the hosted page.
   app.post("/api/sepay/ipn", (req, res) => {
+    run(db, "INSERT INTO platform_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", "last_sepay_ipn", JSON.stringify(new Date().toISOString()));
     const key = req.get("X-Secret-Key") || "";
     if (!sepay.ipnSecret) return res.status(503).json({ success: false });
     if (key.length !== sepay.ipnSecret.length || !timingSafeEqual(Buffer.from(key), Buffer.from(sepay.ipnSecret))) {
@@ -507,6 +508,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
 
   // SePay webhook with "Dùng để xác thực thanh toán": the reply is the verdict.
   app.post("/api/sepay/webhook", (req, res) => {
+    run(db, "INSERT INTO platform_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", "last_sepay_webhook", JSON.stringify(new Date().toISOString()));
     if (!sepay.secret) return res.status(503).json({ success: false });
     const stamp = req.get("X-SePay-Timestamp") || "", signature = (req.get("X-SePay-Signature") || "").replace(/^sha256=/, "");
     const expected = createHmac("sha256", sepay.secret).update(`${stamp}.${req.rawBody || ""}`).digest("hex");

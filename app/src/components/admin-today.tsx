@@ -1,3 +1,4 @@
+import { warnText, type Warn } from "./admin-health";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api, useApp, useLoad } from "@/lib/api";
@@ -17,7 +18,9 @@ type Today = {
 // The administrator's first screen: what is waiting, in the order it matters.
 export function AdminToday() {
   const { t } = useI18n(), { refresh } = useApp(), result = useLoad<Today>("/admin/today");
+  const health = useLoad<{ warnings: Warn[] }>("/admin/health");
   if (result.loading) return <Loading />;
+  const warnings = health.data?.warnings || [];
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
   const d = result.data;
   const queues: [number, string, string][] = [
@@ -34,6 +37,11 @@ export function AdminToday() {
   }
   return (
     <div className="admin-today">
+      {warnings.map((w) => (
+        <Link key={w.kind} to={`/admin?tab=${w.to}`} className="health-warning" role="alert">
+          <span>⚠</span><span>{warnText(w, t)}</span>
+        </Link>
+      ))}
       <ul className="today-queues">
         {queues.map(([n, label, to]) => (
           <li key={label} data-empty={!n || undefined}>
