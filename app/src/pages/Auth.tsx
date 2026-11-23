@@ -9,14 +9,16 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { ErrorState, Submit, Loading } from "@/components/common";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useI18n } from "@/lib/i18n";
 
 // Local development only: one tap into each demo role.
 function DemoLogin({ onUser }: { onUser: (user: User) => void }) {
+  const { t } = useI18n();
   const demo = useLoad<{ enabled: boolean }>("/auth/demo"), [busy, setBusy] = useState("");
   if (!demo.data?.enabled) return null;
   return (
     <section className="demo-login" aria-label="Đăng nhập nhanh tài khoản mẫu">
-      <span>Đăng nhập nhanh (chỉ trên máy local)</span>
+      <span>{t("Đăng nhập nhanh (chỉ trên máy local)")}</span>
       <div>
         {([["student", "Học sinh"], ["parent", "Phụ huynh"], ["tutor", "Gia sư"], ["admin", "Quản trị"]] as const).map(([role, label]) => (
           <Button key={role} variant="outline" size="sm" disabled={!!busy} onClick={async () => {
@@ -31,6 +33,7 @@ function DemoLogin({ onUser }: { onUser: (user: User) => void }) {
 }
 
 export default function Auth() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const register = params.get("mode") === "register";
@@ -72,30 +75,30 @@ export default function Auth() {
   return <div className="auth-layout">
     <aside className="auth-art-panel" aria-label="Gia Sư 10 Điểm">
       <a className="auth-brand" href="/" aria-label="Gia Sư 10 Điểm — Trang chủ">
-        <span className="brand-mark" aria-hidden="true">10<span>đ</span></span>
-        <span>Gia Sư<br /><strong>10 Điểm</strong></span>
+        <span className="brand-mark" aria-hidden="true">10<span>{t("đ")}</span></span>
+        <span>{t("Gia Sư")}<br /><strong>{t("10 Điểm")}</strong></span>
       </a>
       <div className="auth-illustration" aria-hidden="true">
         <img src="/assets/auth-study.webp" alt="" width="1200" height="1200" fetchPriority="high" />
       </div>
-      <Link className="auth-explore" to="/tutors">Tìm gia sư <ArrowUpRight aria-hidden="true" /></Link>
+      <Link className="auth-explore" to="/tutors">{t("Tìm gia sư")} <ArrowUpRight aria-hidden="true" /></Link>
     </aside>
     <div className="auth-content-panel">
-      <a className="auth-back" href="/"><ArrowLeft aria-hidden="true" />Về trang chủ</a>
+      <a className="auth-back" href="/"><ArrowLeft aria-hidden="true" />{t("Về trang chủ")}</a>
       <div className="auth-content">
       {loading ? <Loading /> : authError ? <ErrorState error={authError} retry={retryAuth} /> :
     <section className="account-entry" aria-labelledby="account-title">
       <h1 id="account-title">{register ? "Tạo tài khoản" : "Chào mừng bạn."}</h1>
       <fieldset className="auth-policy">
-        <legend>Trước khi tiếp tục</legend>
+        <legend>{t("Trước khi tiếp tục")}</legend>
         <div className="auth-consent">
         <input ref={consentRef} id="account-consent" type="checkbox" form="account-email-form" required checked={acceptedTerms} disabled={busy}
           aria-invalid={consentError || undefined} aria-describedby={consentError ? "account-consent-error" : undefined}
           onInvalid={event => { event.preventDefault(); requireConsent(); }}
           onChange={event => { setAcceptedTerms(event.target.checked); setConsentError(false); }} />
-        <label htmlFor="account-consent">Đồng ý <a href="/terms" target="_blank" rel="noopener noreferrer" aria-label="Điều khoản dịch vụ">Điều khoản</a> &amp; <a href="/privacy" target="_blank" rel="noopener noreferrer" aria-label="Chính sách quyền riêng tư">Quyền riêng tư</a>.</label>
+        <label htmlFor="account-consent">{t("Đồng ý")} <a href="/terms" target="_blank" rel="noopener noreferrer" aria-label="Điều khoản dịch vụ">{t("Điều khoản")}</a> &amp; <a href="/privacy" target="_blank" rel="noopener noreferrer" aria-label="Chính sách quyền riêng tư">{t("Quyền riêng tư")}</a>.</label>
       </div>
-        {consentError && <p id="account-consent-error" className="auth-consent-error" role="alert">Vui lòng tích đồng ý Điều khoản và Quyền riêng tư để tiếp tục.</p>}
+        {consentError && <p id="account-consent-error" className="auth-consent-error" role="alert">{t("Vui lòng tích đồng ý Điều khoản và Quyền riêng tư để tiếp tục.")}</p>}
       </fieldset>
       <GoogleSignIn next={params.get("next")} disabled={busy} allowed={acceptedTerms} onBlocked={requireConsent} />
       <Button variant="ghost" size="lg" className="account-email-toggle" aria-expanded={emailOpen} aria-controls="email-account" disabled={busy} onClick={() => { if (!emailOpen) requireConsent(); setEmailOpen(value => !value); }}>
@@ -112,14 +115,14 @@ export default function Auth() {
           setParams(next, { replace: true });
         }}>
           <TabsList className="account-email-tabs">
-            <TabsTrigger value="login">Đăng nhập</TabsTrigger>
-            <TabsTrigger value="register">Tạo tài khoản</TabsTrigger>
+            <TabsTrigger value="login">{t("Đăng nhập")}</TabsTrigger>
+            <TabsTrigger value="register">{t("Tạo tài khoản")}</TabsTrigger>
           </TabsList>
         <TabsContent value={register ? "register" : "login"}>
         <form id="account-email-form" key={register ? "register" : "login"} onSubmit={submit}>
           <FieldGroup>
             {register && <Field>
-              <FieldLabel htmlFor="name">Họ và tên</FieldLabel>
+              <FieldLabel htmlFor="name">{t("Họ và tên")}</FieldLabel>
               <Input id="name" name="name" autoComplete="name" required maxLength={80} />
             </Field>}
             <Field>
@@ -132,7 +135,7 @@ export default function Auth() {
               {!register && <Link className="auth-forgot" to="/forgot-password">Quên mật khẩu?</Link>}
             </Field>
             {register && <Field>
-              <FieldLabel htmlFor="confirm-password">Xác nhận mật khẩu</FieldLabel>
+              <FieldLabel htmlFor="confirm-password">{t("Xác nhận mật khẩu")}</FieldLabel>
               <Input id="confirm-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} required />
             </Field>}
             <Submit busy={busy}>{register ? "Gửi mã xác minh" : "Đăng nhập"}<ArrowRight data-icon="inline-end" /></Submit>

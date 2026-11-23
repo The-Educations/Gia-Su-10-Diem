@@ -5,8 +5,10 @@ import { api, useApp } from "@/lib/api";
 import type { ProfileTheme, Tutor } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/common";
+import { useI18n } from "@/lib/i18n";
 
 export function TutorInventory({ tutor, catalog }: { tutor: Tutor; catalog?: ProfileTheme[] }) {
+  const { t } = useI18n();
   const { refresh } = useApp();
   const [owned, setOwned] = useState(tutor.theme_inventory);
   const [equipped, setEquipped] = useState(tutor.profile_theme);
@@ -25,7 +27,7 @@ export function TutorInventory({ tutor, catalog }: { tutor: Tutor; catalog?: Pro
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(""); }
   }
-  return <section className="tutor-inventory" aria-label="Kho giao diện"><h2>Kho giao diện</h2>
+  return <section className="tutor-inventory" aria-label="Kho giao diện"><h2>{t("Kho giao diện")}</h2>
     <div className="theme-inventory-grid">{(catalog || owned).map(theme => {
       const granted = owned.some(item => item.id === theme.id);
       const active = equipped === theme.id;

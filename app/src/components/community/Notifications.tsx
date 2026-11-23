@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n";
 export function CommunityUnread() {
   const { user, revision } = useApp(),
     loc = useLocation();
@@ -61,6 +62,7 @@ const names: Record<string, string> = {
   new_comment: "Có bình luận mới",
 };
 export function Notifications() {
+  const { t } = useI18n();
   const { user, refresh } = useApp(),
     [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false);
@@ -87,13 +89,13 @@ export function Notifications() {
         aria-label="Thông báo cộng đồng"
       >
         <Bell data-icon="inline-start" />
-        <span className="hidden sm:inline">Thông báo</span>
+        <span className="hidden sm:inline">{t("Thông báo")}</span>
         <CommunityUnread />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="community-compose">
           <DialogHeader>
-            <DialogTitle>Thông báo cộng đồng</DialogTitle>
+            <DialogTitle>{t("Thông báo cộng đồng")}</DialogTitle>
             <DialogDescription className="sr-only">
               Kết quả duyệt bài và bình luận mới
             </DialogDescription>

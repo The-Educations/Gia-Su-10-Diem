@@ -9,6 +9,7 @@ import type { Booking } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Person, State } from "@/components/common";
 import { LessonRatingDialog } from "@/components/trust";
+import { useI18n } from "@/lib/i18n";
 
 const START_OPENS_BEFORE = 15 * 60000;
 const VN_OFFSET = 7 * 3600000;
@@ -35,6 +36,7 @@ export function lessonsToHandle(lessons: Booking[], now = Date.now()) {
 export function TodayLessons({ lessons, role, onChanged }: {
   lessons: Booking[]; role: "tutor" | "student"; onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [now, setNow] = useState(Date.now()),
     [busy, setBusy] = useState<number | null>(null),
     [confirmAbsent, setConfirmAbsent] = useState<number | null>(null),
@@ -72,7 +74,7 @@ export function TodayLessons({ lessons, role, onChanged }: {
     if (b.status !== "accepted") return null;
     if (endOf(b) <= now)
       return <>
-        <Button disabled={busy === b.id} onClick={() => complete(b)}>Hoàn thành</Button>
+        <Button disabled={busy === b.id} onClick={() => complete(b)}>{t("Hoàn thành")}</Button>
         {!b.started_at && absent(b)}
       </>;
     if (b.started_at)
@@ -80,43 +82,43 @@ export function TodayLessons({ lessons, role, onChanged }: {
     if (opensAt(b) > now)
       return <span className="today-hint">Chưa đến giờ · điểm danh mở lúc {clock(opensAt(b))}</span>;
     return <>
-      <Button disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}/start`, "POST"), "Đã bắt đầu buổi học")}>Bắt đầu buổi</Button>
+      <Button disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}/start`, "POST"), "Đã bắt đầu buổi học")}>{t("Bắt đầu buổi")}</Button>
       {startOf(b) <= now && absent(b)}
     </>;
   }
   function absent(b: Booking) {
     return confirmAbsent === b.id
       ? <>
-        <Button variant="destructive" disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}`, "PATCH", { status: "missed" }), "Đã ghi nhận học sinh vắng")}>Xác nhận vắng</Button>
-        <Button variant="ghost" onClick={() => setConfirmAbsent(null)}>Hủy</Button>
+        <Button variant="destructive" disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}`, "PATCH", { status: "missed" }), "Đã ghi nhận học sinh vắng")}>{t("Xác nhận vắng")}</Button>
+        <Button variant="ghost" onClick={() => setConfirmAbsent(null)}>{t("Hủy")}</Button>
       </>
-      : <Button variant="ghost" onClick={() => setConfirmAbsent(b.id)}>Học sinh vắng</Button>;
+      : <Button variant="ghost" onClick={() => setConfirmAbsent(b.id)}>{t("Học sinh vắng")}</Button>;
   }
   function tutorAbsent(b: Booking) {
     if (!canReportTutorAbsent(b, now)) return null;
     return confirmTutorAbsent === b.id
       ? <>
-        <Button variant="destructive" disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}`, "PATCH", { status: "tutor_missed" }), "Đã ghi nhận gia sư không đến")}>Xác nhận gia sư không đến</Button>
-        <Button variant="ghost" onClick={() => setConfirmTutorAbsent(null)}>Hủy</Button>
+        <Button variant="destructive" disabled={busy === b.id} onClick={() => act(b, () => api(`/bookings/${b.id}`, "PATCH", { status: "tutor_missed" }), "Đã ghi nhận gia sư không đến")}>{t("Xác nhận gia sư không đến")}</Button>
+        <Button variant="ghost" onClick={() => setConfirmTutorAbsent(null)}>{t("Hủy")}</Button>
       </>
-      : <Button variant="ghost" onClick={() => setConfirmTutorAbsent(b.id)}>Gia sư không đến</Button>;
+      : <Button variant="ghost" onClick={() => setConfirmTutorAbsent(b.id)}>{t("Gia sư không đến")}</Button>;
   }
   function studentActions(b: Booking) {
     if (b.status === "accepted" && opensAt(b) > now)
-      return <span className="today-hint">Chưa đến giờ học</span>;
+      return <span className="today-hint">{t("Chưa đến giờ học")}</span>;
     if (b.status === "accepted" && endOf(b) <= now)
-      return <><Button disabled={busy === b.id} onClick={() => complete(b)}>Đã học xong</Button>{tutorAbsent(b)}</>;
+      return <><Button disabled={busy === b.id} onClick={() => complete(b)}>{t("Đã học xong")}</Button>{tutorAbsent(b)}</>;
     if (b.status === "accepted" && canReportTutorAbsent(b, now))
       return tutorAbsent(b);
     if (b.status === "completed" && !b.offer_id && !b.reviewed)
-      return <Button asChild variant="outline"><Link to="/bookings?status=completed">Đánh giá gia sư</Link></Button>;
+      return <Button asChild variant="outline"><Link to="/bookings?status=completed">{t("Đánh giá gia sư")}</Link></Button>;
     if (b.status === "completed" && b.offer_id) {
       if (b.my_rating != null)
         return <>
           <span className="today-hint">Bạn chấm {b.my_rating}★</span>
-          {b.rating_editable && <Button variant="ghost" onClick={() => setRating(b)}>Sửa</Button>}
+          {b.rating_editable && <Button variant="ghost" onClick={() => setRating(b)}>{t("Sửa")}</Button>}
         </>;
-      if (b.rating_editable) return <Button variant="outline" onClick={() => setRating(b)}>Chấm buổi học</Button>;
+      if (b.rating_editable) return <Button variant="outline" onClick={() => setRating(b)}>{t("Chấm buổi học")}</Button>;
     }
     return null;
   }
@@ -124,7 +126,7 @@ export function TodayLessons({ lessons, role, onChanged }: {
     <section className="today-lessons" aria-labelledby="today-lessons-title">
       <header>
         <h2 id="today-lessons-title">{role === "tutor" ? "Buổi dạy hôm nay" : "Buổi học hôm nay"}</h2>
-        <span>Giờ Việt Nam · UTC+7</span>
+        <span>{t("Giờ Việt Nam · UTC+7")}</span>
       </header>
       {error && <p role="alert" className="today-error">{error}</p>}
       <ul>
@@ -149,9 +151,9 @@ export function TodayLessons({ lessons, role, onChanged }: {
               <State value={b.status} />
               <div className="today-actions">
                 {b.meeting_url && ["accepted", "completed"].includes(b.status) && (
-                  <Button asChild variant="outline"><a href={b.meeting_url} target="_blank" rel="noopener noreferrer"><Video data-icon="inline-start" />Vào phòng học</a></Button>
+                  <Button asChild variant="outline"><a href={b.meeting_url} target="_blank" rel="noopener noreferrer"><Video data-icon="inline-start" />{t("Vào phòng học")}</a></Button>
                 )}
-                <Button asChild variant="ghost"><Link to={lessonMessageHref(b)}><MessageCircle data-icon="inline-start" />Nhắn tin</Link></Button>
+                <Button asChild variant="ghost"><Link to={lessonMessageHref(b)}><MessageCircle data-icon="inline-start" />{t("Nhắn tin")}</Link></Button>
                 {role === "tutor" ? tutorActions(b) : studentActions(b)}
               </div>
             </li>

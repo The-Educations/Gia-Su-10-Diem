@@ -8,9 +8,11 @@ import { Person, ErrorState, Submit } from "./common";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Field, FieldLabel, FieldDescription } from "./ui/field";
+import { useI18n } from "@/lib/i18n";
 
 type Assets = Pick<Tutor, "photo_url" | "banner_url">;
 function UploadField({ kind, assets, name, onChange }: { kind: "photo" | "banner"; assets: Assets; name: string; onChange: (a: Assets, pending: boolean) => void }) {
+  const { t } = useI18n();
   const [crop, setCrop] = useState<File | null>(null);
   const [file, setFile] = useState<File | null>(null), [preview, setPreview] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [inputKey, setInputKey] = useState(0);
@@ -63,7 +65,7 @@ function UploadField({ kind, assets, name, onChange }: { kind: "photo" | "banner
       <div className="actions">
         {file && <Submit busy={busy}><Upload data-icon="inline-start" />{photo ? "Lưu ảnh" : "Lưu ảnh bìa"}</Submit>}
         {existing && <><Button variant="outline" asChild><a href={existing} target="_blank" rel="noreferrer">{photo ? "Xem ảnh" : "Xem ảnh bìa"}</a></Button>
-          <Button variant="ghost" type="button" disabled={busy} onClick={remove} aria-label={photo ? "Xóa ảnh đại diện" : "Xóa ảnh bìa"}><Trash2 data-icon="inline-start" />Xóa</Button></>}
+          <Button variant="ghost" type="button" disabled={busy} onClick={remove} aria-label={photo ? "Xóa ảnh đại diện" : "Xóa ảnh bìa"}><Trash2 data-icon="inline-start" />{t("Xóa")}</Button></>}
       </div>
     </form>
   </section>;

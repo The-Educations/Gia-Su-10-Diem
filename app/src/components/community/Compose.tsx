@@ -1,3 +1,4 @@
+import { useI18n } from "@/lib/i18n";
 import { TOPICS, looksLikeFindTutor } from "./Pitches";
 import { useEffect, useId, useRef, useState } from "react";
 import { useBlocker, useNavigate } from "react-router-dom";
@@ -35,6 +36,7 @@ export default function Compose({
   page?: boolean;
   draft?: CommunityDraft;
 }) {
+  const { t } = useI18n();
   const { user, refresh } = useApp(),
     id = useId();
   const [topic, setTopic] = useState<string>((post as { topic?: string } | undefined)?.topic || "");
@@ -117,7 +119,7 @@ export default function Compose({
     <Alert>
       <AlertDescription>
         <span>
-          <strong>Lưu ý: </strong>
+          <strong>{t("Lưu ý: ")}</strong>
           {POST_NOTICE}
         </span>
       </AlertDescription>
@@ -127,7 +129,7 @@ export default function Compose({
     <>
       {page ? (
         <details className="community-write-rules">
-          <summary>Quy tắc đăng bài</summary>
+          <summary>{t("Quy tắc đăng bài")}</summary>
           {notice}
         </details>
       ) : (
@@ -139,7 +141,7 @@ export default function Compose({
           e.preventDefault();
           if (uploading || busy) return;
           const askTopic = !endpoint && user?.role !== "admin";
-          if (askTopic && !topic) { setError("Chọn chủ đề cho bài viết."); return; }
+          if (askTopic && !topic) { setError(t("Chọn chủ đề cho bài viết.")); return; }
           // Ask again when the text and the chosen topic do not seem to match.
           const seeks = looksLikeFindTutor(`${title} ${body}`);
           if (askTopic && seeks !== (topic === "find_tutor") && !confirm(seeks ? "Bài này có vẻ đang tìm gia sư. Vẫn đăng vào chủ đề đã chọn?" : "Bài này chưa thấy nhu cầu tìm gia sư rõ ràng. Vẫn đăng vào chủ đề Tìm gia sư?")) return;
@@ -193,15 +195,15 @@ export default function Compose({
         <FieldGroup>
           {!endpoint && user?.role !== "admin" && (
             <Field>
-              <FieldLabel htmlFor={`${id}-topic`}>Chủ đề</FieldLabel>
+              <FieldLabel htmlFor={`${id}-topic`}>{t("Chủ đề")}</FieldLabel>
               <select id={`${id}-topic`} className="native-select" value={topic} onChange={(e) => setTopic(e.target.value)} required>
-                <option value="">Chọn chủ đề</option>
+                <option value="">{t("Chọn chủ đề")}</option>
                 {TOPICS.filter(([v]) => v !== "announcement").map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </select>
             </Field>
           )}
           <Field data-invalid={!!fields.title}>
-            <FieldLabel htmlFor={`${id}-title`} className={page ? "sr-only" : undefined}>Tiêu đề</FieldLabel>
+            <FieldLabel htmlFor={`${id}-title`} className={page ? "sr-only" : undefined}>{t("Tiêu đề")}</FieldLabel>
             <Input
               className={page ? "compose-title" : undefined}
               placeholder={page ? "Tiêu đề bài viết" : undefined}
@@ -228,11 +230,11 @@ export default function Compose({
             <span className="community-counter">{title.length}/120</span>
           </Field>
           <Field data-invalid={!!fields.body}>
-            <FieldLabel htmlFor={`${id}-body`} className={page ? "sr-only" : undefined}>Nội dung</FieldLabel>
+            <FieldLabel htmlFor={`${id}-body`} className={page ? "sr-only" : undefined}>{t("Nội dung")}</FieldLabel>
             {page && (
               <div className="segmented compose-mode" role="group" aria-label="Chế độ soạn">
-                <button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>Viết</button>
-                <button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>Xem trước</button>
+                <button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>{t("Viết")}</button>
+                <button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>{t("Xem trước")}</button>
               </div>
             )}
             {preview && (
@@ -323,7 +325,7 @@ export default function Compose({
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Bản nháp chưa được lưu</DialogTitle>
+              <DialogTitle>{t("Bản nháp chưa được lưu")}</DialogTitle>
               <DialogDescription>
                 Lưu nháp trước khi rời trang để giữ nội dung.
               </DialogDescription>

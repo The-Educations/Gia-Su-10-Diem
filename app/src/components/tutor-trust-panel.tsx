@@ -2,6 +2,7 @@ import { useLoad } from "@/lib/api";
 import { Loading, ErrorState, Section } from "@/components/common";
 import { formatScore } from "@/components/trust";
 import { Progress } from "@/components/ui/progress";
+import { useI18n } from "@/lib/i18n";
 
 type TrustDetail = {
   score: number | null; is_new: boolean; review_count: number; punctuality: number | null;
@@ -16,6 +17,7 @@ type TrustDetail = {
 
 // The tutor's own breakdown of the trust score: totals only, never who rated which lesson.
 export function TutorTrustPanel() {
+  const { t } = useI18n();
   const result = useLoad<TrustDetail>("/tutor/trust");
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
@@ -35,16 +37,16 @@ export function TutorTrustPanel() {
     </Section>
     <Section title="Chi tiết">
       <dl className="trust-facts">
-        <div><dt>Chất lượng (Q)</dt><dd>{formatScore(d.quality)} / 5 <small>từ {d.pairs} học sinh</small></dd></div>
-        <div><dt>Độ giữ hẹn (R)</dt><dd>{Math.round(d.reliability * 100)}% <small>{d.held} buổi hoàn thành · {d.bad_breakdown.late_cancels} lần hủy sát giờ · {d.bad_breakdown.no_shows} lần không đến</small></dd></div>
-        <div><dt>Chấm sau từng buổi</dt><dd>{d.lesson_avg === null ? "Chưa có" : `${formatScore(d.lesson_avg)} / 5`} <small>{d.lesson_count} lượt</small></dd></div>
+        <div><dt>{t("Chất lượng (Q)")}</dt><dd>{formatScore(d.quality)} / 5 <small>từ {d.pairs} học sinh</small></dd></div>
+        <div><dt>{t("Độ giữ hẹn (R)")}</dt><dd>{Math.round(d.reliability * 100)}% <small>{d.held} buổi hoàn thành · {d.bad_breakdown.late_cancels} lần hủy sát giờ · {d.bad_breakdown.no_shows} lần không đến</small></dd></div>
+        <div><dt>{t("Chấm sau từng buổi")}</dt><dd>{d.lesson_avg === null ? "Chưa có" : `${formatScore(d.lesson_avg)} / 5`} <small>{d.lesson_count} lượt</small></dd></div>
       </dl>
-      <h3>Nhãn học sinh đã chọn</h3>
+      <h3>{t("Nhãn học sinh đã chọn")}</h3>
       <ul className="trust-tags">{d.tag_counts.map(t => <li key={t.code}>{t.label} <span>{t.count}</span></li>)}</ul>
       <p className="muted">Bạn chỉ thấy số liệu tổng hợp. Nhãn chỉ hiện công khai khi có từ {p.PUBLIC_TAG_MIN} lượt chọn.</p>
     </Section>
     <Section title="Đánh giá cuối khóa công khai">
-      {d.reviews.length ? d.reviews.map((r, i) => <article className="review" key={i}><strong>{r.author}</strong><span>{r.rating}/5</span>{!!r.lessons && <span className="muted">Đã học {r.lessons} buổi</span>}{!!r.body && <p>{r.body}</p>}</article>) : <p className="muted">Chưa có đánh giá cuối khóa.</p>}
+      {d.reviews.length ? d.reviews.map((r, i) => <article className="review" key={i}><strong>{r.author}</strong><span>{r.rating}/5</span>{!!r.lessons && <span className="muted">Đã học {r.lessons} buổi</span>}{!!r.body && <p>{r.body}</p>}</article>) : <p className="muted">{t("Chưa có đánh giá cuối khóa.")}</p>}
     </Section>
     <Section title="Điểm được tính thế nào">
       <ul className="trust-how">

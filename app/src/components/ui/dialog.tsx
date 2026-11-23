@@ -5,6 +5,7 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
 
+import { useI18n } from "@/lib/i18n";
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -57,6 +58,7 @@ function DialogContent({
   showCloseButton?: boolean
   closeDisabled?: boolean
 }) {
+  const { t } = useI18n();
   const previousFocus = React.useRef<HTMLElement | null>(null)
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -88,7 +90,7 @@ function DialogContent({
             className="absolute top-4 right-4 rounded-lg opacity-70 ring-offset-background transition-[background-color,opacity] hover:bg-accent hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
-            <span className="sr-only">Đóng</span>
+            <span className="sr-only">{t("Đóng")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -114,6 +116,7 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
+  const { t } = useI18n();
   return (
     <div
       data-slot="dialog-footer"
@@ -126,7 +129,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Đóng</Button>
+          <Button variant="outline">{t("Đóng")}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

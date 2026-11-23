@@ -21,6 +21,7 @@ import ActionDialog, {
   type CommunityAction,
 } from "@/components/community/ActionDialog";
 import { memberImageUrl, postStates, PostBody } from "@/components/community/shared";
+import { useI18n } from "@/lib/i18n";
 
 export const lockAction = (owner: Pick<CommunityOwner, "id" | "community_locked">): CommunityAction => ({
   title: owner.community_locked ? "Mở quyền Cộng đồng" : "Khóa quyền Cộng đồng",
@@ -30,6 +31,7 @@ export const lockAction = (owner: Pick<CommunityOwner, "id" | "community_locked"
   reasonField: "reason",
 });
 export function CommunityLock({ owner }: { owner: CommunityOwner }) {
+  const { t } = useI18n();
   const [action, setAction] = useState<CommunityAction | null>(null);
   return (
     <>
@@ -41,13 +43,14 @@ export function CommunityLock({ owner }: { owner: CommunityOwner }) {
   );
 }
 function Owner({ owner }: { owner: CommunityOwner }) {
+  const { t } = useI18n();
   return (
     <div className="community-review-owner">
       <div>
         <strong>{owner.name}</strong>
         <span>{owner.email}</span>
         {!!owner.community_locked && (
-          <Badge variant="outline">Đã khóa quyền Cộng đồng</Badge>
+          <Badge variant="outline">{t("Đã khóa quyền Cộng đồng")}</Badge>
         )}
       </div>
       <CommunityLock owner={owner} />
@@ -77,6 +80,7 @@ type Report = {
   owner: CommunityOwner | null;
 };
 export default function AdminCommunity() {
+  const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const tab = ["queue", "reports", "posts", "publish"].includes(
     params.get("section") || "",
@@ -146,10 +150,10 @@ export default function AdminCommunity() {
   return (
     <section className="community-admin">
       <header className="community-admin-heading">
-        <h2>Quản lý cộng đồng</h2>
+        <h2>{t("Quản lý cộng đồng")}</h2>
         <div className="community-actions">
           <Button asChild variant="outline" size="sm">
-            <Link to="/community">Xem cộng đồng</Link>
+            <Link to="/community">{t("Xem cộng đồng")}</Link>
           </Button>
           <Button
             variant="ghost"
@@ -202,10 +206,10 @@ export default function AdminCommunity() {
       )}
       <Tabs value={tab} onValueChange={(section) => update({ section })}>
         <TabsList className="community-admin-tabs">
-          <TabsTrigger value="queue">Chờ duyệt</TabsTrigger>
-          <TabsTrigger value="reports">Báo cáo</TabsTrigger>
-          <TabsTrigger value="posts">Bài viết</TabsTrigger>
-          <TabsTrigger value="publish">Quy tắc</TabsTrigger>
+          <TabsTrigger value="queue">{t("Chờ duyệt")}</TabsTrigger>
+          <TabsTrigger value="reports">{t("Báo cáo")}</TabsTrigger>
+          <TabsTrigger value="posts">{t("Bài viết")}</TabsTrigger>
+          <TabsTrigger value="publish">{t("Quy tắc")}</TabsTrigger>
         </TabsList>
         {tab !== "publish" &&
           (result.loading ? (
@@ -230,12 +234,12 @@ export default function AdminCommunity() {
                 {p.revision_status === "pending" ? (
                   <div className="community-comparison">
                     <section>
-                      <h3>Bản đang hiển thị</h3>
+                      <h3>{t("Bản đang hiển thị")}</h3>
                       <h4>{p.title}</h4>
                       <PostBody text={p.body} html={p.body_html} />
                     </section>
                     <section>
-                      <h3>Bản sửa chờ duyệt</h3>
+                      <h3>{t("Bản sửa chờ duyệt")}</h3>
                       <h4>{p.revision_title}</h4>
                       <PostBody
                         text={p.revision_body || ""}
@@ -301,8 +305,8 @@ export default function AdminCommunity() {
                 </ul>
                 {r.target_type === "profile" && r.target && <div className="member-report-preview">
                   <Badge variant="outline">Hồ sơ · {{ avatar:"Ảnh đại diện",cover:"Ảnh bìa",bio:"Giới thiệu" }[r.part]}</Badge>
-                  {r.part === "bio" ? <p className="member-bio">{r.target.body || "Giới thiệu đã được xóa"}</p> : (r.part === "avatar" ? r.target.has_avatar : r.target.has_cover) ? <img src={memberImageUrl(r.target, r.part)} alt={r.part === "avatar" ? "Ảnh đại diện được báo cáo" : "Ảnh bìa được báo cáo"} /> : <p>Ảnh đã được gỡ</p>}
-                  <Link className="text-link" to={`/community/members/${r.target.profile_code}`}>Xem hồ sơ</Link>
+                  {r.part === "bio" ? <p className="member-bio">{r.target.body || "Giới thiệu đã được xóa"}</p> : (r.part === "avatar" ? r.target.has_avatar : r.target.has_cover) ? <img src={memberImageUrl(r.target, r.part)} alt={r.part === "avatar" ? "Ảnh đại diện được báo cáo" : "Ảnh bìa được báo cáo"} /> : <p>{t("Ảnh đã được gỡ")}</p>}
+                  <Link className="text-link" to={`/community/members/${r.target.profile_code}`}>{t("Xem hồ sơ")}</Link>
                   <Button variant="outline" disabled={r.part === "bio" ? !r.target.body : r.part === "avatar" ? !r.target.has_avatar : !r.target.has_cover} onClick={() => setAction({ title: { avatar:"Gỡ ảnh đại diện", cover:"Gỡ ảnh bìa", bio:"Xóa giới thiệu" }[r.part], path:`/admin/community/members/${r.target!.profile_code}/${r.part}`, method:"DELETE", reasonField:"note" })}>{{ avatar:"Gỡ ảnh đại diện", cover:"Gỡ ảnh bìa", bio:"Xóa giới thiệu" }[r.part]}</Button>
                 </div>}
                 {r.target && r.target_type !== "profile" && (

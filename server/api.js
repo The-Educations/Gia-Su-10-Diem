@@ -440,7 +440,12 @@ export function createApi(
   app.get("/api/tutors", (req, res) => res.json(tutorRows()));
   const tutorDetail = (preview = false) => (req, res) => {
     const t = tutorRows(preview).find((t) => t.user_id === Number(req.params.id));
-    if (!t) fail(404, "Hồ sơ chưa được công bố.");
+    if (!t) {
+      const exists = one(db, "SELECT 1 FROM tutors WHERE user_id=?", Number(req.params.id));
+      return res.status(404).json(exists
+        ? { error: "Hồ sơ chưa được công bố.", reason: "unpublished" }
+        : { error: "Không tìm thấy gia sư này.", reason: "not_found" });
+    }
     refreshAvailability(db, t.user_id);
     const slots = all(
       db,

@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { newsPath, relativeOrDate } from "@/lib/news";
 import { topicLabel } from "@/lib/news-topics";
 import type { NewsCard, NewsTopic } from "@/lib/types";
+import { useI18n } from "@/lib/i18n";
 
 // A cover that never leaves an empty frame or a broken icon: no URL or a failed load shows a tinted topic tile.
 export function NewsCover({ src, alt, topic, fallback = "tile", className = "" }: {
   src: string; alt: string; topic: NewsTopic; fallback?: "tile" | "hide"; className?: string;
 }) {
+  const { t } = useI18n();
   const [failed, setFailed] = useState<string | null>(null);
   if (!src || failed === src) {
     if (fallback === "hide") return null;
@@ -18,13 +20,14 @@ export function NewsCover({ src, alt, topic, fallback = "tile", className = "" }
 }
 
 export function NewsCardItem({ post, featured = false }: { post: NewsCard; featured?: boolean }) {
+  const { t } = useI18n();
   const when = relativeOrDate(post.published_at);
   return <article className={featured ? "news-card news-card-featured" : "news-card"}>
     <Link className="news-card-media" to={newsPath(post)} tabIndex={-1} aria-hidden="true">
       <NewsCover src={post.cover_url} alt="" topic={post.topic} />
     </Link>
     <div className="news-card-text">
-      {featured && <p className="news-eyebrow">Tin nổi bật</p>}
+      {featured && <p className="news-eyebrow">{t("Tin nổi bật")}</p>}
       <span className="news-topic-tag" data-topic={post.topic}>{topicLabel(post.topic)}</span>
       <h2><Link to={newsPath(post)}>{post.title}</Link></h2>
       <p className="news-card-summary">{post.summary}</p>

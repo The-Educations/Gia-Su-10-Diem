@@ -6,6 +6,7 @@ import { api, useLoad } from "@/lib/api";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { ErrorState } from "./common";
+import { useI18n } from "@/lib/i18n";
 
 type CalendarStatus = { available: boolean; connected: boolean; email?: string; lastSynced?: number | null; calendarUrl?: string; error?: string };
 const errors: Record<string, string> = {
@@ -19,6 +20,7 @@ const errors: Record<string, string> = {
   setup_uncertain: "Chưa thể xác nhận lịch trên Google. Hãy kiểm tra Google Calendar, ngắt kết nối rồi kết nối lại.",
 };
 export function GoogleCalendar() {
+  const { t } = useI18n();
   const result = useLoad<CalendarStatus>("/account/google-calendar");
   const [params, setParams] = useSearchParams();
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -66,11 +68,11 @@ export function GoogleCalendar() {
         <DialogTrigger asChild><Button variant="outline" size="icon" aria-label="Cài đặt Google Calendar"><Settings2 /></Button></DialogTrigger>
         <DialogContent>
           <DialogHeader><DialogTitle>Google Calendar</DialogTitle><DialogDescription>{data.email}</DialogDescription></DialogHeader>
-          <p>Lịch “Gia Sư 10 Điểm” tự cập nhật từ ứng dụng, kể cả khi bạn đóng trang.</p>
+          <p>{t("Lịch “Gia Sư 10 Điểm” tự cập nhật từ ứng dụng, kể cả khi bạn đóng trang.")}</p>
           <p className="muted">{data.lastSynced ? `Đồng bộ gần nhất: ${new Date(data.lastSynced).toLocaleString("vi-VN")}` : "Đang đồng bộ lịch lần đầu…"}</p>
-          {data.calendarUrl && <Button asChild variant="outline"><a href={data.calendarUrl} target="_blank" rel="noreferrer">Mở Google Calendar<ExternalLink data-icon="inline-end" /></a></Button>}
-          <p className="muted">Ngắt kết nối sẽ dừng cập nhật. Các sự kiện đã có trên Google được giữ lại.</p>
-          <Button variant="outline" disabled={busy} onClick={() => void action("disconnect")}>Ngắt kết nối</Button>
+          {data.calendarUrl && <Button asChild variant="outline"><a href={data.calendarUrl} target="_blank" rel="noreferrer">{t("Mở Google Calendar")}<ExternalLink data-icon="inline-end" /></a></Button>}
+          <p className="muted">{t("Ngắt kết nối sẽ dừng cập nhật. Các sự kiện đã có trên Google được giữ lại.")}</p>
+          <Button variant="outline" disabled={busy} onClick={() => void action("disconnect")}>{t("Ngắt kết nối")}</Button>
         </DialogContent>
       </Dialog>}
     </div>

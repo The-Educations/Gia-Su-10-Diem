@@ -19,7 +19,9 @@ import { PitchPanel, PostReactions } from "@/components/community/Pitches";
 import ActionDialog, {
   type CommunityAction,
 } from "@/components/community/ActionDialog";
+import { useI18n } from "@/lib/i18n";
 export default function CommunityPost() {
+  const { t } = useI18n();
   const { id } = useParams(),
     { user, refresh } = useApp(),
     navigate = useNavigate(),
@@ -216,7 +218,7 @@ export default function CommunityPost() {
           </div>
           {p.mine && p.revision_status && (
             <details className="community-revision">
-              <summary>Xem bản sửa</summary>
+              <summary>{t("Xem bản sửa")}</summary>
               <h2>{p.revision_title}</h2>
               <PostBody
                 text={p.revision_body || ""}

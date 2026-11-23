@@ -20,8 +20,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n";
 
 export function memberImageUrl(author: Pick<CommunityAuthor, "profile_code" | "image_version">, kind: "avatar" | "cover") {
+  const { t } = useI18n();
   return `/api/community/members/${author.profile_code}/${kind}?v=${encodeURIComponent(author.image_version)}`;
 }
 export function AuthorLabel({ author }: { author: CommunityAuthor }) {
@@ -170,6 +172,7 @@ export function PostCard({ post }: { post: CommunityPostData }) {
   );
 }
 export function useCommunityGate() {
+  const { t } = useI18n();
   const { user, setUser, refresh } = useApp(),
     loc = useLocation(),
     navigate = useNavigate();
@@ -227,7 +230,7 @@ export function useCommunityGate() {
       <Dialog open={guest} onOpenChange={setGuest}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Tham gia cộng đồng</DialogTitle>
+            <DialogTitle>{t("Tham gia cộng đồng")}</DialogTitle>
             <DialogDescription>
               Đăng nhập hoặc tạo tài khoản để viết bài và bình luận.
             </DialogDescription>
@@ -249,7 +252,7 @@ export function useCommunityGate() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Tên hiển thị của bạn</DialogTitle>
+            <DialogTitle>{t("Tên hiển thị của bạn")}</DialogTitle>
             <DialogDescription>
               Tên này sẽ xuất hiện công khai trong cộng đồng.
             </DialogDescription>
@@ -281,7 +284,7 @@ export function useCommunityGate() {
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="community-name">Tên hiển thị</FieldLabel>
+                <FieldLabel htmlFor="community-name">{t("Tên hiển thị")}</FieldLabel>
                 <Input
                   id="community-name"
                   name="display_name"
@@ -292,7 +295,7 @@ export function useCommunityGate() {
                 />
               </Field>
               {error && <ErrorState error={error} />}
-              <Submit busy={busy}>Lưu tên và tiếp tục</Submit>
+              <Submit busy={busy}>{t("Lưu tên và tiếp tục")}</Submit>
             </FieldGroup>
           </form>
         </DialogContent>

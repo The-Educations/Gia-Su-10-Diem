@@ -262,7 +262,7 @@ function Shell() {
           </ErrorBoundary>
         </main>
         <footer className="app-footer">
-          <span>Gia Sư 10 Điểm</span>
+          <span>{t("Gia Sư 10 Điểm")}</span>
           <SocialLinks />
           <nav aria-label={t("Thông tin pháp lý")}><a href="/privacy">{t("Quyền riêng tư")}</a><a href="/terms">{t("Điều khoản dịch vụ")}</a></nav>
         </footer>

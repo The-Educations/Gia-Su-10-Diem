@@ -7,6 +7,7 @@ import { Input } from "./ui/input";
 import { Field, FieldLabel } from "./ui/field";
 import { State } from "./common";
 import { calendarDate, todayVietnam } from "@/lib/offers";
+import { useI18n } from "@/lib/i18n";
 const dayMs = 86400000;
 const localDate = (time: string) => new Date(Date.parse(time) + 7 * 3600000).toISOString().slice(0, 10);
 const timeLabel = (time: number) => new Date(time).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
@@ -15,6 +16,7 @@ const monday = (date: string) => {
   return time - ((new Date(time).getUTCDay() + 6) % 7) * dayMs;
 };
 export function LessonCalendar({ lessons, freeSlots, onOpen, personName }: { lessons: Booking[]; freeSlots?: Slot[]; onOpen: (lesson: Booking) => void; personName: (lesson: Booking) => string }) {
+  const { t } = useI18n();
   const sorted = [...lessons].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
   const next = sorted.find(b => ["accepted", "pending"].includes(b.status) && Date.parse(b.starts_at) + b.duration_minutes * 60000 > Date.now());
   const initialLesson = next || sorted.at(-1);
@@ -30,12 +32,12 @@ export function LessonCalendar({ lessons, freeSlots, onOpen, personName }: { les
         <Button variant="outline" size="icon" aria-label="Tuần sau" onClick={() => setWeek(week + 7 * dayMs)}><ChevronRight /></Button>
       </div>
       <div className="calendar-jump">
-        <Field><FieldLabel htmlFor="schedule-date" className="sr-only">Đến ngày</FieldLabel><Input id="schedule-date" type="date" aria-label="Đến ngày" value={days[0]} onChange={e => { if (e.target.value && Number.isFinite(Date.parse(e.target.value))) setWeek(monday(e.target.value)); }} /></Field>
-        <Button variant="ghost" onClick={() => setWeek(monday(todayVietnam()))}>Hôm nay</Button>
-        {next && <Button variant="outline" onClick={() => setWeek(monday(localDate(next.starts_at)))}>Buổi tiếp theo</Button>}
+        <Field><FieldLabel htmlFor="schedule-date" className="sr-only">{t("Đến ngày")}</FieldLabel><Input id="schedule-date" type="date" aria-label="Đến ngày" value={days[0]} onChange={e => { if (e.target.value && Number.isFinite(Date.parse(e.target.value))) setWeek(monday(e.target.value)); }} /></Field>
+        <Button variant="ghost" onClick={() => setWeek(monday(todayVietnam()))}>{t("Hôm nay")}</Button>
+        {next && <Button variant="outline" onClick={() => setWeek(monday(localDate(next.starts_at)))}>{t("Buổi tiếp theo")}</Button>}
       </div>
     </div>
-    {freeSlots && <div className="calendar-legend"><span>Buổi học</span><span className="calendar-free-label">Giờ rảnh · {weekFree.length} khung giờ</span><Link to="/calendar">Chỉnh giờ rảnh</Link></div>}
+    {freeSlots && <div className="calendar-legend"><span>{t("Buổi học")}</span><span className="calendar-free-label">Giờ rảnh · {weekFree.length} khung giờ</span><Link to="/calendar">{t("Chỉnh giờ rảnh")}</Link></div>}
     <div className="lesson-calendar-week">{days.map((day, i) => {
       const items = weekLessons.filter(b => localDate(b.starts_at) === day);
       const free = weekFree.filter(s => localDate(s.starts_at) === day);
@@ -46,10 +48,10 @@ export function LessonCalendar({ lessons, freeSlots, onOpen, personName }: { les
           <strong>{timeLabel(Date.parse(b.starts_at))}–{timeLabel(Date.parse(b.starts_at) + b.duration_minutes * 60000)}</strong>
           <span>{b.subject_name}</span><small>{personName(b)}</small><State value={b.status} />
         </button> : slot && <Link key={`free-${slot.id}`} to="/calendar" className="calendar-free-slot" aria-label={`Giờ rảnh ${calendarDate(day)} ${timeLabel(Date.parse(slot.starts_at))}`}>
-          <strong>{timeLabel(Date.parse(slot.starts_at))}–{timeLabel(Date.parse(slot.starts_at) + slot.duration_minutes * 60000)}</strong><span>Giờ rảnh</span>
+          <strong>{timeLabel(Date.parse(slot.starts_at))}–{timeLabel(Date.parse(slot.starts_at) + slot.duration_minutes * 60000)}</strong><span>{t("Giờ rảnh")}</span>
         </Link>)}</div>
       </section>;
     })}</div>
-    {!weekLessons.length && !weekFree.length && <div className="calendar-empty" role="status">Không có buổi học trong tuần này.</div>}
+    {!weekLessons.length && !weekFree.length && <div className="calendar-empty" role="status">{t("Không có buổi học trong tuần này.")}</div>}
   </section>;
 }

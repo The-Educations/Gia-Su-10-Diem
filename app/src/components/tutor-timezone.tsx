@@ -3,11 +3,13 @@ import { Clock3 } from "lucide-react";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useI18n } from "@/lib/i18n";
 
 const zones = Array.from(new Set(["Asia/Ho_Chi_Minh", "UTC", ...Intl.supportedValuesOf("timeZone")]));
 export function TimezoneField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useI18n();
   const id = useId();
-  return <Field><FieldLabel htmlFor={id}>Múi giờ của bạn</FieldLabel>
+  return <Field><FieldLabel htmlFor={id}>{t("Múi giờ của bạn")}</FieldLabel>
     <Input id={id} name="timezone" list={`${id}-zones`} value={value} required maxLength={80} onChange={e => {
       const next = e.target.value;
       try { new Intl.DateTimeFormat("en", { timeZone: next }); e.target.setCustomValidity(""); }
@@ -18,6 +20,7 @@ export function TimezoneField({ value, onChange }: { value: string; onChange: (v
   </Field>;
 }
 export function timezoneLabel(zone: string, compact = false) {
+  const { t } = useI18n();
   try {
     const offset = new Intl.DateTimeFormat("en", { timeZone: zone, timeZoneName: "shortOffset" }).formatToParts(new Date()).find(part => part.type === "timeZoneName")?.value;
     return `${(compact ? zone.split("/").at(-1)! : zone).replaceAll("_", " ")} · ${offset}`;

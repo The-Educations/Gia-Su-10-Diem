@@ -10,6 +10,7 @@ import { newsPath, relativeOrDate } from "@/lib/news";
 import { topicLabel } from "@/lib/news-topics";
 import { NewsCover } from "@/components/news/news-cards";
 import { ConfirmDialog } from "./confirm-dialog";
+import { useI18n } from "@/lib/i18n";
 
 const TABS: { id: NewsTab; label: string; empty: string }[] = [
   { id: "review", label: "Chờ duyệt", empty: "Không có bài chờ duyệt. n8n chạy 3 giờ một lần." },
@@ -19,6 +20,7 @@ const TABS: { id: NewsTab; label: string; empty: string }[] = [
 type Pending = { kind: "delete" | "unpublish"; post: AdminNewsRow };
 
 export default function NewsReview({ edit }: { edit: (id: number | "new") => void }) {
+  const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const asked = params.get("news");
   const tab: NewsTab = TABS.some((t) => t.id === asked) ? (asked as NewsTab) : "review";
@@ -51,8 +53,8 @@ export default function NewsReview({ edit }: { edit: (id: number | "new") => voi
 
   return <section className="news-admin">
     <header className="news-admin-head">
-      <h2>Tin tức</h2>
-      <Button onClick={() => edit("new")}><Plus data-icon="inline-start" />Viết bài mới</Button>
+      <h2>{t("Tin tức")}</h2>
+      <Button onClick={() => edit("new")}><Plus data-icon="inline-start" />{t("Viết bài mới")}</Button>
     </header>
     <div className="news-admin-tabs" role="tablist" aria-label="Trạng thái bài viết">
       {TABS.map((t) => <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => goTab(t.id)}>
@@ -77,17 +79,17 @@ export default function NewsReview({ edit }: { edit: (id: number | "new") => voi
             {post.warnings.map((w) => <p className="news-warning" key={w}><TriangleAlert size={14} aria-hidden="true" />{w}</p>)}
             {!!own.length && <ul className="news-problems" role="alert">{own.map((m) => <li key={m}>{m}</li>)}</ul>}
             <div className="news-admin-actions">
-              {tab !== "published" && <Button size="sm" disabled={disabled} onClick={() => run(post, `/admin/posts/${post.id}/publish`, "POST", {}, "Đã đăng bài")}>Duyệt & đăng</Button>}
-              <Button size="sm" variant="outline" disabled={disabled} onClick={() => edit(post.id)}>Sửa</Button>
+              {tab !== "published" && <Button size="sm" disabled={disabled} onClick={() => run(post, `/admin/posts/${post.id}/publish`, "POST", {}, "Đã đăng bài")}>{t("Duyệt & đăng")}</Button>}
+              <Button size="sm" variant="outline" disabled={disabled} onClick={() => edit(post.id)}>{t("Sửa")}</Button>
               {tab === "published" && <>
                 <Button size="sm" variant="outline" asChild><Link to={newsPath(post)}>Xem</Link></Button>
                 <Button size="sm" variant="outline" disabled={disabled}
                   onClick={() => run(post, `/admin/posts/${post.id}/pin`, "POST", { pinned: !post.pinned }, post.pinned ? "Đã bỏ ghim" : "Đã ghim lên đầu trang Tin tức")}>
-                  {post.pinned ? <><PinOff data-icon="inline-start" />Bỏ ghim</> : <><Pin data-icon="inline-start" />Ghim</>}
+                  {post.pinned ? <><PinOff data-icon="inline-start" />{t("Bỏ ghim")}</> : <><Pin data-icon="inline-start" />Ghim</>}
                 </Button>
-                <Button size="sm" variant="outline" disabled={disabled} onClick={() => setPending({ kind: "unpublish", post })}>Gỡ xuống</Button>
+                <Button size="sm" variant="outline" disabled={disabled} onClick={() => setPending({ kind: "unpublish", post })}>{t("Gỡ xuống")}</Button>
               </>}
-              <Button size="sm" variant="ghost" className="danger-text" disabled={disabled} onClick={() => setPending({ kind: "delete", post })}>Xóa</Button>
+              <Button size="sm" variant="ghost" className="danger-text" disabled={disabled} onClick={() => setPending({ kind: "delete", post })}>{t("Xóa")}</Button>
             </div>
           </div>
         </li>;

@@ -5,6 +5,7 @@ import type { ChatAttachment } from "@/lib/types";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ErrorState } from "./common";
+import { useI18n } from "@/lib/i18n";
 
 const limit = 8 * 1024 * 1024;
 // Browsers often report no type, or a wrong one, for Office files; the extension decides.
@@ -24,6 +25,7 @@ const fileSize = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.ro
 export function ChatComposer({ uploadPath, ready, onSend }: {
   uploadPath: string; ready: boolean; onSend: (body: string, attachmentId?: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
@@ -124,7 +126,7 @@ export function ChatComposer({ uploadPath, ready, onSend }: {
       {kindOf(file) === "image" ? <img src={preview} alt="Ảnh sắp gửi" /> : kindOf(file) === "audio" ? <audio src={preview} controls preload="metadata" aria-label="Nghe lại âm thanh trước khi gửi" /> : <FileText aria-hidden="true" />}
       <span>{file.name}{kindOf(file) === "file" && ` · ${fileSize(file.size)}`}</span><Button type="button" variant="ghost" size="icon" disabled={busy} aria-label="Bỏ tệp đính kèm" onClick={() => chooseFile(null)}><X /></Button>
     </div>}
-    <label className="sr-only" htmlFor="message">Tin nhắn</label>
+    <label className="sr-only" htmlFor="message">{t("Tin nhắn")}</label>
     <Textarea id="message" placeholder="Nhập tin nhắn…" value={body} maxLength={3000} disabled={busy} onChange={event => setBody(event.target.value)} onKeyDown={event => {
       if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
         event.preventDefault(); event.currentTarget.form?.requestSubmit();
@@ -137,7 +139,7 @@ export function ChatComposer({ uploadPath, ready, onSend }: {
         <Button type="button" variant="ghost" size="icon" aria-label="Gửi ảnh" title="Gửi ảnh" disabled={busy || recording || requestingMic} onClick={() => imageInput.current?.click()}><ImagePlus /></Button>
         <Button type="button" variant="ghost" size="icon" aria-label="Đính kèm tệp" title="Đính kèm tệp (PDF, Word, Excel, PowerPoint, âm thanh…)" disabled={busy || recording || requestingMic} onClick={() => fileInput.current?.click()}><Paperclip /></Button>
         <Button type="button" variant={recording ? "destructive" : "ghost"} size="icon" aria-label={recording ? "Dừng ghi âm" : "Ghi âm"} title={recording ? "Dừng ghi âm" : "Ghi âm tối đa 2 phút"} disabled={busy || requestingMic || !!file} onClick={() => recording ? recorder.current?.stop() : void startRecording()}>{recording ? <Square /> : <Mic />}</Button>
-        {requestingMic && <span role="status">Đang mở micro…</span>}
+        {requestingMic && <span role="status">{t("Đang mở micro…")}</span>}
         {recording && <span role="status">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2,"0")}</span>}
       </div>
       <Button type="submit" disabled={busy || !ready || recording || requestingMic || (!body.trim() && !file)}><Send />{busy ? "Đang gửi…" : "Gửi"}</Button>

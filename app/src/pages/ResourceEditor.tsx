@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n";
 export default function ResourceEditor({
   resource,
   subjects,
@@ -23,6 +24,7 @@ export default function ResourceEditor({
   categories?: string[];
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [subject, setSubject] = useState(
       resource?.subject_id || subjectId || subjects[0]?.id || "",
     ),
@@ -64,7 +66,7 @@ export default function ResourceEditor({
       <form onSubmit={save}>
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="resource-title">Tên mục</FieldLabel>
+            <FieldLabel htmlFor="resource-title">{t("Tên mục")}</FieldLabel>
             <Input
               id="resource-title"
               name="title"
@@ -81,7 +83,7 @@ export default function ResourceEditor({
           />
           <div className="form-two">
             <Field>
-              <FieldLabel htmlFor="category">Nhóm kỳ thi</FieldLabel>
+              <FieldLabel htmlFor="category">{t("Nhóm kỳ thi")}</FieldLabel>
               <Input
                 id="category"
                 name="category"
@@ -93,7 +95,7 @@ export default function ResourceEditor({
               <datalist id="category-options">{categories.map((c) => <option key={c} value={c} />)}</datalist>
             </Field>
             <Field>
-              <FieldLabel htmlFor="level">Lớp / Cấp học</FieldLabel>
+              <FieldLabel htmlFor="level">{t("Lớp / Cấp học")}</FieldLabel>
               <Input
                 id="level"
                 name="level"
@@ -103,7 +105,7 @@ export default function ResourceEditor({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="year">Năm tham khảo</FieldLabel>
+              <FieldLabel htmlFor="year">{t("Năm tham khảo")}</FieldLabel>
               <Input
                 id="year"
                 name="year"
@@ -116,7 +118,7 @@ export default function ResourceEditor({
             </Field>
           </div>
           <Field>
-            <FieldLabel htmlFor="description">Mô tả</FieldLabel>
+            <FieldLabel htmlFor="description">{t("Mô tả")}</FieldLabel>
             <Textarea
               id="description"
               name="description"
@@ -138,7 +140,7 @@ export default function ResourceEditor({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="source_url">Đường dẫn nguồn HTTPS</FieldLabel>
+            <FieldLabel htmlFor="source_url">{t("Đường dẫn nguồn HTTPS")}</FieldLabel>
             <Input
               id="source_url"
               name="source_url"
@@ -156,7 +158,7 @@ export default function ResourceEditor({
             Hiển thị trong danh mục
           </label>
           {error && <ErrorState error={error} />}
-          <Submit busy={busy}>Lưu kỳ thi</Submit>
+          <Submit busy={busy}>{t("Lưu kỳ thi")}</Submit>
         </FieldGroup>
       </form>
     </>
