@@ -205,4 +205,16 @@ Sau khi chạy: nạp thử 50.000đ, kiểm tra **Nhật ký IPN** trên SePay 
 
 Secret Key của đơn vị chỉ hiện một lần. Nếu key bị lộ (gửi qua chat, commit lên Git), tạo lại ở trang Thông tin đơn vị rồi chạy lại `npx wrangler secret put SEPAY_SECRET_KEY`.
 
+### Rút tiền: SePay tự xác nhận khi tiền rời tài khoản
+
+Mỗi yêu cầu rút có một mã (`GSD` + 8 ký tự). Ở **Quản trị → Tài chính → Cần chuyển tiền**, quét mã QR bằng app ngân hàng: số tài khoản, số tiền và nội dung (mã lệnh) đã điền sẵn. Khi tiền rời tài khoản MB đã liên kết SePay với đúng mã và đúng số tiền, SePay gửi webhook `transferType: "out"` và lệnh tự chuyển sang **Đã chuyển** (ghi mã tham chiếu ngân hàng, hiện "Ngân hàng xác nhận"). Bấm "Đã chuyển" tay vẫn được; webhook đến sau chỉ thêm dấu xác nhận. Ảnh biên lai đính kèm được gửi vào hội thoại hỗ trợ của người dùng và hiện ở dòng "Lệnh rút tiền" trong lịch sử số dư.
+
+Bật một lần:
+
+1. my.sepay.vn → **Tích hợp WebHooks** → thêm webhook cho tài khoản MB: sự kiện **Tiền ra** (hoặc **Cả hai**), URL `https://giasudiem10.online/api/sepay/webhook`, xác thực **HMAC-SHA256** với một secret tự đặt.
+2. `npx wrangler secret put SEPAY_WEBHOOK_SECRET` với đúng secret đó. Chỉ đặt secret này (không đặt `SEPAY_BANK_ACCOUNT` / `SEPAY_BANK_CODE`) thì nạp tiền vẫn đi qua Cổng thanh toán như hiện tại.
+3. Nên khai báo **Cấu trúc mã thanh toán** tiền tố `GSD`, hậu tố 8 ký tự số và chữ, để SePay điền sẵn trường `code`. Chưa khai báo thì website vẫn tìm mã lệnh rút trong nội dung chuyển khoản, chỉ so với các lệnh đang chờ và phải đúng số tiền.
+
+Ở Tài chính, dòng trạng thái báo "SePay tự xác nhận…" khi secret đã có. Báo cáo theo tháng (tiền nạp, tiền rút, phần đã được ngân hàng xác nhận, doanh thu phí và Xu) nằm đầu trang Tài chính.
+
 Webhook chuyển khoản ngân hàng (`/api/sepay/webhook`, `SEPAY_WEBHOOK_SECRET`, `SEPAY_BANK_ACCOUNT`, `SEPAY_BANK_CODE`) vẫn được hỗ trợ nếu sau này cần nhận chuyển khoản thẳng vào tài khoản ngân hàng.

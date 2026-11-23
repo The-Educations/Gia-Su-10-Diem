@@ -7,6 +7,7 @@ import { api, dateTime, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { celebrate } from "@/lib/celebrate";
 import type { Deposit, Wallet } from "@/lib/types";
+import { BANKS } from "@/lib/banks";
 import { ErrorState, Heading, Loading, Page, Submit } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ const KIND: Record<string, string> = {
   deposit: "Nạp tiền",
   offer_hold: "Tạm giữ cho offer",
   offer_released: "Hoàn tiền offer",
-  withdrawal_requested: "Yêu cầu rút tiền",
+  withdrawal_requested: "Lệnh rút tiền",
   withdrawal_paid: "Đã chuyển khoản rút tiền",
   withdrawal_rejected: "Hoàn yêu cầu rút tiền",
   credits_purchased: "Mua credit",
@@ -188,7 +189,6 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
   );
 }
 
-const BANKS = ["Vietcombank", "VietinBank", "BIDV", "Agribank", "Techcombank", "MB Bank", "ACB", "VPBank", "TPBank", "Sacombank", "VIB", "HDBank", "SHB", "OCB", "MSB", "SeABank", "Eximbank", "LPBank", "Nam A Bank", "Bac A Bank", "ABBANK", "Cake by VPBank", "Timo"];
 type Payee = { bank_name: string; account_number: string; account_name: string };
 
 function WithdrawDialog({ open, onOpenChange, available, saved, onDone }: { open: boolean; onOpenChange: (v: boolean) => void; available: number; saved: Payee[]; onDone: () => void }) {
@@ -241,7 +241,7 @@ function WithdrawDialog({ open, onOpenChange, available, saved, onDone }: { open
                   <FieldLabel htmlFor="w-bank">{t("Ngân hàng")}</FieldLabel>
                   <select id="w-bank" className="native-select" required value={payee.bank_name} onChange={set("bank_name")}>
                     <option value="" disabled>{t("Chọn ngân hàng")}</option>
-                    {[...new Set([...BANKS, ...saved.map((s) => s.bank_name)])].map((b) => <option key={b} value={b}>{b}</option>)}
+                    {[...new Set([...BANKS.map((b) => b.name), ...saved.map((s) => s.bank_name)])].map((b) => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </Field>
                 <Field><FieldLabel htmlFor="w-number">{t("Số tài khoản")}</FieldLabel><Input id="w-number" inputMode="numeric" pattern="\d{6,20}" required value={payee.account_number} onChange={set("account_number")} aria-describedby="w-number-hint" /><small id="w-number-hint" className="field-hint">{t("6–20 chữ số")}</small></Field>
@@ -275,23 +275,19 @@ function WithdrawDialog({ open, onOpenChange, available, saved, onDone }: { open
   );
 }
 
-const WITHDRAWAL_STATE: Record<string, string> = { requested: "Đang chờ chuyển", paid: "Đã chuyển", rejected: "Đã từ chối" };
+const WITHDRAWAL_STATE: Record<string, string> = { requested: "Đang xử lý", paid: "Đã chuyển", rejected: "Đã từ chối" };
 
-function Withdrawals({ rows }: { rows: Wallet["withdrawals"] }) {
+// The status of a withdrawal, shown on its line in the history.
+function WithdrawalStatus({ w }: { w: Wallet["withdrawals"][number] }) {
   const { t } = useI18n();
   return (
-    <section className="ledger withdrawals">
-      <h2>{t("Yêu cầu rút tiền")}</h2>
-      <ul>
-        {rows.map((w) => (
-          <li key={w.id}>
-            <span className="ledger-icon" data-sign="out"><ArrowUpRight aria-hidden="true" /></span>
-            <span className="ledger-text"><strong>{w.bank_name} ····{w.account_last4}</strong><time>{dateTime(w.created_at)}</time>{w.status === "rejected" && w.note && <small>{w.note}</small>}</span>
-            <span className="ledger-amount"><strong>{money(w.amount)}</strong><span className="withdraw-state" data-state={w.status}>{t(WITHDRAWAL_STATE[w.status] || w.status)}</span></span>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <span className="ledger-sub">
+      <span className="withdraw-state" data-state={w.status}>{t(WITHDRAWAL_STATE[w.status] || w.status)}</span>
+      <span>{w.bank_name} ····{w.account_last4}</span>
+      {!!w.bank_confirmed && <span className="bank-ok"><CircleCheck aria-hidden="true" />{t("Ngân hàng xác nhận")}</span>}
+      {w.receipt_url && <a href={w.receipt_url} target="_blank" rel="noreferrer">{t("Xem biên lai")}</a>}
+      {w.status === "rejected" && w.note && <span>{w.note}</span>}
+    </span>
   );
 }
 
@@ -332,7 +328,6 @@ export default function WalletPage() {
           <Button variant="outline" disabled={w.available < 50000} onClick={() => setWithdrawOpen(true)}><ArrowUpRight data-icon="inline-start" />{t("Rút tiền")}</Button>
         </div>
       </section>
-      {w.withdrawals.length > 0 && <Withdrawals rows={w.withdrawals} />}
       {tutor && (
         <section className="credits-card">
           <header>
@@ -354,17 +349,20 @@ export default function WalletPage() {
         <h2>{t("Lịch sử")}</h2>
         {w.entries.length ? (
           <ul>
-            {w.entries.map((e) => (
-              <li key={e.id}>
+            {w.entries.filter((e) => e.kind !== "withdrawal_paid").map((e) => {
+              const payout = e.kind === "withdrawal_requested" ? w.withdrawals.find((x) => `withdrawal:${x.id}` === e.ref) : undefined;
+              return (
+              <li key={e.id} data-kind={e.kind}>
                 <span className="ledger-icon" data-sign={e.amount > 0 ? "in" : e.amount < 0 ? "out" : "neutral"}><WalletIcon aria-hidden="true" /></span>
-                <span className="ledger-text"><strong>{t(KIND[e.kind] || e.kind)}</strong><time>{dateTime(e.created_at)}</time>{e.note && <small>{e.note}</small>}</span>
+                <span className="ledger-text"><strong>{t(KIND[e.kind] || e.kind)}</strong><time>{dateTime(e.created_at)}</time>{payout ? <WithdrawalStatus w={payout} /> : e.note && <small>{e.note}</small>}</span>
                 <span className="ledger-amount">
                   {e.amount !== 0 && <strong data-sign={e.amount > 0 ? "in" : "out"}>{e.amount > 0 ? "+" : "−"}{money(Math.abs(e.amount))}</strong>}
                   {e.credits !== 0 && <small>{e.credits > 0 ? "+" : "−"}{Math.abs(e.credits)} {t("credit")}</small>}
                   {e.amount === 0 && e.held !== 0 && <small>{t(e.held > 0 ? "Tạm giữ" : "Bỏ giữ")} {money(Math.abs(e.held))}</small>}
                 </span>
               </li>
-            ))}
+              );
+            })}
           </ul>
         ) : <p className="credential-empty">{t("Chưa có giao dịch.")}</p>}
       </section>
