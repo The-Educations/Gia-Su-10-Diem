@@ -282,8 +282,8 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(tutor).toHaveURL(/workspace/);
   await login(admin, "admin");
   await admin.goto("/app/admin?tab=tutors");
-  await admin.getByRole("textbox", { name: "Tìm trong danh sách" }).fill("Gia sư kiểm thử");
-  await expect(admin.locator(".proof-pending")).toHaveText("1 minh chứng chờ đối chiếu");
+  await admin.getByRole("searchbox", { name: "Tìm gia sư…" }).fill("Gia sư kiểm thử");
+  await expect(admin.locator(".tutor-row .admin-flag").filter({ hasText: "minh chứng" })).toHaveText("1 minh chứng chờ đối chiếu");
   await admin.getByRole("button", { name: "Xem & duyệt" }).click();
   await expect(admin.getByRole("img", { name: "Ảnh bìa của Gia sư kiểm thử" })).toBeVisible();
   await expect(admin.getByRole("dialog")).toContainText("Dùng hình vẽ để hiểu bản chất trước khi làm bài.");
@@ -297,7 +297,7 @@ test("new tutor onboarding, availability and admin approval", async ({
   await expect(admin.getByRole("dialog").locator(".gallery-tile")).toHaveCount(2);
   await admin.getByRole("button", { name: "Duyệt & công bố" }).click();
   await expect(admin.getByRole("dialog")).not.toBeVisible();
-  await expect(admin.locator(".admin-list")).toContainText("Đã công bố");
+  await expect(admin.locator(".admin-rows")).toContainText("Đã công bố");
   await tutor.goto("/app/tutors?q=Gia+sư+kiểm+thử");
   await expect(tutor.locator(".tutor-card")).toHaveCount(1);
   await expect(tutor.locator(".tutor-card .tutor-local-time")).toContainText("(UTC +09:00)");
@@ -473,17 +473,18 @@ test("role workspaces, studio drafts and admin tab persistence", async ({
     } else {
       await expect(page).toHaveURL(/\/admin$/);
       await page.getByRole("tab", { name: /^Gia sư/ }).click();
-      await choose(page, "Trạng thái hồ sơ", "Chờ duyệt");
+      await page.getByRole("group", { name: "Trạng thái hồ sơ" }).getByRole("button", { name: /^Chờ duyệt/ }).click();
+      await expect(page).toHaveURL(/status=pending/);
       await page
-        .getByRole("textbox", { name: "Tìm trong danh sách" })
+        .getByRole("searchbox", { name: "Tìm gia sư…" })
         .fill("no matching tutor");
       await expect(page.getByText("Không có kết quả phù hợp")).toBeVisible();
-      await page.getByRole("button", { name: "Xóa bộ lọc" }).click();
-      await page.getByRole("tab", { name: "Môn học", exact: true }).click();
+      await page.getByRole("button", { name: "Xem tất cả hồ sơ" }).click();
+      await page.getByRole("tab", { name: "Danh mục", exact: true }).click();
       await page
-        .locator(".admin-list article")
+        .locator(".catalog-subject")
         .first()
-        .getByRole("button", { name: "Chỉnh sửa" })
+        .getByRole("button", { name: "Sửa môn" })
         .click();
       await page
         .getByRole("dialog")
@@ -491,9 +492,9 @@ test("role workspaces, studio drafts and admin tab persistence", async ({
         .click();
       await expect(page.getByRole("dialog")).not.toBeVisible();
       await expect(
-        page.getByRole("tab", { name: "Môn học", exact: true }),
+        page.getByRole("tab", { name: "Danh mục", exact: true }),
       ).toHaveAttribute("aria-selected", "true");
-      await expect(page.locator(".admin-list article").first()).toBeVisible();
+      await expect(page.locator(".catalog-subject").first()).toBeVisible();
     }
     for (const width of [320, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -729,16 +730,19 @@ test("administrator confirms or cancels promotion and the new administrator sign
   const target = (await (await uc.request.get("/api/auth/me")).json()).user;
   await login(admin, "admin");
   await admin.goto("/app/admin?tab=users");
-  await admin.getByLabel("Tìm trong danh sách").fill(email);
-  const row = admin.locator(".admin-list article").filter({ hasText: email });
-  await row.getByRole("button", { name: "Cấp quyền quản trị", exact: true }).click();
+  await admin.getByRole("searchbox", { name: "Tìm theo tên hoặc email…" }).fill(email);
+  const row = admin.locator(".account-row").filter({ hasText: email });
+  const menu = row.getByRole("button", { name: "Thao tác với Quản trị viên mới", exact: true });
+  await menu.click();
+  await admin.getByRole("menuitem", { name: "Cấp quyền quản trị", exact: true }).click();
   const dialog = admin.getByRole("dialog");
   await expect(dialog).toContainText(email);
   await dialog.getByRole("button", { name: "Hủy", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   expect((await (await uc.request.get("/api/auth/me")).json()).user.role).toBe("student");
   await admin.setViewportSize({ width: 390, height: 844 });
-  await row.getByRole("button", { name: "Cấp quyền quản trị", exact: true }).click();
+  await menu.click();
+  await admin.getByRole("menuitem", { name: "Cấp quyền quản trị", exact: true }).click();
   expect(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await admin.route(`**/api/admin/users/${target.id}/role`, (route) => route.fulfill({ status: 503, json: { error: "Không thể lưu. Vui lòng thử lại." } }));
   await dialog.getByRole("button", { name: "Xác nhận cấp quyền", exact: true }).click();
@@ -748,7 +752,10 @@ test("administrator confirms or cancels promotion and the new administrator sign
   await admin.keyboard.press("Enter");
   await expect(dialog).not.toBeVisible();
   await expect(row).toContainText("Quản trị viên");
-  await expect(row.getByRole("button", { name: "Cấp quyền quản trị", exact: true })).toHaveCount(0);
+  await menu.click();
+  await expect(admin.getByRole("menuitem", { name: "Mở quyền Cộng đồng" }).or(admin.getByRole("menuitem", { name: "Khóa quyền Cộng đồng" }))).toBeVisible();
+  await expect(admin.getByRole("menuitem", { name: "Cấp quyền quản trị", exact: true })).toHaveCount(0);
+  await admin.keyboard.press("Escape");
   expect((await uc.request.get("/api/admin")).status()).toBe(401);
   await user.goto("/app/auth");
   await user.getByRole("button", { name: "Dùng email và mật khẩu" }).click();
@@ -759,7 +766,7 @@ test("administrator confirms or cancels promotion and the new administrator sign
   await expect(user).toHaveURL(/app\/admin$/);
   await expect(user.getByRole("heading", { name: "Quản trị nền tảng" })).toBeVisible();
   await admin.goto("/app/admin?tab=audit");
-  await expect(admin.getByText(`user.promoted_to_admin · #${target.id}`, { exact: true })).toBeVisible();
+  await expect(admin.locator(".audit-table tbody tr").filter({ hasText: "Cấp quyền quản trị" }).first()).toBeVisible();
   expect(errors).toEqual([]);
   await ac.close();
   await uc.close();
@@ -975,7 +982,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   const profile = await (await tutor.request.get("/api/tutor/profile")).json();
   await login(page, "admin");
   await page.goto("/app/admin?tab=tutors");
-  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
+  await page.getByRole("searchbox", { name: "Tìm gia sư…" }).fill(profile.name);
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog");
@@ -1014,7 +1021,7 @@ test("admin grants frames, tutor equips and email review requires resubmission",
   await expect(tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt.", { exact: true })).toBeVisible();
   await page.reload();
   await page.goto("/app/admin?tab=tutors");
-  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill(profile.name);
+  await page.getByRole("searchbox", { name: "Tìm gia sư…" }).fill(profile.name);
   await page.getByRole("button", { name: "Xem & duyệt", exact: true }).click();
   await dialog.getByRole("button", { name: "Duyệt & công bố", exact: true }).click();
   await expect(dialog).not.toBeVisible();

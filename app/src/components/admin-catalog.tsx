@@ -111,7 +111,7 @@ export function AdminCatalog({ subjects, resources, tutors, onChanged }: { subje
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("Bỏ {name}?", { name: removal?.name || "" })}</DialogTitle>
-            <DialogDescription>{t("Mục này sẽ không còn trong danh mục để chọn mới. Lịch học và offer đã có vẫn được giữ lại.")}</DialogDescription>
+            <DialogDescription>{t("Mục này sẽ không còn trong danh mục để chọn mới. Lịch học và đề nghị đã có vẫn được giữ lại.")}</DialogDescription>
           </DialogHeader>
           {hit && (
             <ul className="catalog-impact">

@@ -115,7 +115,7 @@ function Adjust({ userId, onDone }: { userId: number; onDone: () => void }) {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!n) return;
-    if (!confirm(t("{action} {amount} vào số dư?", { action: t(n > 0 ? "Cộng" : "Trừ"), amount: money(Math.abs(n)) }))) return;
+    if (!confirm(t(n > 0 ? "Cộng {amount} vào số dư?" : "Trừ {amount} khỏi số dư?", { amount: money(Math.abs(n)) }))) return;
     setBusy(true);
     try {
       await api(`/admin/wallets/${userId}/adjust`, "POST", { amount: n, note });

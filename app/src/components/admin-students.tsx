@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, dateTime, fold, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { ErrorState, Loading } from "./common";
+import { AdminSearch, AdminToolbar, FilterChips } from "./admin-kit";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -17,10 +18,11 @@ const FILTERS: [Check["status"], string][] = [["pending", "Chờ duyệt"], ["ap
 const STATE: Record<Check["status"], [string, typeof Clock]> = { pending: ["Chờ duyệt", Clock], approved: ["Đã xác minh", BadgeCheck], rejected: ["Cần bổ sung", CircleAlert] };
 
 // Students' school records (học bạ): compare the photo with the details, then decide.
-export function AdminStudents({ query = "" }: { query?: string }) {
+export function AdminStudents() {
   const { t } = useI18n(),
     { refresh } = useApp(),
     list = useLoad<Check[]>("/admin/verifications?status=all"),
+    [query, setQuery] = useState(""),
     [filter, setFilter] = useState<Check["status"]>("pending"),
     [asking, setAsking] = useState<Check | null>(null),
     [note, setNote] = useState(""),
@@ -43,14 +45,11 @@ export function AdminStudents({ query = "" }: { query?: string }) {
     finally { setBusy(0); }
   }
   return (
-    <div className="admin-students">
-      <div className="segmented student-filter" role="group" aria-label={t("Lọc theo trạng thái")}>
-        {FILTERS.map(([value, label]) => (
-          <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>
-            {t(label)} <span>{rows.filter((v) => v.status === value).length}</span>
-          </button>
-        ))}
-      </div>
+    <div className="admin-pane admin-students">
+      <AdminToolbar>
+        <AdminSearch value={query} onChange={setQuery} placeholder="Tìm học sinh…" />
+        <FilterChips label="Lọc theo trạng thái" value={filter} onChange={(v) => setFilter(v as Check["status"])} options={FILTERS.map(([value, label]) => ({ value, label, count: rows.filter((v) => v.status === value).length }))} />
+      </AdminToolbar>
       {shown.length ? (
         <ul className="student-checks">
           {shown.map((v) => {

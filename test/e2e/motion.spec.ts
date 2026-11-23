@@ -9,7 +9,7 @@ async function admin(page: Page) {
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
   await expect(page).toHaveURL(/\/admin/);
   await page.goto("/app/admin?tab=tutors");
-  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill("Nguyễn Minh Châu");
+  await page.getByRole("searchbox", { name: "Tìm gia sư…" }).fill("Nguyễn Minh Châu");
 }
 
 function recordDialog(page: Page) {
@@ -65,9 +65,8 @@ test("review stays stable during delivery failures and focuses the list after a 
   await admin(page);
   await page.request.patch("/api/admin/tutors/3", { data: { status: "pending" } });
   await page.reload();
-  await page.getByRole("textbox", { name: "Tìm trong danh sách" }).fill("Nguyễn Minh Châu");
-  await page.getByRole("combobox", { name: "Trạng thái hồ sơ", exact: true }).click();
-  await page.getByRole("option", { name: "Chờ duyệt", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Tìm gia sư…" }).fill("Nguyễn Minh Châu");
+  await page.getByRole("group", { name: "Trạng thái hồ sơ", exact: true }).getByRole("button", { name: /^Chờ duyệt/ }).click();
   const trigger = page.getByRole("button", { name: "Xem & duyệt", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog");
@@ -92,7 +91,7 @@ test("review stays stable during delivery failures and focuses the list after a 
   await page.unroute("**/api/admin/tutors/*");
   await dialog.getByRole("button", { name: "Duyệt & công bố", exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: "Tìm trong danh sách" })).toBeFocused();
+  await expect(page.getByRole("searchbox", { name: "Tìm gia sư…" })).toBeFocused();
   await expect(trigger).toHaveCount(0);
   // Restore the fixture for the remaining journeys.
   expect((await page.request.patch("/api/admin/tutors/3", { data: { status: "approved" } })).ok()).toBe(true);
@@ -117,7 +116,7 @@ test("review and shared dialogs fit mobile and reduced motion keeps text still",
     await expect(dialog).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  await page.goto("/app/admin?tab=subjects");
+  await page.goto("/app/admin?tab=catalog");
   const add = page.getByRole("button", { name: "Thêm môn", exact: true });
   await add.click();
   await page.getByRole("dialog").getByRole("button", { name: "Đóng", exact: true }).click();

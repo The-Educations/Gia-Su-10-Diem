@@ -152,18 +152,21 @@ test("admin calendar and reversible take-down dialog work without deleting the t
   await expect(page).toHaveURL(/\/admin/);
   await page.goto("/app/admin?tab=tutors");
   await page
-    .getByRole("textbox", { name: "Tìm trong danh sách" })
+    .getByRole("searchbox", { name: "Tìm gia sư…" })
     .fill("Lê Thảo Linh");
-  const row = page.locator(".admin-list article").first();
-  await row.getByRole("button", { name: "Gỡ hồ sơ", exact: true }).click();
+  const row = page.locator(".tutor-row").first();
+  const menu = row.getByRole("button", { name: /^Thao tác với/ });
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Gỡ hồ sơ", exact: true }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Hủy", exact: true })
     .click();
+  await menu.click();
   await expect(
-    row.getByRole("button", { name: "Gỡ hồ sơ", exact: true }),
+    page.getByRole("menuitem", { name: "Gỡ hồ sơ", exact: true }),
   ).toBeVisible();
-  await row.getByRole("button", { name: "Gỡ hồ sơ", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Gỡ hồ sơ", exact: true }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Xác nhận gỡ hồ sơ", exact: true })
