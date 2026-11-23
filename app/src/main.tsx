@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import { AnimateUIProvider } from "@animate-ui/react/provider";
 import { AppProvider, useApp, accountDestination } from "./lib/api";
+import { WalletProvider } from "./lib/wallet";
 import { Toaster } from "./components/ui/sonner";
 import { Loading, ErrorState, Page } from "./components/common";
 import { Button } from "./components/ui/button";
@@ -283,7 +284,9 @@ const router = createBrowserRouter([{ path: "*", element:
   <AnimateUIProvider>
     <I18nProvider>
       <AppProvider>
-        <Shell />
+        <WalletProvider>
+          <Shell />
+        </WalletProvider>
         <Toaster richColors position="top-right" />
       </AppProvider>
     </I18nProvider>

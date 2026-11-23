@@ -2342,7 +2342,7 @@ test("tutor credentials need proof, stay private and show only approved labels p
 test("wallet deposits, SePay webhook verdicts, offers holding money and tutor credits", async (t) => {
   const { createHmac } = await import("node:crypto");
   const secret = "test-sepay-secret";
-  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, holder: "GIA SU 10 DIEM", prefix: "GSD", webhook: true, gateway: false, ready: true } });
   const student = client(), tutor = client(), admin = client();
   const s = await student.login("student"), u = await tutor.login("chau"); await admin.login("admin");
   const hook = (payload, key = secret, stamp = Math.floor(Date.now() / 1000)) => {
@@ -2354,6 +2354,8 @@ test("wallet deposits, SePay webhook verdicts, offers holding money and tutor cr
   assert.equal(dep.status, 201);
   assert.match(dep.data.code, /^GSD[A-Z0-9]{8}$/);
   assert.ok(dep.data.qr_url.startsWith("https://vietqr.app/img?"));
+  assert.equal(dep.data.pay_url, null, "a bank-ready order never links out to SePay");
+  assert.equal(dep.data.checkout, null, "and never carries a hosted-checkout form");
   assert.equal((await student.request(`/wallet/deposits/${dep.data.id}/simulate`, "POST")).status, 404);
   const event = { id: 9001, gateway: "MBBank", transactionDate: "2026-11-22 10:00:00", accountNumber: "0123456789", subAccount: "", code: dep.data.code, content: `${dep.data.code} nap tien`, transferType: "in", description: "", transferAmount: 2000000, accumulated: 0, referenceCode: "FT1" };
   assert.equal((await hook(event, "wrong")).status, 401);
@@ -2664,10 +2666,11 @@ test("students verify with a school record; one record and one student code per 
 });
 test("SePay payment gateway: signed checkout form and IPN credits a top-up once", async (t) => {
   const { createHmac } = await import("node:crypto");
-  const sepay = { secret: "", account: "", bank: "", holder: "", prefix: "GSD", merchant: "SP-TEST-1", merchantSecret: "spsk_test_x", ipnSecret: "ipn-secret-1234567890", sandbox: true, webhook: false, gateway: true, ready: true };
+  const sepay = { secret: "", account: "", bank: "", bankReady: false, holder: "", prefix: "GSD", merchant: "SP-TEST-1", merchantSecret: "spsk_test_x", ipnSecret: "ipn-secret-1234567890", sandbox: true, webhook: false, gateway: true, ready: true };
   const { client, base } = await fixture(t, { sepay, origin: "https://giasu.example" });
   const s = client(); await s.login("student");
   const dep = (await s.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  // Gateway-only (no bank account): the hosted checkout and pay link still work.
   assert.equal(dep.checkout.action, "https://pay-sandbox.sepay.vn/v1/checkout/init");
   const f = dep.checkout.fields;
   assert.deepEqual(Object.keys(f), ["order_amount", "merchant", "currency", "operation", "order_description", "order_invoice_number", "customer_id", "success_url", "error_url", "cancel_url", "lang", "signature"]);
@@ -2801,4 +2804,56 @@ test("unmatched deposit assign is atomic: second assign 409s, balance credited o
   assert.equal(one(db, "SELECT available FROM wallets WHERE user_id=?", me.id).available, 50000);
   assert.equal((await admin.request("/admin/deposits/unmatched/dismiss", "POST", { source: "gateway", id: "gw-1", reason: "Giao dịch thử" })).status, 200);
   assert.equal(one(db, "SELECT status FROM gateway_events WHERE id='gw-1'").status, "dismissed");
+});
+
+test("SePay webhook with code=null still matches the memo code inside the transfer content", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const secret = "test-sepay-secret";
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, webhook: true, gateway: false, ready: true, merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false } });
+  const student = client(), admin = client();
+  await student.login("student"); await admin.login("admin");
+  const hook = (payload, stamp = Math.floor(Date.now() / 1000)) => {
+    const body = JSON.stringify(payload);
+    return fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", secret).update(`${stamp}.${body}`).digest("hex") }, body });
+  };
+  const dep = (await student.request("/wallet/deposits", "POST", { amount: 200000 })).data;
+  // Exactly the production failure: code=null, the memo only lives in content.
+  const ev = { id: 101921135, accountNumber: "0123456789", code: null, content: `MBVCB.123.${dep.code}.CT tu 0900123456`, transferType: "in", transferAmount: 200000, referenceCode: "FT26327360001989", description: "" };
+  assert.deepEqual(await (await hook(ev)).json(), { success: true }, "the code inside the content credits the deposit");
+  assert.equal((await student.request("/wallet")).data.available, 200000);
+  // A decorated code that names no deposit or payout stays unmatched.
+  const ev2 = { ...ev, id: 101921136, content: "MBVCB.123.GSDZZZZZZZ.CT tu" };
+  assert.deepEqual(await (await hook(ev2)).json(), { success: false });
+  // An unmatched event from before the fix is rescued once via the recheck.
+  const ev3 = { ...ev, id: 101921137 };
+  const dep2 = (await student.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,?,?,? ,0,'unmatched',?)",
+    ev3.id, null, dep2.amount, ev3.referenceCode, JSON.stringify({ ...ev3, code: null, content: `CK ${dep2.code}`, transferAmount: dep2.amount }));
+  const before = (await student.request("/wallet")).data.available;
+  await admin.request("/admin/deposits/recheck", "POST");
+  assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=?", ev3.id).status, "processed");
+  assert.equal((await student.request("/wallet")).data.available, before + 300000, "the stranded payment is credited once");
+  await admin.request("/admin/deposits/recheck", "POST");
+  assert.equal((await student.request("/wallet")).data.available, before + 300000, "a second recheck never credits twice");
+  // With a bank account, new orders never carry a hosted checkout or link.
+  const dep3 = (await student.request("/wallet/deposits", "POST", { amount: 100000 })).data;
+  assert.equal(dep3.checkout, null);
+  assert.equal(dep3.pay_url, null);
+});
+
+test("a stranded unmatched event never breaks startup and is credited once", async (t) => {
+  const sepay = { secret: "s", account: "0123456789", bank: "MB", bankReady: true, webhook: true, gateway: false, ready: true, merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false };
+  const { client, db } = await fixture(t, { sepay });
+  const student = client(); await student.login("student");
+  const dep = (await student.request("/wallet/deposits", "POST", { amount: 200000 })).data;
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,NULL,?,?,0,'unmatched',?)",
+    555001, dep.amount, "FT-BOOT-1", JSON.stringify({ transferType: "in", code: null, content: `MBVCB.1.${dep.code}.CT tu`, transferAmount: dep.amount }));
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,NULL,?,? ,0,'unmatched','{not json')",
+    555002, 1, "FT-BOOT-2");
+  const before = (await student.request("/wallet")).data.available;
+  // The real startup path: createApi runs registerWallet, which rematches.
+  const app = createApi(db, { processPhoto, limit: false, sendEmail: async () => {}, sepay });
+  assert.ok(app, "startup survives a stranded and a malformed event");
+  assert.equal((await student.request("/wallet")).data.available, before + 200000, "the stranded payment is rescued once");
+  assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=?", 555001).status, "processed");
 });

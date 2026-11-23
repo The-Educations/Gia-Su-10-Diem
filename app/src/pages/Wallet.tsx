@@ -3,8 +3,9 @@ import { useSearchParams } from "react-router-dom";
 import { ArrowDownLeft, ArrowUpRight, CircleCheck, Coins, Copy, ExternalLink, Landmark, LoaderCircle, Wallet as WalletIcon } from "lucide-react";
 import { renderSVG } from "uqr";
 import { toast } from "sonner";
-import { api, dateTime, money, useApp, useLoad } from "@/lib/api";
+import { api, dateTime, money, useApp } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { useWallet } from "@/lib/wallet";
 import { celebrate } from "@/lib/celebrate";
 import type { Deposit, Wallet } from "@/lib/types";
 import { BANKS } from "@/lib/banks";
@@ -107,6 +108,7 @@ function PayQr({ deposit }: { deposit: Deposit }) {
 // Every opening is a new order with its own code and QR; unpaid ones are left as they are.
 function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: boolean; onOpenChange: (v: boolean) => void; min: number; onPaid: () => void; forStudent?: number }) {
   const { t } = useI18n(),
+    { watchDeposit } = useWallet(),
     [amount, setAmount] = useState(500000),
     [deposit, setDeposit] = useState<Deposit | null>(null),
     [busy, setBusy] = useState(false),
@@ -132,7 +134,11 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
     if (amount < min) return setError(t("Số tiền nạp tối thiểu là {amount}.", { amount: money(min) }));
     setBusy(true);
     setError("");
-    try { setDeposit(await api<Deposit>("/wallet/deposits", "POST", { amount, ...(forStudent ? { student_id: forStudent } : {}) })); }
+    try {
+      const created = await api<Deposit>("/wallet/deposits", "POST", { amount, ...(forStudent ? { student_id: forStudent } : {}) });
+      watchDeposit(created.id);
+      setDeposit(created);
+    }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   }
@@ -294,7 +300,7 @@ function WithdrawalStatus({ w }: { w: Wallet["withdrawals"][number] }) {
 export default function WalletPage() {
   const { user, refresh } = useApp(),
     { t } = useI18n(),
-    result = useLoad<Wallet>("/wallet"),
+    wallet = useWallet(),
     [depositOpen, setDepositOpen] = useState(false),
     [withdrawOpen, setWithdrawOpen] = useState(false),
     [buying, setBuying] = useState(0),
@@ -302,20 +308,21 @@ export default function WalletPage() {
     forStudent = Number(params.get("for")) || undefined;
   useEffect(() => { if (forStudent) setDepositOpen(true); }, [forStudent]);
   const returned = Number(params.get("deposit")) || 0;
-  if (result.loading) return <Loading />;
-  if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
-  const w = result.data, tutor = user?.role === "tutor";
+  if (!wallet.data && !wallet.error) return <Loading />;
+  if (wallet.error || !wallet.data) return <ErrorState error={wallet.error} retry={wallet.refresh} />;
+  const w = wallet.data, tutor = user?.role === "tutor";
+  const paid = () => { refresh(); void wallet.refresh(); };
   const payees = [...new Map(w.withdrawals.map((x) => [`${x.bank_name}|${x.account_number}`, { bank_name: x.bank_name, account_number: x.account_number, account_name: x.account_name }])).values()].slice(0, 3);
   async function buy(credits: number, target: HTMLElement) {
     setBuying(credits);
-    try { await api("/credits/purchase", "POST", { credits }); celebrate(target); toast.success(t("Đã thêm {n} Xu", { n: credits })); refresh(); }
+    try { await api("/credits/purchase", "POST", { credits }); celebrate(target); toast.success(t("Đã thêm {n} Xu", { n: credits })); paid(); }
     catch (e) { toast.error((e as Error).message); }
     finally { setBuying(0); }
   }
   return (
     <Page>
       <Heading title={t("Số dư học phí")} />
-      {returned > 0 && <ReturnedFromSepay id={returned} result={params.get("result") || ""} onPaid={refresh} />}
+      {returned > 0 && <ReturnedFromSepay id={returned} result={params.get("result") || ""} onPaid={paid} />}
       {w.payments === "off" && <p className="studio-note" role="status">{t("Nạp tiền đang tạm đóng trong lúc nền tảng hoàn tất kết nối ngân hàng.")}</p>}
       <section className="balance-card">
         <div>
@@ -366,8 +373,8 @@ export default function WalletPage() {
           </ul>
         ) : <p className="credential-empty">{t("Chưa có giao dịch.")}</p>}
       </section>
-      <DepositDialog open={depositOpen} onOpenChange={setDepositOpen} min={w.settings.min_deposit} onPaid={refresh} forStudent={forStudent} />
-      <WithdrawDialog open={withdrawOpen} onOpenChange={setWithdrawOpen} available={w.available} saved={payees} onDone={refresh} />
+      <DepositDialog open={depositOpen} onOpenChange={setDepositOpen} min={w.settings.min_deposit} onPaid={paid} forStudent={forStudent} />
+      <WithdrawDialog open={withdrawOpen} onOpenChange={setWithdrawOpen} available={w.available} saved={payees} onDone={paid} />
     </Page>
   );
 }
