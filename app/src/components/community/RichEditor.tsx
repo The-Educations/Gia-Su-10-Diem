@@ -1,7 +1,10 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
+import { Extension } from "@tiptap/core";
+import { Placeholder } from "@tiptap/extensions";
+import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
 import {
   Bold,
   Italic,
@@ -19,11 +22,35 @@ import {
   Trash2,
   Undo,
   Redo,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { ErrorState } from "@/components/common";
+
+// Tab indents like a word processor: nests a list item, indents code, or adds a tab stop.
+// Escape leaves the editor so the keyboard can move on to the next field.
+const Indent = Extension.create({
+  name: "tabIndent",
+  addKeyboardShortcuts() {
+    return {
+      Tab: ({ editor }) => {
+        if (editor.isActive("listItem")) { editor.commands.sinkListItem("listItem"); return true; }
+        return editor.commands.insertContent(editor.isActive("codeBlock") ? "  " : "\t");
+      },
+      "Shift-Tab": ({ editor }) => {
+        if (editor.isActive("listItem")) { editor.commands.liftListItem("listItem"); return true; }
+        const { $from, empty } = editor.state.selection;
+        if (empty && /[\t ]$/.test($from.nodeBefore?.text || "")) editor.commands.deleteRange({ from: $from.pos - 1, to: $from.pos });
+        return true;
+      },
+      Escape: ({ editor }) => { editor.commands.blur(); return true; },
+    };
+  },
+});
+const MAX_IMAGES = 5;
 
 export function plainToHtml(text: string) {
   return text
@@ -61,7 +88,11 @@ export default function RichEditor({
     [label, setLabel] = useState(""),
     [alt, setAlt] = useState("");
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [blocks, setBlocks] = useState(false),
+    picker = useRef<HTMLInputElement>(null);
+  // The editor's own handlers (paste, drop, Ctrl+K) are set once, so they call through refs.
+  const actions = useRef({ upload: async (_file: File, _at?: number) => {}, link: () => {} });
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -90,6 +121,10 @@ export default function RichEditor({
           ];
         },
       }).configure({ allowBase64: false }),
+      Placeholder.configure({
+        placeholder: ({ node }) => (node.type.name === "heading" ? "Tiêu đề mục" : "Viết nội dung… Dòng trống có nút + để thêm tiêu đề, danh sách, ảnh"),
+      }),
+      Indent,
     ],
     content: initial,
     editorProps: {
@@ -101,6 +136,24 @@ export default function RichEditor({
         "aria-invalid": String(invalid),
         "aria-describedby": errorId || "",
         class: "community-rich community-editor-content",
+      },
+      // Paste or drop an image straight into the text.
+      handlePaste: (_view, event) => {
+        const file = [...(event.clipboardData?.files || [])].find((f) => f.type.startsWith("image/"));
+        if (!file) return false;
+        void actions.current.upload(file);
+        return true;
+      },
+      handleDrop: (view, event) => {
+        const file = [...(event.dataTransfer?.files || [])].find((f) => f.type.startsWith("image/"));
+        if (!file) return false;
+        event.preventDefault();
+        void actions.current.upload(file, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos);
+        return true;
+      },
+      handleKeyDown: (_view, event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); actions.current.link(); return true; }
+        return false;
       },
     },
     onUpdate: ({ editor }) => change(editor.getHTML(), editor.getText()),
@@ -128,6 +181,40 @@ export default function RichEditor({
           }
         : null,
   });
+  async function upload(file: File, at?: number) {
+    if (!editor) return;
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return setError("Dùng ảnh JPG, PNG hoặc WebP.");
+    if (file.size > 5 * 1024 * 1024) return setError("Ảnh tối đa 5 MB.");
+    let count = 0;
+    editor.state.doc.descendants((node) => { if (node.type.name === "image") count++; });
+    if (count >= MAX_IMAGES) return setError("Mỗi bài tối đa 5 ảnh.");
+    setBusy(true);
+    uploading(true);
+    setError("");
+    try {
+      const response = await fetch(imageUploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể tải ảnh.");
+      const image = { type: "image", attrs: { src: data.url, alt: alt.trim() || file.name.replace(/\.[^.]+$/, "") } };
+      if (at === undefined) editor.chain().focus().insertContent(image).run();
+      else editor.chain().focus().insertContentAt(at, image).run();
+      setPanel(null);
+      setAlt("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      uploading(false);
+    }
+  }
+  function openLink() {
+    if (!editor) return;
+    setPanel("link");
+    setUrl(editor.getAttributes("link").href || "");
+    setLabel(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to));
+    setError("");
+  }
+  useEffect(() => { actions.current = { upload, link: openLink }; });
   if (!editor || !state) return null;
   // Grouped like a blog editor; each title shows its keyboard shortcut.
   const groups = [
@@ -146,6 +233,7 @@ export default function RichEditor({
     [
       { title: "Danh sách", keys: "- ", icon: List, active: state.bullet, run: () => editor.chain().focus().toggleBulletList().run() },
       { title: "Danh sách đánh số", keys: "1. ", icon: ListOrdered, active: state.ordered, run: () => editor.chain().focus().toggleOrderedList().run() },
+      { title: "Đường phân cách", keys: "---", icon: Minus, active: false, run: () => editor.chain().focus().setHorizontalRule().run() },
     ],
   ];
   const tools = groups.flat();
@@ -180,19 +268,9 @@ export default function RichEditor({
           variant="ghost"
           size="icon"
           aria-label="Chèn liên kết"
-          title="Chèn liên kết"
+          title="Chèn liên kết · Ctrl+K"
           aria-expanded={panel === "link"}
-          onClick={() => {
-            setPanel(panel === "link" ? null : "link");
-            setUrl(editor.getAttributes("link").href || "");
-            setLabel(
-              editor.state.doc.textBetween(
-                editor.state.selection.from,
-                editor.state.selection.to,
-              ),
-            );
-            setError("");
-          }}
+          onClick={() => (panel === "link" ? setPanel(null) : openLink())}
         >
           <Link2 />
         </Button>
@@ -333,50 +411,10 @@ export default function RichEditor({
               type="file"
               accept="image/jpeg,image/png,image/webp"
               disabled={busy}
-              onChange={async (e) => {
+              onChange={(e) => {
                 const file = e.target.files?.[0];
                 e.target.value = "";
-                if (!file) return;
-                if (file.size > 5 * 1024 * 1024) {
-                  setError("Ảnh tối đa 5 MB.");
-                  return;
-                }
-                let count = 0;
-                editor.state.doc.descendants((node) => {
-                  if (node.type.name === "image") count++;
-                });
-                if (count >= 5) {
-                  setError("Mỗi bài tối đa 5 ảnh.");
-                  return;
-                }
-                setBusy(true);
-                uploading(true);
-                setError("");
-                try {
-                  const response = await fetch(imageUploadUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": file.type },
-                    body: file,
-                  });
-                  const data = await response.json();
-                  if (!response.ok)
-                    throw new Error(data.error || "Không thể tải ảnh.");
-                  editor
-                    .chain()
-                    .focus()
-                    .setImage({
-                      src: data.url,
-                      alt: alt.trim() || file.name.replace(/\.[^.]+$/, ""),
-                    })
-                    .run();
-                  setPanel(null);
-                  setAlt("");
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setBusy(false);
-                  uploading(false);
-                }
+                if (file) void upload(file);
               }}
             />
           </Field>
@@ -384,10 +422,39 @@ export default function RichEditor({
         </div>
       )}
       {error && <ErrorState error={error} />}
+      <BubbleMenu editor={editor} className="editor-bubble" options={{ placement: "top", offset: 8 }}
+        shouldShow={({ editor: e, state: st }) => e.isEditable && !st.selection.empty && !e.isActive("codeBlock")}>
+        {state.image ? (
+          <>
+            <input aria-label="Mô tả ảnh đã chọn" placeholder="Mô tả ảnh" defaultValue={editor.getAttributes("image").alt || ""} key={editor.getAttributes("image").src}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); editor.chain().focus().updateAttributes("image", { alt: e.currentTarget.value.slice(0, 300) }).run(); } }}
+              onBlur={(e) => editor.chain().updateAttributes("image", { alt: e.currentTarget.value.slice(0, 300) }).run()} />
+            <button type="button" aria-label="Xóa ảnh" title="Xóa ảnh" onClick={() => editor.chain().focus().deleteSelection().run()}><Trash2 /></button>
+          </>
+        ) : (
+          [...groups[0], groups[1][0], groups[1][1], groups[1][2]].map(({ title, icon: Icon, active, run }) => (
+            <button type="button" key={title} aria-label={title} title={title} aria-pressed={active} data-active={active || undefined} onMouseDown={(e) => e.preventDefault()} onClick={run}><Icon /></button>
+          )).concat(<button type="button" key="link" aria-label="Liên kết" title="Liên kết · Ctrl+K" data-active={state.link || undefined} onMouseDown={(e) => e.preventDefault()} onClick={openLink}><Link2 /></button>)
+        )}
+      </BubbleMenu>
+      <FloatingMenu editor={editor} className="editor-blocks" options={{ placement: "left-start", offset: 8 }}>
+        <button type="button" className="editor-blocks-toggle" aria-label="Thêm khối" aria-expanded={blocks} onMouseDown={(e) => e.preventDefault()} onClick={() => setBlocks((v) => !v)}><Plus /></button>
+        {blocks && (
+          <span className="editor-blocks-list" role="group" aria-label="Thêm khối">
+            {[groups[1][0], groups[1][1], groups[2][0], groups[2][1], groups[1][2], groups[1][3], groups[2][2]].map(({ title, icon: Icon, run }) => (
+              <button type="button" key={title} aria-label={title} title={title} onMouseDown={(e) => e.preventDefault()} onClick={() => { run(); setBlocks(false); }}><Icon /></button>
+            ))}
+            <button type="button" aria-label="Ảnh" title="Ảnh" onMouseDown={(e) => e.preventDefault()} onClick={() => { setBlocks(false); picker.current?.click(); }}><ImagePlus /></button>
+          </span>
+        )}
+      </FloatingMenu>
+      <input ref={picker} type="file" accept="image/jpeg,image/png,image/webp" hidden tabIndex={-1} aria-hidden="true"
+        onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void upload(file); }} />
       <EditorContent editor={editor} />
       <footer className="community-editor-foot" aria-live="polite">
-        <span>{state.words} chữ · {Math.max(1, Math.round(state.words / 200))} phút đọc</span>
-        <span className="community-editor-hint">Gõ ## để tạo tiêu đề, - để tạo danh sách, &gt; để trích dẫn</span>
+        <span>{`${state.words} chữ · ${Math.max(1, Math.round(state.words / 200))} phút đọc`}</span>
+        {busy && <span role="status">Đang tải ảnh…</span>}
+        <span className="community-editor-hint">Tab thụt lề · Esc rời ô soạn · dán hoặc kéo ảnh vào bài</span>
       </footer>
     </div>
   );

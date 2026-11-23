@@ -24,6 +24,7 @@ export function cleanPostHtml(value, imagePath = IMAGE_PATH) {
       "li",
       "a",
       "img",
+      "hr",
     ],
     allowedAttributes: {
       a: ["href", "target", "rel"],
