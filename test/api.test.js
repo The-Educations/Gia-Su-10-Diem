@@ -2802,3 +2802,38 @@ test("unmatched deposit assign is atomic: second assign 409s, balance credited o
   assert.equal((await admin.request("/admin/deposits/unmatched/dismiss", "POST", { source: "gateway", id: "gw-1", reason: "Giao dịch thử" })).status, 200);
   assert.equal(one(db, "SELECT status FROM gateway_events WHERE id='gw-1'").status, "dismissed");
 });
+
+test("SePay webhook with code=null still matches the memo code inside the transfer content", async (t) => {
+  const { createHmac } = await import("node:crypto");
+  const secret = "test-sepay-secret";
+  const { client, base, db } = await fixture(t, { sepay: { secret, account: "0123456789", bank: "MB", bankReady: true, webhook: true, gateway: false, ready: true, merchant: "", merchantSecret: "", ipnSecret: "", holder: "", prefix: "GSD", sandbox: false } });
+  const student = client(), admin = client();
+  await student.login("student"); await admin.login("admin");
+  const hook = (payload, stamp = Math.floor(Date.now() / 1000)) => {
+    const body = JSON.stringify(payload);
+    return fetch(base + "/sepay/webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-SePay-Timestamp": String(stamp), "X-SePay-Signature": "sha256=" + createHmac("sha256", secret).update(`${stamp}.${body}`).digest("hex") }, body });
+  };
+  const dep = (await student.request("/wallet/deposits", "POST", { amount: 200000 })).data;
+  // Exactly the production failure: code=null, the memo only lives in content.
+  const ev = { id: 101921135, accountNumber: "0123456789", code: null, content: `MBVCB.123.${dep.code}.CT tu 0900123456`, transferType: "in", transferAmount: 200000, referenceCode: "FT26327360001989", description: "" };
+  assert.deepEqual(await (await hook(ev)).json(), { success: true }, "the code inside the content credits the deposit");
+  assert.equal((await student.request("/wallet")).data.available, 200000);
+  // A decorated code that names no deposit or payout stays unmatched.
+  const ev2 = { ...ev, id: 101921136, content: "MBVCB.123.GSDZZZZZZZ.CT tu" };
+  assert.deepEqual(await (await hook(ev2)).json(), { success: false });
+  // An unmatched event from before the fix is rescued once via the recheck.
+  const ev3 = { ...ev, id: 101921137 };
+  const dep2 = (await student.request("/wallet/deposits", "POST", { amount: 300000 })).data;
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,?,?,? ,0,'unmatched',?)",
+    ev3.id, null, dep2.amount, ev3.referenceCode, JSON.stringify({ ...ev3, code: null, content: `CK ${dep2.code}`, transferAmount: dep2.amount }));
+  const before = (await student.request("/wallet")).data.available;
+  await admin.request("/admin/deposits/recheck", "POST");
+  assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=?", ev3.id).status, "processed");
+  assert.equal((await student.request("/wallet")).data.available, before + 300000, "the stranded payment is credited once");
+  await admin.request("/admin/deposits/recheck", "POST");
+  assert.equal((await student.request("/wallet")).data.available, before + 300000, "a second recheck never credits twice");
+  // With a bank account, new orders never carry a hosted checkout or link.
+  const dep3 = (await student.request("/wallet/deposits", "POST", { amount: 100000 })).data;
+  assert.equal(dep3.checkout, null);
+  assert.equal(dep3.pay_url, null);
+});

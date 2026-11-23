@@ -125,8 +125,10 @@ export function sepayConfig(env = process.env) {
     ipnSecret: env.SEPAY_IPN_SECRET || "",
     sandbox: env.SEPAY_ENV === "sandbox",
   };
-  const webhook = !!(c.secret && c.account && c.bank), gateway = !!(c.merchant && c.merchantSecret && c.ipnSecret);
-  return { ...c, webhook, gateway, ready: webhook || gateway };
+  // Bank transfers only need the account number and bank code; the webhook
+  // secret just adds automatic confirmation.
+  const bankReady = !!(c.account && c.bank), webhook = bankReady && !!c.secret, gateway = !!(c.merchant && c.merchantSecret && c.ipnSecret);
+  return { ...c, bankReady, webhook, gateway, ready: bankReady || gateway };
 }
 
 // The checkout form's signature: allowed fields in SePay's order, empty ones left out.
@@ -147,6 +149,8 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   };
   // Requests made before payouts had codes get one, so they can be paid by QR too.
   for (const w of all(db, "SELECT id FROM withdrawals WHERE code IS NULL AND status='requested'")) run(db, "UPDATE withdrawals SET code=? WHERE id=?", newCode(), w.id);
+  // Same for transfers that arrived before the code could be read from content.
+  rematchUnmatched();
   const expireProposals = () => {
     for (const p of all(db, "SELECT * FROM proposals WHERE status='pending' AND expires_at<?", new Date().toISOString()))
       transaction(db, () => {
@@ -164,10 +168,12 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       payments: sepay.ready ? "live" : simulate ? "simulated" : "off",
     };
   };
-  const qr = (d) => sepay.webhook
+  const qr = (d) => sepay.bankReady
     ? `https://vietqr.app/img?${new URLSearchParams({ acc: sepay.account, bank: sepay.bank, amount: String(d.amount), des: d.code, template: "compact" })}`
     : null;
-  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: sepay.gateway || simulate ? `${origin}/api/wallet/pay/${d.code}` : null, account: sepay.webhook ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: checkout(d) });
+  // With a bank account the QR is the whole flow: no hosted-checkout form or
+  // QR that links out to SePay ever leaves this response.
+  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: sepay.bankReady ? null : sepay.gateway || simulate ? `${origin}/api/wallet/pay/${d.code}` : null, account: sepay.bankReady ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: sepay.bankReady ? null : checkout(d) });
   // A signed form the browser posts to SePay's hosted checkout page.
   const checkout = (d) => {
     if (!sepay.gateway || d.status !== "pending") return null;
@@ -196,6 +202,39 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     return transaction(db, () => creditDeposit(code, amount, eventRef));
   }
 
+  // A memo code inside free transfer text: banks decorate it with dots,
+  // spaces or prefixes like "MBVCB.123.GSD12345678.CT tu…". Only a code that
+  // names a real top-up or payout counts.
+  function codeIn(text) {
+    const m = String(text || "").match(new RegExp(`(?:^|[^A-Z0-9])(${sepay.prefix}[A-Z0-9]{8})(?![A-Z0-9])`, "i"));
+    if (!m) return null;
+    const code = m[1].toUpperCase();
+    return one(db, "SELECT code FROM deposits WHERE code=? COLLATE NOCASE UNION ALL SELECT code FROM withdrawals WHERE code=? COLLATE NOCASE", code, code)?.code || null;
+  }
+  const eventCode = (e) => e.code || codeIn(`${String(e.content || "")} ${String(e.description || "")}`);
+
+  // Earlier events whose code was missed (SePay sent code=null) get a second
+  // look from their stored payload — once each, inside one transaction.
+  // One bad event must never stop startup, and there is no actor at startup,
+  // so the audit only runs when a real admin asked for the recheck.
+  function rematchUnmatched(actor = null) {
+    for (const ev of all(db, "SELECT id,payload FROM sepay_events WHERE status='unmatched'")) {
+      try {
+        const p = JSON.parse(ev.payload);
+        if (p.transferType !== "in") continue;
+        const code = codeIn(`${String(p.content || "")} ${String(p.description || "")}`);
+        if (!code) continue;
+        transaction(db, () => {
+          const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", code);
+          if (!d) return;
+          if (!run(db, "UPDATE sepay_events SET status='processed',verdict=1,deposit_id=? WHERE id=? AND status='unmatched'", d.id, ev.id).changes) return;
+          creditDeposit(code, Math.round(Number(p.transferAmount) || 0), `sepay:${ev.id}`);
+          if (actor) audit(actor, "deposit.rematched", `sepay:${ev.id}`);
+        });
+      } catch { /* a bad stored event never breaks startup */ }
+    }
+  }
+
   // Pending top-ups from the last 7 days are checked with SePay, so a missed IPN still lands.
   const recheck = async (rows) => { for (const d of rows) await checkWithSepay(d); };
   const recent = () => new Date(Date.now() - 7 * 86400000).toISOString().replace("T", " ").slice(0, 19);
@@ -205,6 +244,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     res.json(view(req.user.id));
   });
   app.post("/api/admin/deposits/recheck", auth("admin"), async (req, res) => {
+    rematchUnmatched(req.user.id);
     const rows = all(db, "SELECT * FROM deposits WHERE status='pending' AND created_at>? ORDER BY id DESC LIMIT 100", recent());
     await recheck(rows);
     const paid = rows.filter((d) => one(db, "SELECT status FROM deposits WHERE id=?", d.id).status === "paid").length;
@@ -375,7 +415,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (!fresh || signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected)))
       return res.status(401).json({ success: false });
     const e = req.body || {};
-    const id = Number(e.id), amount = Number(e.transferAmount) || 0, code = e.code || null;
+    const id = Number(e.id), amount = Number(e.transferAmount) || 0, code = eventCode(e);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ success: false });
     const seen = one(db, "SELECT verdict FROM sepay_events WHERE id=?", id);
     if (seen) return res.json({ success: !!seen.verdict });
