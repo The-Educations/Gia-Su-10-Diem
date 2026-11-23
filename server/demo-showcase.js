@@ -264,15 +264,24 @@ export async function seedShowcase(db, hash) {
 
   // Flagged chat + a reported review so the An toàn tab has work to show.
   mark("showcase-safety-v2", () => {
-    const inq = one(db, "SELECT id,student_id FROM inquiries WHERE student_id=? LIMIT 1", student);
+    // Resolve here: on a first seed the people block ran earlier in this call,
+    // so the outer `student`/`chau` (bound before it) can still be null.
+    const stu = uid("student"), tu = uid("huy") || uid("chau");
+    // A fresh inquiry on a pair no other seed uses: the activity seed only adds
+    // messages to empty threads, so borrowing its thread would silence it.
+    let inq = null;
+    if (stu && tu) {
+      run(db, "INSERT INTO inquiries(student_id,tutor_id) VALUES (?,?)", stu, tu);
+      inq = one(db, "SELECT id,student_id FROM inquiries WHERE student_id=? AND tutor_id=? ORDER BY id DESC LIMIT 1", stu, tu);
+    }
     if (inq) run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,original_body,flagged) VALUES (?,?,?,?,1)",
       inq.id, inq.student_id, "Em có vài thắc mắc ngoài giờ, cô ơi cho em hỏi qua [đã ẩn liên hệ] được không ạ?",
       "Em có vài thắc mắc ngoài giờ, cô ơi cho em hỏi qua zalo 0901 234 567 được không ạ?");
-    let b = one(db, "SELECT id,student_id,tutor_id FROM bookings WHERE student_id=? LIMIT 1", student);
-    if (!b && chau && student) {
+    let b = one(db, "SELECT id,student_id,tutor_id FROM bookings WHERE student_id=? LIMIT 1", stu);
+    if (!b && tu && stu) {
       const sub = one(db, "SELECT id FROM subjects LIMIT 1");
-      const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes,source,available) VALUES (?,?,60,'demo',0)", chau, iso(-2)).lastInsertRowid);
-      b = { id: Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,status) VALUES (?,?,?,?,?,?,'online','Buổi demo an toàn','completed')", student, chau, slot, sub?.id || "toan", iso(-2), 180000).lastInsertRowid), student_id: student, tutor_id: chau };
+      const slot = Number(run(db, "INSERT INTO slots(tutor_id,starts_at,duration_minutes,source,available) VALUES (?,?,60,'demo',0)", tu, iso(-2)).lastInsertRowid);
+      b = { id: Number(run(db, "INSERT INTO bookings(student_id,tutor_id,slot_id,subject_id,starts_at,rate,mode,note,status) VALUES (?,?,?,?,?,?,'online','Buổi demo an toàn','completed')", stu, tu, slot, sub?.id || "toan", iso(-2), 180000).lastInsertRowid), student_id: stu, tutor_id: tu };
     }
     if (b) {
       run(db, "INSERT INTO messages(booking_id,sender_id,body,original_body,flagged) VALUES (?,?,?,?,1)",

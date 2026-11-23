@@ -883,8 +883,10 @@ test("rich demo seeding is repeatable and preserves profile edits", async (t) =>
       "tutor_uploads",
     ].map((table) => one(db, `SELECT count(*) AS n FROM ${table}`).n);
   const before = counts();
-  assert.equal(before[0], 3);
-  assert.equal(before[2], 1);
+  // showcase-safety adds one completed booking (with its review, flagged
+  // message and flagged inquiry message); the other tables only gain rows.
+  assert.equal(before[0], 4);
+  assert.equal(before[2], 2);
   assert.equal(before[5], 6);
   run(db, "UPDATE tutors SET bio='Tutor edited this profile' WHERE user_id=3");
   await seedDemo(db, "TestStudy2026!", { activity: true });
