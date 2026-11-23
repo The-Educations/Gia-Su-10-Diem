@@ -242,14 +242,6 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor.getByLabel("Chú thích ảnh 1", { exact: true }).fill("Góc học tập của tôi");
   await tutor.locator(".gallery-editor-item").first().getByRole("button", { name: "Lưu chú thích", exact: true }).click();
   await expect(tutor.getByText("Đã lưu chú thích. Hồ sơ sẽ được duyệt lại.", { exact: true })).toBeVisible();
-  const preview = tutor.getByRole("complementary", { name: "Xem trước hồ sơ" });
-  await expect(preview.locator(".timezone-tag")).toContainText("Asia/Tokyo");
-  await expect(preview.locator(".tutor-cover img")).toBeVisible();
-  await expect(preview.locator(".intro-video iframe")).toHaveAttribute("src", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
-  await expect(preview).toContainText("Hướng dẫn câu lạc bộ Toán từ năm 2022.");
-  await expect(preview).toContainText("Gia sư Toán lớp 9");
-  await expect(preview).toContainText("Giáo viên");
-  await expect(preview.locator(".tutor-presentation")).toHaveAttribute("data-theme", "paper");
   for (const width of [320, 768, 1024, 1440]) {
     await tutor.setViewportSize({ width, height: 900 });
     expect(await tutor.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -276,6 +268,15 @@ test("new tutor onboarding, availability and admin approval", async ({
   await proofDialog.getByRole("button", { name: "Thêm & gửi đối chiếu", exact: true }).click();
   await expect(tutor.locator(".credential-card")).toContainText("Chờ đối chiếu");
   await nextProfileStep(tutor);
+  // The last step is the profile exactly as students will see it.
+  const preview = tutor.getByRole("region", { name: "Xem trước hồ sơ" });
+  await expect(preview.locator(".timezone-tag")).toContainText("Asia/Tokyo");
+  await expect(preview.locator(".tutor-cover img")).toBeVisible();
+  await expect(preview.locator(".intro-video iframe")).toHaveAttribute("src", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
+  await expect(preview).toContainText("Hướng dẫn câu lạc bộ Toán từ năm 2022.");
+  await expect(preview).toContainText("Gia sư Toán lớp 9");
+  await expect(preview).toContainText("Giáo viên");
+  await expect(preview.locator(".tutor-presentation")).toHaveAttribute("data-theme", "paper");
   await tutor.getByRole("button", { name: "Lưu & gửi duyệt", exact: true }).click();
   await expect(tutor.getByText("Hồ sơ đã gửi quản trị viên duyệt.", { exact: true })).toBeVisible();
   await expect(tutor).toHaveURL(/workspace/);

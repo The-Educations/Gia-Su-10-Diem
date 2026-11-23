@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Award,
   BadgeCheck,
@@ -101,26 +101,31 @@ function CatalogPicker({ kind, value, onChange }: { kind: CredentialKind; value:
   );
 }
 
+// Drop or pick proof files and see them before sending: a thumbnail for images, an icon for PDFs.
 function FilePicker({ files, onChange }: { files: File[]; onChange: (files: File[]) => void }) {
   const { t } = useI18n(),
-    input = useRef<HTMLInputElement>(null);
+    input = useRef<HTMLInputElement>(null),
+    [over, setOver] = useState(false);
+  const previews = useMemo(() => files.map((f) => (f.type.startsWith("image/") ? URL.createObjectURL(f) : "")), [files]);
+  useEffect(() => () => previews.forEach((u) => u && URL.revokeObjectURL(u)), [previews]);
+  const add = (list: FileList | null) => onChange([...files, ...Array.from(list || [])].slice(0, 3));
   return (
     <div className="proof-picker">
-      <button type="button" className="proof-drop" onClick={() => input.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); onChange([...files, ...Array.from(e.dataTransfer.files)].slice(0, 3)); }}>
+      <button type="button" className="proof-drop" data-over={over || undefined} onClick={() => input.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); add(e.dataTransfer.files); }}>
         <Upload aria-hidden="true" />
-        <span>{t("Chọn hoặc kéo tệp minh chứng vào đây")}</span>
+        <span>{t("Kéo tệp minh chứng vào đây hoặc bấm để chọn")}</span>
         <small>{t("JPG, PNG, WebP hoặc PDF · tối đa 5 MB · 3 tệp")}</small>
       </button>
-      <input ref={input} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { onChange([...files, ...Array.from(e.target.files || [])].slice(0, 3)); e.target.value = ""; }} />
+      <input ref={input} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
       {files.length > 0 && (
-        <ul className="proof-files">
+        <ul className="proof-previews">
           {files.map((f, i) => (
             <li key={`${f.name}-${i}`}>
-              <FileText aria-hidden="true" />
-              <span>{f.name}</span>
-              <Button type="button" variant="ghost" size="icon" aria-label={t("Bỏ {name}", { name: f.name })} onClick={() => onChange(files.filter((_, j) => j !== i))}><X /></Button>
+              {previews[i] ? <img src={previews[i]} alt={f.name} /> : <span className="proof-pdf"><FileText aria-hidden="true" /><small>PDF</small></span>}
+              <span className="proof-name">{f.name}</span>
+              <button type="button" aria-label={t("Bỏ {name}", { name: f.name })} onClick={() => onChange(files.filter((_, j) => j !== i))}><X /></button>
             </li>
           ))}
         </ul>
@@ -298,8 +303,11 @@ function CredentialCard({ c, onEdit, onChanged }: { c: Credential; onEdit: () =>
     catch (e) { toast.error((e as Error).message); }
     finally { setBusy(false); }
   }
+  const [over, setOver] = useState(false);
   return (
-    <li className="credential-card" data-status={missing ? "missing" : c.status} aria-busy={busy}>
+    <li className="credential-card" data-status={missing ? "missing" : c.status} aria-busy={busy} data-over={over || undefined}
+      onDragOver={(e) => { if (c.files.length < 3) { e.preventDefault(); setOver(true); } }} onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); const file = e.dataTransfer.files[0]; if (file && c.files.length < 3) run(() => uploadProof(c.id, file)); }}>
       <div className="credential-head">
         <div>
           <strong>{c.name}</strong>
