@@ -73,5 +73,8 @@ test("a tutor's free hours are one block on the calendar and in the offer compos
   for (const day of ["T3", "T5"]) await student.getByRole("button", { name: day, exact: true }).click();
   await expect(student.getByLabel("Giờ bắt đầu")).toHaveValue("17:00");
   await expect(week.locator(".free-week-verdict")).toHaveText(/trùng giờ rảnh/);
+  // Leave the tutor's weekly hours as other journeys expect them.
+  const now = (await (await tutor.request.get("/api/tutor/profile")).json()).weekly_schedule;
+  expect((await tutor.request.put("/api/tutor/availability", { data: { blocks: profile.weekly_schedule.blocks, revision: now.revision } })).ok()).toBe(true);
   await tc.close(); await sc.close();
 });
