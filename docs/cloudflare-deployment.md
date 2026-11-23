@@ -186,7 +186,8 @@ Các secret Worker cho kênh ngân hàng (không commit):
 | `SEPAY_BANK_CODE` | Mã ngân hàng VietQR của tài khoản đó (`MBBank`) |
 | `SEPAY_ACCOUNT_NAME` | Tên chủ tài khoản hiển thị trong dialog nạp |
 | `SEPAY_WEBHOOK_SECRET` | Chuỗi bạn tự đặt, nhập giống hệt ở webhook SePay (HMAC) |
-| `SEPAY_API_TOKEN` | Tùy chọn — API key trên my.sepay.vn để đối soát dự phòng |
+| `SEPAY_API_TOKEN` | Tùy chọn — API token quyền **chỉ đọc** để đối soát dự phòng (xem bên dưới) |
+| `SEPAY_BANK_ACCOUNT_ID` | Tùy chọn — UUID tài khoản ngân hàng trong SePay (từ URL chi tiết tài khoản), để lọc đúng một tài khoản khi đối soát |
 
 ```bash
 npx wrangler secret put SEPAY_BANK_ACCOUNT
@@ -198,7 +199,7 @@ npx wrangler secret put SEPAY_API_TOKEN   # tùy chọn
 
 Cấu hình **Tích hợp WebHooks** trong my.sepay.vn cho tài khoản MBBank: sự kiện **Tiền vào** — lưu ý trong thiết lập này MBBank chỉ gửi được webhook tiền vào — URL `https://giasudiem10.online/api/sepay/webhook`, xác thực **HMAC-SHA256**, secret = `SEPAY_WEBHOOK_SECRET`. Khai báo thêm **Cấu trúc mã thanh toán** tiền tố `GSD`, hậu tố 8 ký tự, để SePay tách sẵn mã khỏi nội dung chuyển khoản; chưa khai thì website vẫn tự tìm mã trong nội dung. Lệnh `id=0` (kiểm tra kết nối) trả 200 `{ "success": false }` và không tạo bản ghi.
 
-Không có `SEPAY_API_TOKEN` thì bỏ qua phần đối soát (không báo lỗi). Có token thì mỗi lần mở ví hoặc mở lại lệnh nạp, server đọc `GET userapi.sepay.vn/v2/transactions` (Bearer), khớp `amount_in` theo mã để cộng tiền và `amount_out` để xác nhận rút; mọi id giao dịch đã xử lý được chống trùng trong `sepay_recon_events`.
+Không có `SEPAY_API_TOKEN` thì bỏ qua phần đối soát (không báo lỗi). Đây là token **quyền chỉ đọc** (không thể chuyển tiền): tạo ở my.sepay.vn → **API Access** → tạo API token, quyền "Đọc danh sách giao dịch". Có token thì mỗi lần mở ví hoặc mở lại lệnh nạp, server đọc `GET userapi.sepay.vn/v2/transactions` (Bearer, `per_page=100`, cửa sổ 7 ngày, lọc `bank_account_id` khi có `SEPAY_BANK_ACCOUNT_ID`), khớp `amount_in` theo mã để cộng tiền và `amount_out` để xác nhận rút. Mỗi giao dịch ngân hàng được chống trùng **xuyên kênh** theo mã tham chiếu (`referenceCode`/`reference_number`) trong `bank_transactions`: webhook đến trước hay API đến trước cũng chỉ cộng một lần. Tiền vào mang mã không khớp lệnh nạp nào vẫn vào danh sách "chưa khớp mã" để quản trị viên gán tay.
 
 Thiếu tài khoản ngân hàng thì nút Nạp tiền tắt trên production và dialog báo "Nạp tiền chưa sẵn sàng". Ở máy local không có secret thì nạp tiền được giả lập. Sau khi chạy: nạp thử 50.000đ, kiểm tra log webhook trả 200 và số dư tăng. Giao dịch không khớp hiện ở Quản trị → Tài chính → "Tiền về chưa khớp mã".
 
