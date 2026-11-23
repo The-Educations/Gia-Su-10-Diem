@@ -8,6 +8,7 @@ import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { MessageCircle, ExternalLink, CalendarDays, List, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, money, dateTime } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import type { Booking, Tutor, WeeklySchedule } from "@/lib/types";
 import { canReportTutorAbsent } from "@/lib/lessons";
 import { LessonRatingDialog } from "@/components/trust";
@@ -33,7 +34,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 export default function Bookings() {
-  const { user: me } = useApp();
+  const { user: me } = useApp(), t = useI18n().t;
   if (me?.role === "admin") return <Navigate to="/sessions" replace />;
   const [params, setParams] = useSearchParams();
   const filter = params.get("status") || "";
@@ -91,7 +92,7 @@ export default function Bookings() {
       setView(null);
       setReview(null);
       refresh();
-      toast.success("Đã cập nhật buổi học");
+      toast.success(t("Đã cập nhật buổi học"));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -106,18 +107,18 @@ export default function Bookings() {
     const future = Date.parse(b.starts_at) > Date.now();
     const changeStatus = (status: string) => { setError(""); setView(null); setAction({ booking: b, status }); };
     return <>
-      {(user?.role !== "admin" || !b.inquiry_id) && <Button asChild variant="outline"><Link to={lessonMessageHref(b)}><MessageCircle data-icon="inline-start" />{details ? "Nhắn tin" : "Trao đổi"}</Link></Button>}
+      {(user?.role !== "admin" || !b.inquiry_id) && <Button asChild variant="outline"><Link to={lessonMessageHref(b)}><MessageCircle data-icon="inline-start" />{details ? t("Nhắn tin") : t("Trao đổi")}</Link></Button>}
       {user?.role === "tutor" && b.status === "pending" && future && <>
         <Button onClick={() => changeStatus("accepted")}>Nhận buổi học</Button>
         <Button variant="ghost" onClick={() => changeStatus("declined")}>Từ chối</Button>
       </>}
       {["pending", "accepted"].includes(b.status) && future && <Button variant="ghost" onClick={() => changeStatus("cancelled")}>Hủy buổi</Button>}
-      {user?.role === "tutor" && ["accepted", "completed"].includes(b.status) && <Button variant="outline" onClick={() => { setError(""); setView(null); setEdit(b); }}>{details ? "Viết ghi chú" : "Nội dung buổi học"}</Button>}
+      {user?.role === "tutor" && ["accepted", "completed"].includes(b.status) && <Button variant="outline" onClick={() => { setError(""); setView(null); setEdit(b); }}>{details ? t("Viết ghi chú") : t("Nội dung buổi học")}</Button>}
       {user?.role === "tutor" && b.status === "accepted" && Date.parse(b.starts_at) + b.duration_minutes * 60000 <= Date.now() && <Button onClick={() => changeStatus("completed")}>Hoàn thành</Button>}
       {user?.role === "student" && b.status === "accepted" && Date.parse(b.starts_at) + b.duration_minutes * 60000 <= Date.now() && <Button onClick={() => changeStatus("completed")}>Đã học xong</Button>}
       {user?.role === "student" && canReportTutorAbsent(b) && <Button variant="ghost" onClick={() => changeStatus("tutor_missed")}>Gia sư không đến</Button>}
       {user?.role === "student" && b.status === "completed" && b.offer_id && (b.my_rating != null
-        ? <><span className="muted">Bạn chấm {b.my_rating}★</span>{b.rating_editable && <Button variant="ghost" onClick={() => { setView(null); setLessonRating(b); }}>Sửa</Button>}</>
+        ? <><span className="muted">{t("Bạn chấm {n}★", { n: b.my_rating })}</span>{b.rating_editable && <Button variant="ghost" onClick={() => { setView(null); setLessonRating(b); }}>{t("Sửa")}</Button>}</>
         : b.rating_editable && <Button onClick={() => { setView(null); setLessonRating(b); }}>Chấm buổi học</Button>)}
       {user?.role === "student" && b.status === "completed" && !b.offer_id && !b.reviewed && <Button onClick={() => openReview(b)}>Đánh giá</Button>}
       {b.status === "completed" && !b.offer_id && !!b.reviewed && <span className="muted">Đã đánh giá {b.reviewed}/5</span>}
@@ -129,38 +130,38 @@ export default function Bookings() {
       <Heading
         title={
           user?.role === "admin"
-            ? "Quản lý buổi học"
+            ? t("Quản lý buổi học")
             : user?.role === "tutor"
-              ? "Lịch dạy của tôi"
-              : "Lịch học của tôi"
+              ? t("Lịch dạy của tôi")
+              : t("Lịch học của tôi")
         }
         action={<LessonExport lessons={allLessons} role={user?.role || "student"} disabled={result.loading || !!result.error} />}
       />
       <div className="schedule-navigation">
         <span>Giờ Việt Nam · UTC+7</span>
         <div>
-          {user?.role !== "admin" && <Button asChild variant="ghost"><Link to="/offers">{pendingOffers.length ? `${pendingOffers.length} đề nghị ${user?.role === "tutor" ? "cần phản hồi" : "chờ xác nhận"}` : "Đề nghị học"}<ArrowRight data-icon="inline-end" /></Link></Button>}
-          <Button asChild variant="ghost"><Link to={user?.role === "tutor" ? "/calendar" : "/tutors"}>{user?.role === "tutor" ? "Mở giờ trống" : "Tìm gia sư"}</Link></Button>
+          {user?.role !== "admin" && <Button asChild variant="ghost"><Link to="/offers">{pendingOffers.length ? t("{n} đề nghị {tail}", { n: pendingOffers.length, tail: user?.role === "tutor" ? t("cần phản hồi") : t("chờ xác nhận") }) : t("Đề nghị học")}<ArrowRight data-icon="inline-end" /></Link></Button>}
+          <Button asChild variant="ghost"><Link to={user?.role === "tutor" ? "/calendar" : "/tutors"}>{user?.role === "tutor" ? t("Mở giờ trống") : t("Tìm gia sư")}</Link></Button>
         </div>
       </div>
       {(profile.error || weekly.error) && <ErrorState error={profile.error || weekly.error} retry={() => { profile.reload(); weekly.reload(); }} />}
       {offers.error && <ErrorState error={offers.error} retry={offers.reload} />}
-      {(inquiryId || lessonId) && <div className="schedule-context"><strong>{contextLessons[0] ? `Lịch cùng ${personName(contextLessons[0])}` : "Lịch từ cuộc trò chuyện"}</strong><Button asChild variant="outline"><Link to="/bookings">Tất cả lịch học</Link></Button></div>}
-      {!result.loading && !result.error && nextLesson && <section className="schedule-next" aria-label="Buổi học sắp tới">
-        <div><span>{Date.parse(nextLesson.starts_at) <= Date.now() ? "Đang diễn ra" : "Buổi tiếp theo"}</span><h2>{nextLesson.subject_name} · {personName(nextLesson)}</h2><p>{dateTime(nextLesson.starts_at)} · {nextLesson.duration_minutes} phút · {nextLesson.mode === "online" ? "Trực tuyến" : "Trực tiếp"}</p></div>
+      {(inquiryId || lessonId) && <div className="schedule-context"><strong>{contextLessons[0] ? t("Lịch cùng {name}", { name: personName(contextLessons[0]) }) : t("Lịch từ cuộc trò chuyện")}</strong><Button asChild variant="outline"><Link to="/bookings">{t("Tất cả lịch học")}</Link></Button></div>}
+      {!result.loading && !result.error && nextLesson && <section className="schedule-next" aria-label={t("Buổi học sắp tới")}>
+        <div><span>{Date.parse(nextLesson.starts_at) <= Date.now() ? t("Đang diễn ra") : t("Buổi tiếp theo")}</span><h2>{nextLesson.subject_name} · {personName(nextLesson)}</h2><p>{dateTime(nextLesson.starts_at)} · {t("{n} phút", { n: nextLesson.duration_minutes })} · {nextLesson.mode === "online" ? t("Trực tuyến") : t("Trực tiếp")}</p></div>
         <div className="actions">
-          {nextLesson.meeting_url && <Button asChild><a href={nextLesson.meeting_url} target="_blank" rel="noreferrer">Vào phòng học<ExternalLink data-icon="inline-end" /></a></Button>}
+          {nextLesson.meeting_url && <Button asChild><a href={nextLesson.meeting_url} target="_blank" rel="noreferrer">{t("Vào phòng học")}<ExternalLink data-icon="inline-end" /></a></Button>}
           <Button variant="outline" onClick={() => setView(nextLesson)}>Chi tiết buổi học</Button>
-          {user?.role !== "admin" && <Button asChild variant="outline"><Link to={lessonMessageHref(nextLesson)}><MessageCircle data-icon="inline-start" />{user?.role === "tutor" ? "Nhắn tin" : "Nhắn gia sư"}</Link></Button>}
+          {user?.role !== "admin" && <Button asChild variant="outline"><Link to={lessonMessageHref(nextLesson)}><MessageCircle data-icon="inline-start" />{user?.role === "tutor" ? t("Nhắn tin") : t("Nhắn gia sư")}</Link></Button>}
         </div>
       </section>}
       <Tabs value={layout} onValueChange={value => setParam("view", value)} className="schedule-views">
         <div className="schedule-controls">
-          <TabsList aria-label="Cách xem lịch"><TabsTrigger value="week"><CalendarDays aria-hidden="true" />Tuần</TabsTrigger><TabsTrigger value="list"><List aria-hidden="true" />Danh sách</TabsTrigger></TabsList>
+          <TabsList aria-label={t("Cách xem lịch")}><TabsTrigger value="week"><CalendarDays aria-hidden="true" />{t("Tuần")}</TabsTrigger><TabsTrigger value="list"><List aria-hidden="true" />{t("Danh sách")}</TabsTrigger></TabsList>
           <div className="schedule-filters">
-            <Choose label="Khóa học" value={offerId} onChange={value => setParam("offer", value)} allLabel="Tất cả khóa học" options={courses.map(b => ({ value: String(b.offer_id), label: `${b.subject_name} · ${personName(b)} (#${b.offer_id})` }))} />
-            <Choose label="Trạng thái" value={filter} onChange={value => setParam("status", value)} allLabel="Tất cả" options={[
-              ["pending", "Chờ xác nhận"], ["accepted", "Đã xác nhận"], ["completed", "Đã hoàn thành"], ["missed", "Học sinh vắng"], ["tutor_missed", "Gia sư không đến"], ["cancelled", "Đã hủy"], ["declined", "Đã từ chối"],
+            <Choose label={t("Khóa học")} value={offerId} onChange={value => setParam("offer", value)} allLabel={t("Tất cả khóa học")} options={courses.map(b => ({ value: String(b.offer_id), label: `${b.subject_name} · ${personName(b)} (#${b.offer_id})` }))} />
+            <Choose label={t("Trạng thái")} value={filter} onChange={value => setParam("status", value)} allLabel={t("Tất cả")} options={[
+              ["pending", t("Chờ xác nhận")], ["accepted", t("Đã xác nhận")], ["completed", t("Đã hoàn thành")], ["missed", t("Học sinh vắng")], ["tutor_missed", t("Gia sư không đến")], ["cancelled", t("Đã hủy")], ["declined", t("Đã từ chối")],
             ].map(([value, label]) => ({ value, label }))} />
           </div>
         </div>
@@ -170,13 +171,13 @@ export default function Bookings() {
         <ErrorState error={result.error} retry={result.reload} />
       ) : !rows.length && !(user?.role === "tutor" && layout === "week" && !filter && !offerId && !inquiryId && !lessonId) ? (
         <Blank
-          title="Chưa có buổi học trong mục này"
-          action={(filter || offerId) ? <Button variant="outline" onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.delete("status"); next.delete("offer"); return next; })}>Xóa bộ lọc</Button> : <Button asChild variant="outline"><Link to={user?.role === "tutor" ? "/offers" : "/tutors"}>{user?.role === "tutor" ? "Xem đề nghị học" : "Tìm gia sư"}</Link></Button>}
+          title={t("Chưa có buổi học trong mục này")}
+          action={(filter || offerId) ? <Button variant="outline" onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.delete("status"); next.delete("offer"); return next; })}>{t("Xóa bộ lọc")}</Button> : <Button asChild variant="outline"><Link to={user?.role === "tutor" ? "/offers" : "/tutors"}>{user?.role === "tutor" ? t("Xem đề nghị học") : t("Tìm gia sư")}</Link></Button>}
         />
       ) : (
         <>
         <TabsContent value="week"><LessonCalendar key={`${offerId}:${filter}:${inquiryId}:${lessonId}`} lessons={rows} freeSlots={user?.role === "tutor" && !lessonId && !inquiryId && !offerId && !filter && !profile.error && !weekly.error && !profile.loading && !weekly.loading ? freeSlots : undefined} onOpen={setView} personName={personName} /></TabsContent>
-        <TabsContent value="list"><div className="list-toolbar schedule-list-count"><span>{rows.length} buổi học</span></div><div className="booking-list">
+        <TabsContent value="list"><div className="list-toolbar schedule-list-count"><span>{t("{n} buổi học", { n: rows.length })}</span></div><div className="booking-list">
           {rows.map((b) => (
             <article key={b.id} className="lesson-card">
               <div className="lesson-date">
@@ -208,10 +209,10 @@ export default function Bookings() {
                 </div>
                 <p>
                   {personName(b)} ·{" "}
-                  {b.mode === "online" ? "Trực tuyến" : "Trực tiếp"} ·{" "}
+                  {b.mode === "online" ? t("Trực tuyến") : t("Trực tiếp")} ·{" "}
                   {money(b.rate * b.duration_minutes / 60)}
                 </p>
-                <p className="muted">{dateTime(b.starts_at)} · {b.duration_minutes} phút</p>
+                <p className="muted">{dateTime(b.starts_at)} · {t("{n} phút", { n: b.duration_minutes })}</p>
                 {!b.offer_id && b.note && <p className="lesson-note">{b.note}</p>}
                 {!b.offer_id && b.lesson_note && (
                   <div className="lesson-notes">
@@ -245,10 +246,10 @@ export default function Bookings() {
         <DialogContent className="schedule-detail">
           <DialogHeader><DialogTitle>{view?.subject_name}</DialogTitle><DialogDescription>{view && `${personName(view)} · ${dateTime(view.starts_at)} · Giờ Việt Nam`}</DialogDescription></DialogHeader>
           {view && <>
-            <div className="schedule-detail-meta"><State value={view.status} /><span>{view.duration_minutes} phút · {view.mode === "online" ? "Trực tuyến" : "Trực tiếp"} · {money(view.rate * view.duration_minutes / 60)}</span></div>
-            {view.meeting_url && ["accepted", "completed"].includes(view.status) && <Button asChild><a href={view.meeting_url} target="_blank" rel="noreferrer">Vào phòng học<ExternalLink data-icon="inline-end" /></a></Button>}
+            <div className="schedule-detail-meta"><State value={view.status} /><span>{t("{n} phút", { n: view.duration_minutes })} · {view.mode === "online" ? t("Trực tuyến") : t("Trực tiếp")} · {money(view.rate * view.duration_minutes / 60)}</span></div>
+            {view.meeting_url && ["accepted", "completed"].includes(view.status) && <Button asChild><a href={view.meeting_url} target="_blank" rel="noreferrer">{t("Vào phòng học")}<ExternalLink data-icon="inline-end" /></a></Button>}
             {view.note && <p className="lesson-note">{view.note}</p>}
-            <div className="lesson-notes"><h3>Ghi chú & bài tập</h3><p>{view.lesson_note || "Chưa có ghi chú cho buổi học này."}</p></div>
+            <div className="lesson-notes"><h3>{t("Ghi chú & bài tập")}</h3><p>{view.lesson_note || t("Chưa có ghi chú cho buổi học này.")}</p></div>
             <div className="actions">{lessonActions(view, true)}</div>
           </>}
         </DialogContent>
@@ -264,12 +265,12 @@ export default function Bookings() {
             <DialogTitle>Xác nhận thay đổi buổi học</DialogTitle>
             <DialogDescription>
               {action?.status === "accepted"
-                ? "Bạn đồng ý dạy buổi học này."
+                ? t("Bạn đồng ý dạy buổi học này.")
                 : action?.status === "completed"
-                  ? "Xác nhận buổi học đã diễn ra và hoàn thành."
+                  ? t("Xác nhận buổi học đã diễn ra và hoàn thành.")
                   : action?.status === "tutor_missed"
-                    ? "Xác nhận gia sư không đến buổi học này? Buổi học sẽ không được tính và gia sư không thể bắt đầu hay hoàn thành buổi này nữa."
-                    : "Buổi học sẽ bị hủy hoặc từ chối. Khung giờ sẽ được mở lại."}
+                    ? t("Xác nhận gia sư không đến buổi học này? Buổi học sẽ không được tính và gia sư không thể bắt đầu hay hoàn thành buổi này nữa.")
+                    : t("Buổi học sẽ bị hủy hoặc từ chối. Khung giờ sẽ được mở lại.")}
             </DialogDescription>
           </DialogHeader>
           {error && <ErrorState error={error} />}
@@ -347,9 +348,9 @@ export default function Bookings() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{review?.reviewed ? "Sửa đánh giá gia sư" : "Đánh giá gia sư"}</DialogTitle>
+            <DialogTitle>{review?.reviewed ? t("Sửa đánh giá gia sư") : t("Đánh giá gia sư")}</DialogTitle>
             <DialogDescription>
-              Chia sẻ trải nghiệm học cùng {review?.tutor_name}. Mỗi gia sư một đánh giá, bạn sửa được sau này. Hiển thị công khai là “{user?.display_name || "Thành viên"} - {user?.learner_type === "parent" ? "Phụ huynh" : "Học sinh"}”.
+              {t("Chia sẻ trải nghiệm học cùng {name}.", { name: review?.tutor_name ?? "" })} {t("Mỗi gia sư một đánh giá, bạn sửa được sau này.")} {t("Hiển thị công khai là “{display} - {role}”.", { display: user?.display_name || t("Thành viên"), role: user?.learner_type === "parent" ? t("Phụ huynh") : t("Học sinh") })}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -364,7 +365,7 @@ export default function Bookings() {
           >
             <FieldGroup>
               <Choose
-                label="Mức đánh giá"
+                label={t("Mức đánh giá")}
                 value={rating}
                 onChange={setRating}
                 options={[5, 4, 3, 2, 1].map((n) => ({
@@ -384,7 +385,7 @@ export default function Bookings() {
                 />
               </Field>
               {error && <ErrorState error={error} />}
-              <Submit busy={busy}>{review?.reviewed ? "Lưu đánh giá" : "Gửi đánh giá"}</Submit>
+              <Submit busy={busy}>{review?.reviewed ? t("Lưu đánh giá") : t("Gửi đánh giá")}</Submit>
             </FieldGroup>
           </form>
         </DialogContent>

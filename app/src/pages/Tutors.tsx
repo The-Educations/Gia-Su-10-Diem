@@ -13,6 +13,7 @@ import { BadgeCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, money } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import type { Tutor, Subject, Resource } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ export default function Tutors({
 }) {
   const { user } = useApp(),
     navigate = useNavigate(),
+    t = useI18n().t,
     [params, setParams] = useSearchParams(),
     [saving, setSaving] = useState<number | null>(null),
     [advanced, setAdvanced] = useState(
@@ -80,20 +82,20 @@ export default function Tutors({
           ? b.experience - a.experience
           : b.trust.sort_score - a.trust.sort_score,
     );
-  async function favorite(t: Tutor) {
+  async function favorite(tr: Tutor) {
     if (!user) {
       navigate("/auth");
       return;
     }
     if (user.role !== "student") {
-      toast.info("Lưu gia sư dành cho tài khoản học sinh.");
+      toast.info(t("Lưu gia sư dành cho tài khoản học sinh."));
       return;
     }
-    setSaving(t.user_id);
+    setSaving(tr.user_id);
     try {
       await api(
-        `/favorites/${t.user_id}`,
-        favorites.data?.includes(t.user_id) ? "DELETE" : "PUT",
+        `/favorites/${tr.user_id}`,
+        favorites.data?.includes(tr.user_id) ? "DELETE" : "PUT",
       );
       favorites.reload();
     } catch (e) {
@@ -105,22 +107,22 @@ export default function Tutors({
   return (
     <Page>
       <Heading
-        title={favoritesOnly ? "Gia sư đã lưu" : "Tìm gia sư"}
+        title={favoritesOnly ? t("Gia sư đã lưu") : t("Tìm gia sư")}
 
       />
 
-      <section className="search-panel" aria-label="Bộ lọc gia sư">
+      <section className="search-panel" aria-label={t("Bộ lọc gia sư")}>
         <Collapsible.Root open={advanced} onOpenChange={setAdvanced}>
           <div className="search-row">
             <Field>
               <FieldLabel htmlFor="tutor-search" className="sr-only">
-                Tìm gia sư
+                {t("Tìm gia sư")}
               </FieldLabel>
               <div className="search-input">
                 <Search size={19} />
                 <Input
                   id="tutor-search"
-                  placeholder="Tên gia sư, trường hoặc từ khóa…"
+                  placeholder={t("Tên gia sư, trường hoặc từ khóa…")}
                   value={q}
                   onChange={(e) => set("q", e.target.value)}
                 />
@@ -129,12 +131,12 @@ export default function Tutors({
             <Collapsible.Trigger asChild>
               <Button variant="outline" className="advanced-filter-toggle">
                 <SlidersHorizontal data-icon="inline-start" />
-                <span className="filter-label-wide">Bộ lọc thêm</span>
-                <span className="filter-label-narrow">Bộ lọc</span>
+                <span className="filter-label-wide">{t("Bộ lọc thêm")}</span>
+                <span className="filter-label-narrow">{t("Bộ lọc")}</span>
                 {(location || goal || level) && (
                   <span
                     className="filter-dot"
-                    aria-label="Có bộ lọc đang áp dụng"
+                    aria-label={t("Có bộ lọc đang áp dụng")}
                   />
                 )}
               </Button>
@@ -142,33 +144,33 @@ export default function Tutors({
           </div>
           <div className="filter-grid three" data-filled={!!(subject || mode || budget) || undefined}>
             <Choose
-              label="Môn học"
+              label={t("Môn học")}
               value={subject}
               onChange={(v) => set("subject", v)}
-              allLabel="Tất cả môn học"
+              allLabel={t("Tất cả môn học")}
               options={(subjects.data || []).map((s) => ({
                 value: s.id,
                 label: s.name,
               }))}
             />
             <Choose
-              label="Hình thức"
+              label={t("Hình thức")}
               value={mode}
               onChange={(v) => set("mode", v)}
-              allLabel="Tất cả hình thức"
+              allLabel={t("Tất cả hình thức")}
               options={[
-                { value: "online", label: "Trực tuyến" },
-                { value: "offline", label: "Trực tiếp" },
+                { value: "online", label: t("Trực tuyến") },
+                { value: "offline", label: t("Trực tiếp") },
               ]}
             />
             <Choose
-              label="Học phí / buổi"
+              label={t("Học phí / buổi")}
               value={budget}
               onChange={(v) => set("budget", v)}
-              allLabel="Mọi mức học phí"
+              allLabel={t("Mọi mức học phí")}
               options={[150000, 200000, 300000].map((n) => ({
                 value: String(n),
-                label: `Đến ${money(n)}`,
+                label: t("Đến {amount}", { amount: money(n) }),
               }))}
             />
           </div>
@@ -176,31 +178,31 @@ export default function Tutors({
             <div className="filter-grid three secondary-filters">
               {" "}
               <Choose
-                label="Địa điểm"
+                label={t("Địa điểm")}
                 value={location}
                 onChange={(v) => set("location", v)}
-                allLabel="Toàn quốc"
+                allLabel={t("Toàn quốc")}
                 options={[...new Set(tutors.data?.map((t) => t.location))].map(
                   (l) => ({ value: l, label: l }),
                 )}
               />
               <Choose
-                label="Cấp học"
+                label={t("Cấp học")}
                 value={level}
                 onChange={(v) => set("level", v)}
-                allLabel="Tất cả cấp học"
+                allLabel={t("Tất cả cấp học")}
                 options={["Tiểu học", "THCS", "THPT", "Người đi làm"].map(
                   (v) => ({
                     value: v,
-                    label: v,
+                    label: t(v),
                   }),
                 )}
               />
               <Choose
-                label="Mục tiêu kỳ thi"
+                label={t("Mục tiêu kỳ thi")}
                 value={goal}
                 onChange={(v) => set("goal", v)}
-                allLabel="Tất cả mục tiêu"
+                allLabel={t("Tất cả mục tiêu")}
                 options={[...new Set(exams.data?.map((r) => r.category))].map(
                   (v) => ({ value: v, label: v }),
                 )}
@@ -215,24 +217,24 @@ export default function Tutors({
             {goal && <Badge variant="secondary">{goal}</Badge>}
             {location && <Badge variant="secondary">{location}</Badge>}
             <Button variant="ghost" size="sm" onClick={() => setParams({})}>
-              Xóa bộ lọc
+              {t("Xóa bộ lọc")}
             </Button>
           </div>
         )}
       </section>
       <div className="results-heading" id="tutor-results">
         <h2>
-          {rows.length} gia sư{favoritesOnly ? " đã lưu" : ""}
+          {t("{count} gia sư", { count: rows.length })}{favoritesOnly ? " " + t("đã lưu") : ""}
         </h2>
         <div className="sort-control">
           <Choose
-            label="Sắp xếp"
+            label={t("Sắp xếp")}
             value={sort}
             onChange={(v) => set("sort", v)}
             options={[
-              { value: "recommended", label: "Đánh giá cao" },
-              { value: "price", label: "Học phí tăng dần" },
-              { value: "experience", label: "Nhiều kinh nghiệm" },
+              { value: "recommended", label: t("Đánh giá cao") },
+              { value: "price", label: t("Học phí tăng dần") },
+              { value: "experience", label: t("Nhiều kinh nghiệm") },
             ]}
           />
         </div>
@@ -245,10 +247,10 @@ export default function Tutors({
         <Blank
           title={
             favoritesOnly
-              ? "Chưa lưu gia sư nào"
-              : "Chưa tìm thấy gia sư phù hợp"
+              ? t("Chưa lưu gia sư nào")
+              : t("Chưa tìm thấy gia sư phù hợp")
           }
-          description="Thử môn học hoặc khoảng học phí khác."
+          description={t("Thử môn học hoặc khoảng học phí khác.")}
           action={
             <Button
               variant="outline"
@@ -256,39 +258,39 @@ export default function Tutors({
                 favoritesOnly ? navigate("/tutors") : setParams({})
               }
             >
-              {favoritesOnly ? "Tìm gia sư" : "Xóa bộ lọc"}
+              {favoritesOnly ? t("Tìm gia sư") : t("Xóa bộ lọc")}
             </Button>
           }
         />
       ) : (
         <div className="tutor-grid">
-          {rows.map((t) => (
-            <article className="tutor-card" data-theme={t.profile_theme} key={t.user_id}>
+          {rows.map((tu) => (
+            <article className="tutor-card" data-theme={tu.profile_theme} key={tu.user_id}>
               <div className="tutor-card-top">
                 <Person
-                  name={t.name}
-                  id={t.user_id}
-                  src={t.photo_url || undefined}
+                  name={tu.name}
+                  id={tu.user_id}
+                  src={tu.photo_url || undefined}
                   large
                 />
                 <div className="tutor-identity">
-                  <Link to={`/tutors/${t.user_id}`}>
-                    <h3>{t.name}</h3>
+                  <Link to={`/tutors/${tu.user_id}`}>
+                    <h3>{tu.name}</h3>
                   </Link>
-                  <p>{t.headline}</p>
+                  <p>{tu.headline}</p>
                 </div>
                 {(!user || user.role === "student") && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    disabled={saving === t.user_id}
-                    onClick={() => favorite(t)}
-                    aria-label={`${favorites.data?.includes(t.user_id) ? "Bỏ lưu" : "Lưu"} ${t.name}`}
-                    aria-pressed={!!favorites.data?.includes(t.user_id)}
+                    disabled={saving === tu.user_id}
+                    onClick={() => favorite(tu)}
+                    aria-label={`${favorites.data?.includes(tu.user_id) ? t("Bỏ lưu") : t("Lưu")} ${tu.name}`}
+                    aria-pressed={!!favorites.data?.includes(tu.user_id)}
                   >
                     <Heart
                       className={
-                        favorites.data?.includes(t.user_id)
+                        favorites.data?.includes(tu.user_id)
                           ? "heart-filled"
                           : ""
                       }
@@ -297,43 +299,43 @@ export default function Tutors({
                 )}
               </div>
               <div className="subject-tags">
-                {t.subjects.map((id) => (
+                {tu.subjects.map((id) => (
                   <Badge variant="secondary" key={id}>
                     {subjects.data?.find((s) => s.id === id)?.name || id}
                   </Badge>
                 ))}
-                {!!t.verified?.length && <Badge variant="outline" className="verified-badge"><BadgeCheck data-icon="inline-start" />Đã xác minh</Badge>}
-                {!!t.demo && <Badge variant="outline">Hồ sơ mẫu</Badge>}
+                {!!tu.verified?.length && <Badge variant="outline" className="verified-badge"><BadgeCheck data-icon="inline-start" />{t("Đã xác minh")}</Badge>}
+                {!!tu.demo && <Badge variant="outline">{t("Hồ sơ mẫu")}</Badge>}
 
               </div>
               <div className="tutor-facts">
                 <span>
-                  {t.levels.join(" · ") || "Cấp học: trao đổi với gia sư"}
+                  {tu.levels.map(l => t(l)).join(" · ") || t("Cấp học: trao đổi với gia sư")}
                 </span>
                 <span>
                   <GraduationCap size={16} />
-                  {t.experience} năm kinh nghiệm
+                  {t("{n} năm kinh nghiệm", { n: tu.experience })}
                 </span>
                 <span>
                   <MapPin size={16} />
-                  {t.location} ·{" "}
-                  {t.mode === "online"
-                    ? "Online"
-                    : t.mode === "both"
-                      ? "Online & trực tiếp"
-                      : "Trực tiếp"}
+                  {tu.location} ·{" "}
+                  {tu.mode === "online"
+                    ? t("Trực tuyến")
+                    : tu.mode === "both"
+                      ? t("Trực tuyến & trực tiếp")
+                      : t("Trực tiếp")}
                 </span>
-                <TutorLocalTime zone={t.timezone} />
-                <TrustLine trust={t.trust} />
+                <TutorLocalTime zone={tu.timezone} />
+                <TrustLine trust={tu.trust} />
               </div>
               <div className="tutor-card-footer">
                 <span>
-                  <strong>{money(t.rate)}</strong>
-                  <small> / buổi</small>
+                  <strong>{money(tu.rate)}</strong>
+                  <small> {t("/ buổi")}</small>
                 </span>
                 <Button asChild>
-                  <Link to={`/tutors/${t.user_id}`}>
-                    Xem hồ sơ
+                  <Link to={`/tutors/${tu.user_id}`}>
+                    {t("Xem hồ sơ")}
                     <ArrowUpRight data-icon="inline-end" />
                   </Link>
                 </Button>

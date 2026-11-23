@@ -3,6 +3,7 @@ import { useRef, useEffect, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { BookOpen, Users, GraduationCap, ArrowRight } from "lucide-react";
 import { api, useApp, accountDestination } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import type { User } from "@/lib/types";
 import { Page, ErrorState, Submit } from "@/components/common";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { skipSetup } from "@/lib/setup";
 
 export default function Onboarding() {
-  const { user, setUser, refresh } = useApp();
+  const { user, setUser, refresh } = useApp(), t = useI18n().t;
   const [params] = useSearchParams(), navigate = useNavigate();
   const [role, setRole] = useState("");
   const [address, setAddress] = useState({ province_code: user?.province_code || "", ward_code: user?.ward_code || "" });
@@ -35,26 +36,26 @@ export default function Onboarding() {
   }
   return <Page><section className="account-entry setup-quick" aria-busy={busy}>
     <span className="brand-mark" aria-hidden="true">10<span>đ</span></span>
-    <h1 ref={heading} tabIndex={-1}>{step === 0 ? "Bạn muốn bắt đầu thế nào?" : "Thông tin cơ bản"}</h1>
+    <h1 ref={heading} tabIndex={-1}>{step === 0 ? t("Bạn muốn bắt đầu thế nào?") : t("Thông tin cơ bản")}</h1>
     <form onSubmit={save}><FieldGroup>
-      {step === 0 ? <ToggleGroup type="single" orientation="vertical" spacing={2} variant="outline" value={role} onValueChange={v => { if (v) setRole(v); }} className="setup-roles" aria-label="Vai trò của bạn">
-        <ToggleGroupItem value="student"><BookOpen aria-hidden="true" />Học sinh</ToggleGroupItem>
-        <ToggleGroupItem value="parent"><Users aria-hidden="true" />Phụ huynh</ToggleGroupItem>
-        <ToggleGroupItem value="tutor"><GraduationCap aria-hidden="true" />Gia sư</ToggleGroupItem>
+      {step === 0 ? <ToggleGroup type="single" orientation="vertical" spacing={2} variant="outline" value={role} onValueChange={v => { if (v) setRole(v); }} className="setup-roles" aria-label={t("Vai trò của bạn")}>
+        <ToggleGroupItem value="student"><BookOpen aria-hidden="true" />{t("Học sinh")}</ToggleGroupItem>
+        <ToggleGroupItem value="parent"><Users aria-hidden="true" />{t("Phụ huynh")}</ToggleGroupItem>
+        <ToggleGroupItem value="tutor"><GraduationCap aria-hidden="true" />{t("Gia sư")}</ToggleGroupItem>
       </ToggleGroup> : <>
-        <Field><FieldLabel htmlFor="setup-name">Họ và tên</FieldLabel><Input id="setup-name" name="name" defaultValue={user!.name} autoComplete="name" required maxLength={80} /></Field>
-        <Field><FieldLabel htmlFor="setup-display-name">Tên hiển thị trong cộng đồng</FieldLabel><Input id="setup-display-name" name="display_name" defaultValue={user!.display_name || user!.name.trim().split(/\s+/).at(-1)} required minLength={2} maxLength={30} /></Field>
+        <Field><FieldLabel htmlFor="setup-name">{t("Họ và tên")}</FieldLabel><Input id="setup-name" name="name" defaultValue={user!.name} autoComplete="name" required maxLength={80} /></Field>
+        <Field><FieldLabel htmlFor="setup-display-name">{t("Tên hiển thị trong cộng đồng")}</FieldLabel><Input id="setup-display-name" name="display_name" defaultValue={user!.display_name || user!.name.trim().split(/\s+/).at(-1)} required minLength={2} maxLength={30} /></Field>
         {user!.role === "student" && <>
-          <Field><FieldLabel htmlFor="setup-school">{user!.learner_type === "parent" ? "Trường của con" : "Trường đang học"}</FieldLabel><Input id="setup-school" name="school" defaultValue={user!.school} required maxLength={160} /></Field>
+          <Field><FieldLabel htmlFor="setup-school">{user!.learner_type === "parent" ? t("Trường của con") : t("Trường đang học")}</FieldLabel><Input id="setup-school" name="school" defaultValue={user!.school} required maxLength={160} /></Field>
           <AddressFields value={address} onChange={setAddress} />
         </>}
         <TimezoneField value={timezone} onChange={setTimezone} />
-        {user!.role === "student" && <Field><FieldLabel htmlFor="setup-goal">{user!.learner_type === "parent" ? "Mục tiêu học tập của con (tùy chọn)" : "Mục tiêu học tập (tùy chọn)"}</FieldLabel><Input id="setup-goal" name="goal" defaultValue={user!.goal} maxLength={1000} /></Field>}
+        {user!.role === "student" && <Field><FieldLabel htmlFor="setup-goal">{user!.learner_type === "parent" ? t("Mục tiêu học tập của con (tùy chọn)") : t("Mục tiêu học tập (tùy chọn)")}</FieldLabel><Input id="setup-goal" name="goal" defaultValue={user!.goal} maxLength={1000} /></Field>}
       </>}
       {error && <ErrorState error={error} />}
-      <Submit busy={busy} disabled={step === 0 && !role}>{step === 0 ? "Tiếp tục" : "Bắt đầu"}<ArrowRight data-icon="inline-end" /></Submit>
+      <Submit busy={busy} disabled={step === 0 && !role}>{step === 0 ? t("Tiếp tục") : t("Bắt đầu")}<ArrowRight data-icon="inline-end" /></Submit>
     </FieldGroup></form>
     {/* Browsing is open before setup; booking, messages and money wait for it. */}
-    <Button variant="ghost" className="setup-later" onClick={() => { skipSetup(); navigate("/tutors"); }}>Để sau, xem gia sư trước</Button>
+    <Button variant="ghost" className="setup-later" onClick={() => { skipSetup(); navigate("/tutors"); }}>{t("Để sau, xem gia sư trước")}</Button>
   </section></Page>;
 }
