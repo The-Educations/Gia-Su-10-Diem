@@ -1,4 +1,5 @@
 import express from "express";
+import { scanChatText } from "./trust-safety.js";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
@@ -69,11 +70,15 @@ export function insertChatMessage(db, kind, threadId, user, input, context = nul
   return transaction(db, () => {
     participant(db, user, kind, threadId, true);
     const { body, attachment_id } = chatMessageSchema.parse(input);
+    // Off-platform contact detail is masked for readers and flagged for admin.
+    const scan = kind === "support" ? { flagged: false, masked: body, reason: null } : scanChatText(body);
     if (attachment_id && !one(db, "SELECT id FROM chat_attachments WHERE id=? AND owner_id=? AND thread_kind=? AND thread_id=? AND message_id IS NULL", attachment_id, user.id, kind, threadId)) fail(400, "Tệp không thuộc cuộc trò chuyện này hoặc đã được gửi.");
     const [, table, column] = threads[kind];
     const result = kind === "inquiry"
-      ? run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id) VALUES (?,?,?,?,?)`, threadId, user.id, body, context?.kind || null, context?.id || null)
-      : run(db, `INSERT INTO ${table}(${column},sender_id,body) VALUES (?,?,?)`, threadId, user.id, body);
+      ? run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,flagged,original_body) VALUES (?,?,?,?,?,?,?)`, threadId, user.id, scan.masked, context?.kind || null, context?.id || null, scan.flagged ? 1 : 0, scan.flagged ? body : null)
+      : kind === "support"
+        ? run(db, `INSERT INTO ${table}(${column},sender_id,body) VALUES (?,?,?)`, threadId, user.id, body)
+        : run(db, `INSERT INTO ${table}(${column},sender_id,body,flagged,original_body) VALUES (?,?,?,?,?)`, threadId, user.id, scan.masked, scan.flagged ? 1 : 0, scan.flagged ? body : null);
     const id = Number(result.lastInsertRowid);
     if (attachment_id) run(db, "UPDATE chat_attachments SET message_id=? WHERE id=?", id, attachment_id);
     const thread = one(db, `SELECT * FROM ${threads[kind][0]} WHERE id=?`, threadId);

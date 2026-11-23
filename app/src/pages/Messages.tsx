@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CalendarDays, FileText, Pin, Search, ShieldCheck, X } from "lucide-react";
 import { api, useApp, useLoad, dateTime } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 import type { Booking, Inquiry, Message as MessageData, MessageContext } from "@/lib/types";
 import { MessageContextCard } from "@/components/message-context-card";
 import { Page, Heading, Person, State, Blank, Loading, ErrorState } from "@/components/common";
@@ -154,6 +155,8 @@ function Conversation({ thread, onRead }: { thread: Thread; onRead: (key: string
     finally { setMoreBusy(false); }
   }
   async function send(body: string, attachment_id?: string) {
+    if (/(?:\+84|0)\s?\d(?:[\s.-]?\d){7,9}|[^\s@]+@[^\s@]+\.[^\s@]+|\b(?:zalo|facebook|fb|messenger|telegram|whatsapp|viber)\b/i.test(body))
+      toast.warning(t("Tin nhắn có thông tin liên hệ — nội dung đó sẽ bị che với người nhận."));
     const temp: ChatMessage = { id: -Date.now(), booking_id: thread.id, sender_id: user!.id, name: user!.name, body, created_at: new Date().toISOString(), pending: true };
     setMessages((m) => [...m, temp]);
     try {
