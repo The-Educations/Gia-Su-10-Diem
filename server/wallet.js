@@ -402,7 +402,9 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
         CASE WHEN w.receipt_id IS NULL THEN NULL ELSE '/api/chat/attachments/' || w.receipt_id END AS receipt_url
         FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE w.status WHEN 'requested' THEN 0 ELSE 1 END, w.id DESC LIMIT 200`).map((w) => ({ ...w, qr_url: w.status === "requested" ? payoutQr(w) : null })),
       // Month by month in Vietnam time: money in, money out, and what the platform earned.
-      months: all(db, `WITH m(month) AS (SELECT strftime('%Y-%m', datetime('now','+7 hours','start of month','-' || n || ' months')) FROM (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5))
+      // The six months come from a recursive CTE: Durable Object SQLite allows at most 5 terms in a compound SELECT.
+      months: all(db, `WITH RECURSIVE ago(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM ago WHERE n<5),
+        m(month) AS (SELECT strftime('%Y-%m', datetime('now','+7 hours','start of month','-' || n || ' months')) FROM ago)
         SELECT month,
           COALESCE((SELECT SUM(received) FROM deposits WHERE status='paid' AND strftime('%Y-%m', paid_at, '+7 hours')=month),0) AS deposits,
           COALESCE((SELECT SUM(amount) FROM withdrawals WHERE status='paid' AND strftime('%Y-%m', handled_at, '+7 hours')=month),0) AS payouts,
