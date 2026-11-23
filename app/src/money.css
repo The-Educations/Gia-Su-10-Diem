@@ -422,9 +422,23 @@
 .sepay-return[data-state="cancel"], .sepay-return[data-state="error"] { background: var(--muted); color: var(--muted-foreground); }
 .sepay-return svg { width: 18px; height: 18px; flex: none; }
 
-.free-hours { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.free-hours > span { width: 100%; font-size: 13px; color: var(--muted-foreground); }
-.free-hours .chip { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.free-week { display: grid; gap: 8px; }
+.free-week-title { font-size: 14px; font-weight: 500; }
+.free-week-grid { display: grid; grid-template-columns: 40px repeat(7, minmax(0, 1fr)); gap: 4px; }
+.free-week-hours { position: relative; margin-top: 20px; height: var(--track); }
+.free-week-hours small { position: absolute; right: 4px; font-size: 10.5px; color: var(--muted-foreground); transform: translateY(-50%); font-variant-numeric: tabular-nums; }
+.free-week-day { display: grid; gap: 4px; justify-items: stretch; text-align: center; }
+.free-week-day > small { font-size: 12px; color: var(--muted-foreground); }
+.free-week-track { position: relative; height: var(--track); border-radius: 8px; background: var(--muted); }
+.free-week-track button { position: absolute; left: 0; right: 0; display: grid; place-items: start center; padding-top: 3px; border: 0; border-radius: 8px; background: var(--pastel-sage); color: var(--pastel-sage-ink); font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer; transition: background-color var(--duration-fast) ease-out; }
+.free-week-track button:hover { background: color-mix(in srgb, var(--pastel-sage) 70%, var(--pastel-sage-ink)); color: var(--background); }
+.free-week-track button span { font-variant-numeric: tabular-nums; line-height: 1.15; overflow: hidden; }
+.free-week-slot { position: absolute; left: 3px; right: 3px; z-index: 1; border-radius: 6px; background: color-mix(in srgb, var(--warning) 30%, transparent); box-shadow: inset 0 0 0 2px var(--warning); pointer-events: none; transition: top var(--duration-base) var(--ease-out), height var(--duration-base) var(--ease-out); }
+.free-week-slot[data-fits] { background: color-mix(in srgb, var(--primary) 22%, transparent); box-shadow: inset 0 0 0 2px var(--primary); }
+.free-week-verdict { margin: 0; font-size: 13px; font-weight: 550; color: var(--warning); }
+.free-week-verdict[data-fits] { color: var(--positive); }
+@media (max-width: 520px) { .free-week-track button span { display: none; } }
+@media (prefers-reduced-motion: reduce) { .free-week-slot { transition: none; } }
 
 .today-list li .session-actions { justify-content: flex-end; }
 .survey-dialog { max-width: 440px; }

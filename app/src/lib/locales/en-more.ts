@@ -1530,4 +1530,9 @@ export const enMore: Record<string, string> = {
   "Đang chờ chuyển": "Waiting for transfer",
   "Quét bằng ứng dụng ngân hàng": "Scan with your banking app",
   "Quét bằng điện thoại để thanh toán": "Scan with your phone to pay",
+  "Rảnh": "Free",
+  "Xóa sự kiện": "Delete event",
+  "Chọn giờ {weekday} {time}": "Pick {weekday} {time}",
+  "Buổi học trùng giờ rảnh": "The lesson fits the free hours",
+  "{days} nằm ngoài giờ rảnh": "{days} outside the free hours",
 };
