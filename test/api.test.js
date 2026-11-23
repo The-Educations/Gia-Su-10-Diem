@@ -2825,7 +2825,7 @@ test("SePay webhook with code=null still matches the memo code inside the transf
   const ev2 = { ...ev, id: 101921136, content: "MBVCB.123.GSDZZZZZZZ.CT tu" };
   assert.deepEqual(await (await hook(ev2)).json(), { success: false });
   // An unmatched event from before the fix is rescued once via the recheck.
-  const ev3 = { ...ev, id: 101921137 };
+  const ev3 = { ...ev, id: 101921137, referenceCode: "FT-STRANDED-1" };
   const dep2 = (await student.request("/wallet/deposits", "POST", { amount: 300000 })).data;
   run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (?,?,?,? ,0,'unmatched',?)",
     ev3.id, null, dep2.amount, ev3.referenceCode, JSON.stringify({ ...ev3, code: null, content: `CK ${dep2.code}`, transferAmount: dep2.amount }));

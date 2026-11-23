@@ -189,15 +189,9 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   const qr = (d) => sepay.bankReady
     ? `https://vietqr.app/img?${new URLSearchParams({ acc: sepay.account, bank: sepay.bank, amount: String(d.amount), des: d.code, template: "compact" })}`
     : null;
-<<<<<<< HEAD
   // With a bank account the QR is the whole flow: no hosted-checkout form or
   // QR that links out to SePay ever leaves this response.
-  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: sepay.bankReady ? null : sepay.gateway || simulate ? `${origin}/api/wallet/pay/${d.code}` : null, account: sepay.bankReady ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: sepay.bankReady ? null : checkout(d) });
-=======
-  // Top-ups are always the inline VietQR — no hosted-checkout link or QR that
-  // bounces the buyer through SePay's page.
-  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: null, account: sepay.bankReady ? sepay.account : "", bank: sepay.bankReady ? sepay.bank : "", holder: sepay.bankReady ? sepay.holder : "", checkout: null });
->>>>>>> 0669ba2 (feat(wallet): inline VietQR top-ups, SePay v2 reconciliation, webhook id=0)
+  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: sepay.bankReady ? null : sepay.gateway || simulate ? `${origin}/api/wallet/pay/${d.code}` : null, account: sepay.bankReady ? sepay.account : "", bank: sepay.bankReady ? sepay.bank : "", holder: sepay.bankReady ? sepay.holder : "", checkout: sepay.bankReady ? null : checkout(d) });
   // A signed form the browser posts to SePay's hosted checkout page.
   const checkout = (d) => {
     if (!sepay.gateway || d.status !== "pending") return null;
@@ -257,6 +251,13 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
         transaction(db, () => {
           const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", code);
           if (!d) return;
+          // Claim the bank reference too: if the API channel already counted
+          // this transfer the event settles without a second credit.
+          const bankRef = String(p.referenceCode || "").trim();
+          if (bankRef && !claimBankTxn(bankRef, "webhook")) {
+            run(db, "UPDATE sepay_events SET status='deduped',verdict=1,deposit_id=? WHERE id=? AND status='unmatched'", d.id, ev.id);
+            return;
+          }
           if (!run(db, "UPDATE sepay_events SET status='processed',verdict=1,deposit_id=? WHERE id=? AND status='unmatched'", d.id, ev.id).changes) return;
           creditDeposit(code, Math.round(Number(p.transferAmount) || 0), `sepay:${ev.id}`);
           if (actor) audit(actor, "deposit.rematched", `sepay:${ev.id}`);
@@ -451,7 +452,9 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     const tid = String(t.id || "");
     if (!tid || one(db, "SELECT 1 FROM sepay_recon_events WHERE id=?", tid)) return;
     const inAmount = Math.round(Number(t.amount_in) || 0), outAmount = Math.round(Number(t.amount_out) || 0);
-    const code = String(t.code || "").trim() || null, ref = String(t.reference_number || "").trim();
+    // Same rule as the webhook: a null code falls back to the memo text, and
+    // only codes that name a real top-up or payout count.
+    const code = String(t.code || "").trim() || codeIn(String(t.transaction_content || "")), ref = String(t.reference_number || "").trim();
     let matched = false;
     transaction(db, () => {
       run(db, "INSERT INTO sepay_recon_events(id) VALUES (?)", tid);
@@ -511,14 +514,9 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (!fresh || signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected)))
       return res.status(401).json({ success: false });
     const e = req.body || {};
-<<<<<<< HEAD
     const id = Number(e.id), amount = Number(e.transferAmount) || 0, code = eventCode(e);
-    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ success: false });
-=======
-    const id = Number(e.id), amount = Number(e.transferAmount) || 0, code = e.code || null;
     // id=0 is SePay's connectivity test; answer success:false without recording it.
     if (!Number.isInteger(id) || id <= 0) return res.json({ success: false });
->>>>>>> 0669ba2 (feat(wallet): inline VietQR top-ups, SePay v2 reconciliation, webhook id=0)
     const seen = one(db, "SELECT verdict FROM sepay_events WHERE id=?", id);
     if (seen) return res.json({ success: !!seen.verdict });
     let verdict = false, depositId = null, status = "unmatched";
