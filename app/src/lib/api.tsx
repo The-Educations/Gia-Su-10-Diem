@@ -20,7 +20,7 @@ export async function api<T>(
   });
   const data = await response.json();
   if (!response.ok)
-    throw Object.assign(new Error(data.error || "Không thể kết nối. Vui lòng thử lại."), { fields: data.fields });
+    throw Object.assign(new Error(data.error || "Không thể kết nối. Vui lòng thử lại."), { fields: data.fields, problems: data.problems as string[] | undefined });
   return data;
 }
 const Context = createContext<{
