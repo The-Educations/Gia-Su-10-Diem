@@ -25,7 +25,7 @@ const noState = items({ stdout: "" });
 const goodBody = (link) => `${"Đoạn nội dung đã được viết lại bằng lời mới. ".repeat(16).trim()}\n\nNguồn: VnExpress - ${link}`;
 const claudeOut = (link, extra = {}) =>
   JSON.stringify({ type: "result", is_error: false, result: JSON.stringify({ skip: false, title: "Tiêu đề", summary: "Tóm tắt", body: goodBody(link), ...extra }) });
-const rss = (n) => ({ title: `Tin ${n}`, link: `https://vnexpress.net/tin-${n}.html`, contentSnippet: "tóm tắt", isoDate: `2026-11-22T0${n}:00:00Z` });
+const rss = (n) => ({ title: `Tuyển sinh đại học 2027: tin ${n}`, link: `https://vnexpress.net/tin-${n}.html`, contentSnippet: "tóm tắt", isoDate: `2026-11-22T0${n}:00:00Z` });
 
 test("workflow có đủ các ô và nối thành một chuỗi từ Hẹn giờ đến Lưu trạng thái 2", () => {
   for (const name of FLOW) assert.ok(node(name), `thiếu ô ${name}`);
@@ -42,6 +42,8 @@ test("lịch là mỗi 3 giờ", () => {
 test("chứa đúng bốn địa chỉ RSS", () => {
   const feeds = node("Cài đặt").parameters.assignments.assignments.find((a) => a.name === "feeds").value.split("\n");
   assert.deepEqual(feeds, [
+    "https://tuoitre.vn/rss/tuyen-sinh.rss",
+    "https://thanhnien.vn/rss/giao-duc/tuyen-sinh.rss",
     "https://vnexpress.net/rss/giao-duc.rss",
     "https://tuoitre.vn/rss/giao-duc.rss",
     "https://dantri.com.vn/rss/giao-duc.rss",
@@ -78,7 +80,7 @@ test("không có published true ở bất kỳ đâu", () => {
 
 test("mã các ô Code hợp lệ và nhúng đủ hàm", () => {
   const needs = {
-    "Chọn tin mới": ["pickNew", "parseState", "todayVN", "buildPrompt"],
+    "Chọn tin mới": ["pickNew", "parseState", "todayVN", "buildPrompt", "isOnTopic"],
     "Kiểm tra bài": ["parseClaudeOutput", "normalizeDraft", "validateDraft", "buildPostBody"],
     "Ghi nhận kiểm tra": ["settle", "parseState"],
     "Lấy cookie": ["extractSessionCookie"],
@@ -98,6 +100,14 @@ test("Chọn tin mới: lần chạy đầu giữ 5 tin, markSeen phần còn l�
   assert.equal(out[0].json.markSeen.length, 2);
   assert.ok(out.slice(1).every((o) => o.json.markSeen.length === 0));
   assert.ok(Buffer.from(out[0].json.promptB64, "base64").toString().includes(out[0].json.link));
+});
+
+test("Chọn tin mới: bỏ tin lạc đề trước khi chọn, nên hạn mức dành cho tin đúng chủ đề", async () => {
+  const offTopic = { title: "Thầy cô 'cười hết cỡ' bốc thăm quà 20/11", link: "https://vnexpress.net/lac-de.html", contentSnippet: "", isoDate: "2026-11-22T09:00:00Z" };
+  const one = items({ baseUrl: "http://x", perRun: 1, perDay: 10, feeds: "a" });
+  const out = await run("Chọn tin mới", { nodes: { "Cài đặt": one, "Đọc trạng thái": noState }, input: items(offTopic, rss(1)) });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].json.link, rss(1).link);
 });
 
 test("Chọn tin mới: không có tin mới thì trả đúng một mục none để chuỗi không đứt", async () => {

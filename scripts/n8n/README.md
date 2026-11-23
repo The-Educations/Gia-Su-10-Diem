@@ -6,7 +6,7 @@ Tự lấy tin giáo dục từ 4 trang báo, nhờ Claude viết lại, rồi t
 
 | File | Việc |
 | --- | --- |
-| `lib/select.js`, `lib/draft.js`, `lib/web.js` | Các hàm logic thuần (chọn tin, kiểm tra bài, gói đăng), có test ở `test/n8n-news.test.js` |
+| `lib/select.js`, `lib/topic.js`, `lib/draft.js`, `lib/web.js` | Các hàm logic thuần (chọn tin, lọc chủ đề, kiểm tra bài, gói đăng), có test ở `test/n8n-news.test.js` |
 | `build-workflow.js` | Sinh `news-workflow.json` từ các hàm trên: `node scripts/n8n/build-workflow.js` |
 | `news-workflow.json` | Workflow để nhập vào n8n (không chứa mật khẩu) |
 | `start-n8n.sh` | Chạy n8n chỉ nghe trên `127.0.0.1:5678`, bật node Execute Command |
@@ -17,6 +17,15 @@ Phiên bản đã dùng: n8n **2.48.7** (cache `npx`), Node 24 (`brew node@24`).
 ## Sơ đồ
 
 `Hẹn giờ (3 giờ)` → `Cài đặt` → `Đọc trạng thái` → `Danh sách nguồn` → `Đọc RSS` → `Chọn tin mới` → `Đăng nhập web` → `Lấy cookie` → `Claude viết bài` → `Kiểm tra bài` → `Ghi nhận kiểm tra` → `Lưu trạng thái 1` → `Bài sẵn sàng` → `Tạo bài nháp` → `Tổng kết` → `Lưu trạng thái 2`. Ô `Chạy tay` nối vào `Cài đặt` để bấm chạy thử.
+
+## Chỉ nhận tin đúng chủ đề
+
+Mục Tin tức chỉ cần: tuyển sinh và thi cử, chính sách/quy định cho học sinh - sinh viên - phụ huynh (học phí, học bổng, chương trình, dạy thêm...), thông tin học tập (ôn thi, chứng chỉ, chọn ngành, du học). Hai lớp lọc:
+
+1. **Bộ lọc từ khoá** (`lib/topic.js`, ô `Chọn tin mới`, miễn phí): loại tin 20/11, chuyện người thầy, sự cố/vụ việc, thời sự ngoài giáo dục; chỉ giữ tin chạm một chủ đề trên. Hai mục `tuyen-sinh` của Tuổi Trẻ và Thanh Niên đứng đầu danh sách nguồn vì đúng chủ đề nhất.
+2. **Claude là cửa kiểm cuối**: prompt (`buildPrompt`) liệt kê nhóm được nhận và nhóm phải bỏ, không chắc thì trả `skip`. Tin bị bỏ qua vẫn được đánh dấu đã xem nên không bị xét lại.
+
+Muốn siết hoặc nới: sửa hai biểu thức `blockTitle`, `blockAny`, `allow` trong `lib/topic.js` (không cần dấu, viết thường) và danh sách nhóm trong `buildPrompt`, rồi `node scripts/n8n/build-workflow.js` và nhập lại vào n8n. Test ở `test/n8n-news.test.js` dùng tiêu đề báo thật.
 
 Đăng nhập nằm TRƯỚC bước Claude: login hỏng thì dừng ngay, không tốn lượt Claude nào.
 

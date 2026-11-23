@@ -3,10 +3,14 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseState, todayVN, pickNew, settle } from "./lib/select.js";
+import { isOnTopic } from "./lib/topic.js";
 import { buildPrompt, parseClaudeOutput, normalizeDraft, validateDraft } from "./lib/draft.js";
 import { buildPostBody, extractSessionCookie } from "./lib/web.js";
 
+// Hai mục tuyển sinh đi đầu vì đúng chủ đề nhất; các mục giáo dục chung còn lại đi qua bộ lọc chủ đề.
 const FEEDS = [
+  "https://tuoitre.vn/rss/tuyen-sinh.rss",
+  "https://thanhnien.vn/rss/giao-duc/tuyen-sinh.rss",
   "https://vnexpress.net/rss/giao-duc.rss",
   "https://tuoitre.vn/rss/giao-duc.rss",
   "https://dantri.com.vn/rss/giao-duc.rss",
@@ -43,7 +47,7 @@ const urls = String($('Cài đặt').first().json.feeds).split("\\n").map((s) =>
 return urls.map((url) => ({ json: { url } }));
 `,
 
-  "Chọn tin mới": `${inline(parseState, todayVN, pickNew, buildPrompt)}
+  "Chọn tin mới": `${inline(parseState, todayVN, pickNew, buildPrompt, isOnTopic)}
 
 const SOURCES = { "vnexpress.net": "VnExpress", "tuoitre.vn": "Tuổi Trẻ", "dantri.com.vn": "Dân Trí", "thanhnien.vn": "Thanh Niên" };
 const sourceName = (link) => {
@@ -52,7 +56,7 @@ const sourceName = (link) => {
 };
 const cfg = $('Cài đặt').first().json;
 const state = parseState($('Đọc trạng thái').first().json.stdout);
-const feed = $input.all().map((i) => i.json).filter((j) => j && j.link && j.title).map((j) => ({
+const feed = $input.all().map((i) => i.json).filter((j) => j && j.link && j.title).filter((j) => isOnTopic({ title: j.title, summary: j.contentSnippet || j.content })).map((j) => ({
   title: String(j.title),
   link: String(j.link),
   source: sourceName(j.link),
