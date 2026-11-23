@@ -283,11 +283,11 @@ export type Wallet = {
   credits_free: number;
   credits_paid: number;
   entries: WalletEntry[];
-  withdrawals: { id: number; amount: number; bank_name: string; account_last4: string; status: string; note: string; created_at: string }[];
+  withdrawals: { id: number; amount: number; bank_name: string; account_number: string; account_name: string; account_last4: string; status: string; note: string; created_at: string; handled_at: string | null }[];
   settings: { offer_credits: number; credit_packs: { credits: number; price: number }[]; min_deposit: number; fee_percent: number };
   payments: "live" | "simulated" | "off";
 };
-export type Deposit = { id: number; code: string; amount: number; received: number; status: string; qr_url: string | null; account: string; bank: string; holder: string; simulated?: boolean; checkout?: { action: string; fields: Record<string, string> } | null };
+export type Deposit = { id: number; code: string; amount: number; received: number; status: string; qr_url: string | null; pay_url?: string | null; account: string; bank: string; holder: string; simulated?: boolean; checkout?: { action: string; fields: Record<string, string> } | null };
 export type Proposal = {
   id: number;
   sender: "student" | "tutor";

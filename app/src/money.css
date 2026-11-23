@@ -132,30 +132,98 @@
 .ledger-amount { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
 .ledger-amount [data-sign="in"] { color: var(--positive); }
 .ledger-amount small { font-size: 12px; color: var(--muted-foreground); }
-.deposit-dialog { max-width: 460px; }
-.deposit-pay { display: grid; gap: 14px; }
-.deposit-qr {
-  display: block;
-  width: min(100%, 260px);
-  margin: 0 auto;
-  border-radius: 12px;
-}
-.deposit-qr.placeholder {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1;
+.topup-dialog { max-width: 440px; }
+.topup-step { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.topup-step > button[type="submit"],
+.topup-actions > button { width: 100%; height: 46px; font-size: 15px; }
+.amount-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.amount-field > label { font-size: 14px; font-weight: 550; }
+.amount-input {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 12px 18px;
+  border-radius: 16px;
   background: var(--muted);
-  color: var(--muted-foreground);
+  transition: box-shadow var(--duration-fast) ease-out;
 }
-.deposit-pay dl { display: grid; gap: 8px; margin: 0; }
-.deposit-pay dl div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
-.deposit-pay dt { color: var(--muted-foreground); }
-.deposit-pay dd { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
-.deposit-pay dd button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--muted); cursor: pointer; }
-.deposit-pay dd button svg { width: 14px; height: 14px; }
-.deposit-code { font-size: 16px; letter-spacing: 0.04em; color: var(--primary); }
-.deposit-wait { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; color: var(--muted-foreground); }
-.deposit-wait svg { width: 16px; height: 16px; }
+.amount-input:focus-within { box-shadow: 0 0 0 2px var(--ring); }
+.amount-field .amount-input input[inputmode] {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 500 38px/1.15 "Lora", serif;
+  font-size: 38px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  outline: none;
+}
+.amount-input span { font: 500 24px/1 "Lora", serif; color: var(--muted-foreground); }
+.amount-field > small { font-size: 13px; color: var(--muted-foreground); }
+.topup-pay { display: grid; justify-items: center; gap: 16px; text-align: center; }
+.topup-sum { display: grid; justify-items: center; gap: 4px; }
+.topup-sum strong { font: 500 36px/1.1 "Lora", serif; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.topup-sum span { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted-foreground); }
+.topup-sum button,
+.topup-bank dd button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--muted); color: var(--foreground); cursor: pointer; }
+.topup-sum button:hover,
+.topup-bank dd button:hover { background: var(--surface-active); }
+.topup-sum button svg,
+.topup-bank dd button svg { width: 14px; height: 14px; }
+.topup-qr {
+  display: block;
+  width: min(100%, 232px);
+  aspect-ratio: 1;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--card);
+  animation: topup-in var(--duration-slow) var(--ease-out);
+}
+.topup-qr svg { display: block; width: 100%; height: 100%; }
+.topup-qr-wrap { display: grid; justify-items: center; gap: 8px; width: 100%; font-size: 13px; color: var(--muted-foreground); }
+.topup-qr-wrap figcaption { margin: 0; }
+/* On a phone the button opens SePay directly; a QR pointing at the same page is only for desktops. */
+@media (max-width: 599px) { .topup-qr-wrap[data-kind="link"] { display: none; } }
+.topup-qr.placeholder { display: grid; place-items: center; background: var(--muted); color: var(--muted-foreground); }
+@keyframes topup-in { from { opacity: 0; transform: scale(0.96); } }
+.topup-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 14px;
+  font-weight: 550;
+}
+.topup-wait svg { width: 15px; height: 15px; }
+.topup-bank { display: grid; gap: 8px; width: 100%; margin: 0; padding: 14px 16px; border-radius: 14px; background: var(--muted); text-align: left; }
+.topup-bank div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.topup-bank dt { color: var(--muted-foreground); }
+.topup-bank dd { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+.topup-actions { display: grid; gap: 8px; width: 100%; }
+.deposit-code { font-weight: 650; letter-spacing: 0.04em; color: var(--foreground); }
+.payee { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.payee legend { margin-bottom: 10px; padding: 0; font-size: 14px; font-weight: 550; }
+.payee .field-hint { margin: 0; font-size: 13px; }
+.withdraw-preview { display: grid; gap: 14px; padding: 20px; border-radius: 18px; background: var(--foreground); color: var(--background); }
+.withdraw-preview strong { font: 500 36px/1.1 "Lora", serif; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.withdraw-preview dl { display: grid; gap: 8px; margin: 0; }
+.withdraw-preview dl div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.withdraw-preview dt { opacity: 0.7; }
+.withdraw-preview dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.withdraw-note { margin: 0; font-size: 14px; color: var(--muted-foreground); }
+.withdraw-state { margin-top: 2px; padding: 1px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--warning-soft); color: var(--warning); }
+.withdraw-state[data-state="paid"] { background: var(--positive-soft); color: var(--positive); }
+.withdraw-state[data-state="rejected"] { background: var(--pastel-rose); color: var(--pastel-rose-ink); }
+@media (prefers-reduced-motion: reduce) { .topup-qr { animation: none; } }
 .deposit-done { display: grid; justify-items: center; gap: 12px; padding: 24px 0 8px; text-align: center; }
 .deposit-done svg { width: 48px; height: 48px; color: var(--positive); animation: count-pop 420ms var(--ease-out); }
 .deposit-done strong { font: 500 24px/1.2 "Lora", serif; }

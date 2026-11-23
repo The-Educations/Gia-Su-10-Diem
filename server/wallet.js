@@ -137,7 +137,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     return {
       available: w.available, held: w.held, credits_free: w.credits_free, credits_paid: w.credits_paid,
       entries: all(db, "SELECT id,kind,amount,held,credits,ref,note,created_at FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50", userId),
-      withdrawals: all(db, "SELECT id,amount,bank_name,substr(account_number,-4) AS account_last4,status,note,created_at FROM withdrawals WHERE user_id=? ORDER BY id DESC LIMIT 20", userId),
+      withdrawals: all(db, "SELECT id,amount,bank_name,account_number,account_name,substr(account_number,-4) AS account_last4,status,note,created_at,handled_at FROM withdrawals WHERE user_id=? ORDER BY id DESC LIMIT 20", userId),
       settings: (({ offer_credits, credit_packs, min_deposit, fee_percent }) => ({ offer_credits, credit_packs, min_deposit, fee_percent }))(settings(db)),
       payments: sepay.ready ? "live" : simulate ? "simulated" : "off",
     };
@@ -145,7 +145,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   const qr = (d) => sepay.webhook
     ? `https://vietqr.app/img?${new URLSearchParams({ acc: sepay.account, bank: sepay.bank, amount: String(d.amount), des: d.code, template: "compact" })}`
     : null;
-  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), account: sepay.webhook ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: checkout(d) });
+  const deposit = (d) => ({ id: d.id, code: d.code, amount: d.amount, received: d.received, status: d.status, created_at: d.created_at, qr_url: qr(d), pay_url: sepay.gateway || simulate ? `${origin}/api/wallet/pay/${d.code}` : null, account: sepay.webhook ? sepay.account : "", bank: sepay.bank, holder: sepay.holder, checkout: checkout(d) });
   // A signed form the browser posts to SePay's hosted checkout page.
   const checkout = (d) => {
     if (!sepay.gateway || d.status !== "pending") return null;
@@ -207,6 +207,17 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     if (!d) fail(404, "Không tìm thấy lệnh nạp.");
     await checkWithSepay(d);
     res.json(deposit(one(db, "SELECT * FROM deposits WHERE id=?", id)));
+  });
+  // The QR on the top-up screen opens this on a phone: it forwards to SePay's page for that one order.
+  app.get("/api/wallet/pay/:code", (req, res) => {
+    const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", String(req.params.code).slice(0, 20));
+    const form = d && checkout(d);
+    if (!form) return res.redirect(303, d ? `${origin}/app/wallet?deposit=${d.id}` : `${origin}/app/wallet`);
+    const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    res.type("html").send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SePay</title>
+<form id="f" method="post" action="${esc(form.action)}">${Object.entries(form.fields).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("")}
+<button style="font:600 17px system-ui;margin:40vh auto 0;display:block;padding:14px 24px;border:0;border-radius:999px;background:#852f36;color:#fff">Thanh toán ${d.amount.toLocaleString("vi-VN")}đ trên SePay</button></form>
+<script>document.getElementById("f").submit()</script>`);
   });
   // Local development only: stands in for the bank transfer and SePay's webhook.
   app.post("/api/wallet/deposits/:id/simulate", auth(), (req, res) => {

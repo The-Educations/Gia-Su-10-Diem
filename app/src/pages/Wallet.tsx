@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowDownLeft, ArrowUpRight, CircleCheck, Coins, Copy, Landmark, LoaderCircle, Wallet as WalletIcon } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CircleCheck, Coins, Copy, ExternalLink, Landmark, LoaderCircle, Wallet as WalletIcon } from "lucide-react";
+import { renderSVG } from "uqr";
 import { toast } from "sonner";
 import { api, dateTime, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -72,6 +73,37 @@ function ReturnedFromSepay({ id, result, onPaid }: { id: number; result: string;
   );
 }
 
+const digits = (v: string) => Number(v.replace(/\D/g, "").slice(0, 9)) || 0;
+const grouped = (n: number) => (n ? n.toLocaleString("vi-VN") : "");
+
+// A big amount field with presets underneath; the number is typed with thousands separators.
+function AmountField({ id, label, value, onChange, presets, hint }: { id: string; label: string; value: number; onChange: (n: number) => void; presets: { label: string; value: number }[]; hint?: string }) {
+  const { t } = useI18n();
+  return (
+    <div className="amount-field">
+      <label htmlFor={id}>{label}</label>
+      <div className="amount-input">
+        <input id={id} inputMode="numeric" autoComplete="off" value={grouped(value)} onChange={(e) => onChange(digits(e.target.value))} aria-describedby={hint ? `${id}-hint` : undefined} />
+        <span aria-hidden="true">₫</span>
+      </div>
+      {hint && <small id={`${id}-hint`}>{hint}</small>}
+      <div className="chip-set" role="group" aria-label={t("Số tiền gợi ý")}>
+        {presets.map((p) => <button type="button" key={p.label} className="chip" data-checked={value === p.value || undefined} aria-pressed={value === p.value} onClick={() => onChange(p.value)}>{p.label}</button>)}
+      </div>
+    </div>
+  );
+}
+
+function PayQr({ deposit }: { deposit: Deposit }) {
+  const { t } = useI18n();
+  const svg = useMemo(() => (!deposit.qr_url && deposit.pay_url ? renderSVG(deposit.pay_url, { border: 1, blackColor: "#282820", whiteColor: "#fffefa" }) : ""), [deposit.pay_url, deposit.qr_url]);
+  const label = t("Mã QR của lệnh {code}", { code: deposit.code });
+  if (deposit.qr_url) return <figure className="topup-qr-wrap"><img className="topup-qr" src={deposit.qr_url} alt={label} /><figcaption>{t("Quét bằng ứng dụng ngân hàng")}</figcaption></figure>;
+  if (svg) return <figure className="topup-qr-wrap" data-kind="link"><div className="topup-qr" role="img" aria-label={label} dangerouslySetInnerHTML={{ __html: svg }} /><figcaption>{t("Quét bằng điện thoại để thanh toán")}</figcaption></figure>;
+  return <div className="topup-qr placeholder"><Landmark aria-hidden="true" /></div>;
+}
+
+// Every opening is a new order with its own code and QR; unpaid ones are left as they are.
 function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: boolean; onOpenChange: (v: boolean) => void; min: number; onPaid: () => void; forStudent?: number }) {
   const { t } = useI18n(),
     [amount, setAmount] = useState(500000),
@@ -96,60 +128,59 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
   }, [deposit?.status]);
   async function create(e: React.FormEvent) {
     e.preventDefault();
+    if (amount < min) return setError(t("Số tiền nạp tối thiểu là {amount}.", { amount: money(min) }));
     setBusy(true);
     setError("");
-    try {
-      const d = await api<Deposit>("/wallet/deposits", "POST", { amount, ...(forStudent ? { student_id: forStudent } : {}) });
-      // The payment gateway takes over: post the signed form to SePay's page.
-      if (d.checkout) return payOnSepay(d.checkout);
-      setDeposit(d);
-    }
+    try { setDeposit(await api<Deposit>("/wallet/deposits", "POST", { amount, ...(forStudent ? { student_id: forStudent } : {}) })); }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   }
   const copy = (text: string) => navigator.clipboard?.writeText(text).then(() => toast.success(t("Đã chép")));
+  const close = (v: boolean) => { onOpenChange(v); if (!v) { setDeposit(null); setError(""); } };
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setDeposit(null); }}>
-      <DialogContent className="deposit-dialog">
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent className="topup-dialog">
         <DialogHeader>
-          <DialogTitle>{t("Nạp tiền vào số dư")}</DialogTitle>
-          <DialogDescription>{t("Chuyển khoản đúng nội dung để số dư tự cộng trong vài giây.")}</DialogDescription>
+          <DialogTitle>{t(forStudent ? "Nạp tiền cho con" : "Nạp tiền")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("Chọn số tiền rồi thanh toán bằng mã QR hoặc trên trang SePay.")}</DialogDescription>
         </DialogHeader>
         {!deposit ? (
-          <form onSubmit={create}>
-            <FieldGroup>
-              <div className="chip-set" role="group" aria-label={t("Số tiền gợi ý")}>
-                {PRESETS.map((p) => <button type="button" key={p} className="chip" data-checked={amount === p || undefined} onClick={() => setAmount(p)}>{money(p)}</button>)}
-              </div>
-              <Field>
-                <FieldLabel htmlFor="deposit-amount">{t("Số tiền (VND)")}</FieldLabel>
-                <Input id="deposit-amount" type="number" min={min} step={1000} required value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
-              </Field>
-            </FieldGroup>
+          <form onSubmit={create} className="topup-step">
+            <AmountField id="deposit-amount" label={t("Số tiền nạp")} value={amount} onChange={setAmount} hint={t("Tối thiểu {amount}", { amount: money(min) })}
+              presets={PRESETS.map((p) => ({ label: money(p), value: p }))} />
             {error && <ErrorState error={error} />}
-            <div className="actions dialog-actions"><Submit busy={busy}>{t("Tạo mã chuyển khoản")}</Submit></div>
+            <Submit busy={busy}>{t("Tạo lệnh nạp {amount}", { amount: money(amount) })}</Submit>
           </form>
         ) : deposit.status === "paid" ? (
           <div className="deposit-done" ref={done} role="status">
             <CircleCheck aria-hidden="true" />
             <strong>{t("Đã nhận {amount}", { amount: money(deposit.received) })}</strong>
-            <Button onClick={() => onOpenChange(false)}>{t("Xong")}</Button>
+            <Button onClick={() => close(false)}>{t("Xong")}</Button>
           </div>
         ) : (
-          <div className="deposit-pay">
-            {deposit.qr_url ? <img className="deposit-qr" src={deposit.qr_url} alt={t("Mã VietQR chuyển {amount}", { amount: money(deposit.amount) })} /> : <div className="deposit-qr placeholder"><Landmark aria-hidden="true" /></div>}
-            <dl>
-              {deposit.account && <div><dt>{t("Số tài khoản")}</dt><dd>{deposit.account} · {deposit.bank}<button type="button" aria-label={t("Chép số tài khoản")} onClick={() => copy(deposit.account)}><Copy /></button></dd></div>}
-              {deposit.holder && <div><dt>{t("Chủ tài khoản")}</dt><dd>{deposit.holder}</dd></div>}
-              <div><dt>{t("Số tiền")}</dt><dd>{money(deposit.amount)}</dd></div>
-              <div><dt>{t("Nội dung chuyển khoản")}</dt><dd className="deposit-code">{deposit.code}<button type="button" aria-label={t("Chép nội dung")} onClick={() => copy(deposit.code)}><Copy /></button></dd></div>
-            </dl>
-            <p className="deposit-wait"><LoaderCircle className="animate-spin" aria-hidden="true" />{t("Đang chờ tiền về…")}</p>
-            {deposit.simulated && (
-              <Button variant="outline" onClick={async () => { try { setDeposit({ ...(await api<Deposit>(`/wallet/deposits/${deposit.id}/simulate`, "POST")), simulated: true }); } catch (e) { toast.error((e as Error).message); } }}>
-                {t("Giả lập tiền đã về (chỉ ở máy local)")}
-              </Button>
+          <div className="topup-pay">
+            <div className="topup-sum">
+              <strong>{money(deposit.amount)}</strong>
+              <span>{t("Mã lệnh")} <b className="deposit-code">{deposit.code}</b><button type="button" aria-label={t("Chép mã lệnh")} onClick={() => copy(deposit.code)}><Copy /></button></span>
+            </div>
+            <PayQr deposit={deposit} />
+            <p className="topup-wait" role="status"><LoaderCircle className="animate-spin" aria-hidden="true" />{t("Đang chờ thanh toán")}</p>
+            {deposit.account && (
+              <dl className="topup-bank">
+                <div><dt>{t("Số tài khoản")}</dt><dd>{deposit.account} · {deposit.bank}<button type="button" aria-label={t("Chép số tài khoản")} onClick={() => copy(deposit.account)}><Copy /></button></dd></div>
+                {deposit.holder && <div><dt>{t("Chủ tài khoản")}</dt><dd>{deposit.holder}</dd></div>}
+                <div><dt>{t("Nội dung chuyển khoản")}</dt><dd>{deposit.code}</dd></div>
+              </dl>
             )}
+            <div className="topup-actions">
+              {deposit.checkout && <Button size="lg" onClick={() => payOnSepay(deposit.checkout!)}><ExternalLink data-icon="inline-start" />{t("Thanh toán trên SePay")}</Button>}
+              {deposit.simulated && (
+                <Button size="lg" variant="outline" onClick={async () => { try { setDeposit({ ...(await api<Deposit>(`/wallet/deposits/${deposit.id}/simulate`, "POST")), simulated: true }); } catch (e) { toast.error((e as Error).message); } }}>
+                  {t("Giả lập tiền đã về (chỉ ở máy local)")}
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => setDeposit(null)}>{t("Đổi số tiền")}</Button>
+            </div>
           </div>
         )}
       </DialogContent>
@@ -157,18 +188,30 @@ function DepositDialog({ open, onOpenChange, min, onPaid, forStudent }: { open: 
   );
 }
 
-function WithdrawDialog({ open, onOpenChange, available, onDone }: { open: boolean; onOpenChange: (v: boolean) => void; available: number; onDone: () => void }) {
+const BANKS = ["Vietcombank", "VietinBank", "BIDV", "Agribank", "Techcombank", "MB Bank", "ACB", "VPBank", "TPBank", "Sacombank", "VIB", "HDBank", "SHB", "OCB", "MSB", "SeABank", "Eximbank", "LPBank", "Nam A Bank", "Bac A Bank", "ABBANK", "Cake by VPBank", "Timo"];
+type Payee = { bank_name: string; account_number: string; account_name: string };
+
+function WithdrawDialog({ open, onOpenChange, available, saved, onDone }: { open: boolean; onOpenChange: (v: boolean) => void; available: number; saved: Payee[]; onDone: () => void }) {
   const { t } = useI18n(),
+    [amount, setAmount] = useState(0),
+    [payee, setPayee] = useState<Payee>(saved[0] || { bank_name: "", account_number: "", account_name: "" }),
+    [review, setReview] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
+  useEffect(() => { if (open) { setAmount(Math.min(available, 500000)); setPayee(saved[0] || { bank_name: "", account_number: "", account_name: "" }); setReview(false); setError(""); } }, [open]);
+  const set = (k: keyof Payee) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setPayee((p) => ({ ...p, [k]: e.target.value }));
+  function next(e: React.FormEvent) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
+    if (amount < 50000 || amount > available) return setError(t("Số tiền rút từ {min} đến {max}.", { min: money(50000), max: money(available) }));
+    setError("");
+    setReview(true);
+  }
+  async function submit() {
     setBusy(true);
     setError("");
     try {
-      await api("/wallet/withdrawals", "POST", { amount: Number(f.get("amount")), bank_name: f.get("bank_name"), account_number: f.get("account_number"), account_name: f.get("account_name") });
-      toast.success(t("Đã gửi yêu cầu rút tiền vào hội thoại với quản trị viên"));
+      await api("/wallet/withdrawals", "POST", { amount, ...payee });
+      toast.success(t("Đã gửi yêu cầu rút tiền"));
       onOpenChange(false);
       onDone();
     } catch (err) { setError((err as Error).message); }
@@ -176,23 +219,79 @@ function WithdrawDialog({ open, onOpenChange, available, onDone }: { open: boole
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="topup-dialog">
         <DialogHeader>
-          <DialogTitle>{t("Rút tiền")}</DialogTitle>
-          <DialogDescription>{t("Quản trị viên chuyển khoản và xác nhận trong tin nhắn hỗ trợ. Số tiền được giữ lại đến khi xong.")}</DialogDescription>
+          <DialogTitle>{t(review ? "Kiểm tra lại" : "Rút tiền")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("Chọn số tiền và tài khoản nhận, kiểm tra lại rồi gửi yêu cầu.")}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit}>
-          <FieldGroup>
-            <Field><FieldLabel htmlFor="w-amount">{t("Số tiền (tối đa {amount})", { amount: money(available) })}</FieldLabel><Input id="w-amount" name="amount" type="number" min={50000} max={available} step={1000} required /></Field>
-            <Field><FieldLabel htmlFor="w-bank">{t("Ngân hàng")}</FieldLabel><Input id="w-bank" name="bank_name" required maxLength={80} /></Field>
-            <Field><FieldLabel htmlFor="w-number">{t("Số tài khoản")}</FieldLabel><Input id="w-number" name="account_number" inputMode="numeric" pattern="\d{6,20}" required /></Field>
-            <Field><FieldLabel htmlFor="w-name">{t("Tên chủ tài khoản")}</FieldLabel><Input id="w-name" name="account_name" required maxLength={80} /></Field>
-          </FieldGroup>
-          {error && <ErrorState error={error} />}
-          <div className="actions dialog-actions"><Submit busy={busy}>{t("Gửi yêu cầu")}</Submit></div>
-        </form>
+        {!review ? (
+          <form onSubmit={next} className="topup-step">
+            <AmountField id="w-amount" label={t("Số tiền rút")} value={amount} onChange={setAmount} hint={t("Có thể rút {amount}", { amount: money(available) })}
+              presets={[...[200000, 500000, 1000000].filter((p) => p < available).map((p) => ({ label: money(p), value: p })), { label: t("Tất cả"), value: available }]} />
+            <fieldset className="payee">
+              <legend>{t("Tài khoản nhận")}</legend>
+              {saved.length > 0 && (
+                <div className="chip-set" role="group" aria-label={t("Tài khoản đã dùng")}>
+                  {saved.map((s) => <button type="button" key={s.bank_name + s.account_number} className="chip" data-checked={s.account_number === payee.account_number && s.bank_name === payee.bank_name || undefined} aria-pressed={s.account_number === payee.account_number && s.bank_name === payee.bank_name} onClick={() => setPayee(s)}>{s.bank_name} ····{s.account_number.slice(-4)}</button>)}
+                  <button type="button" className="chip" onClick={() => setPayee({ bank_name: "", account_number: "", account_name: "" })}>{t("Tài khoản khác")}</button>
+                </div>
+              )}
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="w-bank">{t("Ngân hàng")}</FieldLabel>
+                  <select id="w-bank" className="native-select" required value={payee.bank_name} onChange={set("bank_name")}>
+                    <option value="" disabled>{t("Chọn ngân hàng")}</option>
+                    {[...new Set([...BANKS, ...saved.map((s) => s.bank_name)])].map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </Field>
+                <Field><FieldLabel htmlFor="w-number">{t("Số tài khoản")}</FieldLabel><Input id="w-number" inputMode="numeric" pattern="\d{6,20}" required value={payee.account_number} onChange={set("account_number")} aria-describedby="w-number-hint" /><small id="w-number-hint" className="field-hint">{t("6–20 chữ số")}</small></Field>
+                <Field><FieldLabel htmlFor="w-name">{t("Tên chủ tài khoản")}</FieldLabel><Input id="w-name" required maxLength={80} autoCapitalize="characters" value={payee.account_name} onChange={set("account_name")} /></Field>
+              </FieldGroup>
+            </fieldset>
+            {error && <ErrorState error={error} />}
+            <Submit busy={false}>{t("Xem trước")}</Submit>
+          </form>
+        ) : (
+          <div className="topup-step">
+            <div className="withdraw-preview">
+              <strong>{money(amount)}</strong>
+              <dl>
+                <div><dt>{t("Ngân hàng")}</dt><dd>{payee.bank_name}</dd></div>
+                <div><dt>{t("Số tài khoản")}</dt><dd>{payee.account_number}</dd></div>
+                <div><dt>{t("Chủ tài khoản")}</dt><dd>{payee.account_name.toUpperCase()}</dd></div>
+                <div><dt>{t("Còn lại sau khi rút")}</dt><dd>{money(available - amount)}</dd></div>
+              </dl>
+            </div>
+            <p className="withdraw-note">{t("Số tiền được giữ lại cho đến khi quản trị viên chuyển khoản, thường trong 1 ngày làm việc.")}</p>
+            {error && <ErrorState error={error} />}
+            <div className="topup-actions">
+              <Button size="lg" disabled={busy} onClick={submit}>{busy && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{t("Gửi yêu cầu rút {amount}", { amount: money(amount) })}</Button>
+              <Button variant="ghost" onClick={() => setReview(false)}>{t("Sửa lại")}</Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+const WITHDRAWAL_STATE: Record<string, string> = { requested: "Đang chờ chuyển", paid: "Đã chuyển", rejected: "Đã từ chối" };
+
+function Withdrawals({ rows }: { rows: Wallet["withdrawals"] }) {
+  const { t } = useI18n();
+  return (
+    <section className="ledger withdrawals">
+      <h2>{t("Yêu cầu rút tiền")}</h2>
+      <ul>
+        {rows.map((w) => (
+          <li key={w.id}>
+            <span className="ledger-icon" data-sign="out"><ArrowUpRight aria-hidden="true" /></span>
+            <span className="ledger-text"><strong>{w.bank_name} ····{w.account_last4}</strong><time>{dateTime(w.created_at)}</time>{w.status === "rejected" && w.note && <small>{w.note}</small>}</span>
+            <span className="ledger-amount"><strong>{money(w.amount)}</strong><span className="withdraw-state" data-state={w.status}>{t(WITHDRAWAL_STATE[w.status] || w.status)}</span></span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -210,6 +309,7 @@ export default function WalletPage() {
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
   const w = result.data, tutor = user?.role === "tutor";
+  const payees = [...new Map(w.withdrawals.map((x) => [`${x.bank_name}|${x.account_number}`, { bank_name: x.bank_name, account_number: x.account_number, account_name: x.account_name }])).values()].slice(0, 3);
   async function buy(credits: number, target: HTMLElement) {
     setBuying(credits);
     try { await api("/credits/purchase", "POST", { credits }); celebrate(target); toast.success(t("Đã thêm {n} credit", { n: credits })); refresh(); }
@@ -232,6 +332,7 @@ export default function WalletPage() {
           <Button variant="outline" disabled={w.available < 50000} onClick={() => setWithdrawOpen(true)}><ArrowUpRight data-icon="inline-start" />{t("Rút tiền")}</Button>
         </div>
       </section>
+      {w.withdrawals.length > 0 && <Withdrawals rows={w.withdrawals} />}
       {tutor && (
         <section className="credits-card">
           <header>
@@ -268,7 +369,7 @@ export default function WalletPage() {
         ) : <p className="credential-empty">{t("Chưa có giao dịch.")}</p>}
       </section>
       <DepositDialog open={depositOpen} onOpenChange={setDepositOpen} min={w.settings.min_deposit} onPaid={refresh} forStudent={forStudent} />
-      <WithdrawDialog open={withdrawOpen} onOpenChange={setWithdrawOpen} available={w.available} onDone={refresh} />
+      <WithdrawDialog open={withdrawOpen} onOpenChange={setWithdrawOpen} available={w.available} saved={payees} onDone={refresh} />
     </Page>
   );
 }
