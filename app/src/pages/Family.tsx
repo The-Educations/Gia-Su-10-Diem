@@ -72,7 +72,7 @@ export default function FamilyPage() {
             <header>
               <Person name={k.name} id={k.id} />
               <div><strong>{k.name}</strong>{k.school && <small>{k.school}</small>}</div>
-              {k.pending_offers > 0 && <Link to="/proposals" className="proposal-status">{t("{n} offer chờ", { n: k.pending_offers })}</Link>}
+              {k.pending_offers > 0 && <Link to="/proposals" className="proposal-status">{t("{n} đề nghị chờ", { n: k.pending_offers })}</Link>}
             </header>
             <div className="family-balance">
               <Wallet aria-hidden="true" />

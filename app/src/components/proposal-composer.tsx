@@ -60,7 +60,7 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
         schedule: days.map((weekday) => ({ weekday, hour, minute })),
       });
       celebrate(e.currentTarget as HTMLElement);
-      toast.success(t("Đã gửi offer. Số tiền được tạm giữ đến khi gia sư trả lời."));
+      toast.success(t("Đã gửi đề nghị. Số tiền được tạm giữ đến khi gia sư trả lời."));
       setOpen(false);
       navigate(`/proposals?id=${p.id}`);
     } catch (err) {
@@ -72,12 +72,12 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
   return (
     <>
       <Button className="proposal-cta" onClick={() => (user ? setOpen(true) : navigate(`/auth?next=/tutors/${tutor.user_id}`))}>
-        <Send data-icon="inline-start" />{t("Gửi offer")}
+        <Send data-icon="inline-start" />{t("Gửi đề nghị")}
       </Button>
       <Dialog open={open} onOpenChange={(v) => !busy && setOpen(v)}>
         <DialogContent className="proposal-dialog" closeDisabled={busy}>
           <DialogHeader>
-            <DialogTitle>{t("Gửi offer cho {name}", { name: tutor.name })}</DialogTitle>
+            <DialogTitle>{t("Gửi đề nghị cho {name}", { name: tutor.name })}</DialogTitle>
             <DialogDescription>{t("Tổng gói được tạm giữ từ số dư. Gia sư từ chối hoặc không trả lời trong 48 giờ thì tiền tự hoàn lại.")}</DialogDescription>
           </DialogHeader>
           <form onSubmit={send}>
@@ -163,7 +163,7 @@ export function ProposalComposer({ tutor, subjects }: { tutor: Tutor; subjects: 
             {error && <ErrorState error={error} />}
             <div className="actions dialog-actions">
               <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>{t("Hủy")}</Button>
-              <Submit busy={busy} disabled={short > 0}>{trial ? t("Gửi yêu cầu học thử") : t("Gửi offer {amount}", { amount: money(total) })}</Submit>
+              <Submit busy={busy} disabled={short > 0}>{trial ? t("Gửi yêu cầu học thử") : t("Gửi đề nghị {amount}", { amount: money(total) })}</Submit>
             </div>
           </form>
         </DialogContent>

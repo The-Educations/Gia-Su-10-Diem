@@ -47,7 +47,7 @@ export function BookingCard({ tutor, subjects }: { tutor: Tutor & { rating?: Rat
         </Button>
       ))}
       <ol className="booking-steps">
-        <li>{t("Gửi offer: số buổi, lịch và học phí")}</li>
+        <li>{t("Gửi đề nghị: số buổi, lịch và học phí")}</li>
         <li>{t("Tiền được giữ an toàn đến khi gia sư nhận")}</li>
         <li>{t("Học xong mỗi buổi, hai bên cùng xác nhận")}</li>
       </ol>

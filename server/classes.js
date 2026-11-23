@@ -319,7 +319,7 @@ export function registerClasses(app, db, auth, audit) {
     const { sessions } = z.object({ sessions: z.number().int().min(1).max(60) }).parse(req.body);
     transaction(db, () => {
       const m = one(db, "SELECT m.*,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND m.student_id=? AND m.status='active'", req.params.id, req.user.id);
-      if (!m) fail(404, "Gói học đã kết thúc. Gửi offer mới để học tiếp.");
+      if (!m) fail(404, "Gói học đã kết thúc. Gửi đề nghị mới để học tiếp.");
       const cost = sessions * m.rate;
       move(db, req.user.id, "offer_hold", { amount: -cost, held: cost, ref: `member:${m.id}` });
       run(db, "UPDATE class_members SET sessions_total=sessions_total+?,held=held+? WHERE id=?", sessions, cost, m.id);

@@ -18,15 +18,15 @@ import "@/money.css";
 const PRESETS = [200000, 500000, 1000000, 2000000];
 const KIND: Record<string, string> = {
   deposit: "Nạp tiền",
-  offer_hold: "Tạm giữ cho offer",
-  offer_released: "Hoàn tiền offer",
+  offer_hold: "Tạm giữ cho đề nghị",
+  offer_released: "Hoàn tiền đề nghị",
   withdrawal_requested: "Lệnh rút tiền",
   withdrawal_paid: "Đã chuyển khoản rút tiền",
   withdrawal_rejected: "Hoàn yêu cầu rút tiền",
   credits_purchased: "Mua credit",
-  credits_added: "Cộng credit",
-  credits_spent: "Dùng credit gửi offer",
-  credits_monthly: "Credit tháng mới",
+  credits_added: "Cộng Xu",
+  credits_spent: "Dùng Xu gửi đề nghị",
+  credits_monthly: "Xu tháng mới",
   admin_adjustment: "Điều chỉnh bởi quản trị viên",
   platform_fee: "Phí nền tảng",
   lesson_payout: "Học phí đã nhận",
@@ -308,7 +308,7 @@ export default function WalletPage() {
   const payees = [...new Map(w.withdrawals.map((x) => [`${x.bank_name}|${x.account_number}`, { bank_name: x.bank_name, account_number: x.account_number, account_name: x.account_name }])).values()].slice(0, 3);
   async function buy(credits: number, target: HTMLElement) {
     setBuying(credits);
-    try { await api("/credits/purchase", "POST", { credits }); celebrate(target); toast.success(t("Đã thêm {n} credit", { n: credits })); refresh(); }
+    try { await api("/credits/purchase", "POST", { credits }); celebrate(target); toast.success(t("Đã thêm {n} Xu", { n: credits })); refresh(); }
     catch (e) { toast.error((e as Error).message); }
     finally { setBuying(0); }
   }
@@ -331,10 +331,10 @@ export default function WalletPage() {
       {tutor && (
         <section className="credits-card">
           <header>
-            <h2><Coins aria-hidden="true" />{t("Credit gửi offer")}</h2>
-            <span><strong>{w.credits_free + w.credits_paid}</strong> {t("credit")} · {t("{free} miễn phí tháng này, {paid} đã mua", { free: w.credits_free, paid: w.credits_paid })}</span>
+            <h2><Coins aria-hidden="true" />{t("Xu gửi đề nghị")}</h2>
+            <span><strong>{w.credits_free + w.credits_paid}</strong> {t("Xu")} · {t("{free} miễn phí tháng này, {paid} đã mua", { free: w.credits_free, paid: w.credits_paid })}</span>
           </header>
-          <p>{t("Mỗi offer gửi học sinh tốn {n} credit. Credit miễn phí reset về đầu mỗi tháng.", { n: w.settings.offer_credits })}</p>
+          <p>{t("Mỗi đề nghị gửi học sinh tốn {n} Xu. Xu miễn phí reset về đầu mỗi tháng.", { n: w.settings.offer_credits })}</p>
           <div className="credit-packs">
             {w.settings.credit_packs.map((p) => (
               <button type="button" key={p.credits} className="credit-pack" disabled={!!buying || w.available < p.price} onClick={(e) => buy(p.credits, e.currentTarget)}>
@@ -357,7 +357,7 @@ export default function WalletPage() {
                 <span className="ledger-text"><strong>{t(KIND[e.kind] || e.kind)}</strong><time>{dateTime(e.created_at)}</time>{payout ? <WithdrawalStatus w={payout} /> : e.note && <small>{e.note}</small>}</span>
                 <span className="ledger-amount">
                   {e.amount !== 0 && <strong data-sign={e.amount > 0 ? "in" : "out"}>{e.amount > 0 ? "+" : "−"}{money(Math.abs(e.amount))}</strong>}
-                  {e.credits !== 0 && <small>{e.credits > 0 ? "+" : "−"}{Math.abs(e.credits)} {t("credit")}</small>}
+                  {e.credits !== 0 && <small>{e.credits > 0 ? "+" : "−"}{Math.abs(e.credits)} {t("Xu")}</small>}
                   {e.amount === 0 && e.held !== 0 && <small>{t(e.held > 0 ? "Tạm giữ" : "Bỏ giữ")} {money(Math.abs(e.held))}</small>}
                 </span>
               </li>

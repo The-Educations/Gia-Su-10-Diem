@@ -39,9 +39,9 @@ export function AdminClasses() {
 const ROLE: Record<string, string> = { student: "Học sinh", tutor: "Gia sư", admin: "Quản trị viên" };
 const STATUS: Record<string, string> = { active: "Đang hoạt động", suspended: "Tạm khóa", deleted: "Đã xóa", ended: "Đã kết thúc", pending: "Chờ trả lời", accepted: "Đã nhận", declined: "Đã từ chối", expired: "Hết hạn", withdrawn: "Đã rút" };
 const KIND: Record<string, string> = {
-  deposit: "Nạp tiền", offer_hold: "Tạm giữ cho offer", offer_released: "Hoàn tiền offer", withdrawal_requested: "Yêu cầu rút tiền",
-  withdrawal_paid: "Đã chuyển khoản rút tiền", withdrawal_rejected: "Hoàn yêu cầu rút tiền", credits_purchased: "Mua credit", credits_added: "Cộng credit",
-  credits_spent: "Dùng credit gửi offer", credits_monthly: "Credit tháng mới", credits_refunded: "Hoàn credit", admin_adjustment: "Điều chỉnh bởi quản trị viên",
+  deposit: "Nạp tiền", offer_hold: "Tạm giữ cho đề nghị", offer_released: "Hoàn tiền đề nghị", withdrawal_requested: "Yêu cầu rút tiền",
+  withdrawal_paid: "Đã chuyển khoản rút tiền", withdrawal_rejected: "Hoàn yêu cầu rút tiền", credits_purchased: "Mua credit", credits_added: "Cộng Xu",
+  credits_spent: "Dùng Xu gửi đề nghị", credits_monthly: "Xu tháng mới", credits_refunded: "Hoàn Xu", admin_adjustment: "Điều chỉnh bởi quản trị viên",
   lesson_paid: "Thanh toán buổi học", lesson_payout: "Học phí đã nhận", lesson_refund: "Hoàn học phí",
 };
 type Overview = {
@@ -77,7 +77,7 @@ export function AdminUserOverview({ userId, onClose }: { userId: number | null; 
               {o.user.role === "tutor" && <Button asChild size="sm" variant="outline"><Link to={`/tutors/${o.user.id}`} onClick={onClose}>{t("Hồ sơ công khai")}</Link></Button>}
             </div>
             <section><h2>{t("Lớp học")}</h2>{o.classes.length ? <ul className="family-classes">{o.classes.map((c) => <li key={c.id} data-color={c.color}><Link to={`/classes/${c.id}`} onClick={onClose}><strong>{c.title}</strong><span>{t(c.status === "active" ? "Đang hoạt động" : "Đã kết thúc")}</span></Link></li>)}</ul> : <p className="credential-empty">—</p>}</section>
-            <section><h2>{t("Offer")}</h2>
+            <section><h2>{t("Đề nghị")}</h2>
               <table className="finance-table"><tbody>{o.proposals.map((p) => <tr key={p.id}><td>{p.tutor_name} ← {p.student_name}<small>{dateTime(p.created_at)}</small></td><td>{t(STATUS[p.status] || p.status)}</td><td className="num">{money(p.total)}</td></tr>)}</tbody></table>
             </section>
             {o.family.length > 0 && <section><h2>{t("Gia đình")}</h2><p>{o.family.map((f) => f.name).join(", ")}</p></section>}

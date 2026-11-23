@@ -39,18 +39,18 @@ export function TodayPanel() {
       ) : (
         <Link to={tutor ? "/proposals" : "/tutors"} className="today-next" data-color="sand">
           <span><CalendarDays aria-hidden="true" />{t("Chưa có buổi sắp tới")}</span>
-          <strong>{t(tutor ? "Nhận offer để mở lớp" : "Tìm gia sư và gửi offer")}</strong>
+          <strong>{t(tutor ? "Nhận đề nghị để mở lớp" : "Tìm gia sư và gửi đề nghị")}</strong>
         </Link>
       )}
       <div className="today-stats">
         {w && (
           <Link to="/wallet">
             <Wallet aria-hidden="true" /><span>{t("Số dư")}</span><strong>{money(w.available)}</strong>
-            {tutor && <small><Coins aria-hidden="true" />{w.credits_free + w.credits_paid} {t("credit")}</small>}
+            {tutor && <small><Coins aria-hidden="true" />{w.credits_free + w.credits_paid} {t("Xu")}</small>}
           </Link>
         )}
         <Link to="/proposals" data-alert={answer.length > 0 || undefined}>
-          <Send aria-hidden="true" /><span>{t("Offer cần trả lời")}</span><strong>{answer.length}</strong>
+          <Send aria-hidden="true" /><span>{t("Đề nghị cần trả lời")}</span><strong>{answer.length}</strong>
         </Link>
       </div>
       {toConfirm.length > 0 && (

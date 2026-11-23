@@ -65,7 +65,7 @@ test("a tutor's free hours are one block on the calendar and in the offer compos
   await expect(tutor.locator(".cal-col").first().locator(".cal-free")).toHaveText("Rảnh 17:00–21:00");
 
   await student.goto(`/app/tutors/${profile.user_id}`);
-  await student.getByRole("button", { name: "Gửi offer", exact: true }).click();
+  await student.getByRole("button", { name: "Gửi đề nghị", exact: true }).click();
   const week = student.locator(".free-week");
   await expect(week.getByRole("button", { name: /^Chọn giờ T2/ })).toHaveCount(1);
   await week.getByRole("button", { name: "Chọn giờ T2 17:00" }).press("Enter");
