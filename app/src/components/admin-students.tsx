@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BadgeCheck, CircleAlert, Clock, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { api, dateTime, fold, useApp, useLoad } from "@/lib/api";
@@ -27,7 +28,16 @@ export function AdminStudents() {
     [asking, setAsking] = useState<Check | null>(null),
     [note, setNote] = useState(""),
     [zoom, setZoom] = useState<{ src: string; name: string } | null>(null),
-    [busy, setBusy] = useState(0);
+    [busy, setBusy] = useState(0),
+    [params] = useSearchParams();
+  // Deep link from the audit log: /admin?tab=students&student=<id> shows that card.
+  const wanted = Number(params.get("student")) || null;
+  useEffect(() => {
+    const v = wanted && list.data?.find((x) => x.user_id === wanted);
+    if (!v) return;
+    setFilter(v.status);
+    requestAnimationFrame(() => document.getElementById(`student-${wanted}`)?.scrollIntoView({ block: "center" }));
+  }, [wanted, list.data]);
   if (list.loading) return <Loading />;
   if (list.error || !list.data) return <ErrorState error={list.error} retry={list.reload} />;
   const rows = list.data.filter((v) => !query || fold(`${v.name} ${v.email} ${v.school} ${v.student_code}`).includes(fold(query)));
@@ -55,7 +65,7 @@ export function AdminStudents() {
           {shown.map((v) => {
             const [label, Icon] = STATE[v.status];
             return (
-              <li key={v.user_id} data-status={v.status}>
+              <li key={v.user_id} id={`student-${v.user_id}`} data-status={v.status} data-highlight={v.user_id === wanted || undefined}>
                 <div className="student-check-files">
                   {v.files.length ? v.files.map((f, i) => f.mime.startsWith("image")
                     ? <button type="button" key={f.id} onClick={() => setZoom({ src: `/api/verification-files/${f.id}`, name: v.name })} aria-label={t("Phóng to học bạ {n} của {name}", { n: i + 1, name: v.name })}><img src={`/api/verification-files/${f.id}`} alt={t("Học bạ của {name}", { name: v.name })} /></button>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api, fold, money, useLoad } from "@/lib/api";
@@ -25,6 +25,12 @@ export function AdminTutors({ data, subjects, onChanged }: { data: AdminData; su
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement | null>(null);
+  // Deep link (e.g. from the audit log): /admin?tab=tutors&tutor=<id> opens the review dialog.
+  const wantedTutor = Number(params.get("tutor")) || null;
+  useEffect(() => {
+    const x = wantedTutor && data.tutors.find((t) => t.user_id === wantedTutor);
+    if (x) { setTutor(x); setReviewOpen(true); }
+  }, [wantedTutor, data.tutors]);
   const names = new Map(subjects.map((s) => [s.id, s.name]));
   const found = data.tutors.filter((x) => fold(`${x.name} ${x.headline} ${x.email || ""}`).includes(fold(q)));
   // Waiting work first: new profiles, then edits and proofs to check.
@@ -86,7 +92,7 @@ export function AdminTutors({ data, subjects, onChanged }: { data: AdminData; su
           );
         })}
       </div>
-      <TutorReviewDialog tutor={tutor} catalog={data.theme_catalog} subjects={subjects} open={reviewOpen} onOpenChange={setReviewOpen} onSaved={() => { onChanged(); proofs.reload(); }} returnFocus={() => {
+      <TutorReviewDialog tutor={tutor} catalog={data.theme_catalog} subjects={subjects} open={reviewOpen} onOpenChange={(v) => { setReviewOpen(v); if (!v) setParams((p) => { const n = new URLSearchParams(p); n.delete("tutor"); return n; }); }} onSaved={() => { onChanged(); proofs.reload(); }} returnFocus={() => {
         if (trigger.current?.isConnected) trigger.current.focus();
         else document.getElementById("admin-search")?.focus();
       }} />

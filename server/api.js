@@ -891,7 +891,9 @@ export function createApi(
       resources: resourceRows(true),
       audit: all(
         db,
-        "SELECT a.*,u.name FROM audit a JOIN users u ON u.id=a.actor_id ORDER BY a.id DESC LIMIT 50",
+        `SELECT a.*,u.name,
+        (SELECT c.tutor_id FROM tutor_credentials c WHERE a.action LIKE 'credential.%' AND c.id=CAST(a.target AS INTEGER)) AS credential_tutor
+        FROM audit a JOIN users u ON u.id=a.actor_id ORDER BY a.id DESC LIMIT 50`,
       ),
     }),
   );

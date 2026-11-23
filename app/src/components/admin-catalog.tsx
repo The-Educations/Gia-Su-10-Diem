@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api, fold } from "@/lib/api";
@@ -26,6 +27,12 @@ export function AdminCatalog({ subjects, resources, tutors, onChanged }: { subje
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const categories = [...new Set(resources.map((r) => r.category))].sort();
+  // Deep link from the audit log: scroll to the subject or exam that changed.
+  const wantedSubject = useSearchParams()[0].get("subject"), wantedExam = Number(useSearchParams()[0].get("resource")) || 0;
+  useEffect(() => {
+    const el = wantedExam ? document.getElementById(`exam-${wantedExam}`) : wantedSubject ? document.getElementById(`subject-${wantedSubject}`) : null;
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "center" }));
+  }, [wantedSubject, wantedExam, subjects, resources]);
   const teaching = (id: string) => tutors.filter((x) => x.subjects.includes(id)).length;
   const aiming = (category: string) => tutors.filter((x) => x.goals.includes(category)).length;
   const query = fold(q);
@@ -76,7 +83,7 @@ export function AdminCatalog({ subjects, resources, tutors, onChanged }: { subje
       {!groups.length && <Blank title={t("Không có kết quả phù hợp")} action={<Button variant="outline" onClick={() => setQ("")}>{t("Xóa bộ lọc")}</Button>} />}
       <div className="catalog">
         {groups.map(({ s, all, exams }) => (
-          <section key={s.id} className="catalog-subject" aria-label={s.name}>
+          <section key={s.id} id={`subject-${s.id}`} data-highlight={s.id === wantedSubject || undefined} className="catalog-subject" aria-label={s.name}>
             <header>
               <div>
                 <h3>{s.name}</h3>
@@ -89,7 +96,7 @@ export function AdminCatalog({ subjects, resources, tutors, onChanged }: { subje
             {exams.length ? (
               <ul>
                 {exams.map((r) => (
-                  <li key={r.id} data-hidden={!r.published || undefined}>
+                  <li key={r.id} id={`exam-${r.id}`} data-hidden={!r.published || undefined} data-highlight={r.id === wantedExam || undefined}>
                     <div>
                       <strong>{r.title}</strong>
                       <small>{r.category} · {r.level} · {r.year} · {t("{n} gia sư chọn nhóm này", { n: aiming(r.category) })}</small>

@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Waiting } from "@/components/admin-kit";
 import { AdminToday } from "@/components/admin-today";
 import { AdminClasses } from "@/components/admin-classes";
+import { AdminSessions } from "@/components/admin-sessions";
 import { AdminTutors } from "@/components/admin-tutors";
 import { AdminStudents } from "@/components/admin-students";
 import { AdminAccounts } from "@/components/admin-accounts";
@@ -19,8 +20,8 @@ import { AdminAudit } from "@/components/admin-audit";
 import AdminCommunity from "./AdminCommunity";
 import AdminPosts from "./AdminPosts";
 
-type Today = { students: number; tutors: number; credentials: number; withdrawals: number; community: number; disputes: unknown[] };
-const TABS = ["today", "classes", "tutors", "students", "users", "catalog", "posts", "community", "finance", "audit"];
+type Today = { students: number; tutors: number; credentials: number; withdrawals: number; community: number; disputes: unknown[]; sessions_waiting: number };
+const TABS = ["today", "classes", "sessions", "tutors", "students", "users", "catalog", "posts", "community", "finance", "audit"];
 // The catalog used to be two tabs; keep their old links working.
 const OLD: Record<string, string> = { resources: "catalog", subjects: "catalog" };
 
@@ -28,7 +29,7 @@ export default function Admin() {
   const { t } = useI18n(), { refresh } = useApp(), [params, setParams] = useSearchParams();
   const asked = params.get("tab") || "", tab = TABS.includes(OLD[asked] || asked) ? OLD[asked] || asked : "today";
   const result = useLoad<AdminData>("/admin"), subjects = useLoad<Subject[]>("/subjects"), today = useLoad<Today>("/admin/today").data;
-  const waiting = today ? today.disputes.length + today.withdrawals + today.students + today.credentials + today.tutors + today.community : 0;
+  const waiting = today ? today.disputes.length + today.sessions_waiting + today.withdrawals + today.students + today.credentials + today.tutors + today.community : 0;
   const withData = (pane: (d: AdminData) => ReactNode) =>
     result.data ? pane(result.data) : result.error ? <ErrorState error={result.error} retry={result.reload} /> : <Loading />;
   const trigger = (value: string, label: string, n?: number) => <TabsTrigger value={value}>{t(label)}<Waiting n={n} /></TabsTrigger>;
@@ -51,6 +52,7 @@ export default function Admin() {
           <TabsList variant="line" className="admin-tabs">
             {trigger("today", "Hôm nay", waiting)}
             {trigger("classes", "Lớp học")}
+            {trigger("sessions", "Buổi học", today ? today.disputes.length + today.sessions_waiting : undefined)}
             {trigger("tutors", "Gia sư", today?.tutors)}
             {trigger("students", "Học sinh", today?.students)}
             {trigger("users", "Tài khoản")}
@@ -62,6 +64,7 @@ export default function Admin() {
           </TabsList>
           <TabsContent value="today"><AdminToday /></TabsContent>
           <TabsContent value="classes"><AdminClasses /></TabsContent>
+          <TabsContent value="sessions"><AdminSessions /></TabsContent>
           <TabsContent value="tutors">{withData((d) => <AdminTutors data={d} subjects={subjects.data || []} onChanged={refresh} />)}</TabsContent>
           <TabsContent value="students"><AdminStudents /></TabsContent>
           <TabsContent value="users">{withData((d) => <AdminAccounts users={d.users} onChanged={refresh} />)}</TabsContent>

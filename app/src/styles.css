@@ -3569,3 +3569,27 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 @keyframes chat-flash { 0% { outline: 2px solid var(--primary); outline-offset: 2px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
 @media (prefers-reduced-motion: reduce) { .chat-event.flash, [data-flash].flash [data-slot="bubble-content"] { animation: none; outline: 2px solid var(--primary); } }
 .chat-event-link { color: var(--primary); font-size: 12px; font-weight: 500; width: fit-content; }
+/* Buổi học pane: clickable worklist rows, state words, a quiet history list. */
+.session-table { table-layout: fixed; }
+.session-table th:nth-child(1), .session-table td:nth-child(1) { width: 2.25rem; }
+.session-table th:nth-child(2), .session-table td:nth-child(2) { width: 9rem; }
+.session-table th:nth-child(6), .session-table td:nth-child(6) { width: 10rem; }
+.session-table th:nth-child(7), .session-table td:nth-child(7) { width: 7rem; }
+.session-table th:nth-child(8), .session-table td:nth-child(8) { width: 2.5rem; }
+.session-table .session-check input { accent-color: var(--primary); }
+.session-row { cursor: pointer; }
+.session-row:hover { background: var(--surface-hover); }
+.session-row td small { display: block; font-size: 12px; color: var(--muted-foreground); }
+.session-state { display: inline-block; font-size: 12px; font-weight: 500; }
+.session-state[data-state="attention"] { color: var(--warning); }
+.session-state[data-state="cancelled"] { color: var(--muted-foreground); }
+.session-state[data-state="ok"] { color: var(--positive); }
+.session-drawer .admin-finance { gap: 20px; }
+.session-drawer h2 { margin: 0 0 8px; font-size: 15px; }
+.session-history { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.session-history li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.session-history span { color: var(--muted-foreground); }
+/* A deep-linked record glows briefly, then keeps a calm outline so it stays findable. */
+[data-highlight] { outline: 2px solid var(--primary); outline-offset: -2px; animation: admin-hl 2.6s ease-out; }
+@keyframes admin-hl { 0%, 60% { background: color-mix(in srgb, var(--primary) 12%, transparent); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { [data-highlight] { animation: none; } }
