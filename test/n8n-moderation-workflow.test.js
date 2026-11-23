@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { buildWorkflow } from "../scripts/n8n/build-moderation-workflow.js";
 import { buildClaudeCommand, buildWriteCommand } from "../scripts/n8n/lib/moderation.js";
 import { fixture } from "./community-fixture.js";
-import { one, all } from "../server/db.js";
+import { one, all, run } from "../server/db.js";
 
 const wf = buildWorkflow();
 const node = (name) => wf.nodes.find((n) => n.name === name);
@@ -170,6 +170,17 @@ const newPost = async (call, user, title, body = "Mình muốn trao đổi cách
   assert.equal(r.status, 201, JSON.stringify(r.data));
   return r.data.id;
 };
+// Khoá chấm có đuôi created_at nên tìm theo tiền tố id:version.
+const gradedOf = (home, id, version = 0) => {
+  const g = stateOf(home).graded;
+  const k = Object.keys(g).find((x) => x === `${id}:${version}` || x.startsWith(`${id}:${version}:`));
+  return k ? g[k] : undefined;
+};
+const failsOf = (home, id, version = 0) => {
+  const f = stateOf(home).fails;
+  const k = Object.keys(f).find((x) => x === `${id}:${version}` || x.startsWith(`${id}:${version}:`));
+  return k ? f[k] : undefined;
+};
 const status = (db, id) => one(db, "SELECT status,review_note,title,revision_status,review_version FROM community_posts WHERE id=?", id);
 
 // ---------- lệnh shell ----------
@@ -245,9 +256,9 @@ test("full: duyệt bài tốt, từ chối bài quảng cáo kèm lý do cho t�
   assert.ok(audit.every((a) => a.actor_id === ids.admin), "mọi thao tác được ghi audit dưới tài khoản bot (ở đây là admin của fixture)");
 
   const st = stateOf(home);
-  assert.equal(st.graded[`${ok}:0`].outcome, "approved");
-  assert.equal(st.graded[`${ad}:0`].outcome, "rejected");
-  assert.equal(st.graded[`${unsure}:0`].outcome, "escalated");
+  assert.equal(gradedOf(home, ok, 0).outcome, "approved");
+  assert.equal(gradedOf(home, ad, 0).outcome, "rejected");
+  assert.equal(gradedOf(home, unsure, 0).outcome, "escalated");
   assert.deepEqual(st.daily.approved, 1);
   assert.equal(st.daily.rejected, 1);
   assert.equal(lockExists(home), false, "khoá phải được nhả");
@@ -317,7 +328,7 @@ test("trần mỗi ngày: vượt trần tự duyệt thì các bài sau để l
   const r = await runChain({ home, call, cfg: { capApprove: 1 } });
   assert.deepEqual(r.applied.map((x) => x.id), [a]);
   assert.equal(status(db, b).status, "pending");
-  assert.equal(stateOf(home).graded[`${b}:0`].outcome, "escalated");
+  assert.equal(gradedOf(home, b, 0).outcome, "escalated");
   assert.ok(logOf(home).some((l) => l.id === b && l.reason.includes("vượt trần")));
 });
 
@@ -364,7 +375,7 @@ test("tác giả sửa bài giữa lúc chấm: web trả 409, bị bỏ qua kh�
   assert.deepEqual(r.applied.map((a) => [a.action, a.status]), [["approve", 409]]);
   assert.equal(status(db, id).status, "pending");
   assert.deepEqual(stateOf(home).fails, {});
-  assert.equal(stateOf(home).graded[`${id}:0`].outcome, "conflict");
+  assert.equal(gradedOf(home, id, 0).outcome, "conflict");
   const r2 = await runChain({ home, call });
   assert.deepEqual(r2.applied.map((a) => [a.id, a.action, a.status]), [[id, "approve", 200]]);
   assert.equal(status(db, id).status, "approved");
@@ -380,13 +391,13 @@ test("Claude lỗi: không duyệt, không từ chối, đếm lỗi; sau 3 lầ
     const r = await runChain({ home, call });
     assert.equal(r.applied.length, 0);
     assert.equal(status(db, id).status, "pending");
-    assert.equal(stateOf(home).fails[`${id}:0`], i, `lần ${i}`);
+    assert.equal(failsOf(home, id), i, `lần ${i}`);
     assert.equal(lockExists(home), false);
   }
   const before = calls(home);
   const r4 = await runChain({ home, call });
   assert.equal(calls(home), before, "sau 3 lần lỗi thôi gọi Claude");
-  assert.equal(stateOf(home).graded[`${id}:0`].outcome, "escalated");
+  assert.equal(gradedOf(home, id, 0).outcome, "escalated");
   assert.ok(logOf(home).some((l) => l.reason === "chuyển admin: AI lỗi"));
   assert.equal(r4.applied.length, 0);
 });
@@ -399,7 +410,7 @@ test("Claude trả kết quả không phải JSON: không làm gì và tính là
   const r = await runChain({ home, call });
   assert.equal(r.applied.length, 0);
   assert.equal(status(db, id).status, "pending");
-  assert.equal(stateOf(home).fails[`${id}:0`], 1);
+  assert.equal(failsOf(home, id), 1);
 });
 
 test("đăng nhập hỏng hoặc không có quyền admin: nhả khoá rồi mới báo lỗi rõ ràng, không gọi Claude", async (t) => {
@@ -449,7 +460,7 @@ test("luật cứng: AI lỡ trả approve cho bài lôi kéo ra ngoài nền t�
   const r = await runChain({ home, call });
   assert.deepEqual(r.applied.map((a) => [a.id, a.action, a.status]), [[good, "approve", 200]]);
   assert.equal(status(db, bad).status, "pending", "bài vi phạm phải còn chờ admin, không được tự duyệt");
-  assert.equal(stateOf(home).graded[`${bad}:0`].outcome, "escalated");
+  assert.equal(gradedOf(home, bad, 0).outcome, "escalated");
   const row = logOf(home).find((l) => l.id === bad);
   assert.equal(row.decision, "escalate");
   assert.match(row.reason, /giao dịch ngoài nền tảng/);
@@ -471,4 +482,22 @@ test("nhật ký ghi lại lý do web báo khi lệnh bị từ chối (409), đ
   const row = logOf(home).find((l) => l.id === id);
   assert.equal(row.result, "conflict");
   assert.match(row.webMessage, /không còn chờ duyệt/);
+});
+
+test("admin xoá hẳn bài rồi bài mới nhận lại đúng id: bài mới vẫn được chấm, không bị coi là đã chấm của bài cũ", async (t) => {
+  const home = makeHome();
+  const { db, call } = await fixture(t);
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const first = await newPost(call, "student", "ZZQUANGCAO bài cũ");
+  await runChain({ home, call });
+  assert.equal(status(db, first).status, "rejected");
+  // Mô phỏng xoá hẳn bài cũ: web có thể tái dùng id lớn nhất, bài mới nhận cùng id và phiên bản 0.
+  run(db, "DELETE FROM community_posts WHERE id=?", first);
+  const again = await newPost(call, "student", "Mẹo học Toán lớp 9");
+  assert.equal(again, first, "điều kiện của lỗi: id được tái dùng");
+  // Ngoài đời bài đăng lại cách bài cũ hàng phút; trong test hai bài cùng giây nên đẩy created_at của bài mới đi.
+  run(db, "UPDATE community_posts SET created_at='2099-01-01 00:00:00' WHERE id=?", again);
+  const r = await runChain({ home, call });
+  assert.deepEqual(r.applied.map((a) => [a.id, a.action, a.status]), [[again, "approve", 200]]);
+  assert.equal(status(db, again).status, "approved");
 });
