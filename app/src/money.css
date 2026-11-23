@@ -541,3 +541,14 @@
   .month-bars { height: 140px; gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .month-stack span { transition: none; } }
+
+/* vietqr-inline */
+.topup-note { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin: 0; padding: 10px 14px; border-radius: 12px; background: color-mix(in oklab, #e8a33d 14%, transparent); color: var(--foreground); font-size: 13px; line-height: 1.5; }
+.topup-note svg { width: 15px; height: 15px; flex: none; margin-top: 2px; color: #b4761a; }
+.topup-countdown { margin: 0; font-size: 13px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.topup-expired { margin: 0; font-size: 13px; color: #b4761a; }
+.topup-qr-wrap[data-kind="error"] figcaption { display: grid; justify-items: center; gap: 8px; font-size: 13px; }
+.topup-qr-wrap[data-kind="error"] button { display: inline-flex; }
+.topup-notready { display: grid; justify-items: center; gap: 8px; width: 100%; padding: 22px 18px; border-radius: 14px; background: var(--muted); text-align: center; }
+.topup-notready svg { width: 28px; height: 28px; color: var(--muted-foreground); }
+.topup-notready p { margin: 0; font-size: 13px; color: var(--muted-foreground); line-height: 1.5; }

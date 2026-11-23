@@ -190,6 +190,8 @@ export function migrateDatabase(db) {
   for (const table of ["messages", "inquiry_messages", "support_messages"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "is_event"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN is_event INTEGER NOT NULL DEFAULT 0`);
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "event_href"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN event_href TEXT`);
   }
   // Event cards can also point at proposals/classes: widen the context CHECK
   // (requires a rebuild in SQLite) and keep a plain link column for the rest.

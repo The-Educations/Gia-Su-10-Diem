@@ -176,34 +176,44 @@ Profile removals, hidden/rejected posts, and removed comments enqueue an email i
 
 ## SePay: Số dư học phí
 
-Nạp tiền dùng **Cổng thanh toán SePay** (chuyển khoản QR, NAPAS, thẻ). Website ký form thanh toán bằng HMAC-SHA256, người dùng thanh toán trên trang của SePay, rồi SePay gọi **IPN** về website. Số dư chỉ được cộng khi IPN báo `ORDER_PAID`, đơn `CAPTURED`, giao dịch `APPROVED` và đúng số tiền của lệnh nạp. Mỗi giao dịch chỉ được cộng một lần.
+Nạp tiền dùng **VietQR chuyển khoản trực tiếp** vào tài khoản ngân hàng của nền tảng (hiện MBBank `0962250207`). Mỗi lệnh nạp có một mã duy nhất (`GSD` + 8 ký tự): dialog nạp hiển thị QR vietqr.app kèm đúng số tiền và nội dung chuyển khoản — người dùng không bao giờ rời trang lên SePay. Số dư được cộng khi webhook chuyển khoản của SePay khớp mã, hoặc nhờ đối soát định kỳ qua SePay API v2. Mỗi giao dịch chỉ được cộng một lần.
 
-Ba secret của Worker (không commit):
+Các secret Worker cho kênh ngân hàng (không commit):
 
 | Secret | Lấy ở đâu |
 |---|---|
-| `SEPAY_MERCHANT_ID` | Cổng thanh toán → Cấu hình → Thông tin đơn vị (Mã đơn vị, ví dụ `SP-LIVE-…`) |
+| `SEPAY_BANK_ACCOUNT` | Số tài khoản nhận tiền (`0962250207`) |
+| `SEPAY_BANK_CODE` | Mã ngân hàng VietQR của tài khoản đó (`MBBank`) |
+| `SEPAY_ACCOUNT_NAME` | Tên chủ tài khoản hiển thị trong dialog nạp |
+| `SEPAY_WEBHOOK_SECRET` | Chuỗi bạn tự đặt, nhập giống hệt ở webhook SePay (HMAC) |
+| `SEPAY_API_TOKEN` | Tùy chọn — API token quyền **chỉ đọc** để đối soát dự phòng (xem bên dưới) |
+| `SEPAY_BANK_ACCOUNT_ID` | Tùy chọn — UUID tài khoản ngân hàng trong SePay (từ URL chi tiết tài khoản), để lọc đúng một tài khoản khi đối soát |
+
+```bash
+npx wrangler secret put SEPAY_BANK_ACCOUNT
+npx wrangler secret put SEPAY_BANK_CODE
+npx wrangler secret put SEPAY_ACCOUNT_NAME
+npx wrangler secret put SEPAY_WEBHOOK_SECRET
+npx wrangler secret put SEPAY_API_TOKEN   # tùy chọn
+```
+
+Cấu hình **Tích hợp WebHooks** trong my.sepay.vn cho tài khoản MBBank: sự kiện **Tiền vào** — lưu ý trong thiết lập này MBBank chỉ gửi được webhook tiền vào — URL `https://giasudiem10.online/api/sepay/webhook`, xác thực **HMAC-SHA256**, secret = `SEPAY_WEBHOOK_SECRET`. Khai báo thêm **Cấu trúc mã thanh toán** tiền tố `GSD`, hậu tố 8 ký tự, để SePay tách sẵn mã khỏi nội dung chuyển khoản; chưa khai thì website vẫn tự tìm mã trong nội dung. Lệnh `id=0` (kiểm tra kết nối) trả 200 `{ "success": false }` và không tạo bản ghi.
+
+Không có `SEPAY_API_TOKEN` thì bỏ qua phần đối soát (không báo lỗi). Đây là token **quyền chỉ đọc** (không thể chuyển tiền): tạo ở my.sepay.vn → **API Access** → tạo API token, quyền "Đọc danh sách giao dịch". Có token thì mỗi lần mở ví hoặc mở lại lệnh nạp, server đọc `GET userapi.sepay.vn/v2/transactions` (Bearer, `per_page=100`, cửa sổ 7 ngày, lọc `bank_account_id` khi có `SEPAY_BANK_ACCOUNT_ID`), khớp `amount_in` theo mã để cộng tiền và `amount_out` để xác nhận rút. Mỗi giao dịch ngân hàng được chống trùng **xuyên kênh** theo mã tham chiếu (`referenceCode`/`reference_number`) trong `bank_transactions`: webhook đến trước hay API đến trước cũng chỉ cộng một lần. Tiền vào mang mã không khớp lệnh nạp nào vẫn vào danh sách "chưa khớp mã" để quản trị viên gán tay.
+
+Thiếu tài khoản ngân hàng thì nút Nạp tiền tắt trên production và dialog báo "Nạp tiền chưa sẵn sàng". Ở máy local không có secret thì nạp tiền được giả lập. Sau khi chạy: nạp thử 50.000đ, kiểm tra log webhook trả 200 và số dư tăng. Giao dịch không khớp hiện ở Quản trị → Tài chính → "Tiền về chưa khớp mã".
+
+### Cổng thanh toán SePay (cũ, chỉ còn cho đơn cũ)
+
+Luồng hosted checkout cũ (form ký HMAC, thanh toán trên trang SePay, IPN `/api/sepay/ipn`) vẫn được giữ nguyên cho các đơn đã tạo trước đây; đơn nạp mới không bao giờ có checkout. Ba secret cũ chỉ cần giữ nếu còn đơn pending:
+
+| Secret | Lấy ở đâu |
+|---|---|
+| `SEPAY_MERCHANT_ID` | Cổng thanh toán → Cấu hình → Thông tin đơn vị |
 | `SEPAY_SECRET_KEY` | Cùng trang, Secret Key của đơn vị (`spsk_live_…`) |
 | `SEPAY_IPN_SECRET` | Chuỗi bạn tự đặt, nhập giống hệt ở tab IPN |
 
-```bash
-npx wrangler secret put SEPAY_MERCHANT_ID
-npx wrangler secret put SEPAY_SECRET_KEY
-npx wrangler secret put SEPAY_IPN_SECRET
-```
-
-Cấu hình tab **IPN** trong my.sepay.vn:
-
-- IPN URL: `https://giasudiem10.online/api/sepay/ipn`
-- Auth Type: **Secret Key**, giá trị = `SEPAY_IPN_SECRET`
-- Content Type: `application/json`
-- Trạng thái: Kích hoạt IPN
-
-Thiếu một trong ba secret thì nút Nạp tiền tắt trên production và IPN trả 503. Ở máy local không có secret thì nạp tiền được giả lập. Thử sandbox: thêm `SEPAY_ENV=sandbox` và dùng khóa `spsk_test_…`.
-
-Sau khi chạy: nạp thử 50.000đ, kiểm tra **Nhật ký IPN** trên SePay trả 200 và số dư tăng. Giao dịch không khớp hiện ở Quản trị → Tài chính → "Tiền về chưa khớp mã".
-
-Secret Key của đơn vị chỉ hiện một lần. Nếu key bị lộ (gửi qua chat, commit lên Git), tạo lại ở trang Thông tin đơn vị rồi chạy lại `npx wrangler secret put SEPAY_SECRET_KEY`.
+Secret Key của đơn vị chỉ hiện một lần — nếu key bị lộ, tạo lại rồi chạy lại `npx wrangler secret put SEPAY_SECRET_KEY`.
 
 ### Rút tiền: SePay tự xác nhận khi tiền rời tài khoản
 

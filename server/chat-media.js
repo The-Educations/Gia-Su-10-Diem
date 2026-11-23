@@ -30,9 +30,8 @@ export function withChatMedia(db, kind, threadId, messages) {
 export function insertChatEvent(db, kind, threadId, user, text, context = null, href = null) {
   const [, table, column] = threads[kind];
   if (kind === "inquiry")
-    run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,is_event,event_href) VALUES (?,?,?,?,?,1,?)`, threadId, user.id, text, context?.kind || null, context?.id || null, href);
-  else
-    run(db, `INSERT INTO ${table}(${column},sender_id,body,is_event) VALUES (?,?,?,1)`, threadId, user.id, text);
+    return Number(run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,is_event,event_href) VALUES (?,?,?,?,?,1,?)`, threadId, user.id, text, context?.kind || null, context?.id || null, href).lastInsertRowid);
+  return Number(run(db, `INSERT INTO ${table}(${column},sender_id,body,is_event,event_href) VALUES (?,?,?,1,?)`, threadId, user.id, text, href).lastInsertRowid);
 }
 // Every student–tutor pair affected by a class-session change gets a card
 // in their own conversation, so it shows up where they actually talk.
