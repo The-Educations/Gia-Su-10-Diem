@@ -20,9 +20,10 @@ import { AdminFinance } from "@/components/admin-finance";
 import { AdminAudit } from "@/components/admin-audit";
 import AdminCommunity from "./AdminCommunity";
 import AdminPosts from "./AdminPosts";
+import AdminSafety from "@/components/admin-safety";
 
-type Today = { students: number; tutors: number; credentials: number; withdrawals: number; community: number; disputes: unknown[]; sessions_waiting: number };
-const TABS = ["today", "classes", "tutors", "students", "users", "catalog", "posts", "community", "finance", "audit"];
+type Today = { students: number; tutors: number; credentials: number; withdrawals: number; community: number; disputes: unknown[]; sessions_waiting: number; flagged_messages?: number; reported_reviews?: number };
+const TABS = ["today", "classes", "tutors", "students", "users", "catalog", "posts", "community", "finance", "safety", "audit"];
 // The catalog used to be two tabs; keep their old links working.
 const OLD: Record<string, string> = { resources: "catalog", subjects: "catalog" };
 
@@ -31,7 +32,7 @@ export default function Admin() {
   const asked = params.get("tab") || "", tab = TABS.includes(OLD[asked] || asked) ? OLD[asked] || asked : "today";
   if (asked === "sessions") { const n = new URLSearchParams(params); n.delete("tab"); return <Navigate to={`/sessions${n.size ? `?${n}` : ""}`} replace />; }
   const result = useLoad<AdminData>("/admin"), subjects = useLoad<Subject[]>("/subjects"), today = useLoad<Today>("/admin/today").data;
-  const waiting = today ? today.disputes.length + today.sessions_waiting + today.withdrawals + today.students + today.credentials + today.tutors + today.community : 0;
+  const waiting = today ? today.disputes.length + today.sessions_waiting + today.withdrawals + today.students + today.credentials + today.tutors + today.community + (today.flagged_messages || 0) + (today.reported_reviews || 0) : 0;
   const withData = (pane: (d: AdminData) => ReactNode) =>
     result.data ? pane(result.data) : result.error ? <ErrorState error={result.error} retry={result.reload} /> : <Loading />;
   const trigger = (value: string, label: string, n?: number) => <TabsTrigger value={value}>{lang === "en" ? (TAB_EN[label] ?? t(label)) : t(label)}<Waiting n={n} /></TabsTrigger>;
@@ -53,6 +54,7 @@ export default function Admin() {
             {trigger("posts", "Tin tức")}
             {trigger("community", "Cộng đồng", today?.community)}
             {trigger("finance", "Tài chính", today?.withdrawals)}
+            {trigger("safety", "An toàn", today ? (today.flagged_messages || 0) + (today.reported_reviews || 0) : undefined)}
             {trigger("audit", "Nhật ký")}
           </TabsList>
           <TabsContent value="today"><AdminToday /></TabsContent>
@@ -64,6 +66,7 @@ export default function Admin() {
           <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="finance"><AdminFinance /></TabsContent>
+          <TabsContent value="safety"><AdminSafety /></TabsContent>
           <TabsContent value="audit"><AdminAudit /></TabsContent>
         </Tabs>
       </div>

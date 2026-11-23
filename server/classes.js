@@ -4,6 +4,7 @@ import { notify } from "./notifications.js";
 import { move, settings } from "./wallet.js";
 import { childrenOf } from "./family.js";
 import { sessionChatEvent } from "./chat-media.js";
+import { flaggedList, flaggedThread, reviewQueue, warnThread } from "./trust-safety.js";
 
 // A class has one tutor, one or more students and a weekly rhythm. Each student
 // brings their own package (an accepted offer): a number of lessons paid in
@@ -355,6 +356,8 @@ export function registerClasses(app, db, auth, audit) {
       withdrawals: one(db, "SELECT COUNT(*) n FROM withdrawals WHERE status='requested'").n,
       community: one(db, "SELECT COUNT(*) n FROM community_posts WHERE status='pending'").n,
       violations: all(db, "SELECT t.user_id,u.name,t.violations FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.violations>=3 ORDER BY t.violations DESC"),
+      flagged_messages: one(db, "SELECT (SELECT COUNT(*) FROM messages WHERE flagged=1)+(SELECT COUNT(*) FROM inquiry_messages WHERE flagged=1) n").n,
+      reported_reviews: one(db, "SELECT COUNT(*) n FROM reviews WHERE reported=1 AND hidden=0").n,
       disputes: all(db, `SELECT sm.session_id,sm.member_id,sm.note,cs.starts_at,c.id AS class_id,c.title,u.name AS student_name,t.name AS tutor_name
         FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN classes c ON c.id=cs.class_id
         JOIN class_members m ON m.id=sm.member_id JOIN users u ON u.id=m.student_id JOIN users t ON t.id=c.tutor_id WHERE sm.outcome='disputed' ORDER BY cs.starts_at`),
@@ -371,6 +374,42 @@ export function registerClasses(app, db, auth, audit) {
     NULL AS outcome,b.note,NULL AS tutor_confirmed_at,NULL AS student_confirmed_at,NULL AS rating,NULL AS settled,
     su.name AS student_name
     FROM bookings b JOIN users su ON su.id=b.student_id JOIN users tu ON tu.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id`;
+  // Safety queue: off-platform contact attempts flagged inside chat.
+  app.get("/api/admin/safety/flagged", auth("admin"), (req, res) => res.json(flaggedList(db)));
+  app.get("/api/admin/safety/thread/:kind/:id", auth("admin"), (req, res) => {
+    const thread = flaggedThread(db, req.params.kind === "inquiry" ? "inquiry" : "lesson", Number(req.params.id));
+    // Viewing a private conversation is itself audited.
+    audit(req.user.id, "safety.view", `${req.params.kind}:${req.params.id}`, { parties: thread.parties });
+    res.json(thread);
+  });
+  app.post("/api/admin/safety/dismiss", auth("admin"), (req, res) => {
+    const d = z.object({ kind: z.enum(["lesson", "inquiry"]), message_id: z.number().int() }).parse(req.body);
+    const table = d.kind === "inquiry" ? "inquiry_messages" : "messages";
+    run(db, `UPDATE ${table} SET flagged=0 WHERE id=?`, d.message_id);
+    audit(req.user.id, "safety.dismiss", `${d.kind}:${d.message_id}`, {});
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/safety/warn", auth("admin"), (req, res) => {
+    const d = z.object({ kind: z.enum(["lesson", "inquiry"]), thread_id: z.number().int(), note: z.string().max(300).optional() }).parse(req.body);
+    const warned = warnThread(db, req.user, d.kind, d.thread_id, d.note || "");
+    audit(req.user.id, "safety.warn", `${d.kind}:${d.thread_id}`, { user_id: warned });
+    res.json({ ok: true, warned });
+  });
+  // Reported reviews queue + moderation.
+  app.get("/api/admin/reviews/queue", auth("admin"), (req, res) => res.json(reviewQueue(db)));
+  app.post("/api/admin/reviews/:bookingId/visibility", auth("admin"), (req, res) => {
+    const d = z.object({ hidden: z.boolean() }).parse(req.body);
+    run(db, "UPDATE reviews SET hidden=?,reported=0 WHERE booking_id=?", d.hidden ? 1 : 0, Number(req.params.bookingId));
+    audit(req.user.id, d.hidden ? "review.hidden" : "review.shown", `booking:${req.params.bookingId}`, {});
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/reviews/:bookingId/reply", auth("admin"), (req, res) => {
+    const d = z.object({ body: z.string().min(1).max(500) }).parse(req.body);
+    run(db, "UPDATE reviews SET reply=?,reply_at=CURRENT_TIMESTAMP WHERE booking_id=?", d.body, Number(req.params.bookingId));
+    audit(req.user.id, "review.reply", `booking:${req.params.bookingId}`, { body: d.body.slice(0, 80) });
+    res.json({ ok: true });
+  });
+  // The sessions worklist: one row per (lesson, student) pair; the client groups them back by lesson.
   // The sessions worklist: one row per (lesson, student) pair plus one row per
   // standalone booking; the client groups lessons back by lesson.
   app.get("/api/admin/sessions", auth("admin"), (req, res) => {

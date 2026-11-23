@@ -10,6 +10,7 @@ const pages = {
 <h2>Thông tin được thu thập</h2>
 <p>Chúng tôi lưu thông tin bạn cung cấp khi tạo và sử dụng tài khoản: tên, email, lựa chọn học sinh, phụ huynh hoặc gia sư, mục tiêu học tập của bạn hoặc của con, hồ sơ gia sư, môn học, học phí, địa điểm, giờ trống, ảnh và CV bạn tải lên. Mật khẩu đăng ký trực tiếp được lưu dưới dạng băm, không ở dạng văn bản đọc được.</p>
 <p>Hoạt động trên nền tảng gồm lịch đặt học, trạng thái buổi học, tin nhắn, gia sư đã lưu, đánh giá, lượt thích và bình luận. Hệ thống cũng xử lý cookie phiên đăng nhập, địa chỉ IP để giới hạn yêu cầu và nhật ký quản trị phục vụ bảo mật.</p>
+<p>Tin nhắn được quét tự động để phát hiện thông tin liên hệ ngoài nền tảng (số điện thoại, email, Zalo, liên kết mạng xã hội); phần đó bị che với người nhận và tin nhắn được gắn cờ cho quản trị kiểm tra. Bản gốc chưa che chỉ quản trị viên xem được trong mục An toàn, và mỗi lượt mở hội thoại bị gắn cờ đều được ghi vào nhật ký quản trị.</p>
 <h2>Đăng nhập bằng Google</h2>
 <p>Khi bạn chọn đăng nhập bằng Google, ứng dụng yêu cầu thông tin nhận dạng cơ bản với các phạm vi openid, email và profile. Chúng tôi dùng mã định danh Google, tên và email đã xác minh để tạo, đăng nhập hoặc liên kết tài khoản theo lựa chọn của bạn. Bước đăng nhập không yêu cầu quyền đọc Gmail, Google Drive, danh bạ hay lịch cá nhân và không lưu access token hoặc refresh token của Google sau bước đăng nhập.</p>
 <p>Bạn có thể thu hồi quyền truy cập tại <a href="https://myaccount.google.com/connections">trang kết nối tài khoản Google</a>. Việc thu hồi không tự xóa tài khoản hoặc dữ liệu đã lưu trên Gia Sư 10 Điểm; hãy liên hệ chúng tôi nếu bạn muốn yêu cầu xóa.</p>
@@ -45,6 +46,8 @@ const pages = {
 <h2>Nội dung và hành vi được phép</h2>
 <p>Bạn giữ quyền đối với nội dung của mình và cho phép nền tảng lưu trữ, xử lý, hiển thị nội dung đó để cung cấp dịch vụ theo lựa chọn công khai của bạn. Bạn phải có quyền sử dụng ảnh, tài liệu và CV tải lên; không công bố dữ liệu cá nhân của người khác khi chưa được phép.</p>
 <p>Không đăng nội dung vi phạm pháp luật, quấy rối, lừa đảo, xâm phạm quyền sở hữu trí tuệ; không tạo đánh giá giả, gửi thư rác, khai thác trái phép tài khoản hay can thiệp hoạt động của dịch vụ.</p>
+<h2>Trao đổi trong nền tảng</h2>
+<p>Tin nhắn giữa học sinh/phụ huynh và gia sư được quét tự động để phát hiện thông tin liên hệ ngoài nền tảng (số điện thoại, email, Zalo, liên kết mạng xã hội). Nội dung đó bị che với người nhận và tin nhắn được gắn cờ để quản trị viên kiểm tra, nhằm giữ liên hệ và thanh toán trong nền tảng để bảo vệ hai bên. Quản trị viên có thể xem bản gốc của các tin nhắn bị gắn cờ; mỗi lượt xem được ghi nhật ký.</p>
 <h2>Kiểm duyệt và hạn chế tài khoản</h2>
 <p>Quản trị viên có thể yêu cầu sửa, ẩn hoặc gỡ nội dung và hạn chế tài khoản khi phát hiện vi phạm, rủi ro bảo mật hoặc có yêu cầu pháp lý. Bạn có thể liên hệ ${contact} để cung cấp thông tin bổ sung hoặc yêu cầu xem xét quyết định.</p>
 <h2>Khả dụng và trách nhiệm</h2>

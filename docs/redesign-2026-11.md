@@ -71,3 +71,7 @@ Chốt với chủ dự án ngày 22/11/2026 qua buổi hỏi đáp. Các mục 
 - Thông báo trong app (chuông) + email cho việc quan trọng; Zalo để sau.
 - Bỏ: đặt từng giờ trống và yêu cầu học theo tuần (thay bằng offer/lớp), Tìm môn học (gộp vào tìm gia sư), Tin tức (thành chủ đề Thông báo), thư viện ảnh có thích/bình luận, nhạc nền.
 - Dữ liệu production được phép ghi đè; dữ liệu mẫu local phủ đủ mọi tính năng cho 4 tài khoản (học sinh, phụ huynh, gia sư, admin).
+
+## [CHỐT] Che thông tin liên hệ trong chat (việc G)
+
+Tin nhắn trong luồng tư vấn và buổi học được quét tự động (số điện thoại VN kể cả viết cách/chữ số, email, Zalo, Facebook, link mạng xã hội). Chính sách: không chặn gửi — phần liên hệ bị che với người nhận ("[đã ẩn liên hệ]"), người gửi được cảnh báo nhẹ trước khi gửi và thấy nhãn "Đã ẩn thông tin liên hệ theo chính sách" trên tin của mình, và tin bị gắn cờ cho quản trị tại Quản trị → An toàn. Bản gốc chưa che chỉ quản trị xem được; mỗi lần mở hội thoại bị cờ đều được ghi vào Nhật ký. Mục tiêu: giữ liên hệ và thanh toán trong nền tảng để bảo vệ cả hai phía. Luồng tin hỗ trợ (admin) không áp dụng.

@@ -193,6 +193,16 @@ export function migrateDatabase(db) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "event_href"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN event_href TEXT`);
   }
+  for (const table of ["messages", "inquiry_messages"]) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "flagged"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0`);
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "original_body"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN original_body TEXT`);
+  }
+  for (const col of ["reported INTEGER NOT NULL DEFAULT 0", "reported_reason TEXT NOT NULL DEFAULT ''", "reported_by INTEGER", "hidden INTEGER NOT NULL DEFAULT 0", "reply TEXT NOT NULL DEFAULT ''", "reply_at TEXT"]) {
+    const name = col.split(" ")[0];
+    if (!db.prepare("PRAGMA table_info(reviews)").all().some(c => c.name === name)) db.exec(`ALTER TABLE reviews ADD COLUMN ${col}`);
+  }
   // Event cards can also point at proposals/classes: widen the context CHECK
   // (requires a rebuild in SQLite) and keep a plain link column for the rest.
   const inquirySql = one(db, "SELECT sql FROM sqlite_master WHERE type='table' AND name='inquiry_messages'")?.sql || "";
@@ -201,9 +211,10 @@ export function migrateDatabase(db) {
       id INTEGER PRIMARY KEY, inquiry_id INTEGER NOT NULL REFERENCES inquiries(id),
       sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       context_kind TEXT CHECK(context_kind IN ('offer','lesson','weekly-request','proposal')), context_id INTEGER,
-      is_event INTEGER NOT NULL DEFAULT 0, event_href TEXT);
-    INSERT INTO inquiry_messages_next(id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event,event_href)
-    SELECT id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event,NULL FROM inquiry_messages;
+      is_event INTEGER NOT NULL DEFAULT 0, event_href TEXT,
+      flagged INTEGER NOT NULL DEFAULT 0, original_body TEXT);
+    INSERT INTO inquiry_messages_next(id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event,event_href,flagged,original_body)
+    SELECT id,inquiry_id,sender_id,body,created_at,context_kind,context_id,is_event,NULL,flagged,original_body FROM inquiry_messages;
     DROP TABLE inquiry_messages; ALTER TABLE inquiry_messages_next RENAME TO inquiry_messages;`);
   } else if (!db.prepare("PRAGMA table_info(inquiry_messages)").all().some(c => c.name === "event_href")) {
     db.exec("ALTER TABLE inquiry_messages ADD COLUMN event_href TEXT");
