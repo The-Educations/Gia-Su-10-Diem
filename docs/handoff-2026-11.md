@@ -61,7 +61,7 @@ npm test            # API (≈200 test)
 npm run test:e2e    # Playwright (≈77 hành trình)
 ```
 
-CI (`.github/workflows/ci-deploy.yml`) chạy các bước này cộng Cloudflare runtime (`wrangler deploy --dry-run` và chạy thử Worker), rồi tự deploy khi merge vào `main`. Playwright chỉ chạy ở PR, chia 4 phần song song, thử lại 1 lần trên CI. Lúc merge không chạy lại Playwright vì `main` bắt PR phải cập nhật theo `main` mới merge được (strict), nên commit vào `main` chính là commit đã qua test; bước build, API test và Cloudflare runtime vẫn chạy trước khi deploy. Lệnh deploy tự thử lại tối đa 3 lần nếu mất kết nối.
+CI: `.github/workflows/ci.yml` chạy ở PR (build + API test, Playwright chia 4 phần song song, Cloudflare runtime, check bắt buộc **Validate**). Merge vào `main` chạy `.github/workflows/deploy.yml`: Validate nhanh trên commit đã merge (API test, build, `wrangler deploy --dry-run`, chạy thử Worker) rồi Deploy Cloudflare. Không chạy lại Playwright ở `main` vì branch protection bắt PR cập nhật theo `main` trước khi merge (strict), nên commit vào `main` chính là commit đã qua test.
 
 ## Mã nguồn chính
 
