@@ -229,6 +229,7 @@ function Conversation({ thread, onRead }: { thread: Thread; onRead: (key: string
                                   <BubbleContent className="whitespace-pre-wrap">{m.body}</BubbleContent>
                                 </Bubble>
                               )}
+                              {!!m.masked && m.sender_id === user?.id && <small className="muted">{t("Đã ẩn thông tin liên hệ theo chính sách")}</small>}
                               {m.attachment && (
                                 <Bubble variant={m.sender_id === user?.id ? "default" : "secondary"}>
                                   <BubbleContent><Attachment m={m} /></BubbleContent>

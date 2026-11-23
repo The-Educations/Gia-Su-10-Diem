@@ -58,10 +58,15 @@ export function unreadCount(db, kind, threadId, userId) {
   return one(db, `SELECT COUNT(*) AS n FROM ${table} WHERE ${column}=? AND id>? AND sender_id<>?`, threadId, read, userId).n;
 }
 // ?before=<messageId>&limit=<n>: the newest n rows before a cursor, oldest first.
+// Never returns admin-only columns: original_body (the unmasked contact
+// detail) and flagged stay server-side; `masked` only says the text was cut.
 export function chatPage(db, kind, threadId, req) {
   const q = z.object({ before: z.coerce.number().int().positive().optional(), limit: z.coerce.number().int().min(1).max(200).optional() }).parse(req.query);
   const [, table, column] = threads[kind];
-  const base = `SELECT m.*,u.name FROM ${table} m JOIN users u ON u.id=m.sender_id WHERE ${column}=?`;
+  const cols = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+  const optional = ["context_kind", "context_id", "event_href", "is_event"].filter((c) => cols.has(c)).map((c) => `m.${c}`).join(",");
+  const masked = cols.has("original_body") ? ",(m.original_body IS NOT NULL) AS masked" : ",0 AS masked";
+  const base = `SELECT m.id,m.${column},m.sender_id,m.body,m.created_at,${optional}${masked},u.name FROM ${table} m JOIN users u ON u.id=m.sender_id WHERE ${column}=?`;
   if (!q.limit) return { messages: all(db, `${base} ORDER BY m.id`, threadId), hasMore: false };
   const rows = all(db, `${base} ${q.before ? "AND m.id<?" : ""} ORDER BY m.id DESC LIMIT ?`, threadId, ...(q.before ? [q.before] : []), q.limit + 1);
   return { messages: rows.slice(0, q.limit).reverse(), hasMore: rows.length > q.limit };

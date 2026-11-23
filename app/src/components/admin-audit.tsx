@@ -104,6 +104,7 @@ export function AdminAudit() {
     if (/^subject\./.test(a.action)) return go(`/admin?tab=catalog&subject=${encodeURIComponent(id)}`, d?.title || id);
     if (/^resource\./.test(a.action)) return go(`/admin?tab=catalog&resource=${num}`, d?.title || `#${num}`);
     if (/^community\./.test(a.action)) return go("/admin?tab=community", d?.title || t("Cộng đồng"));
+    if (/^safety\.|^review\./.test(a.action)) return go("/admin?tab=safety", t("An toàn"));
     if (/_post$|news/.test(a.action)) return go("/admin?tab=posts", t("Tin tức"));
     if (!id || id === "0" || id === "rules") return <span className="muted">{d?.title || "—"}</span>;
     return <span className="muted">#{a.target}</span>;

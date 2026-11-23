@@ -1797,5 +1797,5 @@ export const enMore: Record<string, string> = {
   "Thao tác đánh giá": "Review actions",
   "Đánh giá đã bị ẩn": "Review was hidden",
   "Tin nhắn có thông tin liên hệ — nội dung đó sẽ bị che với người nhận.": "Message contains contact info — it will be masked for the recipient.",
-
+  "Đã ẩn thông tin liên hệ theo chính sách": "Contact info hidden per policy",
 };

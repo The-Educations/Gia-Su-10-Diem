@@ -196,6 +196,7 @@ export type Message = {
   context_kind?: MessageContext["kind"] | null;
   is_event?: number;
   event_href?: string | null;
+  masked?: number;
 };
 export type AdminData = {
   theme_catalog: ProfileTheme[];
