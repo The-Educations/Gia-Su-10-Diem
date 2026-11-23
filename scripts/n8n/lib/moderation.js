@@ -75,6 +75,26 @@ export function looksLikeInjection(text) {
   return patterns.some((re) => re.test(t));
 }
 
+// Dấu hiệu rủi ro bằng luật cứng, chạy song song với AI. Chỉ dùng để CHẶN tự duyệt (chuyển admin), không bao giờ tự từ chối.
+// Khớp trên chữ đã bỏ dấu, viết thường. Trả danh sách nhãn tiếng Việt; rỗng nếu không thấy dấu hiệu nào.
+export function riskSignals(text, links) {
+  const fold = (s) =>
+    String(s ?? "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d");
+  const t = fold(text) + " " + (Array.isArray(links) ? links : []).map(fold).join(" ");
+  const rules = [
+    ["số điện thoại", /(?:\d[\s.\-]?){9,}/],
+    ["email", /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/],
+    ["mạng xã hội/liên hệ riêng", /\b(?:zalo|telegram|whatsapp|viber|messenger|facebook|fb|instagram|tiktok|skype|inbox|ib|sdt)\b|t\.me\/|wa\.me\/|zalo\.me\//],
+    ["giao dịch ngoài nền tảng", /hoc chui|khong qua (?:web|trang|nen tang)|khoi (?:qua|phai qua) (?:web|trang|nen tang)|ngoai (?:web|nen tang|trang)|tranh phi|re hon tren web|lien he rieng|nhan (?:tin )?rieng|goi rieng/],
+    ["quảng cáo/bán hàng", /giam gia|khuyen mai|chuyen khoan|\buu dai\b|nhom kin|kiem tien|thu nhap \d|bit\.ly|tinyurl|cutt\.ly|shorturl|rebrand\.ly/],
+  ];
+  return rules.filter(([, re]) => re.test(t)).map(([label]) => label);
+}
+
 export function topicLabel(topic) {
   const labels = {
     find_tutor: "Tìm gia sư",
@@ -117,7 +137,8 @@ export function pickPending(queue, state, opts) {
       continue;
     }
     if (candidates.length < perRun) {
-      candidates.push({ ...base, topic: String(p.topic || "experience"), body: body.slice(0, 10000), links: extractLinks(html).slice(0, 30) });
+      const links = extractLinks(html).slice(0, 30);
+      candidates.push({ ...base, topic: String(p.topic || "experience"), body: body.slice(0, 10000), links, risk: riskSignals(title + "\n" + body, links) });
     }
   }
   return { candidates, escalations };
@@ -204,12 +225,12 @@ export function parseVerdict(raw) {
       ["approve", "reject", "escalate"].includes(o.verdict) &&
       "category" in o &&
       (o.category === null || categories.includes(o.category)) &&
-      typeof o.detail === "string",
+      (typeof o.detail === "string" || o.detail === null),
   );
   const mentions = objectsIn(text).filter((o) => o && typeof o === "object" && "verdict" in o);
   if (valid.length !== 1 || mentions.length !== 1) return null;
   const { verdict, category, detail } = valid[0];
-  return { verdict, category, detail };
+  return { verdict, category, detail: detail ?? "" };
 }
 
 // Quyết định cuối do mã quyết, không phải Claude. Trả { action, reason, note?, wouldDo? }.
@@ -221,7 +242,7 @@ export function decideModeration(verdict, ctx) {
     off_topic: "Bài viết chưa liên quan đến học tập nên chưa phù hợp với Cộng đồng.",
     advertising: "Bài viết có nội dung quảng cáo hoặc tự giới thiệu dịch vụ, chưa phù hợp với Cộng đồng.",
     insult: "Bài viết có lời lẽ xúc phạm hoặc công kích cá nhân, chưa phù hợp với Cộng đồng.",
-    contact: "Bài viết để lại thông tin liên hệ cá nhân (số điện thoại, email, mạng xã hội), chưa phù hợp với Cộng đồng.",
+    contact: "Bài viết để lại hoặc mời liên hệ riêng ngoài nền tảng (số điện thoại, email, mạng xã hội, giao dịch riêng), chưa phù hợp với Cộng đồng.",
   };
   const cleanDetail = (s) => {
     let t = String(s ?? "")
@@ -258,7 +279,13 @@ export function decideModeration(verdict, ctx) {
     intended = "escalate";
   }
 
-  const reason = String(verdict.detail ?? "").slice(0, 200);
+  let reason = String(verdict.detail ?? "").slice(0, 200);
+  // Luật cứng thấy dấu hiệu rủi ro thì không tự duyệt dù AI nói approve: để admin xem.
+  const risk = Array.isArray(ctx.risk) ? ctx.risk.filter((r) => typeof r === "string").slice(0, 5) : [];
+  if (intended === "approve" && risk.length) {
+    intended = "escalate";
+    reason = ("chuyển admin: có dấu hiệu " + risk.join(", ")).slice(0, 200);
+  }
   if (mode === "shadow") return { action: "shadow", wouldDo: intended, reason, ...(note ? { note } : {}) };
   if (intended === "escalate") return { action: "escalate", reason };
   if (intended === "reject" && mode === "approve_only") return { action: "escalate", reason: "chế độ approve_only: để admin từ chối" };

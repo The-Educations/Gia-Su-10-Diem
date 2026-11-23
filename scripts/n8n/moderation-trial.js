@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildModerationPrompt, parseVerdict, decideModeration, looksLikeInjection } from "./lib/moderation.js";
+import { buildModerationPrompt, parseVerdict, decideModeration, looksLikeInjection, riskSignals } from "./lib/moderation.js";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -42,10 +42,10 @@ for (const [i, s] of samples.entries()) {
     } catch (e) {
       error = String(e.message).split("\n")[0];
     }
-    const d = decideModeration(verdict, ctx);
+    const d = decideModeration(verdict, { ...ctx, risk: riskSignals(s.title + "\n" + s.body, s.links) });
     const got = verdict ? verdict.verdict : "LỖI";
-    // Đúng khi kết quả nằm trong tập cho phép; nếu từ chối thì phải đúng nhóm (nếu mẫu có nêu nhóm).
-    const ok = Boolean(verdict) && s.allow.includes(got) && (got !== "reject" || !s.rejectCategory || s.rejectCategory.includes(verdict.category));
+    // Đúng khi kết quả AI nằm trong tập cho phép (nếu từ chối thì đúng nhóm) VÀ quyết định cuối không tự duyệt bài vi phạm.
+    const ok = Boolean(verdict) && s.allow.includes(got) && (got !== "reject" || !s.rejectCategory || s.rejectCategory.includes(verdict.category)) && (s.allow.includes("approve") || d.action !== "approve");
     total += 1;
     if (!ok) bad += 1;
     console.log(`${ok ? "ĐÚNG " : "SAI  "} ${String(i + 1).padStart(2)} ${s.name}\n        AI: ${got}${verdict && verdict.category ? "/" + verdict.category : ""} — ${verdict ? verdict.detail : error}\n        quyết định cuối: ${d.action}${d.note ? " | lý do gửi tác giả: " + d.note : ""}`);

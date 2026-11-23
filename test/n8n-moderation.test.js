@@ -10,6 +10,7 @@ import {
   pickPending,
   buildModerationPrompt,
   parseVerdict,
+  riskSignals,
   decideModeration,
   settleModeration,
 } from "../scripts/n8n/lib/moderation.js";
@@ -154,6 +155,8 @@ test("parseVerdict nhận JSON hợp lệ từ bao của claude -p, từ chữ c
   assert.deepEqual(parseVerdict("Kết quả: " + JSON.stringify(v) + " xong"), v);
   assert.deepEqual(parseVerdict("```json\n" + JSON.stringify(v) + "\n```"), v);
   assert.deepEqual(parseVerdict(JSON.stringify({ result: '{"verdict":"approve","category":null,"detail":"Ổn."}' })), { verdict: "approve", category: null, detail: "Ổn." });
+  // Haiku đôi khi trả "detail": null cho bài hợp lệ: vẫn là kết quả hợp lệ, không được tính là lỗi.
+  assert.deepEqual(parseVerdict('```json\n{"verdict":"approve","category":null,"detail":null}\n```'), { verdict: "approve", category: null, detail: "" });
 });
 
 test("parseVerdict từ chối mọi thứ sai: lỗi, thiếu trường, sai giá trị, hai kết quả mâu thuẫn", () => {
@@ -257,4 +260,37 @@ test("settleModeration không sửa trạng thái đầu vào", () => {
 test("decideModeration giữ dấu & trong lý do (tên chủ đề 'Kinh nghiệm học & thi')", () => {
   const r = decideModeration({ verdict: "reject", category: "off_topic", detail: "Chỉ trao đổi về Kinh nghiệm học & thi." }, { mode: "full", daily: { date: "", approved: 0, rejected: 0 }, today: TODAY, caps: { approve: 40, reject: 15 } });
   assert.ok(r.note.includes("học & thi"));
+});
+
+test("riskSignals: bắt số điện thoại, mạng xã hội, lôi kéo ngoài nền tảng, quảng cáo; bài bình thường thì rỗng", () => {
+  assert.deepEqual(riskSignals("Liên hệ: 0 9 0 4 5 6 7 8 9 1 nhé"), ["số điện thoại"]);
+  assert.ok(riskSignals("kết bạn Zalo mình nhé").includes("mạng xã hội/liên hệ riêng"));
+  assert.ok(riskSignals("ai muốn học chui liên hệ tui, khỏi qua web").includes("giao dịch ngoài nền tảng"));
+  assert.ok(riskSignals("vào đăng ký giảm giá").includes("quảng cáo/bán hàng"));
+  assert.ok(riskSignals("kênh lấy tài liệu", ["https://t.me/abc"]).includes("mạng xã hội/liên hệ riêng"));
+  assert.ok(riskSignals("mail mình a.b@gmail.com").includes("email"));
+  for (const ok of [
+    "Cần gia sư Toán lớp 9 quận Cầu Giấy, ngân sách khoảng 200 nghìn một buổi.",
+    "Mình ôn thi vào lớp 10 bằng cách làm lại đề các năm trước mỗi tuần một đề.",
+    "Mình thấy mức học phí hiện tại hơi cao với học sinh cấp 2, mong web cân nhắc thêm gói.",
+  ]) assert.deepEqual(riskSignals(ok, ["https://www.youtube.com/watch?v=abc"]), [], ok);
+});
+
+test("decideModeration: có dấu hiệu rủi ro thì approve của AI chuyển admin; reject và escalate không đổi", () => {
+  const risk = ["số điện thoại"];
+  const a = decideModeration(V("approve"), ctx({ risk }));
+  assert.equal(a.action, "escalate");
+  assert.match(a.reason, /số điện thoại/);
+  assert.equal(decideModeration(V("approve"), ctx({ risk: [] })).action, "approve");
+  assert.equal(decideModeration(V("reject", "contact", "Có số."), ctx({ risk })).action, "reject");
+  assert.equal(decideModeration(V("escalate"), ctx({ risk })).action, "escalate");
+  // Chế độ shadow vẫn ghi đúng điều sẽ làm.
+  assert.equal(decideModeration(V("approve"), ctx({ mode: "shadow", risk })).wouldDo, "escalate");
+});
+
+test("pickPending: gắn dấu hiệu rủi ro vào bài sẽ gửi AI chấm", () => {
+  const q = [{ id: 1, status: "pending", review_version: 0, title: "Tìm lớp", body: "ai muốn học chui thì nhắn riêng nhé", body_html: "<p>x</p>", topic: "find_student" }];
+  const { candidates } = pickPending(q, { graded: {}, fails: {}, daily: { date: "", approved: 0, rejected: 0 } }, {});
+  assert.equal(candidates.length, 1);
+  assert.ok(candidates[0].risk.includes("giao dịch ngoài nền tảng"));
 });
