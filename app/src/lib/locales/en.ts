@@ -501,3 +501,10 @@ const enCtxCard: Record<string, string> = {
   "Trả lời về": "Reply to",
 };
 for (const [vi, text] of Object.entries(enCtxCard)) en[vi] = text;
+
+// Shared wallet store + balance chip
+const enWalletStore = {
+  "Chưa tải được số dư — bấm để thử lại": "Could not load the balance — tap to retry",
+  "Đã nhận {amount} vào số dư": "{amount} received into your balance",
+};
+for (const [vi, text] of Object.entries(enWalletStore)) en[vi] = text;

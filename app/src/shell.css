@@ -717,3 +717,4 @@ main {
 .balance-chip:hover { background: var(--muted); }
 .balance-chip svg { width: 15px; height: 15px; color: var(--positive); }
 @media (max-width: 420px) { .balance-chip span { font-size: 12px; } .balance-chip { padding: 0 9px; } }
+.balance-chip-error { cursor: pointer; border-style: dashed; }
