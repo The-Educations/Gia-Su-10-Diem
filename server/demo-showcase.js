@@ -1,5 +1,5 @@
-import { all, one, run } from "./db.js";
-import { move } from "./wallet.js";
+import { all, one, run, transaction } from "./db.js";
+import { move, newPaymentCode, creditDepositByCode, requestWithdrawal, payoutWithdrawal, rejectWithdrawal } from "./wallet.js";
 import { notify } from "./notifications.js";
 import { insertChatEvent } from "./chat-media.js";
 import { startClass } from "./classes.js";
@@ -63,7 +63,7 @@ export async function seedShowcase(db, hash) {
   mark("showcase-classes-v1", () => {
     const bao = uid("bao"), nhi = uid("nhi");
     if (!bao || !linh || !huy) return;
-    move(db, bao, "deposit", { amount: 4000000, ref: "demo", note: "Nạp mẫu" });
+    move(db, bao, "admin_adjustment", { amount: 4000000, ref: "demo", note: "Số dư ban đầu cho tài khoản mẫu" });
     const proposal = (sender, sid, tutor, subject, sessions, rate, schedule, start, status, message) => Number(run(db,
       `INSERT INTO proposals(sender,student_id,tutor_id,subject_id,mode,sessions,minutes,rate,total,schedule,start_date,message,status,held,credits,expires_at,decided_at)
        VALUES (?,?,?,?,'online',?,90,?,?,?,?,?,?,?,?,?,?)`, sender, sid, tutor, subject, sessions, rate, sessions * rate, JSON.stringify(schedule), start, message, status,
@@ -98,14 +98,25 @@ export async function seedShowcase(db, hash) {
   });
 
   // Money: deposits in every state, withdrawals in every state, 6 months of revenue.
+  // Everything goes through the wallet's own ledger helpers so the demo ledger
+  // keeps the same invariants as production (deposit:<id> refs, held money).
   mark("showcase-money-v1", () => {
-    const paid = (uid2, code, amount, at) => {
-      run(db, "INSERT INTO deposits(user_id,payer_id,code,amount,received,status,created_at,paid_at) VALUES (?,?,?,?,?, 'paid',?,?)", uid2, uid2, code, amount, amount, at, at);
-      move(db, uid2, "deposit", { amount, ref: `deposit:${code}`, note: `Nạp ${code}` });
+    const code = () => newPaymentCode(db, "GSD");
+    const backdate = (ref, requestAt, settleAt = null, kinds = ["withdrawal_requested", "withdrawal_paid", "withdrawal_rejected", "deposit"]) => {
+      run(db, `UPDATE wallet_entries SET created_at=? WHERE ref=? AND kind=?`, requestAt, ref, kinds[0]);
+      if (settleAt) run(db, `UPDATE wallet_entries SET created_at=? WHERE ref=? AND kind IN (?,?)`, settleAt, ref, kinds[1], kinds[2]);
     };
-    paid(student, "GSD-DEMO-001", 3000000, iso(-24 * 40));
-    paid(parent || student, "GSD-DEMO-002", 1500000, iso(-24 * 20));
-    run(db, "INSERT INTO deposits(user_id,payer_id,code,amount,status,created_at) VALUES (?,?,?,?,'pending',?)", student, student, "GSD-DEMO-003", 1000000, iso(-4));
+    const paid = (uid2, amount, at) => {
+      const c = code();
+      run(db, "INSERT INTO deposits(user_id,payer_id,code,amount,created_at) VALUES (?,?,?,?,?)", uid2, uid2, c, amount, at);
+      creditDepositByCode(db, c, amount, "demo-seed");
+      run(db, "UPDATE deposits SET paid_at=? WHERE code=?", at, c);
+      backdate(`deposit:${one(db, "SELECT id FROM deposits WHERE code=?", c).id}`, at);
+      return c;
+    };
+    const c1 = paid(student, 3000000, iso(-24 * 40));
+    const c2 = paid(parent || student, 1500000, iso(-24 * 20));
+    run(db, "INSERT INTO deposits(user_id,payer_id,code,amount,status,created_at) VALUES (?,?,?,?,'pending',?)", student, student, code(), 1000000, iso(-4));
     // A verified transfer that matches no deposit code, and one whose IPN key failed.
     run(db, "INSERT INTO sepay_events(code,amount,reference,verdict,status,payload,created_at) VALUES (?,?,?,1,'unmatched',?,?)",
       "GSD-KHONG-KHOP", 700000, "CT TU 0901 NGUYEN GIA BAO", '{"note":"demo unmatched"}', iso(-24 * 3));
@@ -114,21 +125,30 @@ export async function seedShowcase(db, hash) {
     run(db, "INSERT INTO gateway_events(id,invoice,amount,verdict,status,payload,created_at) VALUES (?,?,?,?,?,?,?)",
       "gw-demo-1", "INV-DEMO-1", 800000, 1, "processed", '{"note":"demo gateway"}', iso(-24 * 30));
     if (nam) {
-      run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name,status,created_at) VALUES (?,?,?,?,?,'requested',?)",
-        nam, 900000, "Vietcombank", "0123456789", "TRAN HOANG NAM", iso(-8));
-      run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name,status,note,handled_by,handled_at,created_at) VALUES (?,?,?,?,?,'done',?,?,?,?)",
-        nam, 1200000, "Vietcombank", "0123456789", "TRAN HOANG NAM", "Đã chuyển 10:20", admin, iso(-24 * 6), iso(-24 * 7));
-      run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name,status,note,handled_by,handled_at,created_at) VALUES (?,?,?,?,?,'rejected',?,?,?,?)",
-        nam, 400000, "Vietcombank", "0123456789", "TRAN HOANG NAM", "Sai tên tài khoản", admin, iso(-24 * 12), iso(-24 * 13));
+      // Withdrawals hold real balance, so the tutor earns first.
+      move(db, nam, "admin_adjustment", { amount: 3000000, ref: "demo", note: "Thu nhập tích lũy cho tài khoản mẫu" });
+      const bank = { bank_name: "Vietcombank", account_number: "0123456789", account_name: "TRAN HOANG NAM" };
+      const wdr = (amount, { at, settle }) => {
+        const wid = requestWithdrawal(db, nam, { amount, ...bank, code: code() });
+        const row = one(db, "SELECT * FROM withdrawals WHERE id=?", wid);
+        if (settle === "paid") payoutWithdrawal(db, row, { actor: admin, via: "manual", ref: `FT-DEMO-${wid}` });
+        if (settle === "rejected") rejectWithdrawal(db, row, { actor: admin, note: "Sai tên tài khoản" });
+        run(db, "UPDATE withdrawals SET created_at=?,handled_at=? WHERE id=?", at, settle ? at : null, wid);
+        backdate(`withdrawal:${wid}`, at, settle ? at : null);
+        return wid;
+      };
+      wdr(900000, { at: iso(-8) });                       // still held, waiting for admin
+      wdr(1200000, { at: iso(-24 * 7), settle: "paid" });   // sent by QR, held released
+      wdr(400000, { at: iso(-24 * 13), settle: "rejected" }); // bounced back to balance
     }
     // Revenue entries spread over six months so the report chart has history.
     for (let m = 6; m >= 1; m--) {
       const at = new Date(); at.setMonth(at.getMonth() - m); at.setDate(12);
       run(db, "INSERT INTO platform_revenue(kind,amount,ref,created_at) VALUES ('lesson_fee',?,?,?)", 260000 + (6 - m) * 40000, `demo-m${m}`, at.toISOString());
     }
-    audit(admin, "withdrawal.done", String(one(db, "SELECT id FROM withdrawals WHERE status='done' ORDER BY id DESC LIMIT 1")?.id), { name: "Trần Hoàng Nam", amount: 1200000 }, iso(-24 * 6));
-    audit(admin, "withdrawal.rejected", String(one(db, "SELECT id FROM withdrawals WHERE status='rejected' ORDER BY id DESC LIMIT 1")?.id), { name: "Trần Hoàng Nam", amount: 400000, note: "Sai tên tài khoản" }, iso(-24 * 12));
-    audit(admin, "deposit.assign", String(one(db, "SELECT id FROM deposits WHERE code='GSD-DEMO-001'")?.id), { code: "GSD-DEMO-001", name: "Minh Anh", amount: 3000000 }, iso(-24 * 40));
+    audit(admin, "withdrawal.paid", String(one(db, "SELECT id FROM withdrawals WHERE status='paid' ORDER BY id DESC LIMIT 1")?.id), { user_id: nam, amount: 1200000, status: "paid" }, iso(-24 * 6));
+    audit(admin, "withdrawal.rejected", String(one(db, "SELECT id FROM withdrawals WHERE status='rejected' ORDER BY id DESC LIMIT 1")?.id), { user_id: nam, amount: 400000, note: "Sai tên tài khoản", status: "rejected" }, iso(-24 * 12));
+    audit(admin, "deposit.assign", String(one(db, "SELECT id FROM deposits WHERE code=?", c1)?.id), { user_id: student, amount: 3000000, code: c1, event: "demo" }, iso(-24 * 40));
   });
 
   // ~30 audit rows across every group and several days so paging/filter/link tests work.
@@ -151,7 +171,7 @@ export async function seedShowcase(db, hash) {
       ["tutor.revision", trang, { name: "Hoàng Mai Trang", revision: 2 }, -24 * 2],
       ["credential.approved", credential("linh"), { name: "Lê Thảo Linh", title: "IELTS 8.0" }, -24 * 18],
       ["credential.rejected", credential("huy"), { name: "Võ Đức Huy", title: "Bằng lái xe", note: "Không liên quan" }, -24 * 16],
-      ["deposit.assign", dep("GSD-DEMO-002"), { code: "GSD-DEMO-002", name: "Phụ huynh Lan", amount: 1500000 }, -24 * 20],
+      ["deposit.assign", one(db, "SELECT id FROM deposits WHERE user_id=? AND status='paid' ORDER BY id DESC LIMIT 1", parent || student)?.id, { user_id: parent || student, amount: 1500000, code: one(db, "SELECT code FROM deposits WHERE user_id=? AND status='paid' ORDER BY id DESC LIMIT 1", parent || student)?.code, event: "demo" }, -24 * 20],
       ["deposit.dismissed", one(db, "SELECT id FROM sepay_events WHERE status='rejected_key' LIMIT 1")?.id, { event: "GSD-001", note: "Sai khóa IPN" }, -24 * 1],
       ["session.admin_cancel", session, { session: "Toán · Minh Anh", refunded: [{ amount: 180000 }] }, -24 * 5],
       ["session.remind", session, { session: "Tiếng Anh · Nguyễn Gia Bảo" }, -20],

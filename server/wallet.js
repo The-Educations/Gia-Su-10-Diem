@@ -125,6 +125,44 @@ export function spendCredits(db, userId, count, ref) {
   run(db, "INSERT INTO wallet_entries(user_id,kind,credits,ref) VALUES (?,?,?,?)", userId, "credits_spent", -count, ref);
 }
 
+// Ledger helpers shared by the wallet routes and the demo seed. Each takes
+// `db` first and runs no transaction of its own, so callers can compose them
+// inside one transaction() (the local driver cannot nest them).
+export function newPaymentCode(db, prefix) {
+  for (;;) {
+    const code = prefix + Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
+    if (!one(db, "SELECT 1 FROM deposits WHERE code=? UNION ALL SELECT 1 FROM withdrawals WHERE code=?", code, code)) return code;
+  }
+}
+
+export function creditDepositByCode(db, code, amount, eventRef) {
+  const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", code || "");
+  if (!d || amount <= 0) return null;
+  run(db, "UPDATE deposits SET received=received+?,status='paid',paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP) WHERE id=?", amount, d.id);
+  move(db, d.user_id, "deposit", { amount, ref: `deposit:${d.id}`, note: eventRef });
+  notify(db, d.user_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+  if (d.payer_id !== d.user_id) notify(db, d.payer_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+  return d;
+}
+
+export function requestWithdrawal(db, userId, { amount, bank_name, account_number, account_name, code }) {
+  const wid = Number(run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name,code) VALUES (?,?,?,?,?,?)", userId, amount, bank_name, account_number, account_name.toUpperCase(), code).lastInsertRowid);
+  move(db, userId, "withdrawal_requested", { amount: -amount, held: amount, ref: `withdrawal:${wid}` });
+  return wid;
+}
+
+export function payoutWithdrawal(db, w, { actor = null, via, ref = "", receipt = null }) {
+  if (!run(db, "UPDATE withdrawals SET status='paid',handled_by=?,handled_at=CURRENT_TIMESTAMP,paid_via=?,bank_ref=?,receipt_id=? WHERE id=? AND status='requested'", actor, via, ref, receipt, w.id).changes) return false;
+  move(db, w.user_id, "withdrawal_paid", { held: -w.amount, ref: `withdrawal:${w.id}`, actor });
+  return true;
+}
+
+export function rejectWithdrawal(db, w, { actor = null, note = "" }) {
+  if (!run(db, "UPDATE withdrawals SET status='rejected',note=?,handled_by=?,handled_at=CURRENT_TIMESTAMP WHERE id=? AND status='requested'", note, actor, w.id).changes) return false;
+  move(db, w.user_id, "withdrawal_rejected", { amount: w.amount, held: -w.amount, ref: `withdrawal:${w.id}`, note, actor });
+  return true;
+}
+
 export function sepayConfig(env = process.env) {
   const c = {
     // Bank-transfer webhook (SePay Webhooks).
@@ -158,12 +196,7 @@ export function signCheckout(fields, secret) {
 export function registerWallet(app, db, auth, audit, { production, sepay, origin = "" }) {
   const simulate = !production && !sepay.ready;
   // One code space for top-ups and payouts, so a memo always points at one record.
-  const newCode = () => {
-    for (;;) {
-      const code = sepay.prefix + Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
-      if (!one(db, "SELECT 1 FROM deposits WHERE code=? UNION ALL SELECT 1 FROM withdrawals WHERE code=?", code, code)) return code;
-    }
-  };
+  const newCode = () => newPaymentCode(db, sepay.prefix);
   // Requests made before payouts had codes get one, so they can be paid by QR too.
   for (const w of all(db, "SELECT id FROM withdrawals WHERE code IS NULL AND status='requested'")) run(db, "UPDATE withdrawals SET code=? WHERE id=?", newCode(), w.id);
   // Same for transfers that arrived before the code could be read from content.
@@ -213,13 +246,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   // The credit body without a transaction, so callers can compose it inside
   // their own transaction (transaction() cannot nest on the local driver).
   function creditDeposit(code, amount, eventRef) {
-    const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", code || "");
-    if (!d || amount <= 0) return null;
-    run(db, "UPDATE deposits SET received=received+?,status='paid',paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP) WHERE id=?", amount, d.id);
-    move(db, d.user_id, "deposit", { amount, ref: `deposit:${d.id}`, note: eventRef });
-    notify(db, d.user_id, "deposit_received", { subject: String(amount), link: "/wallet" });
-    if (d.payer_id !== d.user_id) notify(db, d.payer_id, "deposit_received", { subject: String(amount), link: "/wallet" });
-    return d;
+    return creditDepositByCode(db, code, amount, eventRef);
   }
   function credit(code, amount, eventRef) {
     return transaction(db, () => creditDeposit(code, amount, eventRef));
@@ -378,8 +405,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   }
   // Marks a payout as sent, once: by an administrator, or by SePay seeing the money leave the bank.
   function payout(w, { actor = null, via, ref = "", receipt = null }) {
-    if (!run(db, "UPDATE withdrawals SET status='paid',handled_by=?,handled_at=CURRENT_TIMESTAMP,paid_via=?,bank_ref=?,receipt_id=? WHERE id=? AND status='requested'", actor, via, ref, receipt, w.id).changes) return false;
-    move(db, w.user_id, "withdrawal_paid", { held: -w.amount, ref: `withdrawal:${w.id}`, actor });
+    if (!payoutWithdrawal(db, w, { actor, via, ref, receipt })) return false;
     supportNote(w.user_id, `Đã chuyển ${w.amount.toLocaleString("vi-VN")}đ cho yêu cầu rút tiền #${w.id} về ${w.bank_name} ****${w.account_number.slice(-4)}.${receipt ? " Biên lai đính kèm." : ""}`, receipt);
     notify(db, w.user_id, "withdrawal_paid", { subject: String(w.amount), link: "/wallet" });
     return true;
@@ -572,8 +598,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       account_name: z.string().trim().min(2).max(80),
     }).parse(req.body);
     const id = transaction(db, () => {
-      const wid = Number(run(db, "INSERT INTO withdrawals(user_id,amount,bank_name,account_number,account_name,code) VALUES (?,?,?,?,?,?)", req.user.id, d.amount, d.bank_name, d.account_number, d.account_name.toUpperCase(), newCode()).lastInsertRowid);
-      move(db, req.user.id, "withdrawal_requested", { amount: -d.amount, held: d.amount, ref: `withdrawal:${wid}` });
+      const wid = requestWithdrawal(db, req.user.id, { ...d, code: newCode() });
       // The request appears as a wallet event card in the user's support thread.
       supportNote(req.user.id, `Yêu cầu rút tiền #${wid}: ${d.amount.toLocaleString("vi-VN")}đ về ${d.bank_name} ****${d.account_number.slice(-4)} (${d.account_name.toUpperCase()}).`, null, req.user.id);
       for (const admin of all(db, "SELECT id FROM users WHERE role='admin' AND status='active'"))
@@ -643,8 +668,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       if (d.status === "paid") {
         if (!payout(w, { actor: req.user.id, via: "manual", receipt: receiptFor(w, d.receipt_id, req.user.id) })) fail(409, "Yêu cầu đã được xử lý.");
       } else {
-        if (!run(db, "UPDATE withdrawals SET status='rejected',note=?,handled_by=?,handled_at=CURRENT_TIMESTAMP WHERE id=? AND status='requested'", d.note, req.user.id, id).changes) fail(409, "Yêu cầu đã được xử lý.");
-        move(db, w.user_id, "withdrawal_rejected", { amount: w.amount, held: -w.amount, ref: `withdrawal:${id}`, note: d.note, actor: req.user.id });
+        if (!rejectWithdrawal(db, w, { actor: req.user.id, note: d.note })) fail(409, "Yêu cầu đã được xử lý.");
         supportNote(w.user_id, `Yêu cầu rút tiền #${id} chưa được chuyển: ${d.note}. Số tiền đã trả lại số dư.`);
         notify(db, w.user_id, "withdrawal_rejected", { subject: String(w.amount), link: "/wallet" });
       }

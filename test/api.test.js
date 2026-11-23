@@ -3020,4 +3020,39 @@ test("webhook timestamps live in system_events, recorded only after signature", 
   const s0 = settings(db);
   const put = await admin.request("/admin/settings", "PUT", { fee_percent: s0.fee_percent });
   assert.equal(put.status, 200, "settings form save still works");
+
+test("demo seed money keeps every ledger invariant, idempotent on re-seed", async (t) => {
+  const { db } = await fixture(t);
+  const check = () => {
+    // Every wallet equals the sum of its entries — available and held alike.
+    assert.deepEqual(all(db, `SELECT w.user_id FROM wallets w LEFT JOIN
+      (SELECT user_id,SUM(amount) a,SUM(held) h FROM wallet_entries GROUP BY user_id) e ON e.user_id=w.user_id
+      WHERE COALESCE(w.available,0)!=COALESCE(e.a,0) OR COALESCE(w.held,0)!=COALESCE(e.h,0)`), [], "wallets match their ledgers");
+    assert.deepEqual(all(db, "SELECT user_id FROM wallets WHERE available<0 OR held<0"), [], "no negative balances");
+    // A paid deposit's received equals the ledger rows that reference its id.
+    assert.deepEqual(all(db, `SELECT id FROM deposits d WHERE d.status='paid' AND d.received !=
+      COALESCE((SELECT SUM(e.amount) FROM wallet_entries e WHERE e.kind='deposit' AND e.ref='deposit:'||d.id),0)`), [], "paid deposits match ledger");
+    // Ledger deposit rows always point at a real deposit, never a bare code.
+    assert.deepEqual(all(db, `SELECT id FROM wallet_entries WHERE kind='deposit' AND
+      ref NOT IN (SELECT 'deposit:'||id FROM deposits)`), [], "every deposit entry has a deposit");
+    // Withdrawal states and held money.
+    assert.deepEqual(all(db, "SELECT id FROM withdrawals WHERE status NOT IN ('requested','paid','rejected')"), [], "valid statuses");
+    assert.deepEqual(all(db, `SELECT id FROM withdrawals w WHERE w.status='requested' AND
+      COALESCE((SELECT SUM(e.held) FROM wallet_entries e WHERE e.ref='withdrawal:'||w.id),0) != w.amount`), [], "requested holds its amount");
+    assert.deepEqual(all(db, `SELECT id FROM withdrawals w WHERE w.status IN ('paid','rejected') AND
+      COALESCE((SELECT SUM(e.held) FROM wallet_entries e WHERE e.ref='withdrawal:'||w.id),0) != 0`), [], "settled withdrawals released held");
+    // Codes look like the real format: GSD + 8 chars.
+    assert.deepEqual(all(db, "SELECT id FROM deposits WHERE code NOT GLOB 'GSD????????'"), [], "deposit codes well-formed");
+    assert.deepEqual(all(db, "SELECT id FROM withdrawals WHERE code NOT GLOB 'GSD????????'"), [], "withdrawal codes well-formed");
+  };
+  await seedDemo(db, "TestStudy2026!", { activity: true });
+  check();
+  await seedDemo(db, "TestStudy2026!", { activity: true });
+  check();
+  // The seeded pending withdrawal can be paid through the admin path itself.
+  const pending = one(db, "SELECT * FROM withdrawals WHERE status='requested' LIMIT 1");
+  assert.ok(pending, "a requested withdrawal exists for the finance tab");
+  const before = one(db, "SELECT held FROM wallets WHERE user_id=?", pending.user_id).held;
+  assert.equal(before, pending.amount, "the request holds its amount");
+});
 });
