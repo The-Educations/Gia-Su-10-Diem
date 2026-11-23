@@ -8,7 +8,9 @@ test("admin session worklist: queues, detail drawer, actions and audit deep link
   const admin = await ac.newPage(), student = await sc.newPage(), tutor = await tc.newPage();
   const errors: string[] = [];
   for (const p of [admin, student, tutor]) p.on("pageerror", (e) => errors.push(e.message));
-  await login(admin, "admin"); await login(student, "profile-other"); await login(tutor, "nam");
+  // Not profile-other+nam: classes.spec builds the same class on the shared server
+  // and would inherit these past lessons on that student's calendar.
+  await login(admin, "admin"); await login(student, "student"); await login(tutor, "nam");
   const me = (await (await student.request.get("/api/auth/me")).json()).user;
   const nam = await (await tutor.request.get("/api/tutor/profile")).json();
 
