@@ -161,7 +161,7 @@ export async function seedDemo(db, password, options = {}) {
       JSON.stringify(goals),
       `${slug}@demo.giasu.test`,
     );
-  await enrichDemo(db, options);
+  await enrichDemo(db, { ...options, hash });
 }
 if (process.argv[1]?.endsWith("/seed.js")) {
   if (process.env.NODE_ENV === "production")
