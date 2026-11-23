@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pageSeo, renderSeo, robots, sitemap, newsSitemap } from "../server/seo.js";
+import { pageSeo, renderSeo, robots, sitemap, newsSitemap, newsPath } from "../server/seo.js";
 
 test("only the public entry and policy pages are indexable and included in the sitemap", () => {
   for (const path of ["/", "/app/tutors", "/app/library", "/privacy", "/terms", "/app/news", "/app/community"]) {
@@ -77,4 +77,56 @@ test("member profiles never emit indexable metadata or image/schema identities",
   const html = renderSeo(renderSeo("<head></head>", "/"), path);
   assert.ok(!html.includes("og:image")); assert.ok(!html.includes("application/ld+json"));
   assert.ok(!newsSitemap([], []).includes("/members/"));
+});
+
+const article = {
+  id: 12, slug: "lich-thi-2027", title: "Lịch thi 2027", summary: "Bộ GD công bố lịch thi.",
+  cover_url: "", cover_alt: "", published_at: "2026-11-23 08:00:00", updated_at: "2026-11-23 09:00:00", revised_at: null,
+};
+const ldOf = (html) => html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)?.[1];
+
+test("news URLs carry the slug: the old id-only link and wrong slugs get a 301 to the canonical path", () => {
+  assert.equal(pageSeo("/app/news/12-lich-thi-2027", article).status, 200);
+  assert.equal(pageSeo("/app/news/12-lich-thi-2027", article).canonical, "https://giasudiem10.online/app/news/12-lich-thi-2027");
+  for (const path of ["/app/news/12", "/app/news/12-sai-slug", "/app/news/12-"]) {
+    const seo = pageSeo(path, article);
+    assert.equal(seo.status, 301, path);
+    assert.equal(seo.redirect, "/app/news/12-lich-thi-2027", path);
+  }
+  assert.equal(pageSeo("/app/news/12", { ...article, slug: "" }).status, 200, "a post without a slug keeps the id-only path");
+  assert.equal(pageSeo("/app/news/12-lich-thi-2027").status, 404, "missing or draft post");
+  assert.match(pageSeo("/app/news/12-lich-thi-2027").robots, /^noindex/);
+  assert.equal(pageSeo("/app/news/12-Lich").status, 404, "uppercase slugs never match");
+  assert.equal(newsPath({ id: 7, slug: "a-b" }), "/app/news/7-a-b");
+  assert.equal(newsPath({ id: 7, slug: "bad slug<>" }), "/app/news/7-badslug");
+});
+
+test("news article metadata: og:article, absolute image, dates, and a NewsArticle schema that cannot break out", () => {
+  const html = renderSeo("<head></head>", "/app/news/12-lich-thi-2027", { ...article, cover_url: "/api/news/images/0b9a7c3e-1d2f-4a5b-8c6d-7e8f9a0b1c2d", cover_alt: 'Ảnh "bìa"' });
+  assert.match(html, /property="og:type" content="article"/);
+  assert.match(html, /property="og:image" content="https:\/\/giasudiem10\.online\/api\/news\/images\/0b9a7c3e-1d2f-4a5b-8c6d-7e8f9a0b1c2d"/);
+  assert.match(html, /property="og:image:alt" content="Ảnh &quot;bìa&quot;"/);
+  assert.match(html, /property="article:published_time" content="2026-11-23T08:00:00Z"/);
+  assert.match(html, /property="article:modified_time" content="2026-11-23T08:00:00Z"/);
+  const schema = JSON.parse(ldOf(html));
+  assert.equal(schema["@type"], "NewsArticle");
+  assert.equal(schema.headline, "Lịch thi 2027");
+  assert.equal(schema.datePublished, "2026-11-23T08:00:00Z");
+  assert.deepEqual(schema.image, ["https://giasudiem10.online/api/news/images/0b9a7c3e-1d2f-4a5b-8c6d-7e8f9a0b1c2d"]);
+  assert.equal(schema.publisher.name, "Gia Sư 10 Điểm");
+  const hotlinked = renderSeo("<head></head>", "/app/news/12-lich-thi-2027", { ...article, cover_url: "https://cdn.tuoitre.vn/a.jpg" });
+  assert.match(hotlinked, /property="og:image" content="https:\/\/cdn\.tuoitre\.vn\/a\.jpg"/);
+  const plain = renderSeo("<head></head>", "/app/news/12-lich-thi-2027", article);
+  assert.match(plain, /og:image" content="https:\/\/giasudiem10\.online\/assets\/social-preview\.png"/, "falls back to the site image");
+  assert.match(renderSeo("<head></head>", "/app/news/12-lich-thi-2027", { ...article, revised_at: "2026-11-24 10:00:00" }), /article:modified_time" content="2026-11-24T10:00:00Z"/);
+  const hostile = renderSeo("<head></head>", "/app/news/12-lich-thi-2027", { ...article, title: 'Tiêu "đề" </script><script>alert(1)</script>', summary: '</script><b>"x"' });
+  assert.ok(!hostile.includes("</script><script>alert"));
+  assert.equal((hostile.match(/<script/g) || []).length, 1, "only the schema script exists");
+  assert.equal(JSON.parse(ldOf(hostile)).headline, 'Tiêu "đề" </script><script>alert(1)</script>');
+});
+
+test("sitemap lists canonical news URLs with lastmod from the latest revision", () => {
+  const map = newsSitemap([article, { ...article, id: 13, slug: "", revised_at: "2026-12-01 01:02:03" }]);
+  assert.match(map, /<loc>https:\/\/giasudiem10\.online\/app\/news\/12-lich-thi-2027<\/loc><lastmod>2026-11-23T08:00:00Z<\/lastmod>/);
+  assert.match(map, /<loc>https:\/\/giasudiem10\.online\/app\/news\/13<\/loc><lastmod>2026-12-01T01:02:03Z<\/lastmod>/);
 });

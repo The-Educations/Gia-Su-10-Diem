@@ -163,7 +163,7 @@ function Shell() {
               <Route path="/community/members/:code" element={<Require><CommunityProfile /></Require>} />
               <Route path="/community/:id" element={<CommunityPost />} />
               <Route path="/news" element={<News />} />
-                <Route path="/news/:id" element={<News />} />
+                <Route path="/news/:idSlug" element={<News />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />

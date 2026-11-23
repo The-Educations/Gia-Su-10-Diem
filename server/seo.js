@@ -7,13 +7,32 @@ export const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="h
 const escape = (value) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const privateRoutes = new Set(["/app/community/write", "/app/community/mine", "/app/auth", "/app/verify-email", "/app/onboarding", "/app/workspace", "/app/bookings", "/app/calendar", "/app/offers", "/app/messages", "/app/settings", "/app/availability", "/app/studio", "/app/admin", "/app/favorites"]);
 
+// News paths are /app/news/<id>[-<slug>]; the slug is only ever a-z, 0-9 and dashes.
+export const NEWS_PATH = /^\/app\/news\/(\d+)(?:-[a-z0-9-]*)?$/;
+export const newsPath = (post) => {
+  const slug = String(post.slug || "").replace(/[^a-z0-9-]/g, "");
+  return `/app/news/${Number(post.id)}${slug ? "-" + slug : ""}`;
+};
+const isoTime = (value) => value ? (String(value).includes("T") ? String(value) : String(value).replace(" ", "T") + "Z") : undefined;
+// JSON inside <script>: "<" is escaped so no text can close the tag early.
+const jsonLd = (data) => JSON.stringify(data).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+const defaultImage = `${siteOrigin}/assets/social-preview.png`;
+const newsImage = (post) => /^\//.test(post.cover_url || "") ? siteOrigin + post.cover_url : /^https:\/\//.test(post.cover_url || "") ? post.cover_url : "";
+
 export function newsSitemap(posts, community = []) {
-  return sitemap.replace("</urlset>", posts.map(post => `<url><loc>${siteOrigin}/app/news/${Number(post.id)}</loc></url>`).join("") + community.map(post => `<url><loc>${siteOrigin}/app/community/${Number(post.id)}</loc></url>`).join("") + "</urlset>");
+  const news = posts.map(post => {
+    const lastmod = isoTime(post.revised_at || post.published_at || post.updated_at);
+    return `<url><loc>${siteOrigin}${newsPath(post)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;
+  });
+  return sitemap.replace("</urlset>", news.join("") + community.map(post => `<url><loc>${siteOrigin}/app/community/${Number(post.id)}</loc></url>`).join("") + "</urlset>");
 }
 export function pageSeo(path, post = null, community = null) {
+  const canonicalNews = NEWS_PATH.test(path) && post ? newsPath(post) : null;
+  if (canonicalNews && path !== canonicalNews)
+    return { title: post.title, description: post.summary, robots: "noindex, follow", canonical: null, status: 301, redirect: canonicalNews };
   const page = /^\/app\/community\/\d+$/.test(path) && community
     ? { title: `${community.title} | Cộng đồng Gia Sư 10 Điểm`, description: description(community.body) }
-    : /^\/app\/news\/\d+$/.test(path) && post
+    : canonicalNews
     ? { title: `${post.title} | Gia Sư 10 Điểm`, description: post.summary }
     : Object.hasOwn(pages, path) ? pages[path] : null;
   const known = page || /^\/app\/community\/members\/[^/]+$/.test(path) || privateRoutes.has(path) || /^\/app\/tutors\/\d+$/.test(path);
@@ -28,23 +47,34 @@ export function pageSeo(path, post = null, community = null) {
 
 export function renderSeo(html, path, post = null, community = null) {
   const page = pageSeo(path, post, community);
+  const article = page.canonical && post && NEWS_PATH.test(path) ? post : null;
+  const cover = article ? newsImage(article) : "";
   const tags = [
     `<title>${escape(page.title)}</title>`,
     `<meta name="description" content="${escape(page.description)}">`,
     `<meta name="robots" content="${page.robots}">`,
     ...(page.canonical ? [
       `<link rel="canonical" href="${page.canonical}">`,
-      '<meta property="og:type" content="website">',
+      `<meta property="og:type" content="${article ? "article" : "website"}">`,
       '<meta property="og:locale" content="vi_VN">',
       '<meta property="og:site_name" content="Gia Sư 10 Điểm">',
       `<meta property="og:title" content="${escape(page.title)}">`,
       `<meta property="og:description" content="${escape(page.description)}">`,
       `<meta property="og:url" content="${page.canonical}">`,
-      `<meta property="og:image" content="${siteOrigin}/assets/social-preview.png">`,
-      '<meta property="og:image:width" content="1200">',
-      '<meta property="og:image:height" content="630">',
-      '<meta property="og:image:alt" content="Gia Sư 10 Điểm — Tìm gia sư, học theo cách của em">',
+      `<meta property="og:image" content="${escape(cover || defaultImage)}">`,
+      ...(cover ? [] : ['<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">']),
+      `<meta property="og:image:alt" content="${escape(cover ? (article.cover_alt || article.title) : "Gia Sư 10 Điểm — Tìm gia sư, học theo cách của em")}">`,
       '<meta name="twitter:card" content="summary_large_image">',
+    ] : []),
+    ...(article ? [
+      `<meta property="article:published_time" content="${isoTime(article.published_at) || ""}">`,
+      `<meta property="article:modified_time" content="${isoTime(article.revised_at || article.published_at) || ""}">`,
+      `<script type="application/ld+json">${jsonLd({
+        "@context": "https://schema.org", "@type": "NewsArticle", headline: article.title.slice(0, 110), description: article.summary,
+        datePublished: isoTime(article.published_at), dateModified: isoTime(article.revised_at || article.published_at),
+        image: [cover || defaultImage], mainEntityOfPage: page.canonical, inLanguage: "vi-VN",
+        publisher: { "@type": "Organization", name: "Gia Sư 10 Điểm", url: siteOrigin },
+      })}</script>`,
     ] : []),
     ...(community && /^\/app\/community\/\d+$/.test(path) ? [`<script type="application/ld+json">${JSON.stringify({
       "@context": "https://schema.org", "@type": "DiscussionForumPosting", headline: community.title,

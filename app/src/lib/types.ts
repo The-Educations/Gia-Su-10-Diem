@@ -214,6 +214,30 @@ export const accountRole = (user: User) => user.role === "admin" ? "Quản trị
 
 export type Post = { id: number; title: string; summary: string; body: string; published: number; published_at: string | null };
 
+export type NewsTopic = "admissions" | "policy" | "study";
+export type NewsCard = {
+  id: number; slug: string; title: string; summary: string; topic: NewsTopic;
+  cover_url: string; cover_alt: string; published_at: string | null; revised_at: string | null; reading_minutes: number;
+};
+export type NewsCta = { heading: string; text: string; button: string; href: string };
+// What NewsArticle renders. The public detail adds cta/related; the admin preview builds it from the form.
+export type NewsArticleData = NewsCard & {
+  cover_credit: string; body: string; body_html: string; source_name: string; source_url: string;
+  cta?: NewsCta | null; related?: NewsCard[];
+};
+export type NewsDetail = NewsArticleData & { updated_at: string; cta: NewsCta; related: NewsCard[] };
+export type NewsList = { pinned: NewsCard | null; items: NewsCard[]; has_more: boolean };
+export type NewsTab = "review" | "drafts" | "published";
+export type AdminNewsRow = {
+  id: number; slug: string; title: string; summary: string; topic: NewsTopic; origin: "auto" | "manual";
+  published: number; pinned: number; cover_url: string; cover_alt: string; source_name: string; source_url: string;
+  created_at: string; updated_at: string; published_at: string | null; revised_at: string | null; warnings: string[];
+};
+export type AdminNewsList = { counts: Record<NewsTab, number>; items: AdminNewsRow[] };
+export type AdminNewsPost = Omit<AdminNewsRow, "warnings"> & {
+  body: string; body_html: string; cover_credit: string; cta_level: string; cta_goal: string; reading_minutes: number;
+};
+
 export type CommunityAuthor = { profile_code: string; has_avatar: boolean; image_version: string; label: string; name_part: string; tier: "student" | "parent" | "tutor" | "admin"; tutor_id?: number };
 export interface CommunityDraft {
   id: string;

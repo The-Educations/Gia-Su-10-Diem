@@ -1,5 +1,6 @@
 import { migrateGoogleCalendar } from "./google-calendar-schema.js";
 import { migrateCommunity } from "./community-schema.js";
+import { migrateNews } from "./news-schema.js";
 import { migrateTrust } from "./trust-schema.js";
 import { migrateNotifications } from "./notifications.js";
 import { migrateCredentials } from "./credentials.js";
@@ -125,6 +126,7 @@ export function migrateDatabase(db) {
     published INTEGER NOT NULL DEFAULT 0 CHECK(published IN (0,1)), author_id INTEGER NOT NULL REFERENCES users(id),
     published_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
+  migrateNews(db);
   if (!db.prepare("PRAGMA table_info(users)").all().some(c => c.name === "timezone")) db.exec("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'Asia/Ho_Chi_Minh'");
   const userColumns = db.prepare("PRAGMA table_info(users)").all();
   if (!userColumns.some(c => c.name === "email_verified_at")) db.exec("ALTER TABLE users ADD COLUMN email_verified_at TEXT");

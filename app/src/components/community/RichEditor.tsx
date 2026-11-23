@@ -41,6 +41,8 @@ export default function RichEditor({
   uploading,
   invalid,
   errorId,
+  imageUploadUrl = "/api/community/images",
+  imageBasePath = imageUploadUrl,
 }: {
   id: string;
   initial: string;
@@ -48,8 +50,12 @@ export default function RichEditor({
   uploading: (value: boolean) => void;
   invalid: boolean;
   errorId?: string;
+  // POST target for new images, and the path (+ "/<uuid>") the saved images are served from.
+  imageUploadUrl?: string;
+  imageBasePath?: string;
 }) {
   const controls = useId();
+  const imageSrc = new RegExp(`^${imageBasePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/[a-f0-9-]{36}$`);
   const [panel, setPanel] = useState<"link" | "image" | null>(null);
   const [url, setUrl] = useState(""),
     [label, setLabel] = useState(""),
@@ -77,9 +83,7 @@ export default function RichEditor({
             {
               tag: "img[src]",
               getAttrs: (element) =>
-                /^\/api\/community\/images\/[a-f0-9-]{36}$/.test(
-                  element.getAttribute("src") || "",
-                )
+                imageSrc.test(element.getAttribute("src") || "")
                   ? null
                   : false,
             },
@@ -349,7 +353,7 @@ export default function RichEditor({
                 uploading(true);
                 setError("");
                 try {
-                  const response = await fetch("/api/community/images", {
+                  const response = await fetch(imageUploadUrl, {
                     method: "POST",
                     headers: { "Content-Type": file.type },
                     body: file,

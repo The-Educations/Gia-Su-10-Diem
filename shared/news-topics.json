@@ -1,0 +1,20 @@
+[
+  {
+    "id": "admissions",
+    "label": "Tuyển sinh & thi cử",
+    "description": "Tuyển sinh ĐH/CĐ, lớp 10, thi tốt nghiệp THPT, điểm chuẩn, phương thức xét tuyển, lịch thi, đề thi",
+    "cta": { "heading": "Cần người kèm ôn thi?", "button": "Tìm gia sư ôn thi →" }
+  },
+  {
+    "id": "policy",
+    "label": "Chính sách",
+    "description": "Học phí, miễn giảm, học bổng, chương trình, SGK, dạy thêm học thêm, quy chế, thông tư",
+    "cta": { "heading": "Cần người đồng hành việc học của con?", "button": "Tìm gia sư phù hợp →" }
+  },
+  {
+    "id": "study",
+    "label": "Học tập & chọn ngành",
+    "description": "Phương pháp học, ôn thi, ngoại ngữ, chứng chỉ, chọn ngành, hướng nghiệp, du học",
+    "cta": { "heading": "Muốn học hiệu quả hơn?", "button": "Tìm gia sư kèm học →" }
+  }
+]

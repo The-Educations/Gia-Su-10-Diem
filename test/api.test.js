@@ -1148,7 +1148,7 @@ test("parent setup is distinct, resumable and shares student permissions", async
 test("news authoring is admin-only and drafts never leak publicly", async (t) => {
   const { client } = await fixture(t), admin = client(), student = client(), guest = client();
   await admin.login("admin"); await student.login("student");
-  const post = { title: "Học Toán", summary: "Kinh nghiệm học", body: '<script>alert("test")</script>\nNội dung', published: false };
+  const post = { title: "Học Toán", summary: "Kinh nghiệm học", body: '<script>alert("test")</script>\n' + "Nội dung ".repeat(60), published: false };
   assert.equal((await guest.request("/admin/posts", "POST", post)).status, 401);
   assert.equal((await student.request("/admin/posts", "POST", post)).status, 403);
   assert.equal((await guest.request("/admin/posts")).status, 401);
@@ -1171,7 +1171,7 @@ test("news authoring is admin-only and drafts never leak publicly", async (t) =>
 test("admin can permanently delete a news post, guests and students cannot", async (t) => {
   const { client } = await fixture(t), admin = client(), student = client(), guest = client();
   await admin.login("admin"); await student.login("student");
-  const post = { title: "Bài xoá", summary: "Tóm tắt", body: "Nội dung", published: true };
+  const post = { title: "Bài xoá", summary: "Tóm tắt", body: "Nội dung ".repeat(60), published: true };
   const id = (await admin.request("/admin/posts", "POST", post)).data.id;
   assert.equal((await guest.request(`/admin/posts/${id}`, "DELETE")).status, 401);
   assert.equal((await student.request(`/admin/posts/${id}`, "DELETE")).status, 403);
@@ -1179,7 +1179,7 @@ test("admin can permanently delete a news post, guests and students cannot", asy
   assert.equal((await admin.request(`/admin/posts/${id}`, "DELETE")).status, 200);
   assert.equal((await guest.request(`/posts/${id}`)).status, 404);
   assert.equal((await guest.request("/posts")).data.length, 0);
-  assert.equal((await admin.request("/admin/posts")).data.length, 0);
+  assert.deepEqual((await admin.request("/admin/posts")).data.counts, { review: 0, drafts: 0, published: 0 });
   assert.equal((await admin.request(`/admin/posts/${id}`, "DELETE")).status, 404);
 });
 

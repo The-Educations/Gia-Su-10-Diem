@@ -8,7 +8,7 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 const FLOW = [
   "Hẹn giờ", "Cài đặt", "Đọc trạng thái", "Danh sách nguồn", "Đọc RSS", "Chọn tin mới",
-  "Đăng nhập web", "Lấy cookie", "Claude viết bài", "Kiểm tra bài", "Ghi nhận kiểm tra",
+  "Đăng nhập web", "Lấy cookie", "Claude viết bài", "Lấy ảnh bìa", "Kiểm tra bài", "Ghi nhận kiểm tra",
   "Lưu trạng thái 1", "Bài sẵn sàng", "Tạo bài nháp", "Tổng kết", "Lưu trạng thái 2",
 ];
 
@@ -25,7 +25,9 @@ const noState = items({ stdout: "" });
 const goodBody = (link) => `${"Đoạn nội dung đã được viết lại bằng lời mới. ".repeat(16).trim()}\n\nNguồn: VnExpress - ${link}`;
 const claudeOut = (link, extra = {}) =>
   JSON.stringify({ type: "result", is_error: false, result: JSON.stringify({ skip: false, title: "Tiêu đề", summary: "Tóm tắt", body: goodBody(link), ...extra }) });
-const rss = (n) => ({ title: `Tuyển sinh đại học 2027: tin ${n}`, link: `https://vnexpress.net/tin-${n}.html`, contentSnippet: "tóm tắt", isoDate: `2026-11-22T0${n}:00:00Z` });
+// Ngày tương đối so với bây giờ để test không hỏng khi bộ lọc "quá 30 ngày" chạy theo đồng hồ thật.
+const ago = (hours) => new Date(Date.now() - hours * 3600e3).toISOString();
+const rss = (n) => ({ title: `Tuyển sinh đại học 2027: tin ${n}`, link: `https://thanhnien.vn/tin-${n}.htm`, contentSnippet: "tóm tắt", isoDate: ago(10 - n) });
 
 test("workflow có đủ các ô và nối thành một chuỗi từ Hẹn giờ đến Lưu trạng thái 2", () => {
   for (const name of FLOW) assert.ok(node(name), `thiếu ô ${name}`);
@@ -39,15 +41,20 @@ test("lịch là mỗi 3 giờ", () => {
   assert.deepEqual(node("Hẹn giờ").parameters.rule.interval, [{ field: "hours", hoursInterval: 3 }]);
 });
 
-test("chứa đúng bốn địa chỉ RSS", () => {
+test("chứa đúng các địa chỉ RSS, trường ĐHQG đứng đầu, rồi Thanh Niên, rồi báo nhà nước", () => {
   const feeds = node("Cài đặt").parameters.assignments.assignments.find((a) => a.name === "feeds").value.split("\n");
   assert.deepEqual(feeds, [
-    "https://tuoitre.vn/rss/tuyen-sinh.rss",
+    "https://uet.vnu.edu.vn/feed",
+    "https://ulis.vnu.edu.vn/feed",
+    "https://vju.ac.vn/feed",
+    "https://law.vnu.edu.vn/feed",
+    "https://tuyensinh.hcmus.edu.vn/feed",
     "https://thanhnien.vn/rss/giao-duc/tuyen-sinh.rss",
-    "https://vnexpress.net/rss/giao-duc.rss",
-    "https://tuoitre.vn/rss/giao-duc.rss",
-    "https://dantri.com.vn/rss/giao-duc.rss",
+    "https://thanhnien.vn/rss/giao-duc/du-hoc.rss",
     "https://thanhnien.vn/rss/giao-duc.rss",
+    "https://baochinhphu.vn/giao-duc.rss",
+    "https://vtv.vn/rss/giao-duc.rss",
+    "https://tuoitre.vn/rss/tuyen-sinh.rss",
   ]);
 });
 
@@ -80,8 +87,8 @@ test("không có published true ở bất kỳ đâu", () => {
 
 test("mã các ô Code hợp lệ và nhúng đủ hàm", () => {
   const needs = {
-    "Chọn tin mới": ["pickNew", "parseState", "todayVN", "buildPrompt", "isOnTopic"],
-    "Kiểm tra bài": ["parseClaudeOutput", "normalizeDraft", "validateDraft", "buildPostBody"],
+    "Chọn tin mới": ["pickNew", "parseState", "todayVN", "buildPrompt", "isOnTopic", "sourceInfo", "findImage"],
+    "Kiểm tra bài": ["parseClaudeOutput", "normalizeDraft", "validateDraft", "buildPostBody", "findImage"],
     "Ghi nhận kiểm tra": ["settle", "parseState"],
     "Lấy cookie": ["extractSessionCookie"],
     "Tổng kết": ["settle"],
@@ -96,7 +103,7 @@ test("Chọn tin mới: lần chạy đầu giữ 5 tin, markSeen phần còn l�
   const feed = items(...[1, 2, 3, 4, 5, 6, 7].map(rss), { error: "feed hỏng" });
   const out = await run("Chọn tin mới", { nodes: { "Cài đặt": cfg, "Đọc trạng thái": noState }, input: feed });
   assert.equal(out.length, 5);
-  assert.equal(out[0].json.source, "VnExpress");
+  assert.equal(out[0].json.source, "Thanh Niên");
   assert.equal(out[0].json.markSeen.length, 2);
   assert.ok(out.slice(1).every((o) => o.json.markSeen.length === 0));
   assert.ok(Buffer.from(out[0].json.promptB64, "base64").toString().includes(out[0].json.link));
@@ -126,7 +133,8 @@ test("Kiểm tra bài phân loại ready, skipped, rejected, error", async () =>
     { exitCode: 0, stderr: "", stdout: claudeOut("L3", { body: "quá ngắn" }) },
     { error: "Failed to authenticate" },
   );
-  const out = (await run("Kiểm tra bài", { nodes: { "Lấy cookie": picks }, input: results })).map((o) => o.json);
+  const noMeta = items({ stdout: "" }, { stdout: "" }, { stdout: "" }, { stdout: "" });
+  const out = (await run("Kiểm tra bài", { nodes: { "Lấy cookie": picks, "Claude viết bài": results }, input: noMeta })).map((o) => o.json);
   assert.deepEqual(out.map((o) => o.kind), ["ready", "skipped", "rejected", "error"]);
   assert.equal(out[0].postBody.published, false);
   assert.equal(out[0].cookie, "giasu_session=c");
@@ -212,4 +220,48 @@ test("khoá được nhả: ở Lưu trạng thái 1 khi không có bài để �
 
 test("claude -p có giới hạn thời gian để một lần treo không giữ khoá mãi", () => {
   assert.ok(node("Claude viết bài").parameters.command.includes("alarm 300"));
+});
+
+test("Lấy ảnh bìa nằm giữa Claude viết bài và Kiểm tra bài, chạy cho từng tin và không làm hỏng chuỗi khi lỗi", () => {
+  const n = node("Lấy ảnh bìa");
+  assert.equal(n.parameters.executeOnce, false);
+  assert.equal(n.onError, "continueRegularOutput");
+  const c = n.parameters.command;
+  for (const part of ["curl", "--proto '=https'", "-m 20", "base64 -d", "og:image"]) assert.ok(c.includes(part), `thiếu ${part}`);
+  assert.ok(c.includes("$json.none") || c.includes("none"), "phải xử lý trường hợp không có tin (none)");
+  assert.ok(!c.includes("$json.link"), "link không được chèn thẳng vào lệnh shell, chỉ qua base64");
+});
+
+test("Chọn tin mới: trường ĐHQG được chọn trước báo, gắn tên nguồn, ảnh trong RSS và link base64", async () => {
+  const uni = { title: "Trường Đại học Công nghệ mở ngành đào tạo mới về trí tuệ nhân tạo", link: "https://uet.vnu.edu.vn/mo-nganh-ai/", contentSnippet: "", content: '<img src="https://uet.vnu.edu.vn/wp-content/a.jpg">', isoDate: ago(100) };
+  const press = { title: "Tuyển sinh đại học 2027: điểm cộng thay đổi", link: "https://thanhnien.vn/tuyen-sinh-2027.htm", contentSnippet: "", enclosure: { url: "https://images2.thanhnien.vn/t.jpg", type: "image/jpeg" }, isoDate: ago(2) };
+  const one = items({ baseUrl: "http://x", perRun: 2, perDay: 10, feeds: "a" });
+  const out = await run("Chọn tin mới", { nodes: { "Cài đặt": one, "Đọc trạng thái": noState }, input: items(press, uni) });
+  assert.deepEqual(out.map((o) => o.json.source), ["Trường ĐH Công nghệ - ĐHQGHN", "Thanh Niên"]);
+  assert.equal(out[0].json.rssImage, "https://uet.vnu.edu.vn/wp-content/a.jpg");
+  assert.equal(out[1].json.rssImage, "https://images2.thanhnien.vn/t.jpg");
+  assert.equal(Buffer.from(out[0].json.linkB64, "base64").toString(), uni.link);
+});
+
+test("Chọn tin mới: bỏ tin quá 30 ngày", async () => {
+  const old = { title: "Tuyển sinh đại học năm cũ", link: "https://thanhnien.vn/cu.htm", contentSnippet: "", isoDate: "2020-01-01T00:00:00Z" };
+  const out = await run("Chọn tin mới", { nodes: { "Cài đặt": cfg, "Đọc trạng thái": items({ stdout: JSON.stringify({ seen: ["x"], daily: { date: "", count: 0 } }) }) }, input: items(old) });
+  assert.equal(out[0].json.none, true);
+});
+
+test("Kiểm tra bài: bài ready có ảnh từ og:image ở đầu bài, ghi nguồn; không tìm được ảnh thì vẫn ready không ảnh", async () => {
+  const mk = (link) => ({ link, title: "t", source: "Thanh Niên", markSeen: [], today: "2026-11-22", cookie: "c", rssImage: "" });
+  const picks = items(mk("https://thanhnien.vn/a.htm"), mk("https://thanhnien.vn/b.htm"));
+  const claude = items({ stdout: claudeOut("https://thanhnien.vn/a.htm") }, { stdout: claudeOut("https://thanhnien.vn/b.htm") });
+  const metas = items({ stdout: '<meta property="og:image" content="https://images2.thanhnien.vn/x.jpg">' }, { stdout: "" });
+  const out = (await run("Kiểm tra bài", { nodes: { "Lấy cookie": picks, "Claude viết bài": claude }, input: metas })).map((o) => o.json);
+  assert.deepEqual(out.map((o) => o.kind), ["ready", "ready"]);
+  assert.equal(out[0].postBody.cover_url, "https://images2.thanhnien.vn/x.jpg");
+  assert.equal(out[0].postBody.cover_credit, "Thanh Niên");
+  assert.equal(out[1].postBody.cover_url, "");
+  assert.ok(!out[0].postBody.body.includes("![") && !out[0].postBody.body.includes("Nguồn:"));
+  assert.equal(out[0].postBody.source_name, "Thanh Niên");
+  assert.equal(out[0].postBody.source_url, "https://thanhnien.vn/a.htm");
+  assert.equal(out[0].postBody.origin, "auto");
+  assert.equal(out[0].postBody.published, false);
 });

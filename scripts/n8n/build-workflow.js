@@ -2,19 +2,26 @@
 // Chạy: node scripts/n8n/build-workflow.js
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseState, todayVN, pickNew, settle } from "./lib/select.js";
+import { parseState, todayVN, pickNew, settle, sourceInfo } from "./lib/select.js";
+import { findImage } from "./lib/image.js";
 import { isOnTopic } from "./lib/topic.js";
 import { buildPrompt, parseClaudeOutput, normalizeDraft, validateDraft } from "./lib/draft.js";
 import { buildPostBody, extractSessionCookie } from "./lib/web.js";
 
-// Hai mục tuyển sinh đi đầu vì đúng chủ đề nhất; các mục giáo dục chung còn lại đi qua bộ lọc chủ đề.
+// Thứ tự ưu tiên khi chọn tin nằm ở sourceInfo (lib/select.js): trường thuộc ĐHQG, rồi Thanh Niên,
+// rồi báo nhà nước (Chính phủ, VTV), rồi Tuổi Trẻ. Thứ tự dưới đây chỉ là thứ tự đọc.
 const FEEDS = [
-  "https://tuoitre.vn/rss/tuyen-sinh.rss",
+  "https://uet.vnu.edu.vn/feed",
+  "https://ulis.vnu.edu.vn/feed",
+  "https://vju.ac.vn/feed",
+  "https://law.vnu.edu.vn/feed",
+  "https://tuyensinh.hcmus.edu.vn/feed",
   "https://thanhnien.vn/rss/giao-duc/tuyen-sinh.rss",
-  "https://vnexpress.net/rss/giao-duc.rss",
-  "https://tuoitre.vn/rss/giao-duc.rss",
-  "https://dantri.com.vn/rss/giao-duc.rss",
+  "https://thanhnien.vn/rss/giao-duc/du-hoc.rss",
   "https://thanhnien.vn/rss/giao-duc.rss",
+  "https://baochinhphu.vn/giao-duc.rss",
+  "https://vtv.vn/rss/giao-duc.rss",
+  "https://tuoitre.vn/rss/tuyen-sinh.rss",
 ];
 const STATE_FILE = '"$HOME/.n8n/news-state.json"';
 const LOCK = '"$HOME/.n8n/news.lock"';
@@ -47,34 +54,43 @@ const urls = String($('Cài đặt').first().json.feeds).split("\\n").map((s) =>
 return urls.map((url) => ({ json: { url } }));
 `,
 
-  "Chọn tin mới": `${inline(parseState, todayVN, pickNew, buildPrompt, isOnTopic)}
+  "Chọn tin mới": `${inline(parseState, todayVN, pickNew, buildPrompt, isOnTopic, sourceInfo, findImage)}
 
-const SOURCES = { "vnexpress.net": "VnExpress", "tuoitre.vn": "Tuổi Trẻ", "dantri.com.vn": "Dân Trí", "thanhnien.vn": "Thanh Niên" };
-const sourceName = (link) => {
-  const m = String(link).match(/^https?:\\/\\/(?:www\\.)?([^\\/:?#]+)/);
-  return m ? SOURCES[m[1]] || m[1] : "Nguồn khác";
-};
 const cfg = $('Cài đặt').first().json;
 const state = parseState($('Đọc trạng thái').first().json.stdout);
-const feed = $input.all().map((i) => i.json).filter((j) => j && j.link && j.title).filter((j) => isOnTopic({ title: j.title, summary: j.contentSnippet || j.content })).map((j) => ({
-  title: String(j.title),
-  link: String(j.link),
-  source: sourceName(j.link),
-  summary: String(j.contentSnippet || j.content || "").slice(0, 1000),
-  isoDate: j.isoDate || j.pubDate || "",
-}));
+const feed = $input.all().map((i) => i.json).filter((j) => j && j.link && j.title)
+  .filter((j) => isOnTopic({ title: j.title, summary: j.contentSnippet || j.content }))
+  .map((j) => {
+    const info = sourceInfo(j.link);
+    return {
+      title: String(j.title),
+      link: String(j.link),
+      source: info.name,
+      rank: info.rank,
+      summary: String(j.contentSnippet || j.content || "").slice(0, 1000),
+      isoDate: j.isoDate || j.pubDate || "",
+      rssImage: findImage({ enclosure: j.enclosure, content: j.content, link: j.link }),
+    };
+  });
 const today = todayVN(new Date());
-const { pick, markSeen } = pickNew(feed, state, { perRun: cfg.perRun, perDay: cfg.perDay, today });
+const { pick, markSeen } = pickNew(feed, state, { perRun: cfg.perRun, perDay: cfg.perDay, today, maxAgeDays: 30, nowMs: Date.now() });
 if (!pick.length) return [{ json: { none: true, markSeen, today } }];
 return pick.map((it, idx) => ({
-  json: { ...it, promptB64: Buffer.from(buildPrompt(it), "utf8").toString("base64"), markSeen: idx === 0 ? markSeen : [], today },
+  json: {
+    ...it,
+    promptB64: Buffer.from(buildPrompt(it), "utf8").toString("base64"),
+    linkB64: Buffer.from(it.link, "utf8").toString("base64"),
+    markSeen: idx === 0 ? markSeen : [],
+    today,
+  },
 }));
 `,
 
-  "Kiểm tra bài": `${inline(parseClaudeOutput, normalizeDraft, validateDraft, buildPostBody)}
+  "Kiểm tra bài": `${inline(parseClaudeOutput, normalizeDraft, validateDraft, buildPostBody, findImage)}
 
 const picks = $('Lấy cookie').all().map((i) => i.json);
-const results = $input.all().map((i) => i.json);
+const results = $('Claude viết bài').all().map((i) => i.json);
+const metas = $input.all().map((i) => i.json);
 return picks.map((p, i) => {
   if (p.none) return { json: { kind: "none", markSeen: p.markSeen, today: p.today } };
   const base = { link: p.link, title: p.title, source: p.source, markSeen: p.markSeen, today: p.today, cookie: p.cookie };
@@ -86,7 +102,8 @@ return picks.map((p, i) => {
   const draft = normalizeDraft(parsed);
   const check = validateDraft(draft, p);
   if (!check.ok) return { json: { ...base, kind: "rejected", reason: check.reasons.join("; ") } };
-  return { json: { ...base, kind: "ready", postBody: buildPostBody(draft) } };
+  const image = findImage({ meta: (metas[i] || {}).stdout, enclosure: { url: p.rssImage }, link: p.link });
+  return { json: { ...base, kind: "ready", hasImage: Boolean(image), postBody: buildPostBody(draft, image ? { url: image, credit: p.source } : null, { source: p.source, link: p.link }) } };
 });
 `,
 
@@ -177,9 +194,16 @@ export function buildWorkflow() {
     onError: "continueRegularOutput",
   });
   nodes.at(-1).parameters.executeOnce = false;
-  code("Kiểm tra bài", [col(3), R2]);
-  code("Ghi nhận kiểm tra", [col(4), R2]);
-  command("Lưu trạng thái 1", [col(5), R2], "={{ $json.command }}");
+  // Lấy thẻ og:image của trang gốc để có ảnh bìa. Link đi qua base64, không chèn thẳng vào lệnh shell.
+  const imgPrefix = "curl -sL --proto '=https' --proto-redir '=https' --max-redirs 3 -m 20 -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' \"$(echo ";
+  const imgSuffix = " | base64 -d)\" | head -c 400000 | grep -o -i -E '<meta[^>]+(og:image|twitter:image)[^>]*>' | head -4; true";
+  command("Lấy ảnh bìa", [col(3), R2], `={{ $('Lấy cookie').item.json.none ? "true" : ${JSON.stringify(imgPrefix)} + $('Lấy cookie').item.json.linkB64 + ${JSON.stringify(imgSuffix)} }}`, {
+    onError: "continueRegularOutput",
+  });
+  nodes.at(-1).parameters.executeOnce = false;
+  code("Kiểm tra bài", [col(4), R2]);
+  code("Ghi nhận kiểm tra", [col(5), R2]);
+  command("Lưu trạng thái 1", [col(6), R2], "={{ $json.command }}");
 
   code("Bài sẵn sàng", [col(0), R3]);
   add("Tạo bài nháp", "n8n-nodes-base.httpRequest", 4.2, [col(1), R3], {
@@ -197,13 +221,13 @@ export function buildWorkflow() {
 
   const note = (content, position, width, color) =>
     add(`Ghi chú ${content.split("\n")[0]}`, "n8n-nodes-base.stickyNote", 1, position, { content, width, height: 140, color });
-  note("1–3. Lấy tin mới\nHẹn giờ, đọc 4 trang báo, chọn tối đa 5 tin chưa xử lý. Sửa địa chỉ web và giới hạn ở ô Cài đặt.", [-20, -170], 1480, 7);
-  note("4–5. Đăng nhập, Claude viết bài và kiểm tra\nĐăng nhập bằng tài khoản bot trước (hỏng thì dừng, không tốn lượt Claude). Claude viết lại bằng lời mới; bài sai độ dài hoặc thiếu dòng Nguồn bị bỏ.", [-20, 130], 1480, 6);
+  note("1–3. Lấy tin mới\nHẹn giờ, đọc các nguồn (trường ĐHQG, Thanh Niên, báo nhà nước), lọc đúng chủ đề, chọn tối đa 5 tin chưa xử lý. Sửa địa chỉ web và giới hạn ở ô Cài đặt.", [-20, -170], 1480, 7);
+  note("4–5. Đăng nhập, Claude viết bài và kiểm tra\nĐăng nhập bằng tài khoản bot trước (hỏng thì dừng, không tốn lượt Claude). Claude viết lại bằng lời mới; ảnh bìa lấy từ trang gốc (không có ảnh vẫn đăng). Bài sai độ dài hoặc thiếu dòng Nguồn bị bỏ.", [-20, 130], 1480, 6);
   note("6–7. Tạo bài nháp trên web\nChỉ tạo bài NHÁP. 8–9: bạn mở Admin → Tin tức duyệt và bấm đăng.", [-20, 430], 960, 4);
 
   const FLOW = [
     "Hẹn giờ", "Cài đặt", "Đọc trạng thái", "Danh sách nguồn", "Đọc RSS", "Chọn tin mới",
-    "Đăng nhập web", "Lấy cookie", "Claude viết bài", "Kiểm tra bài", "Ghi nhận kiểm tra",
+    "Đăng nhập web", "Lấy cookie", "Claude viết bài", "Lấy ảnh bìa", "Kiểm tra bài", "Ghi nhận kiểm tra",
     "Lưu trạng thái 1", "Bài sẵn sàng", "Tạo bài nháp", "Tổng kết", "Lưu trạng thái 2",
   ];
   const connections = {};
