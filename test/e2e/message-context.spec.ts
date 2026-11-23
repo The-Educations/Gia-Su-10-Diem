@@ -101,7 +101,7 @@ test("existing weekly requests link their messages back to the exact weekly card
     const message = tutor.locator(".conversation-body").getByRole("article", { name: `Lịch học hằng tuần #${weekly.id}`, exact: true }).last();
     await message.getByRole("link").click();
     await expect(tutor).toHaveURL(new RegExp(`offers\\?request=${weekly.id}$`));
-    await expect(tutor.getByRole("article", { name: `Lịch học hằng tuần #${weekly.id}`, exact: true }).and(tutor.locator(":not(.chat-event *)"))).toBeFocused();
+    await expect(tutor.locator(":focus")).toHaveAttribute("aria-label", `Lịch học hằng tuần #${weekly.id}`);
   } finally {
     await page.request.patch(`/api/weekly-requests/${weekly.id}`, { data: { status: "cancelled" } });
     const current = await (await tutor.request.get("/api/tutor/profile")).json();

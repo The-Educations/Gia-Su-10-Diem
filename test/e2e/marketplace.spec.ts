@@ -112,15 +112,19 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   await login(student, "student");
   // Existing dated lessons remain supported after new requests move to weekly schedules.
   const available = await (await student.request.get("/api/tutors/3")).json();
-  expect((await student.request.post("/api/bookings", { data: { slot_id: available.slots[0].id, subject_id: available.subjects[0], mode: "online", note: "Ôn phương trình bậc hai" } })).status()).toBe(201);
+  const note = `Ôn phương trình bậc hai ${Date.now()}`;
+  expect((await student.request.post("/api/bookings", { data: { slot_id: available.slots[0].id, subject_id: available.subjects[0], mode: "online", note } })).status()).toBe(201);
   await student.goto("/app/bookings?view=list");
-  await expect(student.locator(".lesson-card")).toHaveCount(1);
+  const card = student.locator(".lesson-card").filter({ hasText: note });
+  await expect(card).toHaveCount(1);
   await login(tutor, "chau");
   await tutor.goto("/app/bookings?view=list");
-  await tutor.getByRole("button", { name: "Nhận buổi học" }).click();
+  const tcard = tutor.locator(".lesson-card").filter({ hasText: note });
+  await expect(tcard).toHaveCount(1);
+  await tcard.getByRole("button", { name: "Nhận buổi học" }).click();
   await tutor.getByRole("button", { name: "Xác nhận", exact: true }).click();
-  await expect(tutor.locator(".lesson-card")).toContainText("Đã xác nhận");
-  await tutor.getByRole("link", { name: "Trao đổi" }).click();
+  await expect(tcard).toContainText("Đã xác nhận");
+  await tcard.getByRole("link", { name: "Trao đổi" }).click();
   const fallback = tutor.locator('.conversation-list [data-slot="avatar-fallback"]').first();
   await expect(fallback).toBeVisible();
   expect(await fallback.evaluate(el => [getComputedStyle(el).display, getComputedStyle(el).alignItems, getComputedStyle(el).justifyContent])).toEqual(["flex", "center", "center"]);
@@ -132,11 +136,11 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
     tutor.locator(".conversation-body").getByText("Chào em, mình sẽ ôn phương trình.", { exact: true }),
   ).toBeVisible();
   await student.reload();
-  await expect(student.locator(".lesson-card")).toContainText("Đã xác nhận");
+  await expect(card).toContainText("Đã xác nhận");
   const download = student.waitForEvent("download");
   await student.getByRole("button", { name: "Tải toàn bộ lịch" }).click();
   expect((await download).suggestedFilename()).toMatch(/\.ics$/);
-  await student.getByRole("link", { name: "Trao đổi" }).click();
+  await card.getByRole("link", { name: "Trao đổi" }).click();
   await expect(
     student.locator(".conversation-body").getByText("Chào em, mình sẽ ôn phương trình.", { exact: true }),
   ).toBeVisible();
@@ -151,9 +155,9 @@ test("student booking, tutor acceptance and persistent two-way messages", async 
   await tutor.reload();
   await expect(tutor.locator(".conversation-body").getByText("Em cảm ơn cô.", { exact: true })).toBeVisible();
   await student.goto("/app/bookings?view=list");
-  await student.getByRole("button", { name: "Hủy buổi", exact: true }).click();
+  await card.getByRole("button", { name: "Hủy buổi", exact: true }).click();
   await student.getByRole("button", { name: "Xác nhận", exact: true }).click();
-  await expect(student.locator(".lesson-card")).toContainText("Đã hủy");
+  await expect(card).toContainText("Đã hủy");
   await studentContext.close();
   await tutorContext.close();
 });
@@ -170,15 +174,16 @@ test("new tutor onboarding, availability and admin approval", async ({
   await tutor.getByRole("checkbox", { name: /Đồng ý/ }).check();
   await tutor.getByRole("tab", { name: "Tạo tài khoản" }).click();
   await tutor.getByLabel("Họ và tên", { exact: true }).fill("Gia sư kiểm thử");
+  const newTutorEmail = `new-tutor-${Date.now()}@browser.test`;
   await tutor
     .getByLabel("Email", { exact: true })
-    .fill("new-tutor@browser.test");
+    .fill(newTutorEmail);
   await tutor.getByLabel(/Mật khẩu/).fill("BrowserStudy2026!");
   await tutor.getByLabel("Xác nhận mật khẩu", { exact: true }).fill("BrowserStudy2026!");
   await tutor
     .getByRole("button", { name: "Gửi mã xác minh", exact: true })
     .click();
-  await verifyEmail(tutor, "new-tutor@browser.test");
+  await verifyEmail(tutor, newTutorEmail);
   await expect(tutor).toHaveURL(/onboarding/);
   await tutor.getByRole("radio", { name: "Gia sư", exact: true }).click();
   await tutor.getByRole("button", { name: "Tiếp tục", exact: true }).click();
