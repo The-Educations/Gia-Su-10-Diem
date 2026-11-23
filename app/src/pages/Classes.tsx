@@ -55,7 +55,27 @@ export function ClassList() {
         <Blank title={t(user?.role === "tutor" ? "Chưa có lớp. Nhận một đề nghị để mở lớp đầu tiên." : "Chưa có lớp. Gửi đề nghị cho gia sư để bắt đầu.")}
           action={<Button asChild><Link to={user?.role === "tutor" ? "/proposals" : "/tutors"}>{t(user?.role === "tutor" ? "Xem offer" : "Tìm gia sư")}</Link></Button>} />
       )}
+      <LegacyHistory />
     </Page>
+  );
+}
+
+// Read-only archive of the retired flows (one-off bookings, dated offers) —
+// listed so old records stay visible; no actions.
+function LegacyHistory() {
+  const { t } = useI18n(),
+    bookings = useLoad<{ id: number; starts_at: string; status: string; subject_name?: string; tutor_name?: string; student_name?: string }[]>("/bookings"),
+    offers = useLoad<{ id: number; status: string; tutor_name?: string; student_name?: string }[]>("/offers");
+  const rows = [
+    ...(bookings.data || []).map((b) => ({ key: `b${b.id}`, when: b.starts_at, label: `${b.subject_name || "Booking"} · ${b.tutor_name || b.student_name || ""}`, status: b.status })),
+    ...(offers.data || []).map((o) => ({ key: `o${o.id}`, when: "", label: `${o.tutor_name || o.student_name || ""}`, status: o.status })),
+  ];
+  if (!rows.length) return null;
+  return (
+    <section className="legacy-history">
+      <h2 className="muted">{t("Lịch sử cũ")}</h2>
+      <ul className="list">{rows.map((r) => <li key={r.key} className="muted"><span>{r.when ? `${dayOf(r.when)} · ${timeOf(r.when)}` : "—"} · {r.label} · {r.status}</span></li>)}</ul>
+    </section>
   );
 }
 

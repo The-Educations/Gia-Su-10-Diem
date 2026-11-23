@@ -255,7 +255,11 @@ function Conversation({ thread, onRead }: { thread: Thread; onRead: (key: string
             {contextResult.loading ? <Loading /> : contextResult.error ? <ErrorState error={contextResult.error} retry={contextResult.reload} /> : context && <MessageContextCard context={context} />}
             {hasContext && <Button variant="ghost" size="icon" aria-label={t("Bỏ ngữ cảnh tin nhắn")} onClick={() => chooseContext(null)}><X aria-hidden="true" /></Button>}
           </aside>}
-          <ChatComposer uploadPath={`/chat/${thread.kind}/${thread.id}/attachments`} ready={contextReady} onSend={send} />
+          {thread.kind === "lesson" ? (
+            <p className="legacy-note muted">{t("Luồng đặt lịch cũ đã ngừng — cuộc trò chuyện này chỉ đọc. Lịch sử ở Lớp học.")}</p>
+          ) : (
+            <ChatComposer uploadPath={`/chat/${thread.kind}/${thread.id}/attachments`} ready={contextReady} onSend={send} />
+          )}
         </>
       )}
     </>
@@ -294,7 +298,7 @@ export default function Messages() {
       kind: "inquiry" as const,
       name: user?.role === "tutor" ? i.student_name : i.tutor_name,
       detail: (bookings.data || []).some((b) => b.inquiry_id === i.id) ? t("Trao đổi lịch học & bài tập") : t("Tư vấn trước buổi học"),
-      scheduleHref: (bookings.data || []).some((b) => b.inquiry_id === i.id) ? `/bookings?inquiry=${i.id}` : undefined,
+      scheduleHref: (bookings.data || []).some((b) => b.inquiry_id === i.id) ? `/app/classes?inquiry=${i.id}` : undefined,
       time: i.last_message_at || i.created_at,
       tutorId: i.tutor_id,
       personId: user?.role === "tutor" ? i.student_id : i.tutor_id,
@@ -313,7 +317,7 @@ export default function Messages() {
       tutorId: b.tutor_id,
       personId: user?.role === "tutor" ? b.student_id : b.tutor_id,
       endpoint: `/bookings/${b.id}/messages`,
-      scheduleHref: `/bookings?lesson=${b.id}`,
+      scheduleHref: `/app/classes?lesson=${b.id}`,
       context: { kind: "lesson" as const, id: b.id, subject_name: b.subject_name, status: b.status, starts_at: b.starts_at, duration_minutes: b.duration_minutes },
       unread: b.unread_count || 0, last: b.last_message || "", lastAt: b.last_message_at || b.starts_at,
       lastSender: b.last_sender, lastIsEvent: b.last_is_event,

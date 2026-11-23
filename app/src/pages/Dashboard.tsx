@@ -1,5 +1,4 @@
 import { TodayPanel } from "@/components/today-panel";
-import type { StudyOffer } from "@/lib/offers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
@@ -20,12 +19,8 @@ import {
 import { WorkspacePanel } from "@/components/workspace";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CoursesToReview, CourseReviewDialog } from "@/components/trust";
 export default function Dashboard() {
-  const [reviewing, setReviewing] = useState<StudyOffer | null>(null);
   const { user } = useApp(), t = useI18n().t,
-    bookings = useLoad<Booking[]>("/bookings"),
-    offers = useLoad<StudyOffer[]>(user?.role === "admin" ? null : "/offers"),
     profile = useLoad<Tutor>(user?.role === "tutor" ? "/tutor/profile" : null),
     favorites = useLoad<number[]>(
       user?.role === "student" ? "/favorites" : null,
@@ -36,23 +31,7 @@ export default function Dashboard() {
     );
   if (!user) return null;
   if (user.role === "admin") return <Navigate to="/admin" replace />;
-  if (bookings.loading) return <Loading />;
-  if (bookings.error)
-    return <ErrorState error={bookings.error} retry={bookings.reload} />;
-  if (offers.error)
-    return <ErrorState error={offers.error} retry={offers.reload} />;
   const isTutor = user.role === "tutor",
-    rows = bookings.data || [],
-    upcoming = rows
-      .filter(
-        (b) =>
-          ["accepted", "pending"].includes(b.status) &&
-          new Date(b.starts_at) > new Date(),
-      )
-      .sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
-    next = upcoming.find((b) => b.status === "accepted") || upcoming[0],
-    pendingOffers = (offers.data || []).filter(o=>o.status === "pending"),
-    pending = upcoming.filter((b) => b.status === "pending"),
     saved = (tutors.data || []).filter((t) =>
       favorites.data?.includes(t.user_id),
     ),
@@ -84,8 +63,6 @@ export default function Dashboard() {
       />
       {!isTutor && (!user.school || !user.ward_code) && <Alert><AlertDescription><Link to="/settings">{t("Hoàn thiện hồ sơ: trường học & nơi sinh sống")}</Link></AlertDescription></Alert>}
       <TodayPanel />
-      {!isTutor && <CoursesToReview offers={offers.data || []} onReview={setReviewing} />}
-      <CourseReviewDialog offer={reviewing} onClose={() => setReviewing(null)} onDone={() => { offers.reload(); bookings.reload(); }} />
       <div className="workspace-lower">
         <div className="workspace-side">
           {isTutor ? (

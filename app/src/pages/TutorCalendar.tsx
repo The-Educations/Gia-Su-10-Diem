@@ -31,7 +31,7 @@ export default function TutorCalendar() {
         title={user?.role === "tutor" ? t("Giờ trống hằng tuần") : t("Lịch dạy")}
         action={
           <Button variant="outline" asChild>
-            <Link to="/bookings">{user?.role === "tutor" ? t("Lịch dạy của tôi") : t("Quản lý buổi học")}</Link>
+            <Link to="/classes">{user?.role === "tutor" ? t("Lịch dạy của tôi") : t("Quản lý buổi học")}</Link>
           </Button>
         }
       />

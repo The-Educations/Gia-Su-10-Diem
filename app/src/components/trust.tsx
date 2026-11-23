@@ -166,7 +166,7 @@ export function CoursesToReview({ offers, onReview }: { offers: StudyOffer[]; on
         <div><strong>{o.subject_name} · {o.tutor_name}</strong><span>Đã học {o.completed_lessons} buổi · còn {daysLeft(o.review_open_until)} ngày để đánh giá</span></div>
         <div className="actions">
           <Button onClick={() => onReview(o)}>{t("Đánh giá khóa học")}</Button>
-          <Button asChild variant="ghost"><Link to={`/offers?id=${o.id}`}>{t("Xem khóa học")}</Link></Button>
+          <Button asChild variant="ghost"><Link to={`/proposals?id=${o.id}`}>{t("Xem khóa học")}</Link></Button>
         </div>
       </li>)}
     </ul>

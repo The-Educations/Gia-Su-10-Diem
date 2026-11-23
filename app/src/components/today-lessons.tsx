@@ -111,7 +111,7 @@ export function TodayLessons({ lessons, role, onChanged }: {
     if (b.status === "accepted" && canReportTutorAbsent(b, now))
       return tutorAbsent(b);
     if (b.status === "completed" && !b.offer_id && !b.reviewed)
-      return <Button asChild variant="outline"><Link to="/bookings?status=completed">{t("Đánh giá gia sư")}</Link></Button>;
+      return <Button asChild variant="outline"><Link to="/classes?status=completed">{t("Đánh giá gia sư")}</Link></Button>;
     if (b.status === "completed" && b.offer_id) {
       if (b.my_rating != null)
         return <>

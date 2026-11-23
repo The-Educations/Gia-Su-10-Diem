@@ -173,7 +173,7 @@ export function WeekAgenda({
           rows.map((b) => (
             <Link
               key={b.id}
-              to={b.offer_id ? `/bookings?offer=${b.offer_id}` : `/bookings?status=${b.status}`}
+              to={"/classes"}
               className="agenda-lesson"
             >
               <time>
