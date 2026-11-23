@@ -149,6 +149,9 @@ export type Booking = {
   rating_open_until?: string | null;
   rating_edit_until?: string | null;
   rating_editable?: boolean;
+  last_message?: string | null;
+  last_message_at?: string | null;
+  unread_count?: number;
 };
 export type Resource = {
   id: number;
@@ -185,6 +188,7 @@ export type Message = {
   created_at: string;
   context?: MessageContext | null;
   context_kind?: MessageContext["kind"] | null;
+  is_event?: number;
 };
 export type AdminData = {
   theme_catalog: ProfileTheme[];
@@ -208,6 +212,8 @@ export type Inquiry = {
   tutor_name: string;
   created_at: string;
   last_message: string;
+  last_message_at?: string | null;
+  unread_count?: number;
 };
 
 export const accountRole = (user: User) => user.role === "admin" ? "Quản trị viên" : user.role === "tutor" ? "Gia sư" : user.learner_type === "parent" ? "Phụ huynh" : "Học sinh";

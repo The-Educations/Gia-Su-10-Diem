@@ -184,6 +184,14 @@ export function migrateDatabase(db) {
     id INTEGER PRIMARY KEY, thread_id INTEGER NOT NULL REFERENCES support_threads(id), sender_id INTEGER NOT NULL REFERENCES users(id),
     body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   ); CREATE INDEX IF NOT EXISTS support_message_thread ON support_messages(thread_id,id)`);
+  for (const table of ["messages", "inquiry_messages", "support_messages"]) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "is_event"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN is_event INTEGER NOT NULL DEFAULT 0`);
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS chat_reads (
+    thread_kind TEXT NOT NULL, thread_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(thread_kind,thread_id,user_id)
+  )`);
   for (const table of ["slots", "bookings"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "duration_minutes"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60`);

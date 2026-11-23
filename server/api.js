@@ -1,6 +1,6 @@
 import { setMemberProfile } from "./community-profile.js";
 import { displayNameSchema, authorLabel } from "./community-policy.js";
-import { registerChatMedia, withChatMedia, insertChatMessage } from "./chat-media.js";
+import { registerChatMedia, withChatMedia, insertChatMessage, insertChatEvent, chatPage, unreadCount } from "./chat-media.js";
 import { registerCatalogRemoval } from "./catalog-removal.js";
 import { registerGoogleCalendar } from "./google-calendar.js";
 import { registerOffers } from "./offers.js";
@@ -648,12 +648,16 @@ export function createApi(
     const rows = (
       all(
         db,
-        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,${pairReview("rating")} AS reviewed,${pairReview("body")} AS review_body FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id WHERE ${condition} ORDER BY b.starts_at DESC`,
+        `SELECT b.*,(SELECT inquiry_id FROM offers WHERE id=b.offer_id) AS inquiry_id,s.name AS student_name,t.name AS tutor_name,sub.name AS subject_name,${pairReview("rating")} AS reviewed,${pairReview("body")} AS review_body,
+        (SELECT body FROM messages WHERE booking_id=b.id ORDER BY id DESC LIMIT 1) AS last_message,
+        (SELECT created_at FROM messages WHERE booking_id=b.id ORDER BY id DESC LIMIT 1) AS last_message_at
+        FROM bookings b JOIN users s ON s.id=b.student_id JOIN users t ON t.id=b.tutor_id JOIN subjects sub ON sub.id=b.subject_id WHERE ${condition} ORDER BY b.starts_at DESC`,
         ...(req.user.role === "admin" ? [] : [req.user.id]),
       )
     );
     // Lesson ratings are private to the student who gave them.
-    res.json(req.user.role === "student" ? lessonRatingFields(db, rows, req.user.id) : rows);
+    const shaped = req.user.role === "student" ? lessonRatingFields(db, rows, req.user.id) : rows;
+    res.json(shaped.map(b => ({ ...b, unread_count: unreadCount(db, "lesson", b.id, req.user.id) })));
   });
   app.post("/api/bookings", auth("student"), (req, res) => {
     const d = z
@@ -705,6 +709,7 @@ export function createApi(
           s.duration_minutes,
         ).lastInsertRowid,
       );
+      insertChatEvent(db, "lesson", id, req.user, "đã đặt buổi học");
       return { id };
     });
     res.status(201).json(result);
@@ -762,6 +767,8 @@ export function createApi(
       const other = req.user.id === b.tutor_id ? b.student_id : b.tutor_id;
       notify(db, other, `lesson_${status}`, { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", b.subject_id)?.name || "", link: `/bookings?lesson=${b.id}` });
     }
+    const eventText = { accepted: "đã xác nhận buổi học", declined: "đã từ chối buổi học", cancelled: "đã hủy buổi học", completed: "đã hoàn thành buổi học", missed: "đã báo học sinh vắng", tutor_missed: "đã báo gia sư vắng" }[status];
+    if (eventText) insertChatEvent(db, "lesson", b.id, req.user, eventText);
     audit(req.user.id, `booking.${status}`, b.id);
     res.json({ ok: true });
   });
@@ -808,14 +815,10 @@ export function createApi(
   });
   app.get("/api/bookings/:id/messages", auth(), (req, res) => {
     const b = booking(req);
+    const page = chatPage(db, "lesson", b.id, req);
     const context = lessonMessageContext(db, b.id);
-    res.json(
-      withChatMedia(db, "lesson", b.id, all(
-        db,
-        "SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender_id WHERE booking_id=? ORDER BY m.id",
-        b.id,
-      ).map(message => ({ ...message, context }))),
-    );
+    const messages = withChatMedia(db, "lesson", b.id, page.messages).map((message) => ({ ...message, context }));
+    res.json(req.query.limit ? { messages, hasMore: page.hasMore } : messages);
   });
   app.post(
     "/api/bookings/:id/messages",

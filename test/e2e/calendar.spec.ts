@@ -78,3 +78,19 @@ test("a tutor's free hours are one block on the calendar and in the offer compos
   expect((await tutor.request.put("/api/tutor/availability", { data: { blocks: profile.weekly_schedule.blocks, revision: now.revision } })).ok()).toBe(true);
   await tc.close(); await sc.close();
 });
+
+test("overlapping events share a day column without intersecting, and both stay clickable", async ({ page }) => {
+  await login(page, "student");
+  const day = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  const iso = (t: string) => new Date(`${day}T${t}:00+07:00`).toISOString();
+  for (const [title, from, to] of [["Ca A", "09:00", "10:00"], ["Ca B", "09:30", "10:30"]] as const)
+    expect((await page.request.post("/api/calendar-events", { data: { title, note: "", color: "sky", starts_at: iso(from), ends_at: iso(to) } })).ok()).toBe(true);
+  await page.goto("/app/schedule");
+  const a = page.locator(".cal-event", { hasText: "Ca A" }), b = page.locator(".cal-event", { hasText: "Ca B" });
+  await expect(a).toBeVisible(); await expect(b).toBeVisible();
+  const ba = (await a.boundingBox())!, bb = (await b.boundingBox())!;
+  const horizontalOverlap = Math.min(ba.x + ba.width, bb.x + bb.width) - Math.max(ba.x, bb.x);
+  expect(horizontalOverlap).toBeLessThanOrEqual(0);
+  await b.click();
+  await expect(page.locator(".event-pop")).toBeVisible();
+});

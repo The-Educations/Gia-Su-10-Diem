@@ -321,10 +321,10 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
   await tutor.request(`/bookings/${id}/messages`, "POST", {
     body: "Mình sẽ bắt đầu từ kiến thức cơ bản.",
   });
-  assert.equal(
-    (await owner.request(`/bookings/${id}/messages`)).data.length,
-    2,
-  );
+  const thread = (await owner.request(`/bookings/${id}/messages`)).data;
+  assert.equal(thread.filter((m) => !m.is_event).length, 2);
+  // Booking and acceptance land in the thread as compact event cards.
+  assert.equal(thread.filter((m) => m.is_event).length, 2);
   assert.equal(
     (
       await tutor.request(`/bookings/${id}/lesson`, "PATCH", {
@@ -350,7 +350,11 @@ test("booking conflict, ownership, messages, completion and review lifecycle", a
   );
   const reopened = openDatabase(file);
   assert.equal(
-    one(reopened, "SELECT count(*) n FROM messages WHERE booking_id=?", id).n,
+    one(reopened, "SELECT count(*) n FROM messages WHERE booking_id=? AND is_event=0", id).n,
+    2,
+  );
+  assert.equal(
+    one(reopened, "SELECT count(*) n FROM messages WHERE booking_id=? AND is_event=1", id).n,
     2,
   );
   reopened.close();
@@ -1777,7 +1781,9 @@ test("message context persists for both participants and rejects content from an
   for (const context of [{ kind: "offer", id: 0 }, { kind: "support", id: 1 }, { kind: "offer", id: offer.id, href: "https://evil.invalid" }]) {
     assert.equal((await student.request(`${path}/messages`, "POST", { body: "Invalid", context })).status, 400);
   }
-  assert.equal((await tutor.request(`${path}/messages`)).data.length, 1);
+  const sent = (await tutor.request(`${path}/messages`)).data;
+  assert.equal(sent.filter((m) => !m.is_event).length, 1);
+  assert.equal(sent.find((m) => m.is_event)?.context?.id, offer.id);
   assert.equal((await tutor.request(`/offers/${offer.id}`, "PATCH", { status: "accepted" })).status, 200);
   const lesson = (await student.request("/bookings")).data.find(b => b.offer_id === offer.id);
   assert.equal((await tutor.request(`${path}/messages`, "POST", { body: "Bài tập của buổi này", context: { kind: "lesson", id: lesson.id } })).status, 201);
@@ -1797,7 +1803,7 @@ test("message context persists for both participants and rejects content from an
   await student.request(`/bookings/${lesson.id}/messages`, "POST", { body: "Old lesson thread" });
   assert.equal((await tutor.request(`/bookings/${lesson.id}/messages`)).data[0].context.id, lesson.id);
   run(db, "UPDATE inquiry_messages SET context_id=999999 WHERE id=?", received.id);
-  const unavailable = (await student.request(`${path}/messages`)).data[0];
+  const unavailable = (await student.request(`${path}/messages`)).data.find((m) => m.id === received.id);
   assert.equal(unavailable.context, null);
   assert.equal(unavailable.context_kind, "offer");
 });

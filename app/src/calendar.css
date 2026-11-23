@@ -151,6 +151,10 @@
 .cal-free { position: absolute; left: 0; right: 0; z-index: 0; background: color-mix(in srgb, var(--pastel-sage) 70%, transparent); border-left: 3px solid color-mix(in srgb, var(--pastel-sage-ink) 45%, transparent); pointer-events: none; }
 .cal-free small { display: block; padding: 3px 6px; font-size: 10.5px; font-weight: 600; color: var(--pastel-sage-ink); opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-event span { font-variant-numeric: tabular-nums; }
+/* A sliver of a shared column still opens; show the time, tooltip carries the rest. */
+.cal-event[data-narrow] { padding: 3px 4px; }
+.cal-event[data-narrow] strong { display: none; }
+.cal-event[data-narrow] > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10.5px; }
 .cal-grid[data-compact] .cal-event { flex-direction: row; gap: 6px; padding-block: 2px; }
 .cal-grid[data-compact] .cal-event strong { width: auto; flex: 1; }
 .cal-grid[data-compact] .cal-hours span { font-size: 10px; }

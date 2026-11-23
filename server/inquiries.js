@@ -1,5 +1,5 @@
 import { liveTutorSql, publicView } from "./tutor-visibility.js";
-import { withChatMedia, insertChatMessage } from "./chat-media.js";
+import { withChatMedia, insertChatMessage, insertChatEvent, chatPage, unreadCount } from "./chat-media.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text, availabilitySchema } from "./validation.js";
 import { weeklySchedule } from "./availability.js";
@@ -21,12 +21,13 @@ export function registerInquiries(app, db, auth) {
       all(
         db,
         `SELECT i.*,s.name AS student_name,t.name AS tutor_name,
-    (SELECT body FROM inquiry_messages WHERE inquiry_id=i.id ORDER BY id DESC LIMIT 1) AS last_message
+    (SELECT body FROM inquiry_messages WHERE inquiry_id=i.id ORDER BY id DESC LIMIT 1) AS last_message,
+    (SELECT created_at FROM inquiry_messages WHERE inquiry_id=i.id ORDER BY id DESC LIMIT 1) AS last_message_at
     FROM inquiries i JOIN users s ON s.id=i.student_id JOIN users t ON t.id=i.tutor_id
     WHERE i.student_id=? OR i.tutor_id=? ORDER BY i.id DESC`,
         req.user.id,
         req.user.id,
-      ),
+      ).map(i => ({ ...i, unread_count: unreadCount(db, "inquiry", i.id, req.user.id) })),
     ),
   );
   app.post("/api/inquiries", auth("student"), (req, res) => {
@@ -91,13 +92,9 @@ export function registerInquiries(app, db, auth) {
     (req, res) => {
       const thread = participant(req, res);
       if (!thread) return;
-      res.json(
-        withChatMedia(db, "inquiry", thread.id, withInquiryContexts(db, thread, all(
-          db,
-          "SELECT m.*,u.name FROM inquiry_messages m JOIN users u ON u.id=m.sender_id WHERE inquiry_id=? ORDER BY m.id",
-          req.params.id,
-        ))),
-      );
+      const page = chatPage(db, "inquiry", thread.id, req);
+      const messages = withChatMedia(db, "inquiry", thread.id, withInquiryContexts(db, thread, page.messages));
+      res.json(req.query.limit ? { messages, hasMore: page.hasMore } : messages);
     },
   );
   app.post(
