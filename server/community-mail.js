@@ -3,8 +3,8 @@ import { z } from "./validation.js";
 
 // Enqueue within the moderation transaction; call Mailflare only after commit.
 export function registerCommunityMail(app, db, auth, audit, { sendAdminEmail, origin }) {
-  function enqueue(userId, detail, reason, path) {
-    return Number(run(db, "INSERT INTO community_mail(user_id,detail,reason,path) VALUES (?,?,?,?)", userId, detail, reason, path).lastInsertRowid);
+  function enqueue(userId, detail, reason, path, postId = null) {
+    return Number(run(db, "INSERT INTO community_mail(user_id,detail,reason,path,post_id) VALUES (?,?,?,?,?)", userId, detail, reason, path, postId).lastInsertRowid);
   }
   async function deliver(id, actorId) {
     const row = one(db, "SELECT m.*,u.email,u.status FROM community_mail m JOIN users u ON u.id=m.user_id WHERE m.id=?", id);

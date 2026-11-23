@@ -1051,6 +1051,9 @@ test("admin deletes hidden posts, undoes, purges, and expired posts clean up laz
   await call("parent", `/community/posts/${id}/comments`, "POST", { body: "Học đều nhé" });
   await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
   const before = notes();
+  const unsentMail = (pid) =>
+    db.prepare("SELECT COUNT(*) n FROM community_mail WHERE post_id=? AND sent_at IS NULL").get(pid).n;
+  assert.equal(unsentMail(id), 1);
   assert.equal((await call("student", `/admin/community/posts/${id}/delete`, "POST")).status, 403);
   assert.equal((await call("admin", `/admin/community/posts/${id}/delete`, "POST")).status, 200);
   assert.equal(post(id).status, "deleted");
@@ -1067,6 +1070,7 @@ test("admin deletes hidden posts, undoes, purges, and expired posts clean up laz
   assert.equal((await call("student", `/admin/community/posts/${id}`, "DELETE")).status, 403);
   assert.equal((await call("admin", `/admin/community/posts/${id}`, "DELETE")).status, 200);
   assert.equal(post(id), undefined);
+  assert.equal(unsentMail(id), 0);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM community_comments WHERE post_id=?").get(id).n, 0);
   assert.equal(audits("community.post.purge"), 1);
 
