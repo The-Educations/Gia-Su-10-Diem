@@ -35,6 +35,51 @@ export function createMailflareSender({ url = "https://mail.giasudiem10.online",
       if (!response.ok) throw new Error("Mail delivery unavailable");
       return;
     }
+    // Forgot-password mail: a one-use link that lives for 30 minutes.
+    if (kind === "password_reset") {
+      const subject = "Đặt lại mật khẩu — Gia Sư 10 Điểm";
+      const content = `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#55594f">Bạn vừa yêu cầu đặt lại mật khẩu. Liên kết chỉ dùng được một lần và hết hạn sau 30 phút.</p><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="background:#852f36;border-radius:8px"><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 22px;font-size:14px;font-weight:700;line-height:1.4;color:#ffffff;text-decoration:none">Đặt lại mật khẩu</a></td></tr></table>`;
+      const footer = "Nếu không phải bạn yêu cầu, hãy bỏ qua email này — mật khẩu hiện tại vẫn giữ nguyên.";
+      const response = await fetch(`${url}/api/v1/send`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ mailboxId, from, to: [to], subject, undoSend: false, trackOpens: false,
+          text: `Đặt lại mật khẩu Gia Sư 10 Điểm (một lần, 30 phút): ${link}\n\n${footer}`, html: emailFrame(subject, content, footer) }),
+      });
+      if (!response.ok) throw new Error("Mail delivery unavailable");
+      return;
+    }
+    // Google-only accounts get directions back to Google sign-in instead.
+    if (kind === "password_reset_google") {
+      const subject = "Tài khoản của bạn dùng Google — Gia Sư 10 Điểm";
+      const content = `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#55594f">Tài khoản này đăng nhập bằng Google, không có mật khẩu riêng. Vui lòng vào bằng nút Đăng nhập Google.</p><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="background:#852f36;border-radius:8px"><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 22px;font-size:14px;font-weight:700;line-height:1.4;color:#ffffff;text-decoration:none">Đăng nhập</a></td></tr></table>`;
+      const footer = "Nếu không phải bạn, hãy bỏ qua email này.";
+      const response = await fetch(`${url}/api/v1/send`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ mailboxId, from, to: [to], subject, undoSend: false, trackOpens: false,
+          text: `Tài khoản này đăng nhập bằng Google, không có mật khẩu riêng: ${link}\n\n${footer}`, html: emailFrame(subject, content, footer) }),
+      });
+      if (!response.ok) throw new Error("Mail delivery unavailable");
+      return;
+    }
+    // Confirmation after a successful reset so an unnoticed change is caught.
+    if (kind === "password_changed") {
+      const subject = "Mật khẩu vừa được đổi — Gia Sư 10 Điểm";
+      const content = `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#55594f">Mật khẩu tài khoản của bạn vừa được đổi và mọi phiên đăng nhập cũ đã đăng xuất.</p><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="background:#852f36;border-radius:8px"><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 22px;font-size:14px;font-weight:700;line-height:1.4;color:#ffffff;text-decoration:none">Đăng nhập lại</a></td></tr></table>`;
+      const footer = "Nếu không phải bạn, hãy liên hệ hỗ trợ ngay.";
+      const response = await fetch(`${url}/api/v1/send`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ mailboxId, from, to: [to], subject, undoSend: false, trackOpens: false,
+          text: `Mật khẩu tài khoản của bạn vừa được đổi và mọi phiên đăng nhập cũ đã đăng xuất: ${link}\n\n${footer}`, html: emailFrame(subject, content, footer) }),
+      });
+      if (!response.ok) throw new Error("Mail delivery unavailable");
+      return;
+    }
     const signup = kind === "signup";
     const update = kind === "profile_update";
     if (update && from !== "admin@giasudiem10.online") throw new Error("Profile review mail must use the admin mailbox in Mailflare");

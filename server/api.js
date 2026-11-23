@@ -28,6 +28,7 @@ import { liveTutorSql, isLiveTutor, publicView, publishedView, contentSnapshot, 
 import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
+import { registerPasswordReset } from "./password-reset.js";
 import { registerPosts } from "./posts.js";
 import { registerNewsImages } from "./news-images.js";
 import { isGoogleAdmin } from "./admin-access.js";
@@ -154,7 +155,7 @@ export function createApi(
       }),
     );
     app.use(
-      ["/api/auth/login", "/api/auth/register", "/api/auth/google", "/api/auth/verify-email", "/api/auth/resend-verification", "/api/auth/signup"],
+      ["/api/auth/login", "/api/auth/register", "/api/auth/google", "/api/auth/verify-email", "/api/auth/resend-verification", "/api/auth/signup", "/api/auth/forgot-password", "/api/auth/reset-password"],
       rateLimit({
         ...(clientIp
           ? {
@@ -265,6 +266,7 @@ export function createApi(
     });
   };
   registerEmailVerification(app, db, { origin, sendEmail });
+  registerPasswordReset(app, db, { origin, sendEmail, audit });
   const signup = registerSignupVerification(app, db, { sendEmail, production, session });
   app.locals.calendarSync = registerGoogleCalendar(app, db, auth, { origin, production, google, wakeCalendar });
   registerGoogleAuth(app, db, { origin, production, session, google, signup });
