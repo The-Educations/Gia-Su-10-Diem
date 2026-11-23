@@ -42,16 +42,18 @@ import {
 import ResourceEditor from "./ResourceEditor";
 import { AdminFinance } from "@/components/admin-finance";
 import { AdminToday } from "@/components/admin-today";
+import { AdminStudents } from "@/components/admin-students";
 import { AdminClasses, AdminUserOverview } from "@/components/admin-classes";
 export default function Admin() {
   const [params, setParams] = useSearchParams();
-  const tab = ["today", "classes", "tutors", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
+  const tab = ["today", "classes", "tutors", "students", "users", "resources", "subjects", "audit", "posts", "community", "finance"].includes(
       params.get("tab") || "",
     )
       ? params.get("tab")!
       : "today",
     status = params.get("status") || "";
   const communityQueue = useLoad<unknown[]>("/admin/community/queue");
+  const pendingStudents = useLoad<unknown[]>("/admin/verifications");
   const pendingProofs = useLoad<{ tutor_id: number; count: number }[]>("/admin/credentials/pending");
   const { refresh } = useApp(),
     result = useLoad<AdminData>("/admin"),
@@ -130,6 +132,7 @@ export default function Admin() {
       />
       <WorkspaceStats
         items={[
+          { label: "Học sinh chờ xác minh", value: pendingStudents.data?.length || 0, to: "/admin?tab=students" },
           { label: "Bài cộng đồng chờ duyệt", value: communityQueue.data?.length || 0, to: "/admin?tab=community" },
           {
             label: "Hồ sơ chờ duyệt",
@@ -165,6 +168,7 @@ export default function Admin() {
             <TabsTrigger value="today">Hôm nay</TabsTrigger>
             <TabsTrigger value="classes">Lớp học</TabsTrigger>
             <TabsTrigger value="tutors">Gia sư ({d.tutors.length})</TabsTrigger>
+            <TabsTrigger value="students">{`Học sinh (${pendingStudents.data?.length || 0})`}</TabsTrigger>
             <TabsTrigger value="users">Tài khoản</TabsTrigger>
             <TabsTrigger value="resources">Kỳ thi</TabsTrigger>
             <TabsTrigger value="subjects">Môn học</TabsTrigger>
@@ -209,6 +213,7 @@ export default function Admin() {
           <TabsContent value="classes"><AdminClasses /></TabsContent>
           <TabsContent value="community"><AdminCommunity /></TabsContent>
           <TabsContent value="finance"><AdminFinance /></TabsContent>
+          <TabsContent value="students"><AdminStudents query={q} /></TabsContent>
           <TabsContent value="posts"><AdminPosts /></TabsContent>
           <TabsContent value="tutors">
             {!matchingTutors.length && (
