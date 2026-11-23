@@ -118,3 +118,18 @@ jobs:
       - name: Link the verified live site
         if: steps.revision.outputs.current == 'true'
         run: echo 'Production checks passed — [Open Gia-Sư 10 Điểm](https://giasudiem10.online)' >> "$GITHUB_STEP_SUMMARY"
+      - name: Production smoke (read-only)
+        if: steps.revision.outputs.current == 'true'
+        shell: bash
+        env:
+          BASE: https://giasudiem10.online
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          ok=0
+          for attempt in 1 2 3; do
+            if node scripts/prod-smoke.mjs > smoke.md; then ok=1; break; fi
+            echo "::warning::prod smoke attempt $attempt failed, waiting for the worker to come up"
+            sleep 20
+          done
+          cat smoke.md >> "$GITHUB_STEP_SUMMARY"
+          [ "$ok" = 1 ]
