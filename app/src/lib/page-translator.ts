@@ -14,6 +14,9 @@ function compiled() {
   if (patterns) return patterns;
   patterns = Object.entries(en)
     .filter(([k]) => /\{\w+\}/.test(k))
+    // Keys with under 3 literal chars ("T{n}") cannot anchor a pattern: they
+    // would swallow any word sharing their first letter ("Thứ" → "Mhứ"). Skip.
+    .filter(([k]) => k.replace(/\{\w+\}/g, "").length >= 3)
     .map(([k, out]) => {
       const names: string[] = [];
       const source = k.split(/(\{\w+\})/).map((part) => {

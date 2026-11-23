@@ -142,7 +142,7 @@ export function upkeep(db) {
   });
 }
 
-const sessionSql = `SELECT cs.*, c.title, c.color, c.tutor_id, c.subject_id, c.mode, c.meeting_url, sm.member_id, sm.tutor_confirmed_at, sm.student_confirmed_at, sm.outcome, sm.rating, sm.survey, sm.comment,
+const sessionSql = `SELECT cs.*, c.title, c.color, c.tutor_id, c.subject_id, c.mode, c.meeting_url, sm.member_id, sm.tutor_confirmed_at, sm.student_confirmed_at, sm.outcome, sm.rating, sm.survey, sm.comment, sm.note, sm.settled,
   m.student_id, u.name AS student_name, t.name AS tutor_name
   FROM class_sessions cs JOIN classes c ON c.id=cs.class_id LEFT JOIN session_members sm ON sm.session_id=cs.id
   LEFT JOIN class_members m ON m.id=sm.member_id LEFT JOIN users u ON u.id=m.student_id JOIN users t ON t.id=c.tutor_id`;
@@ -358,7 +358,70 @@ export function registerClasses(app, db, auth, audit) {
       disputes: all(db, `SELECT sm.session_id,sm.member_id,sm.note,cs.starts_at,c.id AS class_id,c.title,u.name AS student_name,t.name AS tutor_name
         FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN classes c ON c.id=cs.class_id
         JOIN class_members m ON m.id=sm.member_id JOIN users u ON u.id=m.student_id JOIN users t ON t.id=c.tutor_id WHERE sm.outcome='disputed' ORDER BY cs.starts_at`),
+      // Ended lessons nobody confirmed and nobody reported: they auto-confirm soon, so an admin should see them first.
+      sessions_waiting: one(db, `SELECT COUNT(DISTINCT sm.session_id) n FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id
+        WHERE sm.outcome='pending' AND cs.status='scheduled' AND datetime(cs.starts_at,'+'||cs.minutes||' minutes')<datetime('now')
+        AND NOT EXISTS(SELECT 1 FROM session_members x WHERE x.session_id=sm.session_id AND x.outcome='disputed')`).n,
     });
+  });
+  // The sessions worklist: one row per (lesson, student) pair; the client groups them back by lesson.
+  app.get("/api/admin/sessions", auth("admin"), (req, res) => {
+    upkeep(db);
+    const q = z.object({
+      class: z.coerce.number().int().positive().optional(),
+      member: z.coerce.number().int().positive().optional(),
+      tutor: z.coerce.number().int().positive().optional(),
+      student: z.coerce.number().int().positive().optional(),
+    }).parse(req.query);
+    const [where, args] = [
+      [q.class && "cs.class_id=?", q.member && "sm.member_id=?", q.tutor && "c.tutor_id=?", q.student && "m.student_id=?"].filter(Boolean).join(" AND "),
+      [q.class, q.member, q.tutor, q.student].filter((v) => v !== undefined),
+    ];
+    res.json(all(db, `SELECT cs.id,cs.class_id,cs.starts_at,cs.minutes,cs.status,cs.moved_from,
+      c.title,c.color,c.status AS class_status,c.tutor_id,tu.name AS tutor_name,
+      m.id AS member_id,m.student_id,m.status AS member_status,m.rate,m.held,m.sessions_total,
+      sm.outcome,sm.note,sm.tutor_confirmed_at,sm.student_confirmed_at,sm.rating,sm.settled,
+      su.name AS student_name
+      FROM class_sessions cs JOIN classes c ON c.id=cs.class_id JOIN users tu ON tu.id=c.tutor_id
+      LEFT JOIN session_members sm ON sm.session_id=cs.id
+      LEFT JOIN class_members m ON m.id=sm.member_id LEFT JOIN users su ON su.id=m.student_id
+      ${where ? `WHERE ${where}` : ""} ORDER BY cs.starts_at DESC LIMIT 500`, ...args));
+  });
+  // One lesson in full: students and their money, move requests and the admin actions already taken.
+  app.get("/api/admin/sessions/:id", auth("admin"), (req, res) => {
+    upkeep(db);
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const rows = all(db, `${sessionSql} WHERE cs.id=?`, id);
+    if (!rows.length) fail(404, "Không tìm thấy buổi học.");
+    res.json({
+      session: rows[0],
+      students: rows.filter((r) => r.member_id).map((r) => ({
+        member_id: r.member_id, student_id: r.student_id, student_name: r.student_name,
+        outcome: r.outcome, note: r.note, rating: r.rating, settled: r.settled,
+        tutor_confirmed_at: r.tutor_confirmed_at, student_confirmed_at: r.student_confirmed_at,
+        ...one(db, "SELECT status,rate,held,sessions_total,proposal_id FROM class_members WHERE id=?", r.member_id),
+      })),
+      moves: all(db, "SELECT mv.*,u.name AS requested_name FROM session_moves mv JOIN users u ON u.id=mv.requested_by WHERE mv.session_id=? ORDER BY mv.id DESC", id),
+      history: all(db, "SELECT a.id,a.action,a.created_at,u.name FROM audit a JOIN users u ON u.id=a.actor_id WHERE a.action LIKE 'session%' AND a.target=? ORDER BY a.id DESC LIMIT 20", String(id)),
+    });
+  });
+  // Nudge everyone who has not confirmed an ended lesson, without deciding the outcome for them.
+  app.post("/api/admin/sessions/remind", auth("admin"), (req, res) => {
+    const d = z.object({ ids: z.array(z.number().int().positive()).min(1).max(50) }).parse(req.body);
+    let reminded = 0;
+    transaction(db, () => {
+      for (const id of d.ids) {
+        const rows = all(db, `${sessionSql} WHERE cs.id=?`, id);
+        if (!rows.length || Date.parse(rows[0].starts_at) + rows[0].minutes * 60000 > Date.now()) continue;
+        let sent = false;
+        for (const r of rows.filter((x) => x.member_id && x.outcome === "pending")) {
+          if (!r.student_confirmed_at) { notify(db, r.student_id, "session_remind", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
+          if (!r.tutor_confirmed_at) { notify(db, r.tutor_id, "session_remind", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` }); sent = true; }
+        }
+        if (sent) { audit(req.user.id, "session.remind", id, { session: rows[0].title }); reminded++; }
+      }
+    });
+    res.json({ reminded });
   });
   // Administrators see every class, every lesson and one person's whole picture.
   app.get("/api/admin/classes", auth("admin"), (req, res) => {
@@ -395,10 +458,11 @@ export function registerClasses(app, db, auth, audit) {
     const { note } = z.object({ note: z.string().trim().min(3).max(300) }).parse(req.body);
     transaction(db, () => {
       if (!run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=? AND status='scheduled'", id).changes) fail(409, "Buổi học không còn hoạt động.");
+      const refunded = all(db, "SELECT m.student_id, m.rate AS amount FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome IN ('pending','disputed')", id);
       run(db, "UPDATE session_members SET outcome='refunded',note=? WHERE session_id=? AND outcome IN ('pending','disputed')", note, id);
       for (const r of all(db, "SELECT DISTINCT m.student_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=?", id))
         for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "session_cancelled", { actor: "Quản trị viên", subject: r.title, link: "/schedule" });
-      audit(req.user.id, "session.admin_cancel", id);
+      audit(req.user.id, "session.admin_cancel", id, { note, refunded });
     });
     upkeep(db);
     res.json({ ok: true });
@@ -406,8 +470,10 @@ export function registerClasses(app, db, auth, audit) {
   app.post("/api/admin/members/:id/end", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     transaction(db, () => {
+      const member = one(db, "SELECT student_id,rate FROM class_members WHERE id=?", id);
+      const future = one(db, "SELECT COUNT(*) AS n FROM session_members WHERE member_id=? AND outcome='pending' AND session_id IN (SELECT id FROM class_sessions WHERE starts_at>?)", id, new Date().toISOString());
       run(db, "UPDATE session_members SET outcome='refunded' WHERE member_id=? AND outcome='pending' AND session_id IN (SELECT id FROM class_sessions WHERE starts_at>?)", id, new Date().toISOString());
-      audit(req.user.id, "member.admin_end", id);
+      audit(req.user.id, "member.admin_end", id, { user_id: member?.student_id, refunded: (future?.n || 0) * (member?.rate || 0) });
     });
     upkeep(db);
     res.json({ ok: true });
@@ -419,7 +485,7 @@ export function registerClasses(app, db, auth, audit) {
     if (!r) fail(404, "Không tìm thấy báo cáo.");
     run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
     for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: "/classes" });
-    audit(req.user.id, `session.resolve.${d.outcome}`, id);
+    audit(req.user.id, `session.resolve.${d.outcome}`, id, { member_id: d.member_id, outcome: d.outcome, user_id: r.student_id });
     upkeep(db);
     res.json({ ok: true });
   });

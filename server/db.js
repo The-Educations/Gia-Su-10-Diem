@@ -70,6 +70,9 @@ export function migrateDatabase(db) {
   // Existing accounts keep their workspace; only new signups enter setup.
   if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "onboarding_step"))
     db.exec("ALTER TABLE users ADD COLUMN onboarding_step INTEGER NOT NULL DEFAULT 3");
+  // Additive: audit rows carry a JSON detail so the log can be re-read, not just replayed.
+  if (!db.prepare("PRAGMA table_info(audit)").all().some((c) => c.name === "detail"))
+    db.exec("ALTER TABLE audit ADD COLUMN detail TEXT");
   // Additive migration: keep existing accounts and bookings intact.
   const tutorColumns = db
     .prepare("PRAGMA table_info(tutors)")

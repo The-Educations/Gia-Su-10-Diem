@@ -9,7 +9,7 @@ import "@/money.css";
 
 type Today = {
   students: number;
-  tutors: number; credentials: number; withdrawals: number; community: number;
+  tutors: number; credentials: number; withdrawals: number; community: number; sessions_waiting: number;
   violations: { user_id: number; name: string; violations: number }[];
   disputes: { session_id: number; member_id: number; note: string; starts_at: string; class_id: number; title: string; student_name: string; tutor_name: string }[];
 };
@@ -21,7 +21,7 @@ export function AdminToday() {
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
   const d = result.data;
   const queues: [number, string, string][] = [
-    [d.disputes.length, "Buổi học bị báo vấn đề", "#disputes"],
+    [d.disputes.length + d.sessions_waiting, "Buổi học cần xử lý", "/admin?tab=sessions&scope=attention"],
     [d.withdrawals, "Yêu cầu rút tiền", "/admin?tab=finance"],
     [d.students, "Học sinh chờ xác minh", "/admin?tab=students"],
     [d.credentials, "Minh chứng chờ đối chiếu", "/admin?tab=tutors"],
@@ -48,7 +48,7 @@ export function AdminToday() {
             <tbody>
               {d.disputes.map((x) => (
                 <tr key={`${x.session_id}-${x.member_id}`}>
-                  <td><Link to={`/classes/${x.class_id}`}>{x.title}</Link><small>{dayOf(x.starts_at)} {timeOf(x.starts_at)} · {x.tutor_name} / {x.student_name}</small></td>
+                  <td><Link to={`/admin?tab=sessions&session=${x.session_id}`}>{x.title}</Link><small>{dayOf(x.starts_at)} {timeOf(x.starts_at)} · {x.tutor_name} / {x.student_name}</small></td>
                   <td>{x.note}</td>
                   <td>
                     <span className="actions">

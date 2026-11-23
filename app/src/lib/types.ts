@@ -206,6 +206,7 @@ export type AdminData = {
     action: string;
     target: string;
     created_at: string;
+    credential_tutor: number | null;
   }[];
 };
 

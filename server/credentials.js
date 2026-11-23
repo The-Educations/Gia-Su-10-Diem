@@ -123,7 +123,7 @@ export function registerCredentials(app, db, auth, audit, processPhoto) {
       if (one(db, "SELECT COUNT(*) n FROM tutor_credentials WHERE tutor_id=?", req.user.id).n >= MAX_CREDENTIALS) fail(409, `Tối đa ${MAX_CREDENTIALS} mục.`);
       return Number(run(db, "INSERT INTO tutor_credentials(tutor_id,kind,catalog_id,name,detail) VALUES (?,?,?,?,?)", req.user.id, d.kind, d.catalog_id, d.name, JSON.stringify(d.detail)).lastInsertRowid);
     });
-    audit(req.user.id, "credential.created", id);
+    audit(req.user.id, "credential.created", id, { tutor_id: req.user.id, name: d.name });
     res.status(201).json(rows(db, req.user.id).find((c) => c.id === id));
   });
   app.put("/api/tutor/credentials/:id", auth("tutor"), (req, res) => {
@@ -137,7 +137,7 @@ export function registerCredentials(app, db, auth, audit, processPhoto) {
   app.delete("/api/tutor/credentials/:id", auth("tutor"), (req, res) => {
     const c = owned(req);
     run(db, "DELETE FROM tutor_credentials WHERE id=?", c.id);
-    audit(req.user.id, "credential.deleted", c.id);
+    audit(req.user.id, "credential.deleted", c.id, { tutor_id: c.tutor_id, name: c.name });
     res.json({ ok: true });
   });
   app.post("/api/tutor/credentials/:id/files", auth("tutor"), express.raw({ type: () => true, limit: PROOF_LIMIT }), async (req, res) => {
@@ -193,7 +193,7 @@ export function registerCredentials(app, db, auth, audit, processPhoto) {
     if (d.status === "rejected" && !d.note) fail(400, "Ghi lý do để gia sư biết cần bổ sung gì.");
     run(db, "UPDATE tutor_credentials SET status=?,review_note=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?", d.status, d.note, id);
     notify(db, c.tutor_id, `credential_${d.status}`, { subject: c.name, link: "/studio?step=proof" });
-    audit(req.user.id, `credential.${d.status}`, id);
+    audit(req.user.id, `credential.${d.status}`, id, { tutor_id: c.tutor_id, name: c.name, note: d.note });
     res.json({ ok: true });
   });
 }

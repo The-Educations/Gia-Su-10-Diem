@@ -93,3 +93,34 @@ app.post("/__test/course", express.json(), (req, res) => {
     res.json({ offer, bookings: ids });
   } finally { db.close(); }
 });
+// Test-only: age a lesson and set its members' outcome, so the admin "Buổi học" queues have work.
+app.post("/__test/class-session", express.json(), (req, res) => {
+  const { session_id, hours_from_now, outcome = "pending", note = "" } = req.body;
+  const db = openDatabase();
+  try {
+    run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() + hours_from_now * 3600000).toISOString(), session_id);
+    run(db, "UPDATE session_members SET outcome=?,note=? WHERE session_id=?", outcome, note || (outcome === "disputed" ? "Gia sư không vào lớp" : ""), session_id);
+    res.json({ ok: true });
+  } finally { db.close(); }
+});
+// Test-only: a dedicated class with a unique slugged title and three lessons
+// (disputed past, ended-pending past, upcoming) — specs filter by the slug, so
+// leftovers from other specs on the shared database never change the counts.
+app.post("/__test/session-class", express.json(), (req, res) => {
+  const db = openDatabase();
+  try {
+    const slug = `B${Date.now().toString(36)}`;
+    const tutor = one(db, "SELECT id FROM users WHERE email='nam@demo.giasu.test'"),
+      student = one(db, "SELECT id,name FROM users WHERE email='student@demo.giasu.test'"),
+      title = `Vật lí · ${slug}`;
+    const cid = Number(run(db, "INSERT INTO classes(tutor_id,title,subject_id,mode,color,minutes,schedule) VALUES (?,?,?,?,?,?,?)", tutor.id, title, "vat-li", "online", "rose", 60, "[]").lastInsertRowid);
+    const mid = Number(run(db, "INSERT INTO class_members(class_id,student_id,sessions_total,rate,held) VALUES (?,?,?,?,?)", cid, student.id, 3, 180000, 540000).lastInsertRowid);
+    const mk = (hours, outcome, note) => {
+      const sid = Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cid, new Date(Date.now() + hours * 3600000).toISOString(), 60).lastInsertRowid);
+      run(db, "INSERT INTO session_members(session_id,member_id,outcome,note) VALUES (?,?,?,?)", sid, mid, outcome, note);
+      return sid;
+    };
+    const disputed = mk(-3, "disputed", `Gia sư không vào lớp ${slug}`), waiting = mk(-2, "pending", ""), upcoming = mk(26, "pending", "");
+    res.json({ class_id: cid, slug, disputed, waiting, upcoming, member_id: mid, student_id: student.id, student_name: student.name });
+  } finally { db.close(); }
+});

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, dateTime, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { ErrorState, Loading } from "./common";
-import { Waiting } from "./admin-kit";
+import { Waiting , AdminAuditTrail} from "./admin-kit";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "./ui/field";
@@ -17,7 +17,8 @@ type Finance = {
   months: { month: string; deposits: number; payouts: number; payouts_confirmed: number; fees: number; credits: number }[];
   payout_check: boolean;
   deposits: { id: number; name: string; email: string; payer_name: string; payer_email: string; user_id: number; payer_id: number; code: string; amount: number; received: number; status: string; created_at: string; paid_at: string | null; method: string | null }[];
-  unmatched: { id: number; code: string | null; amount: number; reference: string; created_at: string }[];
+  unmatched: { id: string; code: string | null; amount: number; reference: string; created_at: string; source: "sepay" | "gateway"; status: string }[];
+  dismissed: { id: string; code: string | null; amount: number; reference: string; created_at: string; source: "sepay" | "gateway" }[];
   totals: { deposited: number; balances: number; credit_revenue: number; fee_revenue: number };
   settings: Record<string, number | { credits: number; price: number }[]>;
   payments: "live" | "simulated" | "off";
@@ -45,6 +46,12 @@ export function AdminFinance() {
     result = useLoad<Finance>("/admin/finance"),
     [busy, setBusy] = useState(0),
     [paying, setPaying] = useState<Payout | null>(null);
+  // Deep links from the audit log: scroll to the payout or deposit that changed.
+  const wantedPayout = Number(params.get("withdrawal")) || 0, wantedDeposit = Number(params.get("deposit")) || 0;
+  useEffect(() => {
+    const el = wantedPayout ? document.getElementById(`payout-${wantedPayout}`) : wantedDeposit ? document.getElementById(`deposit-${wantedDeposit}`) : null;
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "center" }));
+  }, [wantedPayout, wantedDeposit, result.data]);
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
   const f = result.data, open = f.withdrawals.filter((w) => w.status === "requested"), done = f.withdrawals.filter((w) => w.status !== "requested");
@@ -61,6 +68,23 @@ export function AdminFinance() {
     catch (e) { toast.error((e as Error).message); }
     finally { setBusy(0); }
   }
+  async function assignUnmatched(u: Finance["unmatched"][number]) {
+    const code = (prompt(t("Mã lệnh nạp (ví dụ GSD123456)")) || "").trim();
+    if (!code) return;
+    try {
+      const dep = await api<{ name: string; email: string; amount: number; status: string }>(`/admin/deposits/find?code=${encodeURIComponent(code)}`);
+      const warn = dep.amount !== u.amount ? `\n⚠ ${t("Số tiền lệnh nạp ({dep}) KHÔNG khớp khoản tiền về ({amt}).", { dep: money(dep.amount), amt: money(u.amount) })}` : "";
+      if (!confirm(`${t("Sẽ cộng {amt} cho {name} ({email}), lệnh {code} {dep}.", { amt: money(u.amount), name: dep.name, email: dep.email, code, dep: money(dep.amount) })}${warn}`)) return;
+      await api("/admin/deposits/unmatched/assign", "POST", { source: u.source, id: u.id, code });
+      toast.success(t("Đã ghi nhận vào lệnh {code}", { code })); refresh();
+    } catch (e) { toast.error((e as Error).message); }
+  }
+  async function dismissUnmatched(u: Finance["unmatched"][number]) {
+    const reason = (prompt(t("Lý do bỏ qua khoản tiền này")) || "").trim();
+    if (reason.length < 3) return;
+    try { await api("/admin/deposits/unmatched/dismiss", "POST", { source: u.source, id: u.id, reason }); toast.success(t("Đã bỏ qua khoản tiền")); refresh(); }
+    catch (e) { toast.error((e as Error).message); }
+  }
   return (
     <div className="admin-finance">
       <p className="finance-status" data-state={f.payments}>{t(f.payments === "live" ? "Thanh toán SePay đang chạy" : f.payments === "simulated" ? "Đang giả lập nạp tiền (môi trường local)" : "Nạp tiền đang tắt: chưa có khóa SePay")}</p>
@@ -76,7 +100,7 @@ export function AdminFinance() {
           <section>
             <h2>{t("Cần chuyển tiền")}</h2>
             <p className="finance-status" data-state={f.payout_check ? "live" : "off"}>{t(f.payout_check ? "SePay tự xác nhận khi tiền rời tài khoản ngân hàng với đúng mã lệnh" : "Chưa bật tự xác nhận qua SePay: bấm “Đã chuyển” sau khi chuyển khoản")}</p>
-            {open.length ? <div className="payout-queue">{open.map((w) => <PayoutCard key={w.id} w={w} busy={busy === w.id} onPaid={() => setPaying(w)} onReject={() => reject(w.id)} />)}</div>
+            {open.length ? <div className="payout-queue">{open.map((w) => <PayoutCard key={w.id} w={w} busy={busy === w.id} onPaid={() => setPaying(w)} onReject={() => reject(w.id)} hl={w.id === wantedPayout} />)}</div>
               : <p className="credential-empty">{t("Không có yêu cầu nào đang chờ.")}</p>}
           </section>
           {done.length > 0 && (
@@ -86,7 +110,7 @@ export function AdminFinance() {
                 <thead><tr><th>{t("Người yêu cầu")}</th><th>{t("Tài khoản nhận")}</th><th>{t("Trạng thái")}</th><th className="num">{t("Số tiền")}</th></tr></thead>
                 <tbody>
                   {done.map((w) => (
-                    <tr key={w.id}>
+                    <tr key={w.id} id={`payout-${w.id}`} data-highlight={w.id === wantedPayout || undefined}>
                       <td>{w.name}<small>{w.code} · {dateTime(w.handled_at || w.created_at)}</small></td>
                       <td>{w.bank_name} · {w.account_number}<small>{w.account_name}</small></td>
                       <td>
@@ -113,9 +137,29 @@ export function AdminFinance() {
             <section>
               <h2>{t("Tiền về chưa khớp mã")}</h2>
               <table className="finance-table">
-                <tbody>{f.unmatched.map((u) => <tr key={u.id}><td>#{u.id}<small>{dateTime(u.created_at)}</small></td><td>{u.code || t("Không có mã")}<small>{u.reference}</small></td><td className="num">{money(u.amount)}</td></tr>)}</tbody>
+                <tbody>{f.unmatched.map((u) => (
+                  <tr key={`${u.source}-${u.id}`}>
+                    <td>#{u.id}<small>{dateTime(u.created_at)}</small></td>
+                    <td>{u.code || t("Không có mã")}<small>{u.reference}</small></td>
+                    <td className="num">{money(u.amount)}</td>
+                    <td className="num">
+                      {u.status === "unmatched"
+                        ? <Button size="xs" variant="outline" onClick={() => assignUnmatched(u)}>{t("Gán cho lệnh nạp…")}</Button>
+                        : <small className="muted">{t("Không xác thực được, chỉ bỏ qua")}</small>}{" "}
+                      <Button size="xs" variant="ghost" onClick={() => dismissUnmatched(u)}>{t("Bỏ qua")}</Button>
+                    </td>
+                  </tr>
+                ))}</tbody>
               </table>
             </section>
+          )}
+          {f.dismissed.length > 0 && (
+            <details className="finance-dismissed">
+              <summary>{t("Đã bỏ qua ({n})", { n: f.dismissed.length })}</summary>
+              <table className="finance-table">
+                <tbody>{f.dismissed.map((u) => <tr key={`${u.source}-${u.id}`}><td>#{u.id}<small>{dateTime(u.created_at)}</small></td><td>{u.code || t("Không có mã")}<small>{u.reference}</small></td><td className="num">{money(u.amount)}</td></tr>)}</tbody>
+              </table>
+            </details>
           )}
           <section>
             <header className="finance-head">
@@ -130,7 +174,7 @@ export function AdminFinance() {
               <table className="finance-table">
                 <thead><tr><th>{t("Người nạp → tài khoản nhận")}</th><th>{t("Mã lệnh")}</th><th>{t("Cách thanh toán")}</th><th className="num">{t("Số tiền")}</th></tr></thead>
                 <tbody>{f.deposits.map((d) => (
-                  <tr key={d.id}>
+                  <tr key={d.id} id={`deposit-${d.id}`} data-highlight={d.id === wantedDeposit || undefined}>
                     <td>{d.payer_name}{d.payer_id !== d.user_id && <> → {d.name}</>}<small>{d.payer_email} · {dateTime(d.paid_at || d.created_at)}</small></td>
                     <td>{d.code}</td>
                     <td>{t(/BANK_TRANSFER/.test(d.method || "") ? "Chuyển khoản" : /CARD/.test(d.method || "") ? "Thẻ" : /NAPAS/.test(d.method || "") ? "NAPAS" : /simulated/.test(d.method || "") ? "Giả lập" : "SePay")}</td>
@@ -228,10 +272,10 @@ function SettingsForm({ settings, onSaved }: { settings: Finance["settings"]; on
 const copy = (text: string, t: (s: string) => string) => navigator.clipboard?.writeText(text).then(() => toast.success(t("Đã chép")));
 
 // One payout to make: scan the QR with the bank app (account, amount and memo are filled in).
-function PayoutCard({ w, busy, onPaid, onReject }: { w: Payout; busy: boolean; onPaid: () => void; onReject: () => void }) {
+function PayoutCard({ w, busy, onPaid, onReject, hl }: { w: Payout; busy: boolean; onPaid: () => void; onReject: () => void; hl?: boolean }) {
   const { t } = useI18n();
   return (
-    <article className="payout-card">
+    <article className="payout-card" id={`payout-${w.id}`} data-highlight={hl || undefined}>
       {w.qr_url ? <img src={w.qr_url} alt={t("Mã QR chuyển {amount} cho {name}", { amount: money(w.amount), name: w.account_name })} /> : <span className="payout-noqr"><Landmark aria-hidden="true" /></span>}
       <div className="payout-body">
         <strong className="payout-amount">{money(w.amount)}</strong>
@@ -246,6 +290,7 @@ function PayoutCard({ w, busy, onPaid, onReject }: { w: Payout; busy: boolean; o
           <Button size="sm" disabled={busy} onClick={onPaid}><Receipt data-icon="inline-start" />{t("Đã chuyển")}</Button>
           <Button size="sm" variant="ghost" disabled={busy} onClick={onReject}>{t("Từ chối")}</Button>
         </div>
+        <AdminAuditTrail target={w.id} />
       </div>
     </article>
   );
@@ -305,10 +350,10 @@ function PayoutDialog({ w, onClose, onDone }: { w: Payout | null; onClose: () =>
 
 // Six months of money in, money out and revenue, drawn as bars with the figures beside them.
 function MonthReport({ months, balances }: { months: Finance["months"]; balances: number }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const now = months.at(-1)!, revenue = (m: Finance["months"][number]) => m.fees + m.credits;
   const max = Math.max(1, ...months.flatMap((m) => [m.deposits, m.payouts, revenue(m)]));
-  const label = (m: string) => t("T{n}", { n: Number(m.slice(5)) });
+  const label = (m: string) => new Intl.DateTimeFormat(lang === "en" ? "en-US" : "vi-VN", { month: "short" }).format(new Date(2024, Number(m.slice(5)) - 1, 1));
   return (
     <section className="month-report">
       <h2>{t("Tháng {month}", { month: `${Number(now.month.slice(5))}/${now.month.slice(0, 4)}` })}</h2>

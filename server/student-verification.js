@@ -112,7 +112,7 @@ export function registerStudentVerification(app, db, auth, audit, processPhoto) 
     if (d.status === "approved" && !one(db, "SELECT 1 FROM verification_files WHERE user_id=?", id)) fail(409, "Học sinh chưa gửi ảnh học bạ.");
     if (!run(db, "UPDATE student_verifications SET status=?,note=?,reviewed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status IN ('pending','approved','rejected') AND status<>?", d.status, d.note, id, d.status).changes) fail(404, "Không tìm thấy yêu cầu xác minh.");
     notify(db, id, `verification_${d.status}`, { subject: d.note, link: "/settings" });
-    audit(req.user.id, `student.verification.${d.status}`, id);
+    audit(req.user.id, `student.verification.${d.status}`, id, { user_id: id, status: d.status, note: d.note });
     res.json({ ok: true });
   });
 }

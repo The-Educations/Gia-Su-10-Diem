@@ -424,7 +424,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
         p.id,
       );
       if (req.user.role === "admin")
-        audit(req.user.id, "community.post.delete", p.id);
+        audit(req.user.id, "community.post.delete", p.id, { post_id: p.id, title: p.title });
     });
     res.json({ ok: true });
   });
@@ -667,7 +667,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
     transaction(db, () => {
       removeComment(c.id, "removed_by_author");
       if (req.user.role === "admin")
-        audit(req.user.id, "community.comment.delete", c.id);
+        audit(req.user.id, "community.comment.delete", c.id, { comment_id: c.id, post_id: c.post_id });
     });
     res.json({ ok: true });
   });

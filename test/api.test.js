@@ -2726,3 +2726,79 @@ test("free trials: one 60-minute lesson per student and tutor, only when the tut
   const row = db.prepare("SELECT rating,survey,comment FROM session_members WHERE session_id=?").get(cls.sessions[0].id);
   assert.deepEqual([row.rating, JSON.parse(row.survey).clear, row.comment], [4, true, "Cô giảng dễ hiểu"]);
 });
+test("admin sessions worklist: queues, detail, cancel, remind and audit", async (t) => {
+  const { client, db } = await fixture(t), admin = client(), student = client(), tutor = client();
+  const s = await student.login("student"), u = await tutor.login("chau");
+  await admin.login("admin");
+  db.prepare("INSERT INTO wallets(user_id,available) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET available=available+excluded.available").run(s.id, 1000000);
+  const start = new Date(Date.now() + 7 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
+  const sent = await student.request("/proposals", "POST", { tutor_id: u.id, subject_id: "toan", mode: "online", sessions: 3, minutes: 60, rate: 200000, schedule: [{ weekday: 0, hour: 18, minute: 0 }, { weekday: 1, hour: 18, minute: 0 }, { weekday: 2, hour: 18, minute: 0 }], start_date: start });
+  assert.equal(sent.status, 201);
+  const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
+  const cid = accepted.data.class_id;
+  const cls = (await student.request(`/classes/${cid}`)).data;
+  const [a, b, c] = cls.sessions;
+  const past = (id, hours) => db.prepare("UPDATE class_sessions SET starts_at=? WHERE id=?").run(new Date(Date.now() - hours * 3600000).toISOString(), id);
+  past(a.id, 3); past(b.id, 2);
+  db.prepare("UPDATE session_members SET outcome='disputed',note='Gia sư vắng' WHERE session_id=?").run(a.id);
+
+  // Non-admin is rejected; the list groups by lesson with member rows.
+  assert.equal((await student.request("/admin/sessions")).status, 403);
+  const list = await admin.request("/admin/sessions");
+  assert.equal(list.status, 200);
+  const rows = list.data.filter((r) => r.class_id === cid);
+  assert.equal(rows.length, 3);
+  assert.ok(rows.some((r) => r.outcome === "disputed" && r.student_name && r.rate === 200000));
+  // Class and member filters narrow the worklist.
+  const member = rows[0].member_id;
+  assert.deepEqual([...new Set((await admin.request(`/admin/sessions?member=${member}`)).data.map((r) => r.id))].length, 3);
+  assert.equal((await admin.request(`/admin/sessions?class=${cid}&student=999999`)).data.length, 0);
+
+  // Detail: students, money and the disputed note.
+  const detail = await admin.request(`/admin/sessions/${a.id}`);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.data.students.length, 1);
+  assert.equal(detail.data.students[0].note, "Gia sư vắng");
+  assert.equal(detail.data.students[0].rate, 200000);
+  assert.equal((await admin.request("/admin/sessions/999999")).status, 404);
+
+  // Today counts the overdue-unconfirmed lesson but not the disputed one twice.
+  const today = (await admin.request("/admin/today")).data;
+  assert.equal(today.disputes.length, 1);
+  assert.equal(today.sessions_waiting, 1);
+
+  // Resolving the dispute and reminding the pending lesson both write audit rows.
+  assert.equal((await admin.request(`/admin/sessions/${a.id}/resolve`, "POST", { member_id: member, outcome: "confirmed" })).status, 200);
+  assert.equal((await admin.request("/admin/sessions/remind", "POST", { ids: [c.id] })).data.reminded, 0);
+  assert.equal((await admin.request("/admin/sessions/remind", "POST", { ids: [b.id] })).data.reminded, 1);
+  const actions = db.prepare("SELECT action,target FROM audit WHERE action LIKE 'session.%' ORDER BY id").all().map((x) => `${x.action}:${x.target}`);
+  assert.ok(actions.includes(`session.resolve.confirmed:${a.id}`));
+  assert.ok(actions.includes(`session.remind:${b.id}`));
+  // The audit feed exposes the session target for deep links.
+  const feed = (await admin.request("/admin")).data.audit;
+  assert.ok(feed.some((x) => x.action === "session.remind" && x.target === String(b.id)));
+});
+
+test("unmatched deposit assign is atomic: second assign 409s, balance credited once", async (t) => {
+  const { db, client } = await fixture(t);
+  const admin = client(), student = client();
+  await admin.login("admin"); const me = await student.login("student");
+  const dep = await student.request("/wallet/deposits", "POST", { amount: 50000 });
+  assert.equal(dep.status, 201);
+  run(db, "INSERT INTO sepay_events(id,code,amount,reference,verdict,status,payload) VALUES (900001,NULL,50000,'ref',0,'unmatched','{}')");
+  run(db, "INSERT INTO gateway_events(id,invoice,amount,verdict,status,payload) VALUES ('gw-1','',12000,0,'rejected_key','{}')");
+  const assign = (source, id) => admin.request("/admin/deposits/unmatched/assign", "POST", { source, id, code: dep.data.code });
+  const find = await admin.request(`/admin/deposits/find?code=${dep.data.code}`);
+  assert.equal(find.data.name, me.name);
+  assert.equal((await assign("sepay", "900001")).status, 200);
+  const again = await assign("sepay", "900001");
+  assert.equal(again.status, 409);
+  assert.equal(one(db, "SELECT available FROM wallets WHERE user_id=?", me.id).available, 50000);
+  assert.equal(one(db, "SELECT status FROM sepay_events WHERE id=900001").status, "processed");
+  // rejected_key is unverified payload: dismiss only, never creditable.
+  const bad = await assign("gateway", "gw-1");
+  assert.equal(bad.status, 400);
+  assert.equal(one(db, "SELECT available FROM wallets WHERE user_id=?", me.id).available, 50000);
+  assert.equal((await admin.request("/admin/deposits/unmatched/dismiss", "POST", { source: "gateway", id: "gw-1", reason: "Giao dịch thử" })).status, 200);
+  assert.equal(one(db, "SELECT status FROM gateway_events WHERE id='gw-1'").status, "dismissed");
+});

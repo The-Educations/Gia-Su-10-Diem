@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api, fold } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -21,6 +22,7 @@ const joined = (s: string) => new Date(s.includes("T") ? s : s.replace(" ", "T")
 
 export function AdminAccounts({ users, onChanged }: { users: Account[]; onChanged: () => void }) {
   const { t } = useI18n(),
+    [, setParams] = useSearchParams(),
     [q, setQ] = useState(""),
     [role, setRole] = useState(""),
     [status, setStatus] = useState(""),
@@ -33,6 +35,9 @@ export function AdminAccounts({ users, onChanged }: { users: Account[]; onChange
   const found = users.filter((u) => fold(`${u.name} ${u.email}`).includes(fold(q)));
   const shown = found.filter((u) => (!role || roleOf(u) === role) && (!status || (status === "locked" ? !!Number(u.community_locked) : u.status === status)));
   const open = (user: Account, kind: Step["kind"]) => { setError(""); setEmail(""); setStep({ user, kind }); };
+  // Deep link (e.g. from the audit log): /admin?tab=users&user=<id> opens the overview.
+  const wanted = Number(useSearchParams()[0].get("user")) || null;
+  useEffect(() => { if (wanted && users.some((u) => u.id === wanted)) setOverview(wanted); }, [wanted]); // eslint-disable-line react-hooks/exhaustive-deps
   async function confirm(e: React.FormEvent) {
     e.preventDefault();
     if (!step) return;
@@ -89,7 +94,7 @@ export function AdminAccounts({ users, onChanged }: { users: Account[]; onChange
           </article>
         ))}
       </div>
-      <AdminUserOverview userId={overview} onClose={() => setOverview(null)} />
+      <AdminUserOverview userId={overview} onClose={() => { setOverview(null); setParams((p) => { const n = new URLSearchParams(p); n.delete("user"); return n; }); }} />
       {lock && <ActionDialog action={lock} close={() => setLock(null)} done={onChanged} />}
       <Dialog open={!!step} onOpenChange={(o) => { if (!o && !busy) setStep(null); }}>
         <DialogContent>

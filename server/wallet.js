@@ -181,16 +181,19 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
   };
 
   // Credits whatever amount arrives with a known code to that deposit's wallet.
+  // The credit body without a transaction, so callers can compose it inside
+  // their own transaction (transaction() cannot nest on the local driver).
+  function creditDeposit(code, amount, eventRef) {
+    const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", code || "");
+    if (!d || amount <= 0) return null;
+    run(db, "UPDATE deposits SET received=received+?,status='paid',paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP) WHERE id=?", amount, d.id);
+    move(db, d.user_id, "deposit", { amount, ref: `deposit:${d.id}`, note: eventRef });
+    notify(db, d.user_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+    if (d.payer_id !== d.user_id) notify(db, d.payer_id, "deposit_received", { subject: String(amount), link: "/wallet" });
+    return d;
+  }
   function credit(code, amount, eventRef) {
-    return transaction(db, () => {
-      const d = one(db, "SELECT * FROM deposits WHERE code=? COLLATE NOCASE", code || "");
-      if (!d || amount <= 0) return null;
-      run(db, "UPDATE deposits SET received=received+?,status='paid',paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP) WHERE id=?", amount, d.id);
-      move(db, d.user_id, "deposit", { amount, ref: `deposit:${d.id}`, note: eventRef });
-      notify(db, d.user_id, "deposit_received", { subject: String(amount), link: "/wallet" });
-      if (d.payer_id !== d.user_id) notify(db, d.payer_id, "deposit_received", { subject: String(amount), link: "/wallet" });
-      return d;
-    });
+    return transaction(db, () => creditDeposit(code, amount, eventRef));
   }
 
   // Pending top-ups from the last 7 days are checked with SePay, so a missed IPN still lands.
@@ -205,8 +208,48 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
     const rows = all(db, "SELECT * FROM deposits WHERE status='pending' AND created_at>? ORDER BY id DESC LIMIT 100", recent());
     await recheck(rows);
     const paid = rows.filter((d) => one(db, "SELECT status FROM deposits WHERE id=?", d.id).status === "paid").length;
-    audit(req.user.id, "deposits.recheck", paid);
+    audit(req.user.id, "deposits.recheck", paid, { checked: rows.length, credited: paid });
     res.json({ checked: rows.length, paid });
+  });
+  // An unmatched gateway event is real money with no deposit code: attach it
+  // by hand, or dismiss it with a reason (the row stays for the audit trail).
+  const unmatchedEvent = (source, id) => source === "sepay"
+    ? one(db, "SELECT * FROM sepay_events WHERE id=?", Number(id))
+    : one(db, "SELECT * FROM gateway_events WHERE id=?", String(id));
+  // Look up the deposit behind a code so the assign dialog can preview who gets it.
+  app.get("/api/admin/deposits/find", auth("admin"), (req, res) => {
+    const code = z.string().trim().min(3).max(40).parse(req.query.code);
+    const d = one(db, "SELECT d.id,d.code,d.amount,d.received,d.status,u.name,u.email FROM deposits d JOIN users u ON u.id=d.user_id WHERE d.code=? COLLATE NOCASE", code);
+    if (!d) fail(404, "Không tìm thấy lệnh nạp với mã này.");
+    res.json(d);
+  });
+  app.post("/api/admin/deposits/unmatched/assign", auth("admin"), (req, res) => {
+    const d = z.object({ source: z.enum(["sepay", "gateway"]), id: z.string().trim().min(1), code: z.string().trim().min(3).max(40) }).parse(req.body);
+    const event = unmatchedEvent(d.source, d.id);
+    if (!event) fail(404, "Không tìm thấy khoản tiền chưa khớp.");
+    if (event.status === "rejected_key") fail(400, "Khoản tiền này không xác thực được — chỉ có thể bỏ qua.");
+    if (event.status !== "unmatched") fail(409, "Khoản tiền này đã được xử lý.");
+    const table = d.source === "sepay" ? "sepay_events" : "gateway_events";
+    const key = d.source === "sepay" ? Number(d.id) : d.id;
+    const deposit = transaction(db, () => {
+      // Claim the row first: the second click (or admin) sees 0 changes and stops.
+      if (!run(db, `UPDATE ${table} SET status='processed',verdict=1 WHERE id=? AND status='unmatched'`, key).changes)
+        fail(409, "Khoản tiền này đã được xử lý.");
+      const dep = creditDeposit(d.code, event.amount, `${d.source}:${d.id}`);
+      if (!dep) fail(404, "Không tìm thấy lệnh nạp với mã này.");
+      run(db, `UPDATE ${table} SET deposit_id=? WHERE id=?`, dep.id, key);
+      audit(req.user.id, "deposit.assign", dep.id, { user_id: dep.user_id, amount: event.amount, code: d.code, event: `${d.source}:${d.id}` });
+      return dep;
+    });
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/deposits/unmatched/dismiss", auth("admin"), (req, res) => {
+    const d = z.object({ source: z.enum(["sepay", "gateway"]), id: z.string().trim().min(1), reason: z.string().trim().min(3).max(300) }).parse(req.body);
+    const event = unmatchedEvent(d.source, d.id);
+    if (!event || !["unmatched", "rejected_key"].includes(event.status)) fail(404, "Không tìm thấy khoản tiền chưa khớp.");
+    run(db, `UPDATE ${d.source === "sepay" ? "sepay_events" : "gateway_events"} SET status='dismissed' WHERE id=?`, d.source === "sepay" ? Number(d.id) : d.id);
+    audit(req.user.id, "deposit.dismissed", `${d.source}:${d.id}`, { amount: event.amount, reason: d.reason });
+    res.json({ ok: true });
   });
   app.post("/api/wallet/deposits", auth("student", "tutor"), (req, res) => {
     const s = settings(db);
@@ -418,9 +461,12 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
         u.name, u.email, p.name AS payer_name, p.email AS payer_email,
         (SELECT note FROM wallet_entries WHERE ref='deposit:' || d.id AND kind='deposit' LIMIT 1) AS method
         FROM deposits d JOIN users u ON u.id=d.user_id JOIN users p ON p.id=d.payer_id WHERE d.status='paid' ORDER BY d.paid_at DESC LIMIT 200`),
-      unmatched: all(db, `SELECT id,code,amount,reference,created_at FROM (
-        SELECT CAST(id AS TEXT) id,code,amount,reference,created_at FROM sepay_events WHERE status='unmatched'
-        UNION ALL SELECT id,invoice AS code,amount,CASE status WHEN 'rejected_key' THEN 'Sai khóa IPN' ELSE '' END AS reference,created_at FROM gateway_events WHERE status IN ('unmatched','rejected_key')) ORDER BY created_at DESC LIMIT 100`),
+      unmatched: all(db, `SELECT id,code,amount,reference,created_at,source,status FROM (
+        SELECT CAST(id AS TEXT) id,code,amount,reference,created_at,'sepay' AS source,status FROM sepay_events WHERE status='unmatched'
+        UNION ALL SELECT id,invoice AS code,amount,CASE status WHEN 'rejected_key' THEN 'Sai khóa IPN' ELSE '' END AS reference,created_at,'gateway' AS source,status FROM gateway_events WHERE status IN ('unmatched','rejected_key')) ORDER BY created_at DESC LIMIT 100`),
+      dismissed: all(db, `SELECT id,code,amount,reference,created_at,source FROM (
+        SELECT CAST(id AS TEXT) id,code,amount,reference,created_at,'sepay' AS source FROM sepay_events WHERE status='dismissed'
+        UNION ALL SELECT id,invoice AS code,amount,'',created_at,'gateway' AS source FROM gateway_events WHERE status='dismissed') ORDER BY created_at DESC LIMIT 100`),
       totals: one(db, `SELECT
         COALESCE((SELECT SUM(received) FROM deposits),0) AS deposited,
         COALESCE((SELECT SUM(available+held) FROM wallets),0) AS balances,
@@ -444,7 +490,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
         supportNote(w.user_id, `Yêu cầu rút tiền #${id} chưa được chuyển: ${d.note}. Số tiền đã trả lại số dư.`);
         notify(db, w.user_id, "withdrawal_rejected", { subject: String(w.amount), link: "/wallet" });
       }
-      audit(req.user.id, `withdrawal.${d.status}`, id);
+      audit(req.user.id, `withdrawal.${d.status}`, id, { user_id: w.user_id, amount: w.amount, note: d.note, status: d.status });
     });
     res.json({ ok: true });
   });
@@ -459,14 +505,14 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       run(db, "UPDATE withdrawals SET receipt_id=? WHERE id=?", receipt, id);
       supportNote(w.user_id, `Biên lai chuyển khoản cho yêu cầu rút tiền #${id}.`, receipt);
       notify(db, w.user_id, "withdrawal_paid", { subject: String(w.amount), link: "/wallet" });
-      audit(req.user.id, "withdrawal.receipt", id);
+      audit(req.user.id, "withdrawal.receipt", id, { user_id: w.user_id, amount: w.amount });
     });
     res.json({ ok: true });
   });
   app.post("/api/admin/wallets/:id/adjust", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     const d = z.object({ amount: z.number().int().refine((n) => n !== 0), note: z.string().trim().min(3).max(300) }).parse(req.body);
-    transaction(db, () => { move(db, id, "admin_adjustment", { amount: d.amount, note: d.note, actor: req.user.id }); audit(req.user.id, "wallet.adjust", id); });
+    transaction(db, () => { move(db, id, "admin_adjustment", { amount: d.amount, note: d.note, actor: req.user.id }); audit(req.user.id, "wallet.adjust", id, { user_id: id, amount: d.amount, note: d.note, balance_after: one(db, "SELECT available FROM wallets WHERE user_id=?", id)?.available }); });
     res.json({ ok: true });
   });
   app.put("/api/admin/settings", auth("admin"), (req, res) => {
@@ -481,8 +527,10 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       credit_packs: z.array(z.object({ credits: z.number().int().positive(), price: z.number().int().positive() })).min(1).max(6),
     }).partial().parse(req.body);
     transaction(db, () => {
+      const before = settings(db);
+      const changed = Object.fromEntries(Object.entries(d).filter(([k, v]) => JSON.stringify(before[k]) !== JSON.stringify(v)).map(([k, v]) => [k, [before[k], v]]));
       for (const [key, value] of Object.entries(d)) run(db, "INSERT INTO platform_settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", key, JSON.stringify(value));
-      audit(req.user.id, "settings.update", 0);
+      if (Object.keys(changed).length) audit(req.user.id, "settings.update", 0, { changed });
     });
     res.json(settings(db));
   });

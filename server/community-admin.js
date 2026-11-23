@@ -177,7 +177,7 @@ export function registerCommunityAdmin(
       );
       attachPostImages(db, id, req.user.id, d.image_ids);
       follow(id, req.user.id);
-      audit(req.user.id, "community.announcement.create", id);
+      audit(req.user.id, "community.announcement.create", id, { post_id: id, title: d.title });
       return id;
     });
     res.status(201).json(serialize(getPost(id, req.user), req.user));
@@ -215,7 +215,7 @@ export function registerCommunityAdmin(
         saved.id,
       );
       attachPostImages(db, saved.id, req.user.id, d.image_ids);
-      audit(req.user.id, "community.rules.update", "rules");
+      audit(req.user.id, "community.rules.update", "rules", { title: "community rules" });
     });
     res.json({ ok: true });
   });

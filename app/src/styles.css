@@ -3569,3 +3569,41 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 @keyframes chat-flash { 0% { outline: 2px solid var(--primary); outline-offset: 2px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
 @media (prefers-reduced-motion: reduce) { .chat-event.flash, [data-flash].flash [data-slot="bubble-content"] { animation: none; outline: 2px solid var(--primary); } }
 .chat-event-link { color: var(--primary); font-size: 12px; font-weight: 500; width: fit-content; }
+/* Buổi học pane: clickable worklist rows, state words, a quiet history list. */
+.session-check { width: 36px; }
+.session-check input { accent-color: var(--primary); }
+.session-fee { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.session-state { display: inline-block; font-size: 12px; font-weight: 500; }
+.session-state[data-state="attention"] { color: var(--warning); }
+.session-state[data-state="cancelled"] { color: var(--muted-foreground); }
+.session-state[data-state="ok"] { color: var(--positive); }
+.session-drawer .admin-finance { gap: 20px; }
+.session-drawer h2 { margin: 0 0 8px; font-size: 15px; }
+.session-history { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.session-history li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.session-history span { color: var(--muted-foreground); }
+/* A deep-linked record glows briefly, then keeps a calm outline so it stays findable. */
+[data-highlight] { outline: 2px solid var(--primary); outline-offset: -2px; animation: admin-hl 2.6s ease-out; }
+@keyframes admin-hl { 0%, 60% { background: color-mix(in srgb, var(--primary) 12%, transparent); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { [data-highlight] { animation: none; } }
+
+/* People inside the lesson drawer stack, so names stay readable at any width. */
+.session-people { display: grid; }
+.session-person { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--border); }
+.session-person:first-child { border-top: 0; }
+.session-person small { font-size: 12px; color: var(--muted-foreground); }
+.session-person-side { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.session-person-side .session-fee { margin-left: auto; }
+.session-person > .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+@media (max-width: 640px) {
+  .session-rows .session-check { grid-area: who; align-self: start; padding-top: 4px; }
+  .session-rows .session-fee { grid-area: action; justify-self: end; }
+}
+
+/* Audit log filters, paging and per-record trails. */
+.audit-range { display: flex; gap: 6px; }
+.audit-range input { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); color: inherit; font: inherit; font-size: 13px; }
+.audit-table td small { display: block; font-size: 12px; color: var(--muted-foreground); }
+.audit-more { display: flex; justify-content: center; padding: 14px 0 4px; }
+.audit-trail h3 { margin: 10px 0 4px; font-size: 13px; color: var(--muted-foreground); }
+.finance-dismissed summary { margin: 14px 0 6px; font-size: 13px; color: var(--muted-foreground); cursor: pointer; }

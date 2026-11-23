@@ -21,7 +21,7 @@ export function registerCatalogRemoval(app, db, auth, audit) {
           if (JSON.stringify(subjects) !== tutor.subjects || JSON.stringify(remainingGoals) !== tutor.goals)
             run(db, "UPDATE tutors SET subjects=?,goals=?,review_revision=review_revision+1 WHERE user_id=?", JSON.stringify(subjects), JSON.stringify(remainingGoals), tutor.user_id);
         }
-        audit(req.user.id, `${kind === "subjects" ? "subject" : "resource"}.removed`, item.id);
+        audit(req.user.id, `${kind === "subjects" ? "subject" : "resource"}.removed`, item.id, { title: item.name || item.title });
       });
       res.json({ ok: true });
     });

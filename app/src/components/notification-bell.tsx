@@ -66,6 +66,7 @@ const templates: Record<string, [string, LucideIcon]> = {
   pitch_new: ["{actor} gửi hồ sơ vào bài “{subject}”", Send],
   dispute_resolved: ["Quản trị viên đã xử lý báo cáo ở lớp {subject}", CalendarDays],
   session_confirm: ["{actor} đã xác nhận buổi {subject}, bạn xác nhận giúp nhé", CalendarDays],
+  session_remind: ["{actor} nhắc bạn xác nhận buổi {subject}", CalendarDays],
   session_cancelled: ["{actor} đã hủy một buổi {subject}", CalendarDays],
   session_move: ["{actor} đề nghị dời một buổi {subject}", CalendarDays],
   session_moved: ["{actor} đã đồng ý dời buổi {subject}", CalendarDays],
