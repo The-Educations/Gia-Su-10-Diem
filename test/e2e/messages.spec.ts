@@ -15,9 +15,11 @@ test("two-pane inbox: search, filters, open a conversation and send", async ({ p
   await expect(page.getByText("Không có cuộc trò chuyện nào khớp.")).toBeVisible();
   await page.getByLabel("Tìm cuộc trò chuyện").fill("");
   await page.locator(".conversation-filter").getByRole("button", { name: "Tất cả" }).click();
-  await page.locator(".conversation-list > button").first().click();
+  await page.locator(".conversation-list > button").filter({ hasText: "Hỗ trợ" }).first().click();
   await page.locator("#message").fill("Xin chào đội ngũ hỗ trợ");
-  await page.getByRole("button", { name: "Gửi", exact: true }).click();
+  const send = page.getByRole("button", { name: "Gửi", exact: true });
+  await expect(send).toBeEnabled();
+  await send.click();
   await expect(page.getByRole("region", { name: "Nội dung trò chuyện" }).getByText("Xin chào đội ngũ hỗ trợ")).toBeVisible();
   expect(errors).toEqual([]);
 });

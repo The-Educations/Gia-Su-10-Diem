@@ -23,12 +23,12 @@ test("offer and dated lesson messages keep context for both people, with direct 
     await page.getByRole("button", { name: "Gửi", exact: true }).click();
     await page.reload();
     await expect(page.locator(".conversation-body")).toContainText("Mình muốn trao đổi về đề nghị này.");
-    await expect(page.locator(".conversation-body .message-context a")).toHaveAttribute("href", `/app/offers?id=${offer.id}`);
+    await expect(page.locator(".conversation-body .message-context:not(.chat-event .message-context) a")).toHaveAttribute("href", `/app/offers?id=${offer.id}`);
     // The receiver opens their regular inbox, without the sender's URL context.
     await tutor.goto("/app/messages");
-    await tutor.locator(".conversation-list button").filter({ hasText: "Private community-parent" }).click();
-    await expect(tutor.locator(".conversation-body .message-context")).toContainText(`Đề nghị học #${offer.id}`);
-    await tutor.locator(".conversation-body .message-context a").click();
+    await tutor.locator(".conversation-list > button").filter({ hasText: "Private community-parent" }).click();
+    await expect(tutor.locator(".conversation-body .message-context:not(.chat-event .message-context)")).toContainText(`Đề nghị học #${offer.id}`);
+    await tutor.locator(".conversation-body .message-context:not(.chat-event .message-context) a").click();
     await expect(tutor.getByRole("dialog")).toContainText(`Chi tiết đề nghị học #${offer.id}`);
     await tutor.getByRole("button", { name: "Chấp nhận", exact: true }).click();
     await tutor.getByRole("link", { name: "Mở lịch dạy", exact: true }).click();
@@ -39,7 +39,7 @@ test("offer and dated lesson messages keep context for both people, with direct 
     await tutor.getByRole("textbox", { name: "Tin nhắn", exact: true }).fill("Chuẩn bị bài tập cho buổi này nhé.");
     await tutor.getByRole("button", { name: "Gửi", exact: true }).click();
     await expect(page.locator(".conversation-body")).toContainText("Chuẩn bị bài tập cho buổi này nhé.", { timeout: 12000 });
-    const lessonCard = page.locator(".conversation-body").getByRole("article", { name: `Buổi học #${lessonId}`, exact: true });
+    const lessonCard = page.locator(".conversation-body .message-context:not(.chat-event .message-context)", { has: page.locator(`a[href="/app/bookings?lesson=${lessonId}"]`) });
     await lessonCard.getByRole("button", { name: /Trả lời/ }).click();
     await expect(page.locator(".message-context-draft")).toContainText(`Buổi học #${lessonId}`);
     await page.getByRole("textbox", { name: "Tin nhắn", exact: true }).fill("Đã rõ lịch của buổi này.");
@@ -101,7 +101,7 @@ test("existing weekly requests link their messages back to the exact weekly card
     const message = tutor.locator(".conversation-body").getByRole("article", { name: `Lịch học hằng tuần #${weekly.id}`, exact: true }).last();
     await message.getByRole("link").click();
     await expect(tutor).toHaveURL(new RegExp(`offers\\?request=${weekly.id}$`));
-    await expect(tutor.getByRole("article", { name: `Lịch học hằng tuần #${weekly.id}`, exact: true })).toBeFocused();
+    await expect(tutor.getByRole("article", { name: `Lịch học hằng tuần #${weekly.id}`, exact: true }).and(tutor.locator(":not(.chat-event *)"))).toBeFocused();
   } finally {
     await page.request.patch(`/api/weekly-requests/${weekly.id}`, { data: { status: "cancelled" } });
     const current = await (await tutor.request.get("/api/tutor/profile")).json();

@@ -161,7 +161,7 @@ function Conversation({ thread, onRead }: { thread: Thread; onRead: (key: string
       await pull();
     } catch (e) {
       setMessages((m) => m.filter((x) => x.id !== temp.id));
-      setError((e as Error).message);
+      throw e; // let the composer keep the draft and pending attachment
     }
   }
   const rows = useMemo(() => messages.map((m, i) => {
