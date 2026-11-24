@@ -21,10 +21,11 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "security", label: "Bảo mật", icon: ShieldCheck },
   { id: "notifications", label: "Thông báo", icon: Bell },
 ];
-const EMAIL_TOPICS: { id: "proposals" | "money" | "lessons"; label: string }[] = [
+const EMAIL_TOPICS: { id: "proposals" | "money" | "lessons" | "community"; label: string }[] = [
   { id: "proposals", label: "Đề nghị học mới và câu trả lời" },
   { id: "money", label: "Tiền vào số dư và rút tiền" },
   { id: "lessons", label: "Buổi học cần xác nhận" },
+  { id: "community", label: "Cộng đồng: bài viết, bình luận hoặc hồ sơ bị ẩn, gỡ" },
 ];
 
 // Email for the events that matter; in-app notices are always on.

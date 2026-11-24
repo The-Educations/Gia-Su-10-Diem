@@ -13,12 +13,14 @@ export function migrateNotifications(db) {
     attempts INTEGER NOT NULL DEFAULT 0, sending_until INTEGER NOT NULL DEFAULT 0, sent_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE INDEX IF NOT EXISTS email_outbox_pending ON email_outbox(sent_at, id);`);
+  if (!db.prepare("PRAGMA table_info(email_outbox)").all().some((c) => c.name === "detail"))
+    db.exec("ALTER TABLE email_outbox ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "email_prefs"))
     db.exec("ALTER TABLE users ADD COLUMN email_prefs TEXT NOT NULL DEFAULT '{}'");
 }
 
 // Which important events also arrive by email. Everything is on until the person turns it off.
-export const EMAIL_TOPICS = ["proposals", "money", "lessons"];
+export const EMAIL_TOPICS = ["proposals", "money", "lessons", "community"];
 export function emailPrefs(db, userId) {
   let stored = {};
   try { stored = JSON.parse(one(db, "SELECT email_prefs FROM users WHERE id=?", userId)?.email_prefs || "{}"); } catch { /* keep defaults */ }
@@ -30,7 +32,16 @@ export const EMAIL_KINDS = {
   proposal_new: "proposals", proposal_accepted: "proposals", proposal_declined: "proposals",
   deposit_received: "money", package_settled: "money", withdrawal_paid: "money", withdrawal_rejected: "money",
   session_confirm: "lessons", session_move: "lessons",
+  // Moderation decisions about a member's own content. Mail only: the community bell already tells them in the web.
+  community_post_rejected: "community", community_revision_rejected: "community", community_post_hidden: "community",
+  community_comment_removed: "community", community_profile_removed: "community",
 };
+
+// Puts an email in the outbox without a bell notice. The mailer sends it after the request and retries on failure.
+export function queueEmail(db, userId, kind, { actor = "", subject = "", detail = "", link = "" } = {}) {
+  if (!userId || !EMAIL_KINDS[kind] || !emailPrefs(db, userId)[EMAIL_KINDS[kind]]) return;
+  run(db, "INSERT INTO email_outbox(user_id,kind,actor_name,subject,detail,link) VALUES (?,?,?,?,?,?)", userId, kind, actor, subject, detail, link);
+}
 
 // The client turns `kind` into words, so every language reads the same row.
 // Unread message notices for one conversation collapse into the latest.
@@ -42,8 +53,7 @@ export function notify(db, userId, kind, { actor = "", subject = "", link = "" }
   }
   run(db, "INSERT INTO notifications(user_id,kind,actor_name,subject,link) VALUES (?,?,?,?,?)", userId, kind, actor, subject, link);
   // Queued with the change itself; sent after the request by the mail flusher.
-  if (EMAIL_KINDS[kind] && emailPrefs(db, userId)[EMAIL_KINDS[kind]])
-    run(db, "INSERT INTO email_outbox(user_id,kind,actor_name,subject,link) VALUES (?,?,?,?,?)", userId, kind, actor, subject, link);
+  queueEmail(db, userId, kind, { actor, subject, link });
 }
 
 export function registerNotifications(app, db, auth) {

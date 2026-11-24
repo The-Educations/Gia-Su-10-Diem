@@ -1,4 +1,3 @@
-import PendingMail from "@/components/community/PendingMail";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -153,7 +152,6 @@ export default function AdminCommunity() {
           </Button>
         </div>
       </header>
-      <PendingMail />
       {summary.error ? (
         <ErrorState error={summary.error} retry={summary.reload} />
       ) : summary.data ? (
@@ -350,12 +348,12 @@ export default function AdminCommunity() {
             options={[
               { value: "approved", label: "Đã đăng" },
               { value: "hidden", label: "Đã ẩn" },
-              { value: "deleted", label: "Đã xóa" },
+              { value: "deleted", label: "Tác giả đã xóa" },
             ]}
           />
           {status === "deleted" && (
             <p className="text-muted-foreground">
-              Bài đã xóa tự mất sau 30 ngày.
+              Bài tác giả đã xóa được giữ 30 ngày để đối chiếu khi có báo cáo, rồi tự xóa vĩnh viễn.
             </p>
           )}
           {posts.data?.items.length === 0 && (
@@ -382,43 +380,28 @@ export default function AdminCommunity() {
                       Xem bài viết
                     </Link>
                   )}
-                  {p.status === "hidden" ? (
-                    <>
-                      <Button
-                        onClick={() => review(p.id, "restore", "Khôi phục bài")}
-                      >
-                        Khôi phục
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => review(p.id, "delete", "Xóa bài")}
-                      >
-                        Xóa
-                      </Button>
-                    </>
-                  ) : p.status === "deleted" ? (
-                    <>
-                      <Button
-                        onClick={() =>
-                          review(p.id, "undelete", "Khôi phục về Đã ẩn")
-                        }
-                      >
-                        Khôi phục về Đã ẩn
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() =>
-                          setAction({
-                            title: "Xóa vĩnh viễn (không hoàn tác được)",
-                            path: `/admin/community/posts/${p.id}`,
-                            method: "DELETE",
-                          })
-                        }
-                      >
-                        Xóa vĩnh viễn
-                      </Button>
-                    </>
-                  ) : p.status === "approved" ? (
+                  {p.status === "hidden" && (
+                    <Button
+                      onClick={() => review(p.id, "restore", "Khôi phục bài")}
+                    >
+                      Khôi phục
+                    </Button>
+                  )}
+                  {(p.status === "hidden" || p.status === "deleted") && (
+                    <Button
+                      variant="destructive"
+                      onClick={() =>
+                        setAction({
+                          title: "Xóa vĩnh viễn bài và bình luận (không hoàn tác được)",
+                          path: `/admin/community/posts/${p.id}`,
+                          method: "DELETE",
+                        })
+                      }
+                    >
+                      {p.status === "deleted" ? "Xóa vĩnh viễn ngay" : "Xóa vĩnh viễn"}
+                    </Button>
+                  )}
+                  {p.status === "approved" ? (
                     <Button
                       variant="outline"
                       onClick={() => review(p.id, "hide", "Ẩn bài", true)}

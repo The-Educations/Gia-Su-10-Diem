@@ -130,14 +130,8 @@ CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notificatio
       DROP TABLE community_reports;
       ALTER TABLE community_reports_with_profiles RENAME TO community_reports;`);
   }
-  db.exec(`CREATE TABLE IF NOT EXISTS community_mail (
-    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
-    detail TEXT NOT NULL, reason TEXT NOT NULL, path TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT,
-    attempted_at INTEGER NOT NULL DEFAULT 0, sending_until INTEGER NOT NULL DEFAULT 0
-  )`);
-  if (!db.prepare("PRAGMA table_info(community_mail)").all().some(c => c.name === "post_id"))
-    db.exec("ALTER TABLE community_mail ADD COLUMN post_id INTEGER");
+  // Moderation email now goes through the shared email_outbox; the old per-admin retry table is gone.
+  db.exec("DROP TABLE IF EXISTS community_mail");
   if (!db.prepare("PRAGMA table_info(community_notifications)").all().some(c => c.name === "detail"))
     db.exec("ALTER TABLE community_notifications ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   if (
@@ -149,6 +143,13 @@ CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notificatio
     db.exec(
       "ALTER TABLE community_posts ADD COLUMN review_version INTEGER NOT NULL DEFAULT 0",
     );
+  // A purged post keeps its row (title and body wiped) so its id is never handed to a new post.
+  if (!db.prepare("PRAGMA table_info(community_posts)").all().some((c) => c.name === "purged_at"))
+    db.exec("ALTER TABLE community_posts ADD COLUMN purged_at TEXT");
+  // Reports have no foreign key: close the ones left pointing at posts or comments hard-deleted before tombstones.
+  db.exec(`UPDATE community_reports SET status='resolved',resolution='Nội dung đã bị xóa vĩnh viễn.'
+    WHERE status='open' AND ((target_type='post' AND NOT EXISTS (SELECT 1 FROM community_posts WHERE id=target_id))
+      OR (target_type='comment' AND NOT EXISTS (SELECT 1 FROM community_comments WHERE id=target_id)))`);
   for (const name of ["body_html", "revision_body_html"]) {
     if (
       !db

@@ -2,22 +2,49 @@ import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
 import { attachPostImages } from "./community-images.js";
 import { postSchema, fold } from "./community-policy.js";
+import { queueEmail } from "./notifications.js";
 
 export function registerCommunityAdmin(
   app,
   db,
   auth,
   audit,
-  { fail, getPost, serialize, notify, follow, rules, removeComment, mail },
+  { fail, getPost, serialize, notify, follow, rules, removeComment },
 ) {
   const base = "/api/admin/community";
   const admin = auth("admin");
   const PURGE_DAYS = 30;
+  // Purging wipes a post but keeps its row, so the id is never given to a later post
+  // (reports and tutors' pitches that point at it can never attach to someone else's post).
   const purge = (rows, actorId, auto) =>
     transaction(db, () => {
       for (const p of rows) {
-        run(db, "DELETE FROM community_posts WHERE id=?", p.id);
-        run(db, "DELETE FROM community_mail WHERE post_id=? AND sent_at IS NULL", p.id);
+        const comments = all(db, "SELECT id FROM community_comments WHERE post_id=?", p.id).map((c) => c.id);
+        const close = (type, id) =>
+          run(
+            db,
+            "UPDATE community_reports SET status='resolved',resolved_by=?,resolution='Nội dung đã bị xóa vĩnh viễn.' WHERE status='open' AND target_type=? AND target_id=?",
+            actorId,
+            type,
+            id,
+          );
+        close("post", p.id);
+        for (const id of comments) close("comment", id);
+        for (const table of [
+          "community_comments",
+          "community_reactions",
+          "community_follows",
+          "community_notifications",
+          "community_post_images",
+        ])
+          run(db, `DELETE FROM ${table} WHERE post_id=?`, p.id);
+        run(
+          db,
+          `UPDATE community_posts SET title='',body='',body_html='',search_text='',review_note='',
+            revision_title=NULL,revision_body=NULL,revision_body_html='',revision_status=NULL,revision_note='',
+            best_comment_id=NULL,status='deleted',purged_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          p.id,
+        );
         audit(actorId, "community.post.purge", p.id, {
           id: p.id,
           title: p.title,
@@ -29,15 +56,16 @@ export function registerCommunityAdmin(
   const purgeExpired = (actorId) => {
     const rows = all(
       db,
-      "SELECT id,title,author_id FROM community_posts WHERE status='deleted' AND kind!='rules' AND updated_at < datetime('now', ?)",
+      "SELECT id,title,author_id FROM community_posts WHERE status='deleted' AND purged_at IS NULL AND kind!='rules' AND updated_at < datetime('now', ?)",
       `-${PURGE_DAYS} days`,
     );
     if (rows.length) purge(rows, actorId, true);
   };
-  const deletedPost = (id, status) => {
+  // Only a hidden post, or one its author deleted, can be wiped; a tombstone is already gone.
+  const purgeable = (id) => {
     const p = one(db, "SELECT * FROM community_posts WHERE id=?", id);
-    if (!p || p.kind === "rules") fail(404, "Không tìm thấy bài viết.");
-    if (p.status !== status) fail(409, "Trạng thái bài không phù hợp.");
+    if (!p || p.kind === "rules" || p.purged_at) fail(404, "Không tìm thấy bài viết.");
+    if (!["hidden", "deleted"].includes(p.status)) fail(409, "Trạng thái bài không phù hợp.");
     return p;
   };
   const privatePost = (p) => ({
@@ -88,7 +116,7 @@ export function registerCommunityAdmin(
       .parse(req.query.status);
     const rows = all(
       db,
-      "SELECT * FROM community_posts WHERE status=? AND kind!='rules' ORDER BY updated_at DESC,id DESC LIMIT 21 OFFSET ?",
+      "SELECT * FROM community_posts WHERE status=? AND purged_at IS NULL AND kind!='rules' ORDER BY updated_at DESC,id DESC LIMIT 21 OFFSET ?",
       status,
       (page - 1) * 20,
     );
@@ -114,7 +142,7 @@ export function registerCommunityAdmin(
   });
   app.get(`${base}/rules`, admin, (req, res) => res.json(rules(req.user)));
   for (const action of ["approve", "reject", "hide", "restore"])
-    app.post(`${base}/posts/:id/${action}`, admin, async (req, res) => {
+    app.post(`${base}/posts/:id/${action}`, admin, (req, res) => {
       const p = getPost(req.params.id, req.user);
       if (p.kind === "rules") fail(409, "Sửa Quy tắc bằng biểu mẫu riêng.");
       const note = ["reject", "hide"].includes(action)
@@ -144,7 +172,7 @@ export function registerCommunityAdmin(
         (action === "restore" && p.status !== "hidden")
       )
         fail(409, "Trạng thái bài không phù hợp.");
-      const mailId = transaction(db, () => {
+      transaction(db, () => {
         if (revision && action === "approve") {
           run(
             db,
@@ -197,36 +225,17 @@ export function registerCommunityAdmin(
           `community.${revision && ["approve", "reject"].includes(action) ? "revision" : "post"}.${action}`,
           JSON.stringify({ id: p.id, note }),
         );
-        if (action === "hide" || action === "reject") return mail.enqueue(p.author_id, `${revision && action === "reject" ? "Bản sửa bài viết" : "Bài viết"} “${revision && action === "reject" ? p.revision_title : p.title}” ${action === "hide" ? "đã bị ẩn" : "chưa được duyệt"}.`, note, "/app/community/mine", p.id);
+        if (action === "hide" || action === "reject")
+          queueEmail(db, p.author_id, action === "hide" ? "community_post_hidden" : revision ? "community_revision_rejected" : "community_post_rejected", {
+            subject: revision && action === "reject" ? p.revision_title : p.title,
+            detail: note,
+            link: "/community/mine",
+          });
       });
-      res.json({ ok: true, ...(mailId ? await mail.deliver(mailId, req.user.id) : {}) });
+      res.json({ ok: true });
     });
-  app.post(`${base}/posts/:id/delete`, admin, (req, res) => {
-    const p = deletedPost(req.params.id, "hidden");
-    transaction(db, () => {
-      run(
-        db,
-        "UPDATE community_posts SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=?",
-        p.id,
-      );
-      audit(req.user.id, "community.post.delete", p.id, { post_id: p.id, title: p.title });
-    });
-    res.json({ ok: true });
-  });
-  app.post(`${base}/posts/:id/undelete`, admin, (req, res) => {
-    const p = deletedPost(req.params.id, "deleted");
-    transaction(db, () => {
-      run(
-        db,
-        "UPDATE community_posts SET status='hidden',updated_at=CURRENT_TIMESTAMP WHERE id=?",
-        p.id,
-      );
-      audit(req.user.id, "community.post.undelete", p.id, { post_id: p.id, title: p.title });
-    });
-    res.json({ ok: true });
-  });
   app.delete(`${base}/posts/:id`, admin, (req, res) => {
-    purge([deletedPost(req.params.id, "deleted")], req.user.id, false);
+    purge([purgeable(req.params.id)], req.user.id, false);
     res.json({ ok: true });
   });
   app.post(`${base}/posts`, admin, (req, res) => {
@@ -292,7 +301,7 @@ export function registerCommunityAdmin(
     });
     res.json({ ok: true });
   });
-  app.delete(`${base}/comments/:id`, admin, async (req, res) => {
+  app.delete(`${base}/comments/:id`, admin, (req, res) => {
     const note = text(1000).parse(req.body.note);
     const c = one(
       db,
@@ -300,7 +309,7 @@ export function registerCommunityAdmin(
       req.params.id,
     );
     if (!c || c.status !== "visible") fail(404, "Không tìm thấy bình luận.");
-    const mailId = transaction(db, () => {
+    transaction(db, () => {
       removeComment(c.id, "removed_by_admin", note);
       audit(
         req.user.id,
@@ -308,9 +317,13 @@ export function registerCommunityAdmin(
         JSON.stringify({ id: c.id, note }),
       );
       const post = one(db, "SELECT title FROM community_posts WHERE id=?", c.post_id);
-      return mail.enqueue(c.author_id, `Bình luận trong bài “${post.title}” đã được gỡ: “${c.body.slice(0, 300)}”`, note, `/app/community/${c.post_id}`, c.post_id);
+      queueEmail(db, c.author_id, "community_comment_removed", {
+        subject: post.title,
+        detail: JSON.stringify({ reason: note, quote: c.body.slice(0, 300) }),
+        link: `/community/${c.post_id}`,
+      });
     });
-    res.json({ ok: true, ...await mail.deliver(mailId, req.user.id) });
+    res.json({ ok: true });
   });
   app.get(`${base}/reports`, admin, (req, res) => {
     const status = z

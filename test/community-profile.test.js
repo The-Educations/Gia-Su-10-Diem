@@ -565,54 +565,61 @@ test("admin can inspect a suspended profile without counting nonpublic activity"
   );
 });
 
-test("moderation sends private reasons from admin and persists failures for authorized retries", async t => {
-  const emails = []; let offline = true;
-  const { db, ids, call, create, approve } = await fixture(t, { sendAdminEmail: async mail => {
-    if (offline) throw new Error("Mailflare unavailable"); emails.push(mail);
-  } });
+test("moderation decisions queue one email each in the shared outbox, without a second bell notice", async t => {
+  const { db, ids, call, create, approve } = await fixture(t);
+  const outbox = (user = ids.student) => db.prepare("SELECT kind,subject,detail,link FROM email_outbox WHERE user_id=? ORDER BY id").all(user).map(r => ({ ...r }));
+  const bell = user => one(db, "SELECT COUNT(*) n FROM notifications WHERE user_id=?", user).n;
   const code = one(db, "SELECT profile_code FROM users WHERE id=?", ids.student).profile_code;
   run(db, "UPDATE users SET bio='Nội dung cần gỡ' WHERE id=?", ids.student);
   const path = `/admin/community/members/${code}/bio`;
   assert.equal((await call("parent", path, "DELETE", { note: "Không được phép" })).status, 403);
   assert.equal((await call("admin", path, "DELETE", { note: "" })).status, 400);
-  assert.equal(one(db, "SELECT COUNT(*) n FROM community_mail").n, 0);
+  assert.deepEqual(outbox(), []);
   const removed = await call("admin", path, "DELETE", { note: 'Lý do <script>alert("test")</script>' });
-  assert.equal(removed.status, 200); assert.equal(removed.data.email_status, "failed");
+  assert.equal(removed.status, 200); assert.deepEqual(removed.data, { ok: true });
   assert.equal(one(db, "SELECT bio FROM users WHERE id=?", ids.student).bio, "");
-  assert.match((await call("student", "/community/notifications")).data[0]?.detail || JSON.stringify((await call("student", "/community/notifications")).data), /Lý do/);
-  const pending = (await call("admin", "/admin/community/mail")).data;
-  assert.equal(pending.length, 1); const id = pending[0].id;
-  assert.equal((await call("student", "/admin/community/mail")).status, 403);
-  assert.equal((await call("student", `/admin/community/mail/${id}/retry`, "POST")).status, 403);
-  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).status, 429);
-  offline = false; run(db, "UPDATE community_mail SET attempted_at=0");
-  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).data.email_status, "sent");
-  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).data.email_status, "sent");
-  assert.equal(emails.length, 1); assert.equal(emails[0].kind, "community_moderation"); assert.equal(emails[0].to, "student@private.test");
-  assert.match(emails[0].link, new RegExp(`/app/community/members/${code}$`)); assert.match(emails[0].occurredAt, /giờ Việt Nam/);
+  assert.match(JSON.stringify((await call("student", "/community/notifications")).data), /Lý do/);
+  assert.deepEqual(outbox(), [{ kind: "community_profile_removed", subject: "Giới thiệu", detail: 'Lý do <script>alert("test")</script>', link: `/community/members/${code}` }]);
   assert.equal((await call("admin", path, "DELETE", { note: "Gỡ lần nữa" })).status, 409);
-  assert.equal((await call("admin", "/admin/community/mail")).data.length, 0);
+  assert.equal(outbox().length, 1);
+
   const postId = await create(); await approve(postId);
   const comment = await call("parent", `/community/posts/${postId}/comments`, "POST", { body: "Mình cũng đang học phần này." });
-  assert.equal(comment.status, 201);
-  assert.equal((await call("admin", `/admin/community/comments/${comment.data.id}`, "DELETE", { note: "Nội dung không phù hợp" })).data.email_status, "sent");
-  assert.equal(emails.at(-1).to, "parent@private.test");
-  assert.equal((await call("admin", `/admin/community/posts/${postId}/hide`, "POST", { note: "Cần điều chỉnh nội dung" })).data.email_status, "sent");
-  assert.match(emails.at(-1).detail, /Bài viết/);
-  assert.equal((await call("admin", `/admin/users/${ids.student}`, "DELETE", { email: "student@private.test" })).status, 200);
-  assert.equal(one(db, "SELECT COUNT(*) n FROM community_mail WHERE user_id=?", ids.student).n, 0);
-});
+  const removedComment = await call("admin", `/admin/community/comments/${comment.data.id}`, "DELETE", { note: "Nội dung không phù hợp" });
+  assert.deepEqual(removedComment.data, { ok: true });
+  const [mail] = outbox(ids.parent);
+  assert.equal(mail.kind, "community_comment_removed"); assert.equal(mail.subject, "Tìm gia sư Anh văn lớp 8");
+  assert.deepEqual(JSON.parse(mail.detail), { reason: "Nội dung không phù hợp", quote: "Mình cũng đang học phần này." });
+  assert.equal(mail.link, `/community/${postId}`);
 
-test("failed moderation mail is paginated and retries claim one delivery at a time", async t => {
-  let release; const sent = [];
-  const { db, ids, call } = await fixture(t, { sendAdminEmail: mail => new Promise(resolve => { sent.push(mail); release = resolve; }) });
-  for (let n = 0; n < 21; n++) run(db, "INSERT INTO community_mail(user_id,detail,reason,path) VALUES (?,?,?,?)", ids.student, `Nội dung ${n}`, "Cần cập nhật", "/app/community");
-  const first = await call("admin", "/admin/community/mail"); const second = await call("admin", "/admin/community/mail?page=2");
-  assert.equal(first.data.length, 20); assert.equal(second.data.length, 1); assert.equal(second.data[0].detail, "Nội dung 0");
-  assert.equal((await call("admin", "/admin/community/mail?page=0")).status, 400);
-  const id = first.data[0].id;
-  const pending = call("admin", `/admin/community/mail/${id}/retry`, "POST");
-  while (!release) await new Promise(resolve => setTimeout(resolve, 1));
-  assert.equal((await call("admin", `/admin/community/mail/${id}/retry`, "POST")).status, 429);
-  release(); assert.equal((await pending).data.email_status, "sent"); assert.equal(sent.length, 1);
+  const bellBefore = bell(ids.student);
+  assert.deepEqual((await call("admin", `/admin/community/posts/${postId}/hide`, "POST", { note: "Cần điều chỉnh nội dung" })).data, { ok: true });
+  assert.deepEqual(outbox().at(-1), { kind: "community_post_hidden", subject: "Tìm gia sư Anh văn lớp 8", detail: "Cần điều chỉnh nội dung", link: "/community/mine" });
+  assert.equal(bell(ids.student), bellBefore);
+
+  const pending = await create(); 
+  await call("admin", `/admin/community/posts/${pending}/reject`, "POST", { note: "Có quảng cáo" });
+  assert.equal(outbox().at(-1).kind, "community_post_rejected");
+  assert.equal(outbox().at(-1).detail, "Có quảng cáo");
+
+  // A rejected edit of a live post is a different notice and names the edited title.
+  const live = await create(); await approve(live);
+  await call("student", `/community/posts/${live}`, "PUT", { title: "Tiêu đề đã sửa", body: "Nội dung đã sửa khác hẳn." });
+  await call("admin", `/admin/community/posts/${live}/reject`, "POST", { note: "Sửa chưa đạt" });
+  assert.deepEqual(outbox().at(-1), { kind: "community_revision_rejected", subject: "Tiêu đề đã sửa", detail: "Sửa chưa đạt", link: "/community/mine" });
+
+  // Turning the topic off stops the email but never the in-app notice.
+  await call("student", "/account/notifications", "PUT", { community: false });
+  const before = outbox().length;
+  run(db, "UPDATE community_posts SET created_at=datetime('now','-2 days')");
+  const again = await create(); await approve(again);
+  await call("admin", `/admin/community/posts/${again}/hide`, "POST", { note: "Lần nữa" });
+  assert.equal(outbox().length, before);
+  assert.ok((await call("student", "/community/notifications")).data.some(n => n.kind === "post_hidden"));
+
+  // The old per-admin retry endpoints are gone.
+  for (const [method, url] of [["GET", "/admin/community/mail"], ["POST", "/admin/community/mail/1/retry"], ["DELETE", "/admin/community/mail/1"]])
+    assert.equal((await call("admin", url, method)).status, 404);
+  assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='community_mail'").get(), undefined);
+  assert.equal((await call("admin", `/admin/users/${ids.student}`, "DELETE", { email: "student@private.test" })).status, 200);
 });
