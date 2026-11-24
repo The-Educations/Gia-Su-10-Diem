@@ -27,6 +27,7 @@ import type { Resource, Subject, Tutor, TutorKind, User } from "@/lib/types";
 import { embedUrl } from "@/lib/video";
 import { ErrorState, Heading, Loading, Page, State } from "@/components/common";
 import { AddressFields } from "@/components/address-fields";
+import { AreaMap } from "@/components/area-map";
 import { AvailabilityGrid, scheduleBlocks, scheduleKeys } from "@/components/availability-grid";
 import { CredentialsEditor, useCredentials } from "@/components/credentials-editor";
 import { TimezoneField } from "@/components/tutor-timezone";
@@ -265,6 +266,12 @@ function ProfileWizard({ tutor, subjects, goals, onPending }: { tutor: Tutor; su
           <AddressFields value={draft} required={draft.mode !== "online"} onChange={(address, location) => set({ ...address, location: location || draft.location })} />
           <p className="field-hint">{t(draft.mode === "online" ? "Không bắt buộc với dạy trực tuyến." : "Khu vực bạn nhận dạy tại nhà. Học sinh chỉ thấy phường và tỉnh.")}</p>
         </div>
+        {draft.mode !== "online" && (
+          <Field>
+            <FieldLabel>{t("Khu vực dạy trực tiếp")}</FieldLabel>
+            <AreaMap value={{ area_lat: draft.area_lat, area_lng: draft.area_lng, area_km: draft.area_km }} onChange={(area) => set(area)} />
+          </Field>
+        )}
         <Field>
           <FieldLabel htmlFor="rate">{t("Học phí (VND / buổi)")}</FieldLabel>
           <Input id="rate" type="number" min={50000} max={3000000} step={1000} required value={draft.rate} onChange={(e) => set({ rate: Number(e.target.value) })} />

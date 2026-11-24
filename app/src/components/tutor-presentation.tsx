@@ -79,6 +79,11 @@ export function TutorPresentation({
           <MapPin />
           {t.location}
         </span>
+        {t.mode !== "online" && !!t.area_km && (
+          <span className="area-note" title={tr("Khu vực dạy trực tiếp")}>
+            {tr("Dạy trực tiếp trong ~{km} km quanh {location}", { km: String(t.area_km), location: t.location })}
+          </span>
+        )}
         {!preview && (
           <TrustLine trust={t.trust} />
         )}

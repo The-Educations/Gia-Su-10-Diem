@@ -84,6 +84,9 @@ export function migrateDatabase(db) {
         `ALTER TABLE tutors ADD COLUMN ${name} TEXT NOT NULL DEFAULT '[]'`,
       );
   }
+  for (const name of ["area_lat", "area_lng", "area_km"]) {
+    if (!tutorColumns.includes(name)) db.exec(`ALTER TABLE tutors ADD COLUMN ${name} REAL`);
+  }
   for (const [name, fallback] of Object.entries({
     teaching_style: "",
     lesson_plan: "",

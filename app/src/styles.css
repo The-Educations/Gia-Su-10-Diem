@@ -3714,3 +3714,11 @@ button.admin-row-title:hover strong { text-decoration: underline; }
   .ls-one, .ls-zero, .ls-ring { animation: none; stroke-dashoffset: 0; }
   .ls-d { animation: none; opacity: 1; transform: rotate(-6deg); }
 }
+/* Tutor offline-area picker (S) */
+.area-map { display: grid; gap: 0.5rem; }
+.area-map-canvas { height: 260px; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; z-index: 0; }
+.area-map-canvas .leaflet-container { height: 100%; }
+.area-map-controls { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.area-km { display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 180px; }
+.area-km input[type="range"] { flex: 1; accent-color: var(--accent); }
+.area-note { display: inline-flex; }
