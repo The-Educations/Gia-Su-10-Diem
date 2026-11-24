@@ -89,6 +89,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback(
     (next: Lang) => {
       if (next === lang) return;
+      try {
+        localStorage.setItem(STORAGE_KEY, next);
+      } catch {
+        /* The choice still applies to this visit when storage is unavailable. */
+      }
       if (navigator.webdriver) {
         setLangState(next);
         return;
@@ -97,11 +102,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       coverAt.current = performance.now();
       setCover("open");
       requestAnimationFrame(() => requestAnimationFrame(() => setLangState(next)));
-      try {
-        localStorage.setItem(STORAGE_KEY, next);
-      } catch {
-        /* The choice still applies to this visit when storage is unavailable. */
-      }
     },
     [lang],
   );
