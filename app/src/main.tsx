@@ -7,7 +7,7 @@ import {
   Route,
   Link,
   Navigate,
-  useLocation,
+  useLocation, useSearchParams,
 } from "react-router-dom";
 import { AnimateUIProvider } from "@animate-ui/react/provider";
 import { AppProvider, useApp, accountDestination } from "./lib/api";
@@ -29,7 +29,6 @@ import { finishBoot } from "./lib/boot";
 import "./styles.css";
 import "./shell.css";
 import { PageMetadata } from "./components/page-metadata";
-const Offers = lazy(() => import("./pages/Offers"));
 const Proposals = lazy(() => import("./pages/Proposals"));
 const WalletPage = lazy(() => import("./pages/Wallet"));
 const Schedule = lazy(() => import("./pages/Schedule"));
@@ -53,12 +52,21 @@ const Auth = lazy(() => import("./pages/Auth"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Bookings = lazy(() => import("./pages/Bookings"));
 const Messages = lazy(() => import("./pages/Messages"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
 const TutorCalendar = lazy(() => import("./pages/TutorCalendar"));
 const TutorStudio = lazy(() => import("./pages/TutorStudio"));
 const Admin = lazy(() => import("./pages/Admin"));
+
+// Retired flows keep their paths as redirects: /bookings and /offers land on
+// the replacement pages per role; a link to one old offer opens the new
+// proposals list.
+function LegacyRedirect({ from }: { from: "bookings" | "offers" }) {
+  const { user } = useApp(), loc = useLocation(), [params] = useSearchParams();
+  if (user?.role === "admin") return <Navigate to={`/sessions${loc.search}`} replace />;
+  if (from === "offers" && params.get("id")) return <Navigate to={`/proposals${loc.search}`} replace />;
+  return <Navigate to={`/classes${loc.search}`} replace />;
+}
 
 function Require({
   role,
@@ -194,7 +202,7 @@ function Shell() {
                   path="/bookings"
                   element={
                     <Require>
-                      <Bookings />
+                      <LegacyRedirect from="bookings" />
                     </Require>
                   }
                 />
@@ -214,7 +222,7 @@ function Shell() {
                     </Require>
                   }
                 />
-                <Route path="/offers" element={<Require><Offers /></Require>} />
+                <Route path="/offers" element={<Require><LegacyRedirect from="offers" /></Require>} />
                 <Route path="/proposals" element={<Require><Proposals /></Require>} />
                 <Route path="/wallet" element={<Require><WalletPage /></Require>} />
                 <Route path="/schedule" element={<Require><Schedule /></Require>} />

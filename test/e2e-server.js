@@ -127,3 +127,23 @@ app.post("/__test/session-class", express.json(), (req, res) => {
     res.json({ class_id: cid, slug, disputed, waiting, upcoming, member_id: mid, booking_id: booking, student_id: student.id, student_name: student.name });
   } finally { db.close(); }
 });
+
+// Test-only: a class with three finished sessions a student can rate, plus an
+// endable membership — used by ratings.spec.ts on the new class flow.
+app.post("/__test/rated-class", express.json(), (req, res) => {
+  const db = openDatabase();
+  try {
+    const student = one(db, "SELECT id FROM users WHERE email=?", `${req.body.student}@demo.giasu.test`);
+    const tutor = one(db, "SELECT id FROM users WHERE email='chau@demo.giasu.test'");
+    const slug = `R${Date.now().toString(36)}`;
+    const cid = Number(run(db, "INSERT INTO classes(tutor_id,title,subject_id,mode,color,minutes,schedule) VALUES (?,?,?,?,?,?,?)", tutor.id, `Toán · ${slug}`, "toan", "online", "sky", 60, "[]").lastInsertRowid);
+    const mid = Number(run(db, "INSERT INTO class_members(class_id,student_id,sessions_total,rate,held) VALUES (?,?,?,?,?)", cid, student.id, 3, 180000, 0).lastInsertRowid);
+    const sessions = [];
+    for (let i = 0; i < 3; i++) {
+      const sid = Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cid, new Date(Date.now() - (5 - i) * 86400000).toISOString(), 60).lastInsertRowid);
+      run(db, "INSERT INTO session_members(session_id,member_id,outcome) VALUES (?,?,'confirmed')", sid, mid);
+      sessions.push(sid);
+    }
+    res.json({ member: mid, sessions });
+  } finally { db.close(); }
+});

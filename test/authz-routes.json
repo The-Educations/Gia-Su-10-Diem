@@ -607,6 +607,10 @@
     "auth": "student",
     "file": "classes.js"
   },
+  "POST /api/members/{id}/report": {
+    "auth": "student,tutor",
+    "file": "classes.js"
+  },
   "PUT /api/members/{id}/review": {
     "auth": "student",
     "file": "classes.js"

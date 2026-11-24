@@ -9,6 +9,7 @@ import type { CalendarEvent, ClassSession, Tutor } from "@/lib/types";
 import { EventDialog, EventPopover, type EventDraft } from "@/components/event-dialog";
 import { ErrorState, Heading, Page } from "@/components/common";
 import { SessionActions, timeOf } from "@/components/session-actions";
+import { GoogleCalendar } from "@/components/google-calendar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { freeRuns } from "@/lib/free-hours";
@@ -155,6 +156,7 @@ export default function Schedule() {
       <Heading title={t("Lịch")} action={
         <span className="actions">
           {user?.role !== "admin" && <Button onClick={newEvent}><Plus data-icon="inline-start" />{t("Sự kiện mới")}</Button>}
+          {user?.role !== "admin" && <GoogleCalendar />}
           <Button asChild variant="outline"><Link to="/classes">{t("Lớp học")}</Link></Button>
         </span>
       } />

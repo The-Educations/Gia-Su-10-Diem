@@ -39,27 +39,26 @@ test("admin can remove subjects and exams with cancellation and historical-safe 
   }
 });
 
-test("tutor calendar shows dated free hours without occupied or past hours", async ({ page }) => {
+test("tutor schedule shows dated class sessions and weekly free hours", async ({ page }) => {
   await login(page,"chau");
   const profile = await (await page.request.get("/api/tutor/profile")).json();
   const date = new Date(Date.now()+86400000).toISOString().slice(0,10);
   const starts_at = `${date}T10:30:00+07:00`;
-  const lesson = {id:9001,student_name:"Học sinh lịch thử",tutor_name:profile.name,subject_name:"Toán",status:"accepted",starts_at,duration_minutes:60,rate:180000,mode:"online",note:"",lesson_note:"",meeting_url:"",reviewed:null};
-  await page.route("**/api/bookings",route=>route.fulfill({json:[lesson]}));
-  await page.route("**/api/tutor/profile",route=>route.fulfill({json:{...profile,slots:[10,11,12].map(hour=>({id:hour,starts_at:`${date}T${hour}:00:00+07:00`,duration_minutes:60,available:1,reserved:0,source:"weekly"}))}}));
-  await page.route("**/api/weekly-requests",route=>route.fulfill({json:[]}));
-  await page.goto("/app/bookings");
-  await page.getByLabel("Đến ngày",{exact:true}).fill(date);
-  await expect(page.locator(".dated-lesson")).toHaveCount(1);
-  await expect(page.locator(".calendar-free-slot")).toHaveCount(1);
-  await expect(page.locator(".calendar-free-slot")).toContainText("12:00–13:00");
+  const session = {id:9001,title:"Toán — Học sinh lịch thử",color:"blue",status:"confirmed",starts_at,minutes:60,kind:"lesson"};
+  await page.route("**/api/schedule?**",route=>route.fulfill({json:[session]}));
+  await page.route("**/api/calendar-events?**",route=>route.fulfill({json:[]}));
+  await page.route("**/api/tutor/profile",route=>route.fulfill({json:{...profile,weekly_schedule:{blocks:[0,1,2,3,4,5,6].map(wd=>({weekday:wd,hour:12})),revision:1}}}));
+  await page.goto("/app/schedule");
+  await expect(page.locator(".cal-event").filter({hasText:"Toán"})).toHaveCount(1);
+  await expect(page.locator(".cal-free").first()).toBeVisible();
+  await expect(page.locator(".cal-free").first()).toContainText("Rảnh");
   for (const width of [320,768,1440]) {
     await page.setViewportSize({width,height:900});
-    await expect(page.locator(".calendar-free-slot")).toBeVisible();
+    await expect(page.locator(".cal-free").first()).toBeVisible();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   }
-  await page.locator(".dated-lesson").click();
-  await expect(page.getByRole("dialog")).toContainText("Học sinh lịch thử");
+  await page.locator(".cal-event").filter({hasText:"Toán"}).click();
+  await expect(page.getByRole("dialog").or(page.locator("[data-radix-popper-content-wrapper]")).first()).toContainText("Học sinh lịch thử");
 });
 
 test("Enter sends, Shift+Enter preserves lines, and private images survive a failed send", async ({ page, browser }) => {

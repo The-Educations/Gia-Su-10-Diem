@@ -22,16 +22,15 @@ test.describe("journey EN coverage (H)", () => {
     expect(filters).not.toMatch(VI);
   });
 
-  test("bookings page is English", async ({ page }) => {
-    await page.goto("/app/bookings");
-    await expect(page.getByRole("heading", { name: /My learning schedule/ })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Week" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "List" })).toBeVisible();
+  test("classes page is English", async ({ page }) => {
+    await page.goto("/app/classes");
+    await expect(page.getByRole("heading", { name: /Classes|Lessons/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Schedule|Calendar/i }).first()).toBeVisible();
   });
 
-  test("offers page is English", async ({ page }) => {
-    await page.goto("/app/offers");
-    await expect(page.getByRole("heading", { name: /Lesson request|Proposals|proposal/i })).toBeVisible();
+  test("proposals page is English", async ({ page }) => {
+    await page.goto("/app/proposals");
+    await expect(page.getByRole("heading", { name: /Requests|Offers|Proposal/i })).toBeVisible();
   });
 
   test("workspace hero + today panel is English", async ({ page }) => {

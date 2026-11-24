@@ -18,7 +18,6 @@ async function setup(t, { configured = true } = {}) {
     run(db, "INSERT INTO slots(id,tutor_id,starts_at) VALUES (?,3,?)", id, start);
     return run(db, "INSERT INTO bookings(id,slot_id,student_id,tutor_id,subject_id,starts_at,rate,mode,note,status,duration_minutes) VALUES (?,?,?,3,'toan',?,150000,'online','Mục tiêu',?,90)", id, id, student, start, status);
   };
-  lesson(1); lesson(2, "completed"); lesson(3, "pending"); lesson(4, "cancelled"); lesson(5, "accepted", 4);
   const fake = { calls: [], calendars: new Map(), nonce: "", sub: "google-2", fail: "", lostEvent: false, delay: null, verified: true };
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
   const calendarFetch = async (url, options) => {
@@ -59,6 +58,7 @@ async function setup(t, { configured = true } = {}) {
   };
   const app = createApi(db, { limit: false, google: { clientId: "calendar-client", clientSecret: "test-secret", calendarTokenKey: configured ? Buffer.alloc(32, 7).toString("base64") : "", calendarFetch, calendarVerifyToken: async () => ({ sub: fake.sub, email: `${fake.sub}@example.test`, email_verified: fake.verified, nonce: fake.nonce }) } });
   const server = app.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve));
+  lesson(1); lesson(2, "completed"); lesson(3, "pending"); lesson(4, "cancelled"); lesson(5, "accepted", 4);
   t.after(async () => { await new Promise(resolve => server.close(resolve)); db.close(); });
   const base = `http://127.0.0.1:${server.address().port}`;
   const request = (path, method = "GET", user = 2, data = {}) => fetch(base + path, { method, redirect: "manual", headers: { Cookie: `giasu_session=session-${user}`, "Content-Type": "application/json" }, ...(method !== "GET" ? { body: JSON.stringify(data) } : {}) });
@@ -98,6 +98,34 @@ test("calendar consent requires the current verified session, PKCE, browser stat
   assert.match((await callback(retry, { query: "&error=access_denied" })).headers.get("location"), /cancelled/);
   retry = await start(); run(db, "DELETE FROM sessions WHERE user_id=2");
   assert.match((await callback(retry)).headers.get("location"), /expired/);
+});
+
+
+
+
+
+test("missing configuration and disabled Google API are explicit and cannot leak tokens", async t => {
+  const disabled = await setup(t, { configured: false });
+  assert.equal((await (await disabled.request("/api/account/google-calendar")).json()).available, false);
+  assert.equal((await disabled.request("/api/account/google-calendar/connect", "POST")).status, 503);
+  const { db, fake, start, callback, request } = await setup(t);
+  fake.fail = "disabled"; await callback(await start());
+  const status = await (await request("/api/account/google-calendar")).json();
+  assert.equal(status.error, "api_disabled"); assert.equal(status.lastSynced, null);
+  assert.equal(one(db, "SELECT calendar_id FROM google_calendars").calendar_id, "");
+});
+
+test("disconnect cancels an in-flight authorization callback without resurrecting the connection", async t => {
+  const { db, fake, start, callback, request } = await setup(t);
+  const flow = await start();
+  let release; fake.delay = new Promise(resolve => { release = resolve; });
+  const pending = callback(flow);
+  while (!fake.calls.length) await new Promise(resolve => setTimeout(resolve, 5));
+  await request("/api/account/google-calendar", "DELETE");
+  release();
+  assert.match((await pending).headers.get("location"), /expired/);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendars").n, 0);
+  assert.equal(fake.calendars.size, 0);
 });
 
 test("calendar sync exports only the user's confirmed lessons, encrypts credentials and reuses its own calendar", async t => {
@@ -181,30 +209,6 @@ test("revoked credentials pause automatic retries and deleted accounts lose stor
   assert.equal((await request("/api/admin/users/2", "DELETE", 1, { email: "user2@example.test" })).status, 200);
   assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendars").n, 0);
   assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendar_events").n, 0);
-});
-
-test("missing configuration and disabled Google API are explicit and cannot leak tokens", async t => {
-  const disabled = await setup(t, { configured: false });
-  assert.equal((await (await disabled.request("/api/account/google-calendar")).json()).available, false);
-  assert.equal((await disabled.request("/api/account/google-calendar/connect", "POST")).status, 503);
-  const { db, fake, start, callback, request } = await setup(t);
-  fake.fail = "disabled"; await callback(await start());
-  const status = await (await request("/api/account/google-calendar")).json();
-  assert.equal(status.error, "api_disabled"); assert.equal(status.lastSynced, null);
-  assert.equal(one(db, "SELECT calendar_id FROM google_calendars").calendar_id, "");
-});
-
-test("disconnect cancels an in-flight authorization callback without resurrecting the connection", async t => {
-  const { db, fake, start, callback, request } = await setup(t);
-  const flow = await start();
-  let release; fake.delay = new Promise(resolve => { release = resolve; });
-  const pending = callback(flow);
-  while (!fake.calls.length) await new Promise(resolve => setTimeout(resolve, 5));
-  await request("/api/account/google-calendar", "DELETE");
-  release();
-  assert.match((await pending).headers.get("location"), /expired/);
-  assert.equal(one(db, "SELECT COUNT(*) n FROM google_calendars").n, 0);
-  assert.equal(fake.calendars.size, 0);
 });
 
 test("one deleted Google event is recreated without stopping sync; a deleted calendar is reported", async t => {

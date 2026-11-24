@@ -904,3 +904,11 @@ const enAdminSessions: Record<string, string> = {
   "Giờ Việt Nam · UTC+7": "Vietnam time · UTC+7",
 };
 for (const [vi, text] of Object.entries(enAdminSessions)) en[vi] = text;
+
+// Session Q: legacy-flow retirement notices
+const enRetire: Record<string, string> = {
+  "Lịch sử cũ": "Old history",
+  "Lý do báo cáo đánh giá này": "Why are you reporting this review?",
+  "Luồng đặt lịch cũ đã ngừng — cuộc trò chuyện này chỉ đọc. Lịch sử ở Lớp học.": "The old booking flow is retired — this thread is read-only. History lives in Classes.",
+};
+for (const [vi, text] of Object.entries(enRetire)) en[vi] = text;

@@ -8,7 +8,7 @@ test("Google Calendar starts real consent directly without an import-instruction
   let connected = 0;
   await page.route("**/api/account/google-calendar/connect", route => { connected++; expect(route.request().method()).toBe("POST"); return route.fulfill({ json: { url: "https://accounts.google.com/o/oauth2/v2/auth?state=test-calendar-consent" } }); });
   await page.route("https://accounts.google.com/**", route => route.fulfill({ body: "Google consent test boundary" }));
-  await page.goto("/app/bookings");
+  await page.goto("/app/schedule");
   await expect(page.getByRole("button", { name: "Google Calendar", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Google Calendar", exact: true }).click();
   await expect(page).toHaveURL(/accounts.google.com\/o\/oauth2\/v2\/auth/);
@@ -23,7 +23,7 @@ test("connected Calendar offers one-click sync, honest failures and disconnect o
     return route.fulfill({ json: status() });
   });
   await page.route("**/api/account/google-calendar/sync", route => { syncs++; return route.fulfill({ json: { ...status(), error: "temporary" } }); });
-  await page.goto("/app/bookings?calendar=connected");
+  await page.goto("/app/schedule?calendar=connected");
   await expect(page).not.toHaveURL(/calendar=connected/);
   await page.getByRole("button", { name: "Đồng bộ Google Calendar", exact: true }).click();
   expect(syncs).toBe(1);
@@ -43,7 +43,7 @@ test("connected Calendar offers one-click sync, honest failures and disconnect o
 test("Calendar cancellation stays visible and retry does not disturb course filters", async ({ page }) => {
   await login(page);
   await page.route("**/api/account/google-calendar", route => route.fulfill({ json: { available: true, connected: false } }));
-  await page.goto("/app/bookings?calendar_error=cancelled&status=completed&view=list");
+  await page.goto("/app/schedule?calendar_error=cancelled&status=completed&view=list");
   await expect(page.getByRole("alert")).toContainText("Bạn chưa cấp quyền Google Calendar");
   await expect(page).toHaveURL(/status=completed&view=list/);
   await expect(page).not.toHaveURL(/calendar_error/);

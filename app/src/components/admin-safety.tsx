@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { Star } from "lucide-react";
 
 type Flag = { id: number; thread_kind: string; thread_id: number; sender_id: number; sender_name: string; student_name: string; tutor_name: string; body: string; original_body: string | null; created_at: string };
-type Review = { booking_id: number; rating: number; body: string; hidden: number; reply: string; reported_reason: string; student_name: string; tutor_name: string; created_at: string };
+type Review = { kind: "booking" | "member"; booking_id: number; rating: number; body: string; hidden: number; reply: string; reported_reason: string; student_name: string; tutor_name: string; created_at: string };
 
 export default function AdminSafety() {
   const { t } = useI18n();
@@ -41,14 +41,14 @@ export default function AdminSafety() {
       <h3 className="admin-section-title">{t("Đánh giá bị báo cáo")}</h3>
       <div className="admin-rows">
         {reviews.data?.map((r) => (
-          <article key={r.booking_id}>
+          <article key={`${r.kind}-${r.booking_id}`}>
             <span className="admin-row-title"><strong><Star data-icon="inline-start" />{r.rating} · {r.student_name} → {r.tutor_name}</strong><small>{when(r.created_at)}{r.reported_reason ? ` · ${t("Lý do")}: ${r.reported_reason}` : ""}</small></span>
             <span className="admin-row-meta"><small>{r.body}</small>{r.reply ? <small>{t("Phản hồi nền tảng")}: {r.reply}</small> : null}</span>
             <span className="admin-row-state">{!!r.hidden && <span className="session-state" data-state="cancelled">{t("Đã ẩn")}</span>}</span>
             <span />
             <RowMenu label={t("Thao tác đánh giá")} items={[
-              r.hidden ? { label: "Hiện lại", onSelect: () => act(`/admin/reviews/${r.booking_id}/visibility`, { hidden: false }) } : { label: "Ẩn đánh giá", onSelect: () => act(`/admin/reviews/${r.booking_id}/visibility`, { hidden: true }) },
-              { label: "Trả lời công khai", onSelect: async () => { const body = prompt(t("Nội dung trả lời")); if (body) act(`/admin/reviews/${r.booking_id}/reply`, { body }); } },
+              r.hidden ? { label: "Hiện lại", onSelect: () => act(`/admin/reviews/${r.booking_id}/visibility`, { hidden: false, ...(r.kind === "member" ? { kind: "member" } : {}) }) } : { label: "Ẩn đánh giá", onSelect: () => act(`/admin/reviews/${r.booking_id}/visibility`, { hidden: true, ...(r.kind === "member" ? { kind: "member" } : {}) }) },
+              { label: "Trả lời công khai", onSelect: async () => { const body = prompt(t("Nội dung trả lời")); if (body) act(`/admin/reviews/${r.booking_id}/reply`, { body, ...(r.kind === "member" ? { kind: "member" } : {}) }); } },
             ]} />
           </article>
         ))}

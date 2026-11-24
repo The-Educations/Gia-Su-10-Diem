@@ -5,10 +5,10 @@ import { dateTime } from "./api";
 export const contextLabels = { offer: "Đề nghị học", lesson: "Buổi học", "weekly-request": "Lịch học hằng tuần", proposal: "Đề nghị học" };
 export const contextActions = { offer: "Xem đề nghị", lesson: "Xem buổi học", "weekly-request": "Xem lịch tuần", proposal: "Xem đề nghị" };
 export function contextHref(context: Pick<MessageContext, "kind" | "id">) {
-  if (context.kind === "offer") return `/offers?id=${context.id}`;
+  if (context.kind === "offer") return `/app/proposals?id=${context.id}`;
   if (context.kind === "proposal") return `/proposals?id=${context.id}`;
-  if (context.kind === "lesson") return `/bookings?lesson=${context.id}`;
-  return `/offers?request=${context.id}`;
+  if (context.kind === "lesson") return `/app/classes?lesson=${context.id}`;
+  return `/app/proposals?request=${context.id}`;
 }
 export function contextDetail(context: MessageContext, t: (s: string, v?: Record<string, string | number>) => string = (s) => s) {
   if (context.kind === "lesson") return `${dateTime(context.starts_at!)} · ${t("{minutes} phút", { minutes: context.duration_minutes || 0 })}`;

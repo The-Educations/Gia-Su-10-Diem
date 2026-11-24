@@ -114,7 +114,7 @@ test("IDOR: students, parents and tutors cannot reach objects they do not own", 
   const session = one(db, "SELECT id FROM class_sessions WHERE class_id=? LIMIT 1", klass).id;
   const withdrawal = one(db, "SELECT id FROM withdrawals WHERE user_id=4 LIMIT 1").id;
 
-  const denied = (r) => [401, 403, 404].includes(r.status) && !(r.data && JSON.stringify(r.data).match(/student|demo\.giasu|available|balance/i));
+  const denied = (r) => [401, 403, 404, 410].includes(r.status) && !(r.data && JSON.stringify(r.data).match(/student|demo\.giasu|available|balance/i));
 
   // B (another student) cannot read A's objects.
   for (const [method, url] of [

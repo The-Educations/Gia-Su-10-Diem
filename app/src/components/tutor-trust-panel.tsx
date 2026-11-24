@@ -1,4 +1,4 @@
-import { useLoad } from "@/lib/api";
+import { api, useLoad } from "@/lib/api";
 import { Loading, ErrorState, Section } from "@/components/common";
 import { formatScore } from "@/components/trust";
 import { Progress } from "@/components/ui/progress";
@@ -11,7 +11,7 @@ type TrustDetail = {
   progress: { ratings: number; raters: number; need_ratings: number; need_raters: number };
   tag_counts: { code: string; label: string; count: number }[];
   bad_breakdown: { late_cancels: number; no_shows: number };
-  reviews: { author: string; rating: number; body: string; created_at: string; lessons: number }[];
+  reviews: { author: string; rating: number; body: string; created_at: string; lessons: number; kind: "booking" | "member"; ref: number }[];
   policy: Record<string, number>;
 };
 
@@ -46,7 +46,7 @@ export function TutorTrustPanel() {
       <p className="muted">Bạn chỉ thấy số liệu tổng hợp. Nhãn chỉ hiện công khai khi có từ {p.PUBLIC_TAG_MIN} lượt chọn.</p>
     </Section>
     <Section title="Đánh giá cuối khóa công khai">
-      {d.reviews.length ? d.reviews.map((r, i) => <article className="review" key={i}><strong>{r.author}</strong><span>{r.rating}/5</span>{!!r.lessons && <span className="muted">Đã học {r.lessons} buổi</span>}{!!r.body && <p>{r.body}</p>}</article>) : <p className="muted">{t("Chưa có đánh giá cuối khóa.")}</p>}
+      {d.reviews.length ? d.reviews.map((r, i) => <article className="review" key={i}><strong>{r.author}</strong><span>{r.rating}/5</span>{!!r.lessons && <span className="muted">Đã học {r.lessons} buổi</span>}{!!r.body && <p>{r.body}</p>}{r.kind === "member" && <button className="link small" onClick={async () => { const reason = prompt(t("Lý do báo cáo đánh giá này")); if (reason) { await api(`/members/${r.ref}/report`, "POST", { reason }); result.reload(); } }}>{t("Báo cáo")}</button>}</article>) : <p className="muted">{t("Chưa có đánh giá cuối khóa.")}</p>}
     </Section>
     <Section title="Điểm được tính thế nào">
       <ul className="trust-how">
