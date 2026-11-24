@@ -504,7 +504,7 @@
 /* Canvas */
 main {
   min-height: calc(100dvh - var(--topbar-height) - 80px);
-  padding: 32px var(--gutter) 56px;
+  padding: 32px var(--gutter) calc(56px + var(--mobile-bar-height));
   outline: none;
 }
 .route-stage {
