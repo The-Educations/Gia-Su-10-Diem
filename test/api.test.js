@@ -1910,7 +1910,9 @@ test("masked contact never reaches participants; admin thread keeps the original
   assert.ok(JSON.stringify((await admin.request(`/admin/safety/thread/inquiry/${thread}`)).data).includes(SECRET));
 });
 test("admin health: shape, resend resets the outbox row, no secret leaks", async (t) => {
-  const { client, db } = await fixture(t), admin = client(), student = client();
+  // No auto mailer wake: resend queues the row and a scheduled flush could mark
+  // it sent before the test reads attempts back (raced in CI at a9ceac4).
+  const { client, db } = await fixture(t, { wakeMail: () => {} }), admin = client(), student = client();
   await admin.login("admin"); await student.login("student");
   // A webhook hit without a secret configured is rejected before marking; a failed email exists.
   await student.request("/sepay/webhook", "POST", {});
