@@ -24,7 +24,7 @@ const joins = "FROM community_posts p JOIN users u ON u.id=p.author_id";
 export function communitySitemap(db) {
   return all(
     db,
-    `SELECT p.id,p.updated_at ${joins} WHERE ${publicPosts} ORDER BY p.id`,
+    `SELECT p.id,p.title,p.updated_at ${joins} WHERE ${publicPosts} ORDER BY p.id`,
   );
 }
 export function publicCommunityPost(db, id) {
