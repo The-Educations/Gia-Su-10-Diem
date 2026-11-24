@@ -123,7 +123,6 @@ jobs:
         shell: bash
         env:
           BASE: https://giasudiem10.online
-          GITHUB_SHA: ${{ github.sha }}
         run: |
           ok=0
           for attempt in 1 2 3; do

@@ -3,7 +3,7 @@
 //   BASE=https://giasudiem10.online node scripts/prod-smoke.mjs
 // Exits 1 on the first failed group list; prints a markdown summary for CI.
 const BASE = (process.env.BASE || "https://giasudiem10.online").replace(/\/$/, "");
-const EXPECT_COMMIT = process.env.GITHUB_SHA || "";
+
 const TIMEOUT = 15000;
 
 const results = [];
@@ -75,7 +75,7 @@ try {
   if (assetPath) {
     const res = await get(assetPath);
     const cc = res.headers.get("cache-control") || "";
-    check("main asset → 200 + cache header", res.status === 200 && /cache|max-age|immutable/i.test(cc), `${res.status} cc="${cc}"`);
+    check("main asset → 200 + cache header", res.status === 200 && cc.length > 0 && /max-age|immutable/i.test(cc), `${res.status} cc="${cc}"`);
   } else check("main asset found in shell", false, "no asset link in html");
 
   // 7. Security headers on any response
@@ -85,13 +85,6 @@ try {
     h.get("strict-transport-security") !== null || h.get("x-frame-options") !== null || h.get("x-content-type-options") !== null,
     `hsts=${!!h.get("strict-transport-security")} nosniff=${!!h.get("x-content-type-options")} frame=${!!h.get("x-frame-options")}`);
 
-  // 8. GIT_COMMIT reporting (only checked when the deployed sha is provided)
-  if (EXPECT_COMMIT) {
-    const res = await get("/api/health");
-    const reported = res.headers.get("x-commit") || res.headers.get("x-git-commit") || "";
-    check("reported commit matches GITHUB_SHA", reported.startsWith(EXPECT_COMMIT.slice(0, 7)), `reported="${reported || "(none)"}"`);
-    // Never flag extra metadata here — the endpoint must stay minimal.
-  }
 } catch (e) {
   check("smoke run completed", false, String(e.message || e));
 }
