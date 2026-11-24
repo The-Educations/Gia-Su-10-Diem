@@ -16,7 +16,8 @@ test("only the public entry and policy pages are indexable and included in the s
     assert.ok(!sitemap.includes(`<loc>https://giasudiem10.online${path}</loc>`));
   }
   assert.match(robots, /Sitemap: https:\/\/giasudiem10.online\/sitemap.xml/);
-  assert.ok(!robots.includes("Disallow: /app"), "Google must be able to read noindex and render public pages");
+  assert.ok(!robots.includes("Disallow: /app\n") && !robots.endsWith("Disallow: /app"), "Google must be able to read noindex and render public pages");
+  assert.ok(robots.includes("Disallow: /api/") && robots.includes("Disallow: /app/admin"), "api + private routes are disallowed");
 });
 
 test("unknown paths are real 404s and untrusted path text is never injected", () => {
@@ -121,7 +122,7 @@ test("news article metadata: og:article, absolute image, dates, and a NewsArticl
   assert.match(renderSeo("<head></head>", "/app/news/12-lich-thi-2027", { ...article, revised_at: "2026-11-24 10:00:00" }), /article:modified_time" content="2026-11-24T10:00:00Z"/);
   const hostile = renderSeo("<head></head>", "/app/news/12-lich-thi-2027", { ...article, title: 'Tiêu "đề" </script><script>alert(1)</script>', summary: '</script><b>"x"' });
   assert.ok(!hostile.includes("</script><script>alert"));
-  assert.equal((hostile.match(/<script/g) || []).length, 1, "only the schema script exists");
+  assert.equal((hostile.match(/<script/g) || []).length, 2, "article schema + breadcrumb schema");
   assert.equal(JSON.parse(ldOf(hostile)).headline, 'Tiêu "đề" </script><script>alert(1)</script>');
 });
 

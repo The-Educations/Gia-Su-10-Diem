@@ -1,5 +1,6 @@
 import { createMailflareSender } from "../server/email-verification.js";
 import { NEWS_PATH, pageSeo, renderSeo, robots, newsSitemap } from "../server/seo.js";
+import { crawlLinks, tutorSeoProfile, tutorSitemapIds } from "../server/seo-data.js";
 import { DurableObject } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import { createServer } from "node:http";
@@ -111,11 +112,17 @@ export default {
     if (["/robots.txt", "/sitemap.xml"].includes(url.pathname)) {
       let content = robots;
       if (url.pathname === "/sitemap.xml") {
-        const posts = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL("/api/posts", request.url)));
+        const stub = env.MARKETPLACE.getByName("marketplace-v1");
+        const posts = await stub.fetch(new Request(new URL("/api/posts", request.url)));
         if (!posts.ok) return new Response("Temporarily unavailable", { status: 503 });
-        const community = await env.MARKETPLACE.getByName("marketplace-v1").fetch(new Request(new URL("/api/community/sitemap", request.url)));
+        const community = await stub.fetch(new Request(new URL("/api/community/sitemap", request.url)));
         if (!community.ok) return new Response("Temporarily unavailable", { status: 503 });
-        content = newsSitemap(await posts.json(), await community.json());
+        const tutors = await stub.fetch(new Request(new URL("/api/tutors", request.url)));
+        if (!tutors.ok) return new Response("Temporarily unavailable", { status: 503 });
+        // Static pages' lastmod comes from the build date — no fs in the bundle.
+        const build = await env.ASSETS.fetch(new Request(new URL("/seo-build.json", request.url)))
+          .then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+        content = newsSitemap(await posts.json(), await community.json(), tutorSitemapIds(await tutors.json()), build.date || null);
       }
       return new Response(content, {
         headers: { "Content-Type": url.pathname === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8", "Cache-Control": "public, max-age=300" },
@@ -170,12 +177,37 @@ export default {
         if (result.ok) community = await result.json();
         else if (result.status !== 404) return new Response("Temporarily unavailable", { status: 503 });
       }
-      const seo = pageSeo(url.pathname, post, community);
+      // Live tutor profiles index the same way as in server/index.js; 404
+      // (unpublished or missing) keeps the soft noindex page.
+      const tutorMatch = url.pathname.match(/^\/app\/tutors\/(\d+)$/);
+      let tutor = null;
+      if (tutorMatch) {
+        const stub = env.MARKETPLACE.getByName("marketplace-v1");
+        const result = await stub.fetch(new Request(new URL(`/api/tutors/${tutorMatch[1]}`, request.url)));
+        if (result.ok) {
+          const subjects = await stub.fetch(new Request(new URL("/api/subjects", request.url)));
+          if (!subjects.ok) return new Response("Temporarily unavailable", { status: 503 });
+          const subjectMap = new Map((await subjects.json()).map((s) => [s.id, s.name]));
+          tutor = tutorSeoProfile(await result.json(), (id) => subjectMap.get(id) || "");
+        } else if (result.status !== 404) return new Response("Temporarily unavailable", { status: 503 });
+      }
+      const stub = env.MARKETPLACE.getByName("marketplace-v1");
+      const doFetch = async (path) => {
+        const res = await stub.fetch(new Request(new URL(path, request.url)));
+        return res.ok ? res.json() : [];
+      };
+      const crawl = await crawlLinks(url.pathname, {
+        tutors: () => doFetch("/api/tutors"),
+        posts: () => doFetch("/api/posts"),
+        community: () => doFetch("/api/community/sitemap"),
+        subjects: () => doFetch("/api/subjects"),
+      });
+      const seo = pageSeo(url.pathname, post, community, tutor);
       if (seo.redirect) return Response.redirect(url.origin + seo.redirect + url.search, 301);
       headers.set("X-Robots-Tag", seo.robots);
       headers.delete("Content-Length");
       headers.delete("ETag");
-      return new Response(renderSeo(await response.text(), url.pathname, post, community), {
+      return new Response(renderSeo(await response.text(), url.pathname, post, community, tutor, crawl), {
         status: response.ok ? seo.status : response.status, headers,
       });
     }

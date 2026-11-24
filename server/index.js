@@ -1,7 +1,10 @@
-import { communitySitemap, publicCommunityPost } from "./community.js";
+import { communitySitemap, publicCommunityPost, publicPosts as communityPublic } from "./community.js";
 import { pathToFileURL } from "node:url";
 import { createMailflareSender } from "./email-verification.js";
-import { NEWS_PATH, pageSeo, renderSeo, robots, newsSitemap } from "./seo.js";
+import { NEWS_PATH, newsPath, pageSeo, renderSeo, robots, newsSitemap } from "./seo.js";
+import { crawlLinks, tutorSeoProfile, tutorSitemapIds } from "./seo-data.js";
+import { liveTutorSql, isLiveTutor, publicView } from "./tutor-visibility.js";
+import { classRatings } from "./classes.js";
 import { all, one } from "./db.js";
 import { processPhoto } from "./photo.js";
 import express from "express";
@@ -40,25 +43,47 @@ app.get(["/favicon.ico", "/apple-touch-icon.png", "/favicon-32.png"], (req, res)
 });
 app.get(["/app", "/app/"], (req, res) => res.redirect("/"));
 app.get("/robots.txt", (req, res) => res.type("text/plain").send(robots));
-app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(newsSitemap(all(db, "SELECT id,slug,published_at,updated_at,revised_at FROM posts WHERE published=1 ORDER BY published_at DESC,id DESC"), communitySitemap(db))));
+app.get("/sitemap.xml", (req, res) => res.type("application/xml").send(newsSitemap(
+  all(db, "SELECT id,slug,published_at,updated_at,revised_at FROM posts WHERE published=1 ORDER BY published_at DESC,id DESC"),
+  communitySitemap(db),
+  tutorSitemapIds(all(db, `SELECT t.user_id FROM tutors t JOIN users u ON u.id=t.user_id WHERE ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor' ORDER BY t.user_id`)),
+)));
 app.get(["/privacy", "/terms"], (req, res) => res.sendFile(path.resolve(`dist/legal${req.path}.html`)));
 app.get("/index.html", (req, res) => res.redirect(308, "/"));
 app.get("/", (req, res) => res.sendFile(path.resolve("index.html")));
-const sendApp = (req, res, html) => {
+const sendApp = async (req, res, html) => {
   const match = req.path.match(NEWS_PATH);
   const post = match ? one(db, "SELECT id,slug,title,summary,cover_url,cover_alt,published_at,updated_at,revised_at FROM posts WHERE id=? AND published=1", match[1]) : null;
   const communityMatch = req.path.match(/^\/app\/community\/(\d+)$/);
   const community = communityMatch ? publicCommunityPost(db, communityMatch[1]) : null;
-  const seo = pageSeo(req.path, post, community);
+  // A live tutor profile is indexable; draft/blocked profiles keep noindex.
+  const tutorMatch = req.path.match(/^\/app\/tutors\/(\d+)$/);
+  let tutor = null;
+  if (tutorMatch) {
+    const row = one(db, `SELECT t.*,u.name,u.status AS user_status,u.role FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=?`, tutorMatch[1]);
+    if (row && row.user_status === "active" && row.role === "tutor" && isLiveTutor(row)) {
+      const { published, moderation_note, ...rest } = publicView(row);
+      const subjectMap = new Map(all(db, "SELECT id,name FROM subjects").map((s) => [s.id, s.name]));
+      tutor = tutorSeoProfile({ ...rest, rating: classRatings(db)(row.user_id) }, (id) => subjectMap.get(id) || "");
+    }
+  }
+  // Crawlers get a real heading + links even without running the SPA.
+  const crawl = await crawlLinks(req.path, {
+    tutors: () => all(db, `SELECT t.user_id,u.name FROM tutors t JOIN users u ON u.id=t.user_id WHERE ${liveTutorSql("t")} AND u.status='active' AND u.role='tutor' ORDER BY t.user_id LIMIT 20`),
+    posts: () => all(db, "SELECT id,slug,title FROM posts WHERE published=1 ORDER BY published_at DESC,id DESC LIMIT 20"),
+    community: () => all(db, `SELECT p.id,p.title FROM community_posts p JOIN users u ON u.id=p.author_id WHERE ${communityPublic} ORDER BY p.id DESC LIMIT 20`),
+    subjects: () => all(db, "SELECT id,name FROM subjects ORDER BY id LIMIT 20"),
+  });
+  const seo = pageSeo(req.path, post, community, tutor);
   // Old id-only and wrong-slug links go to the canonical address.
   if (seo.redirect) return res.redirect(301, seo.redirect + req.url.slice(req.path.length));
   res.set("X-Robots-Tag", seo.robots).set("Cache-Control", "no-cache")
-    .status(seo.status).type("html").send(renderSeo(html, req.path, post, community));
+    .status(seo.status).type("html").send(renderSeo(html, req.path, post, community, tutor, crawl));
 };
 if (production || process.env.SERVE_BUILD === "1") {
   app.use("/app/assets", express.static(path.resolve("dist/app/assets")));
   app.get("/app{/*path}", async (req, res) =>
-    sendApp(req, res, await readFile("dist/app/index.html", "utf8")),
+    await sendApp(req, res, await readFile("dist/app/index.html", "utf8")),
   );
 } else {
   const { createServer } = await import("vite");
@@ -74,7 +99,7 @@ if (production || process.env.SERVE_BUILD === "1") {
         req.originalUrl,
         await readFile("app/index.html", "utf8"),
       );
-      sendApp(req, res, html);
+      await sendApp(req, res, html);
     } catch (e) {
       vite.ssrFixStacktrace(e);
       next(e);
