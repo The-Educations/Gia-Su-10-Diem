@@ -704,3 +704,25 @@ const enJourneys: Record<string, string> = {
   "Việc cần làm": "Things to do",
 };
 for (const [vi, text] of Object.entries(enJourneys)) en[vi] = text;
+// Session F: password reset
+const enPasswordReset: Record<string, string> = {
+  "Đặt lại mật khẩu": "Reset your password",
+  "Nếu email này có tài khoản, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu. Liên kết dùng một lần và hết hạn sau 30 phút — hãy kiểm tra cả hộp thư rác.": "If this email has an account, we sent reset instructions. The link works once and expires in 30 minutes — check your spam folder too.",
+  "Về trang đăng nhập": "Back to sign-in",
+  "Nhập email tài khoản của bạn. Nếu email tồn tại, chúng tôi sẽ gửi một liên kết đặt lại mật khẩu.": "Enter your account email. If it exists, we will send a password reset link.",
+  "Email": "Email",
+  "Gửi liên kết đặt lại": "Send reset link",
+  "Đặt mật khẩu mới": "Set a new password",
+  "Mật khẩu đã được đổi. Mọi phiên đăng nhập cũ đã đăng xuất — hãy đăng nhập lại bằng mật khẩu mới.": "Your password was changed. Every old session was signed out — log in again with the new password.",
+  "Đăng nhập": "Sign in",
+  "Liên kết đặt lại không hợp lệ. Hãy yêu cầu một liên kết mới.": "This reset link is invalid. Please request a new one.",
+  "Gửi lại liên kết": "Send a new link",
+  "Mật khẩu mới (ít nhất 10 ký tự)": "New password (at least 10 characters)",
+  "Xác nhận mật khẩu": "Confirm password",
+  "Đổi mật khẩu": "Change password",
+  "Hiện mật khẩu": "Show password",
+  "Ẩn mật khẩu": "Hide password",
+  "Mật khẩu xác nhận chưa khớp.": "The passwords do not match.",
+};
+for (const [vi, text] of Object.entries(enPasswordReset)) en[vi] = text;
+// Session F: password reset

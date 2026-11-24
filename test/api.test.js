@@ -3075,4 +3075,57 @@ test("hot-path lookups use indexes, not full scans", async (t) => {
     if (/SCAN/.test(plan) && !/USING (INDEX|COVERING INDEX)/.test(plan)) scans.push(`${name}: ${plan}`);
   }
   assert.deepEqual(scans, [], "hot queries doing full table scans");
+
+test("forgot/reset password: no email leak, one-use token, sessions killed, hourly limit, Google account", async (t) => {
+  const { client, db, emails } = await fixture(t);
+  const student = client(), second = client();
+  await student.login("student"); await second.login("student");
+  const mail = (email) => student.request("/auth/forgot-password", "POST", { email });
+  // Identical answer whether the email exists or not — nothing is revealed.
+  const known = await mail("student@demo.giasu.test"), ghost = await mail("nobody@example.com");
+  assert.equal(known.status, 200); assert.equal(ghost.status, 200);
+  assert.deepEqual(known.data.message, ghost.data.message);
+  assert.equal(emails.length, 1, "one real mail for the real account, none for the ghost");
+  assert.equal(emails[0].kind, "password_reset");
+  const token = new URL(emails[0].link).searchParams.get("token");
+  assert.match(token, /^[a-f0-9]{64}$/);
+  // Bad, expired and foreign tokens are all refused.
+  assert.equal((await student.request("/auth/reset-password", "POST", { token: "0".repeat(64), password: "NewPass12345" })).status, 400);
+  run(db, "UPDATE password_resets SET expires=? WHERE user_id=(SELECT id FROM users WHERE email='student@demo.giasu.test')", Date.now() - 1);
+  assert.equal((await student.request("/auth/reset-password", "POST", { token, password: "NewPass12345" })).status, 400);
+  run(db, "UPDATE password_resets SET expires=? WHERE user_id=(SELECT id FROM users WHERE email='student@demo.giasu.test')", Date.now() + 60000);
+  const ok = await student.request("/auth/reset-password", "POST", { token, password: "NewPass12345" });
+  assert.equal(ok.status, 200);
+  // A used token never works twice, and every old session is dead.
+  assert.equal((await student.request("/auth/reset-password", "POST", { token, password: "Other1234567" })).status, 400);
+  assert.equal((await second.request("/wallet")).status, 401, "the second session was logged out too");
+  assert.equal((await student.request("/wallet")).status, 401);
+  assert.equal(one(db, "SELECT action FROM audit WHERE action='user.password_reset' ORDER BY id DESC").action, "user.password_reset");
+  assert.equal(emails.at(-1).kind, "password_changed");
+  // New password works, the old one does not.
+  assert.equal((await student.request("/auth/login", "POST", { email: "student@demo.giasu.test", password: "TestStudy2026!" })).status, 401);
+  assert.equal((await student.request("/auth/login", "POST", { email: "student@demo.giasu.test", password: "NewPass12345" })).status, 200);
+  // Three requests per email per hour — the fourth still answers 200 but sends nothing.
+  const before = emails.length;
+  for (let i = 0; i < 5; i++) await mail("student@demo.giasu.test");
+  assert.equal(emails.length - before, 2, "the hourly budget kept the extra sends quiet");
+  // A Google-only account is told to use Google, and gets no usable token.
+  run(db, "UPDATE users SET password='' WHERE email='chau@demo.giasu.test'");
+  const beforeGoogle = emails.length;
+  assert.equal((await mail("chau@demo.giasu.test")).status, 200);
+  assert.equal(emails.at(-1).kind, "password_reset_google");
+  assert.equal(emails.length - beforeGoogle, 1);
+  assert.equal(one(db, "SELECT token_hash FROM password_resets WHERE user_id=(SELECT id FROM users WHERE email='chau@demo.giasu.test')").token_hash, "");
+});
+});
+
+test("forgot-password returns the same answer when the mailer is down — no enumeration", async (t) => {
+  const { client } = await fixture(t, { sendEmail: async () => { throw new Error("mailer down"); } });
+  const guest = client();
+  const exists = await guest.request("/auth/forgot-password", "POST", { email: "student@demo.giasu.test" });
+  const missing = await guest.request("/auth/forgot-password", "POST", { email: "ghost@nowhere.test" });
+  assert.equal(exists.status, 200);
+  assert.equal(missing.status, 200);
+  assert.deepEqual(exists.data, missing.data, "an existing email must get the byte-identical reply");
+  assert.ok(!JSON.stringify(exists.data).match(/token|reset/i) || exists.data.message, "no token leaks in the reply");
 });

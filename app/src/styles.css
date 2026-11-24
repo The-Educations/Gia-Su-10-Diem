@@ -3630,3 +3630,9 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 .health-kv{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:0;padding:9px 0;border-bottom:1px solid var(--line,rgba(0,0,0,.06));font-size:13px}
 .health-kv>span:first-child{font-weight:500}
 .health-kv>span:last-child{text-align:right}
+/* Forgot/reset password: inline link under the field and a show/hide eye. */
+.auth-forgot { display: inline-flex; margin-top: 4px; font-size: 13px; color: var(--muted-foreground); }
+.auth-forgot:hover { color: var(--primary); }
+.password-field { position: relative; }
+.password-field input { padding-right: 44px; }
+.password-field button { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
