@@ -260,9 +260,10 @@ test("profile report queue removes content with a reason and notifies only its o
   await expect(
     page.getByText("Giới thiệu đã được xóa", { exact: true }),
   ).toBeVisible();
+  // The shared mailer sends after the request, so wait for it.
+  await expect.poll(async () => (await (await page.request.get(`/__test/email?email=${encodeURIComponent(user.email)}`)).json())?.kind).toBe("notice");
   const email = await (await page.request.get(`/__test/email?email=${encodeURIComponent(user.email)}`)).json();
-  expect(email.kind).toBe("community_moderation");
-  expect(email.reason).toBe("Vui lòng cập nhật giới thiệu phù hợp hơn.");
+  expect(email.message).toContain("Vui lòng cập nhật giới thiệu phù hợp hơn.");
   expect(email.link).toContain(`/app/community/members/${user.profile_code}`);
   await page.getByRole("link", { name: "Xem hồ sơ", exact: true }).click();
   await expect(

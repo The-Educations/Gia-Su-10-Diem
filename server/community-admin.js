@@ -2,22 +2,49 @@ import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
 import { attachPostImages } from "./community-images.js";
 import { postSchema, fold } from "./community-policy.js";
+import { queueEmail } from "./notifications.js";
 
 export function registerCommunityAdmin(
   app,
   db,
   auth,
   audit,
-  { fail, getPost, serialize, notify, follow, rules, removeComment, mail },
+  { fail, getPost, serialize, notify, follow, rules, removeComment },
 ) {
   const base = "/api/admin/community";
   const admin = auth("admin");
   const PURGE_DAYS = 30;
+  // Purging wipes a post but keeps its row, so the id is never given to a later post
+  // (reports and tutors' pitches that point at it can never attach to someone else's post).
   const purge = (rows, actorId, auto) =>
     transaction(db, () => {
       for (const p of rows) {
-        run(db, "DELETE FROM community_posts WHERE id=?", p.id);
-        run(db, "DELETE FROM community_mail WHERE post_id=? AND sent_at IS NULL", p.id);
+        const comments = all(db, "SELECT id FROM community_comments WHERE post_id=?", p.id).map((c) => c.id);
+        const close = (type, id) =>
+          run(
+            db,
+            "UPDATE community_reports SET status='resolved',resolved_by=?,resolution='Nội dung đã bị xóa vĩnh viễn.' WHERE status='open' AND target_type=? AND target_id=?",
+            actorId,
+            type,
+            id,
+          );
+        close("post", p.id);
+        for (const id of comments) close("comment", id);
+        for (const table of [
+          "community_comments",
+          "community_reactions",
+          "community_follows",
+          "community_notifications",
+          "community_post_images",
+        ])
+          run(db, `DELETE FROM ${table} WHERE post_id=?`, p.id);
+        run(
+          db,
+          `UPDATE community_posts SET title='',body='',body_html='',search_text='',review_note='',
+            revision_title=NULL,revision_body=NULL,revision_body_html='',revision_status=NULL,revision_note='',
+            best_comment_id=NULL,status='deleted',purged_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          p.id,
+        );
         audit(actorId, "community.post.purge", p.id, {
           id: p.id,
           title: p.title,
@@ -29,16 +56,29 @@ export function registerCommunityAdmin(
   const purgeExpired = (actorId) => {
     const rows = all(
       db,
-      "SELECT id,title,author_id FROM community_posts WHERE status='deleted' AND kind!='rules' AND updated_at < datetime('now', ?)",
+      "SELECT id,title,author_id FROM community_posts WHERE status='deleted' AND purged_at IS NULL AND kind!='rules' AND updated_at < datetime('now', ?)",
       `-${PURGE_DAYS} days`,
     );
     if (rows.length) purge(rows, actorId, true);
   };
-  const deletedPost = (id, status) => {
+  // Only a hidden post, or one its author deleted, can be wiped; a tombstone is already gone.
+  const purgeable = (id) => {
     const p = one(db, "SELECT * FROM community_posts WHERE id=?", id);
-    if (!p || p.kind === "rules") fail(404, "Không tìm thấy bài viết.");
-    if (p.status !== status) fail(409, "Trạng thái bài không phù hợp.");
+    if (!p || p.kind === "rules" || p.purged_at) fail(404, "Không tìm thấy bài viết.");
+    if (!["hidden", "deleted"].includes(p.status)) fail(409, "Trạng thái bài không phù hợp.");
     return p;
+  };
+  // Copies a pending or rejected edit over the live post and swaps in its images.
+  const applyRevision = (p, actorId) => {
+    run(db, "DELETE FROM community_post_images WHERE post_id=? AND revision=0", p.id);
+    run(db, "UPDATE community_post_images SET revision=0 WHERE post_id=? AND revision=1", p.id);
+    run(
+      db,
+      "UPDATE community_posts SET title=revision_title,body=revision_body,body_html=revision_body_html,revision_body_html='',search_text=?,revision_title=NULL,revision_body=NULL,revision_status=NULL,revision_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      fold(p.revision_title + " " + p.revision_body),
+      actorId,
+      p.id,
+    );
   };
   const privatePost = (p) => ({
     ...p,
@@ -83,18 +123,34 @@ export function registerCommunityAdmin(
       .default(1)
       .parse(req.query.page);
     const status = z
-      .enum(["approved", "hidden", "deleted"])
+      .enum(["approved", "hidden", "deleted", "rejected"])
       .default("approved")
       .parse(req.query.status);
-    const rows = all(
-      db,
-      "SELECT * FROM community_posts WHERE status=? AND kind!='rules' ORDER BY updated_at DESC,id DESC LIMIT 21 OFFSET ?",
-      status,
-      (page - 1) * 20,
-    );
+    // "Bị từ chối" holds rejected posts and live posts whose latest edit was rejected.
+    const rows = status === "rejected"
+      ? all(
+          db,
+          "SELECT * FROM community_posts WHERE purged_at IS NULL AND kind!='rules' AND (status='rejected' OR (status='approved' AND revision_status='rejected')) ORDER BY reviewed_at DESC,id DESC LIMIT 21 OFFSET ?",
+          (page - 1) * 20,
+        )
+      : all(
+          db,
+          "SELECT * FROM community_posts WHERE status=? AND purged_at IS NULL AND kind!='rules' ORDER BY updated_at DESC,id DESC LIMIT 21 OFFSET ?",
+          status,
+          (page - 1) * 20,
+        );
     res.json({
       items: rows.slice(0, 20).map((p) => ({
         ...privatePost(p),
+        ...(status === "rejected"
+          ? {
+              is_revision: p.status === "approved",
+              reason: p.status === "approved" ? p.revision_note : p.review_note,
+              reviewer: p.reviewed_by
+                ? one(db, "SELECT id,name FROM users WHERE id=?", p.reviewed_by)
+                : null,
+            }
+          : {}),
         ...(status === "deleted"
           ? {
               days_left: Math.max(
@@ -114,7 +170,7 @@ export function registerCommunityAdmin(
   });
   app.get(`${base}/rules`, admin, (req, res) => res.json(rules(req.user)));
   for (const action of ["approve", "reject", "hide", "restore"])
-    app.post(`${base}/posts/:id/${action}`, admin, async (req, res) => {
+    app.post(`${base}/posts/:id/${action}`, admin, (req, res) => {
       const p = getPost(req.params.id, req.user);
       if (p.kind === "rules") fail(409, "Sửa Quy tắc bằng biểu mẫu riêng.");
       const note = ["reject", "hide"].includes(action)
@@ -144,25 +200,9 @@ export function registerCommunityAdmin(
         (action === "restore" && p.status !== "hidden")
       )
         fail(409, "Trạng thái bài không phù hợp.");
-      const mailId = transaction(db, () => {
+      transaction(db, () => {
         if (revision && action === "approve") {
-          run(
-            db,
-            "DELETE FROM community_post_images WHERE post_id=? AND revision=0",
-            p.id,
-          );
-          run(
-            db,
-            "UPDATE community_post_images SET revision=0 WHERE post_id=? AND revision=1",
-            p.id,
-          );
-          run(
-            db,
-            "UPDATE community_posts SET title=revision_title,body=revision_body,body_html=revision_body_html,revision_body_html='',search_text=?,revision_title=NULL,revision_body=NULL,revision_status=NULL,revision_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            fold(p.revision_title + " " + p.revision_body),
-            req.user.id,
-            p.id,
-          );
+          applyRevision(p, req.user.id);
         } else if (revision && action === "reject")
           run(
             db,
@@ -197,36 +237,65 @@ export function registerCommunityAdmin(
           `community.${revision && ["approve", "reject"].includes(action) ? "revision" : "post"}.${action}`,
           JSON.stringify({ id: p.id, note }),
         );
-        if (action === "hide" || action === "reject") return mail.enqueue(p.author_id, `${revision && action === "reject" ? "Bản sửa bài viết" : "Bài viết"} “${revision && action === "reject" ? p.revision_title : p.title}” ${action === "hide" ? "đã bị ẩn" : "chưa được duyệt"}.`, note, "/app/community/mine", p.id);
+        if (action === "hide" || action === "reject")
+          queueEmail(db, p.author_id, action === "hide" ? "community_post_hidden" : revision ? "community_revision_rejected" : "community_post_rejected", {
+            subject: revision && action === "reject" ? p.revision_title : p.title,
+            detail: note,
+            link: "/community/mine",
+          });
       });
-      res.json({ ok: true, ...(mailId ? await mail.deliver(mailId, req.user.id) : {}) });
+      res.json({ ok: true });
     });
-  app.post(`${base}/posts/:id/delete`, admin, (req, res) => {
-    const p = deletedPost(req.params.id, "hidden");
+  // Undo a rejection (by the bot or an admin): publish the post, or its rejected edit.
+  app.post(`${base}/posts/:id/reapprove`, admin, (req, res) => {
+    const p = getPost(req.params.id, req.user);
+    const version = z.number().int().nonnegative().parse(req.body.expected_version);
+    if (version !== p.review_version)
+      fail(409, "Bài đã thay đổi. Tải lại danh sách trước khi duyệt lại.");
+    const revision = p.status === "approved" && p.revision_status === "rejected";
+    if (p.kind === "rules" || !(p.status === "rejected" || revision))
+      fail(409, "Bài không ở trạng thái bị từ chối.");
     transaction(db, () => {
-      run(
-        db,
-        "UPDATE community_posts SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=?",
-        p.id,
-      );
-      audit(req.user.id, "community.post.delete", p.id, { post_id: p.id, title: p.title });
+      if (revision) applyRevision(p, req.user.id);
+      else
+        run(
+          db,
+          "UPDATE community_posts SET status='approved',review_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,published_at=CURRENT_TIMESTAMP WHERE id=?",
+          req.user.id,
+          p.id,
+        );
+      notify(p.author_id, revision ? "revision_approved" : "post_approved", p.id);
+      audit(req.user.id, `community.${revision ? "revision" : "post"}.reapprove`, JSON.stringify({ id: p.id }));
     });
     res.json({ ok: true });
   });
-  app.post(`${base}/posts/:id/undelete`, admin, (req, res) => {
-    const p = deletedPost(req.params.id, "deleted");
-    transaction(db, () => {
-      run(
-        db,
-        "UPDATE community_posts SET status='hidden',updated_at=CURRENT_TIMESTAMP WHERE id=?",
-        p.id,
-      );
-      audit(req.user.id, "community.post.undelete", p.id, { post_id: p.id, title: p.title });
-    });
+  // The moderation bot explains why it handed a post to an admin. It changes nothing else
+  // and applies only to the version it graded, so an edited post drops the old note.
+  app.post(`${base}/posts/:id/ai-note`, admin, (req, res) => {
+    const d = z
+      .object({
+        expected_version: z.number().int().nonnegative(),
+        verdict: z.enum(["escalate", "approve", "reject"]),
+        reason: z.string().trim().max(200).default(""),
+      })
+      .parse(req.body);
+    const p = getPost(req.params.id, req.user);
+    if (d.expected_version !== p.review_version)
+      fail(409, "Bài đã thay đổi.");
+    if (!(p.status === "pending" || (p.status === "approved" && p.revision_status === "pending")))
+      fail(409, "Bài không còn chờ duyệt.");
+    run(
+      db,
+      "UPDATE community_posts SET ai_verdict=?,ai_reason=?,ai_version=?,ai_at=CURRENT_TIMESTAMP WHERE id=?",
+      d.verdict,
+      d.reason,
+      d.expected_version,
+      p.id,
+    );
     res.json({ ok: true });
   });
   app.delete(`${base}/posts/:id`, admin, (req, res) => {
-    purge([deletedPost(req.params.id, "deleted")], req.user.id, false);
+    purge([purgeable(req.params.id)], req.user.id, false);
     res.json({ ok: true });
   });
   app.post(`${base}/posts`, admin, (req, res) => {
@@ -292,7 +361,7 @@ export function registerCommunityAdmin(
     });
     res.json({ ok: true });
   });
-  app.delete(`${base}/comments/:id`, admin, async (req, res) => {
+  app.delete(`${base}/comments/:id`, admin, (req, res) => {
     const note = text(1000).parse(req.body.note);
     const c = one(
       db,
@@ -300,7 +369,7 @@ export function registerCommunityAdmin(
       req.params.id,
     );
     if (!c || c.status !== "visible") fail(404, "Không tìm thấy bình luận.");
-    const mailId = transaction(db, () => {
+    transaction(db, () => {
       removeComment(c.id, "removed_by_admin", note);
       audit(
         req.user.id,
@@ -308,9 +377,13 @@ export function registerCommunityAdmin(
         JSON.stringify({ id: c.id, note }),
       );
       const post = one(db, "SELECT title FROM community_posts WHERE id=?", c.post_id);
-      return mail.enqueue(c.author_id, `Bình luận trong bài “${post.title}” đã được gỡ: “${c.body.slice(0, 300)}”`, note, `/app/community/${c.post_id}`, c.post_id);
+      queueEmail(db, c.author_id, "community_comment_removed", {
+        subject: post.title,
+        detail: JSON.stringify({ reason: note, quote: c.body.slice(0, 300) }),
+        link: `/community/${c.post_id}`,
+      });
     });
-    res.json({ ok: true, ...await mail.deliver(mailId, req.user.id) });
+    res.json({ ok: true });
   });
   app.get(`${base}/reports`, admin, (req, res) => {
     const status = z

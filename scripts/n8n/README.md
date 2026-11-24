@@ -64,6 +64,8 @@ Mỗi bài gửi lên web theo trường có cấu trúc: `topic` (Claude chọn
 
 Mỗi 5 phút, workflow **Kiểm duyệt Cộng đồng** lấy hàng đợi bài chờ duyệt (bài mới và bản sửa), nhờ Claude Haiku chấm theo bộ tiêu chí, rồi tự duyệt / tự từ chối những bài rõ ràng; bài không chắc để admin. Thiết kế: [docs/superpowers/specs/2026-11-23-kiem-duyet-cong-dong-ai-design.md](../../docs/superpowers/specs/2026-11-23-kiem-duyet-cong-dong-ai-design.md). Không sửa code web, không tốn phí ngoài gói Claude Pro. Máy tắt thì bài nằm trong hàng đợi, admin duyệt tay như cũ.
 
+Bài bot chuyển admin được gọi thêm `POST /api/admin/community/posts/:id/ai-note` (kết luận + lý do tối đa 200 ký tự, gắn với `review_version` đã chấm) để trang Chờ duyệt hiện "AI chuyển admin xem: …". Lệnh này chỉ để admin dễ xem: web chưa có endpoint (404), 409 hay rớt mạng đều chỉ ghi nhật ký và không làm hỏng lần chạy. Chế độ `shadow` không gọi. **Sau khi sửa workflow phải nhập lại vào n8n** (deploy web trước).
+
 | File | Việc |
 | --- | --- |
 | `lib/moderation.js` | Logic thuần: chọn bài, dựng prompt, đọc kết quả, quyết định cuối, trạng thái. Test: `test/n8n-moderation.test.js` |

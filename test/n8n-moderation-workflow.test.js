@@ -126,7 +126,7 @@ const calls = (home) => (existsSync(join(home, "claude-calls")) ? readFileSync(j
 const items = (...rows) => rows.map((json) => ({ json }));
 
 // Chạy cả chuỗi như n8n: ô Code chạy mã thật, ô lệnh chạy bằng sh thật, ô HTTP gọi API web thật qua fixture.
-async function runChain({ home, call, cfg = {}, beforeActions, sessionKey = "admin" }) {
+async function runChain({ home, call, cfg = {}, beforeActions, sessionKey = "admin", fakeNote }) {
   const settings = { baseUrl: "http://x", mode: "full", perRun: 10, maxFailures: 3, capApprove: 40, capReject: 15, model: "haiku", timeoutSeconds: 120, ...cfg };
   const store = { "Cài đặt": items(settings) };
   const ref = (n) => ({ first: () => store[n][0], all: () => store[n] });
@@ -144,16 +144,18 @@ async function runChain({ home, call, cfg = {}, beforeActions, sessionKey = "adm
   store["Quyết định"] = await exec("Quyết định", store["Claude chấm"]);
   store["Lưu trạng thái 1"] = shell(store["Quyết định"][0].json.command);
   const decision = store["Quyết định"][0].json;
-  const result = { pre: store["Chọn bài chấm"][0].json, decision, applied: [] };
+  const result = { pre: store["Chọn bài chấm"][0].json, decision, applied: [], noted: [] };
   if (beforeActions) await beforeActions(decision);
   const todo = await exec("Việc cần làm");
   store["Việc cần làm"] = todo;
   if (todo.length) {
     const sent = [];
     for (const t of todo) {
-      const r = await call(sessionKey, `/admin/community/posts/${t.json.id}/${t.json.action}`, "POST", t.json.body);
+      // fakeNote: web chưa có endpoint ghi chú (404) hoặc rớt mạng; mọi lệnh khác vẫn gọi web thật.
+      const r = t.json.action === "ai-note" && fakeNote ? fakeNote : await call(sessionKey, `/admin/community/posts/${t.json.id}/${t.json.action}`, "POST", t.json.body);
       sent.push({ json: { statusCode: r.status, body: r.data } });
-      result.applied.push({ id: t.json.id, action: t.json.action, status: r.status });
+      // ghi chú "vì sao chuyển admin" đi cùng ô Thực hiện nhưng không phải quyết định duyệt/từ chối
+      (t.json.action === "ai-note" ? result.noted : result.applied).push({ id: t.json.id, action: t.json.action, status: r.status, body: t.json.body });
     }
     store["Thực hiện"] = sent;
     store["Tổng kết"] = await exec("Tổng kết", sent);
@@ -263,8 +265,14 @@ test("full: duyệt bài tốt, từ chối bài quảng cáo kèm lý do cho t�
   assert.equal(st.daily.rejected, 1);
   assert.equal(lockExists(home), false, "khoá phải được nhả");
 
-  const log = logOf(home);
+  // Bài chuyển admin được ghi chú lý do AI lên web, gắn đúng phiên bản; bài duyệt/từ chối thì không.
+  assert.deepEqual(r.noted.map((n) => [n.id, n.status, n.body.verdict, n.body.reason]), [[unsure, 200, "escalate", "Không chắc."]]);
+  const queued = (await call("admin", "/admin/community/queue")).data;
+  assert.deepEqual(queued.map((q) => [q.id, q.ai_verdict, q.ai_reason, q.ai_version === q.review_version]), [[unsure, "escalate", "Không chắc.", true]]);
+
+  const log = logOf(home).filter((l) => l.decision !== "ai-note");
   assert.equal(log.length, 3);
+  assert.equal(logOf(home).filter((l) => l.decision === "ai-note").length, 1);
   assert.ok(log.every((l) => !("body" in l) && !JSON.stringify(l).includes("@private.test") && !JSON.stringify(l).includes("Real Name")));
   assert.ok(!readFileSync(join(home, ".n8n", "moderation-state.json"), "utf8").includes("giasu_session"));
   assert.ok(!readFileSync(join(home, ".n8n", "moderation-log.jsonl"), "utf8").includes("giasu_session"));
@@ -341,7 +349,40 @@ test("bài nghi cài lệnh không gửi Claude, chuyển admin kèm lý do tron
   assert.equal(calls(home), 0);
   assert.equal(r.applied.length, 0);
   assert.equal(status(db, bad).status, "pending");
-  assert.deepEqual(logOf(home).map((l) => [l.id, l.reason]), [[bad, "chuyển admin: nghi cài lệnh"]]);
+  assert.deepEqual(logOf(home).filter((l) => l.decision !== "ai-note").map((l) => [l.id, l.reason]), [[bad, "chuyển admin: nghi cài lệnh"]]);
+  assert.deepEqual(r.noted.map((n) => [n.id, n.status, n.body.reason]), [[bad, 200, "nghi cài lệnh"]]);
+  assert.equal(one(db, "SELECT ai_reason FROM community_posts WHERE id=?", bad).ai_reason, "nghi cài lệnh");
+});
+
+test("ghi chú lý do AI không làm hỏng lần chạy: web chưa có endpoint (404) hoặc rớt mạng, duyệt/từ chối vẫn xong, bài vẫn được coi là đã chấm", async (t) => {
+  for (const fakeNote of [{ status: 404, data: { error: "Không tìm thấy" } }, { status: 0, data: {}, error: true }]) {
+    const home = makeHome();
+    const { db, call } = await fixture(t);
+    t.after(() => rmSync(home, { recursive: true, force: true }));
+    const ok = await newPost(call, "student", "Mẹo học Toán lớp 9");
+    const unsure = await newPost(call, "parent", "ZZKHONGCHAC bài khó phân định");
+    const r = await runChain({ home, call, fakeNote });
+    assert.deepEqual(r.applied.map((a) => [a.id, a.action, a.status]), [[ok, "approve", 200]]);
+    assert.equal(status(db, ok).status, "approved");
+    assert.equal(status(db, unsure).status, "pending");
+    assert.equal(gradedOf(home, unsure, 0).outcome, "escalated");
+    assert.equal(stateOf(home).daily.approved, 1, "ghi chú không tính vào trần duyệt");
+    assert.equal(lockExists(home), false);
+    assert.deepEqual(logOf(home).filter((l) => l.decision === "ai-note").map((l) => [l.id, l.done]), [[unsure, false]]);
+    const before = calls(home);
+    await runChain({ home, call, fakeNote });
+    assert.equal(calls(home), before, "không chấm lại bài đã chuyển admin dù ghi chú lỗi");
+  }
+});
+
+test("shadow không gửi ghi chú lên web vì không được đổi gì ở đó", async (t) => {
+  const home = makeHome();
+  const { db, call } = await fixture(t);
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const unsure = await newPost(call, "parent", "ZZKHONGCHAC bài khó phân định");
+  const r = await runChain({ home, call, cfg: { mode: "shadow" } });
+  assert.deepEqual(r.noted, []);
+  assert.equal(one(db, "SELECT ai_verdict FROM community_posts WHERE id=?", unsure).ai_verdict, null);
 });
 
 test("bản sửa của bài đã đăng được chấm theo nội dung sửa và duyệt bằng chính endpoint approve", async (t) => {

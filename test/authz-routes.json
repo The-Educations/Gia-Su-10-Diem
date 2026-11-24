@@ -67,18 +67,6 @@
     "auth": "admin",
     "file": "classes.js"
   },
-  "POST /api/admin/community/mail/{id}/retry": {
-    "auth": "admin",
-    "file": "community-mail.js"
-  },
-  "DELETE /api/admin/community/mail/{id}": {
-    "auth": "admin",
-    "file": "community-mail.js"
-  },
-  "GET /api/admin/community/mail": {
-    "auth": "admin",
-    "file": "community-mail.js"
-  },
   "DELETE /api/admin/community/members/{code}/{part}": {
     "auth": "admin",
     "file": "community-profile.js"
