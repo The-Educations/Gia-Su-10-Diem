@@ -14,6 +14,7 @@ import { NEWS_LEVELS, buildCta, countWords, formatClock, htmlToText, plainBodyTo
 import { CoverField, NEWS_IMAGE_BASE, NEWS_IMAGE_UPLOAD } from "./cover-field";
 import { ConfirmDialog } from "./confirm-dialog";
 import { checkNews, emptyForm, type NewsFormState } from "./checks";
+import { useI18n } from "@/lib/i18n";
 
 const RichEditor = lazy(() => import("@/components/community/RichEditor"));
 const draftKey = (id: number | "new") => `news-draft:${id}`;
@@ -30,13 +31,15 @@ function formFromPost(post: AdminNewsPost | null): NewsFormState {
 }
 
 export default function NewsEditor({ id, close }: { id: number | "new"; close: (saved?: "published" | "drafts" | "review") => void }) {
+  const { t } = useI18n();
   const loaded = useLoad<AdminNewsPost>(id === "new" ? null : `/admin/posts/${id}`);
   if (loaded.loading) return <Loading />;
-  if (loaded.error) return <><ErrorState error={loaded.error} retry={loaded.reload} /><Button variant="outline" onClick={() => close()}>← Quay lại danh sách</Button></>;
+  if (loaded.error) return <><ErrorState error={loaded.error} retry={loaded.reload} /><Button variant="outline" onClick={() => close()}>{t("← Quay lại danh sách")}</Button></>;
   return <EditorForm id={id} first={loaded.data} close={close} />;
 }
 
 function EditorForm({ id, first, close }: { id: number | "new"; first: AdminNewsPost | null; close: (saved?: "published" | "drafts" | "review") => void }) {
+  const { t } = useI18n();
   const [post, setPost] = useState(first);
   const initial = useMemo(() => formFromPost(post), [post]);
   const [form, setForm] = useState(initial);
@@ -135,51 +138,51 @@ function EditorForm({ id, first, close }: { id: number | "new"; first: AdminNews
 
   return <section className="news-editor-page">
     <div className="news-editor-bar">
-      <Button type="button" variant="ghost" onClick={back}><ArrowLeft data-icon="inline-start" />Quay lại danh sách</Button>
+      <Button type="button" variant="ghost" onClick={back}><ArrowLeft data-icon="inline-start" />{t("Quay lại danh sách")}</Button>
       <div className="news-editor-buttons">
         <Button type="button" variant="outline" onClick={() => setPreview((p) => !p)}>
-          {preview ? <><Pencil data-icon="inline-start" />Tiếp tục soạn</> : <><Eye data-icon="inline-start" />Xem trước</>}
+          {preview ? <><Pencil data-icon="inline-start" />{t("Tiếp tục soạn")}</> : <><Eye data-icon="inline-start" />{t("Xem trước")}</>}
         </Button>
         {published
           ? <>
-            <Button type="button" variant="outline" disabled={busy} onClick={() => setConfirm("unpublish")}>Gỡ xuống</Button>
-            <Button type="button" disabled={busy || !!uploads} onClick={() => save(true)}>Cập nhật bài</Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setConfirm("unpublish")}>{t("Gỡ xuống")}</Button>
+            <Button type="button" disabled={busy || !!uploads} onClick={() => save(true)}>{t("Cập nhật bài")}</Button>
           </>
           : <>
-            <Button type="button" variant="outline" disabled={busy || !!uploads} onClick={() => save(false)}>Lưu nháp</Button>
-            <Button type="button" disabled={busy || !!uploads || !check.canPublish} onClick={() => save(true)}>Lưu & đăng</Button>
+            <Button type="button" variant="outline" disabled={busy || !!uploads} onClick={() => save(false)}>{t("Lưu nháp")}</Button>
+            <Button type="button" disabled={busy || !!uploads || !check.canPublish} onClick={() => save(true)}>{t("Lưu & đăng")}</Button>
           </>}
       </div>
     </div>
     {restore && <div className="news-restore" role="status">
       <span>Có bản đang soạn dở lúc {formatClock(new Date(restore.at))}.</span>
-      <Button size="sm" onClick={() => { setForm(restore.form); setText(htmlToText(restore.form.body_html)); setEditorKey((k) => k + 1); setRestore(null); }}>Khôi phục</Button>
-      <Button size="sm" variant="outline" onClick={() => { try { localStorage.removeItem(key); } catch { /* ignore */ } setRestore(null); }}>Bỏ</Button>
+      <Button size="sm" onClick={() => { setForm(restore.form); setText(htmlToText(restore.form.body_html)); setEditorKey((k) => k + 1); setRestore(null); }}>{t("Khôi phục")}</Button>
+      <Button size="sm" variant="outline" onClick={() => { try { localStorage.removeItem(key); } catch { /* ignore */ } setRestore(null); }}>{t("Bỏ")}</Button>
     </div>}
     {error && <div role="alert" className="news-editor-error"><ErrorState error={error} />{!!problems.length && <ul className="news-problems">{problems.map((m) => <li key={m}>{m}</li>)}</ul>}</div>}
     {preview && <NewsArticle post={previewData} preview />}
     <div className="news-editor-grid" hidden={preview}>
       <form className="news-editor-form" onSubmit={(e) => e.preventDefault()}>
-        <h2>{post ? "Sửa bài viết" : "Bài viết mới"}{post?.origin === "auto" && <span className="news-origin"> · do n8n tạo</span>}</h2>
+        <h2>{post ? "Sửa bài viết" : "Bài viết mới"}{post?.origin === "auto" && <span className="news-origin"> {t("· do n8n tạo")}</span>}</h2>
         <Field>
-          <FieldLabel htmlFor="news-title">Tiêu đề *</FieldLabel>
+          <FieldLabel htmlFor="news-title">{t("Tiêu đề *")}</FieldLabel>
           <Input id="news-title" value={form.title} maxLength={160} onChange={(e) => set({ title: e.target.value })} />
           <span className="news-counter">{form.title.length}/160</span>
         </Field>
         <Field>
-          <FieldLabel htmlFor="news-summary">Tóm tắt *</FieldLabel>
+          <FieldLabel htmlFor="news-summary">{t("Tóm tắt *")}</FieldLabel>
           <Textarea id="news-summary" value={form.summary} maxLength={500} rows={3} onChange={(e) => set({ summary: e.target.value })} />
           <span className="news-counter">{form.summary.length}/500</span>
         </Field>
         <fieldset className="news-topic-field">
-          <legend>Chủ đề *</legend>
+          <legend>{t("Chủ đề *")}</legend>
           {NEWS_TOPICS.map((t) => <label key={t.id}>
             <input type="radio" name="news-topic" value={t.id} checked={form.topic === t.id} onChange={() => set({ topic: t.id })} />{t.label}
           </label>)}
         </fieldset>
         <CoverField form={form} set={set} uploading={(b) => setUploads((n) => n + (b ? 1 : -1))} />
         <div className="news-body-field">
-          <span className="news-field-label" id="news-body-label">Nội dung *</span>
+          <span className="news-field-label" id="news-body-label">{t("Nội dung *")}</span>
           <Suspense fallback={<Loading />}>
             <RichEditor key={editorKey} id="news-body" initial={form.body_html} invalid={false}
               imageUploadUrl={NEWS_IMAGE_UPLOAD} imageBasePath={NEWS_IMAGE_BASE}
@@ -189,16 +192,16 @@ function EditorForm({ id, first, close }: { id: number | "new"; first: AdminNews
           <span className="news-counter">{words} chữ · khoảng {readingMinutes(words)} phút đọc</span>
         </div>
         <fieldset className="news-source-field">
-          <legend>Nguồn bài gốc</legend>
+          <legend>{t("Nguồn bài gốc")}</legend>
           <div className="news-field-pair">
-            <Field><FieldLabel htmlFor="news-source-name">Tên báo</FieldLabel>
+            <Field><FieldLabel htmlFor="news-source-name">{t("Tên báo")}</FieldLabel>
               <Input id="news-source-name" value={form.source_name} maxLength={120} onChange={(e) => set({ source_name: e.target.value })} /></Field>
-            <Field><FieldLabel htmlFor="news-source-url">Liên kết bài gốc</FieldLabel>
+            <Field><FieldLabel htmlFor="news-source-url">{t("Liên kết bài gốc")}</FieldLabel>
               <Input id="news-source-url" type="url" inputMode="url" placeholder="https://…" value={form.source_url} maxLength={500} onChange={(e) => set({ source_url: e.target.value })} /></Field>
           </div>
         </fieldset>
         <fieldset className="news-cta-field">
-          <legend>Lời mời tìm gia sư</legend>
+          <legend>{t("Lời mời tìm gia sư")}</legend>
           <div className="news-field-pair">
             <Choose label="Cấp học" value={form.cta_level} onChange={(v) => set({ cta_level: v })} allLabel="Mặc định theo chủ đề"
               options={NEWS_LEVELS.map((v) => ({ value: v, label: v }))} />
@@ -207,18 +210,18 @@ function EditorForm({ id, first, close }: { id: number | "new"; first: AdminNews
           </div>
           <p className="news-cta-preview">Xem trước: “{cta.heading}” → {cta.button}</p>
         </fieldset>
-        <label className="post-publish"><input type="checkbox" checked={form.pin} onChange={(e) => set({ pin: e.target.checked })} />Ghim lên đầu trang Tin tức (chỉ khi đăng)</label>
+        <label className="post-publish"><input type="checkbox" checked={form.pin} onChange={(e) => set({ pin: e.target.checked })} />{t("Ghim lên đầu trang Tin tức (chỉ khi đăng)")}</label>
         <div className="news-editor-foot">
-          {post && <Button type="button" variant="ghost" className="danger-text" disabled={busy} onClick={() => setConfirm("delete")}>Xóa bài viết</Button>}
+          {post && <Button type="button" variant="ghost" className="danger-text" disabled={busy} onClick={() => setConfirm("delete")}>{t("Xóa bài viết")}</Button>}
         </div>
       </form>
       <aside className="news-checklist" aria-label="Kiểm tra trước khi đăng">
-        <h3>Kiểm tra trước khi đăng</h3>
+        <h3>{t("Kiểm tra trước khi đăng")}</h3>
         <ul>
           {check.required.map((r) => <li key={r.good} data-state={r.ok ? "ok" : "bad"}>{r.ok ? <Check size={14} aria-hidden="true" /> : <X size={14} aria-hidden="true" />}{r.ok ? r.good : r.bad}</li>)}
           {check.warnings.map((w) => <li key={w} data-state="warn"><TriangleAlert size={14} aria-hidden="true" />{w}</li>)}
         </ul>
-        <p>Phím tắt: Ctrl/Cmd + S để lưu.</p>
+        <p>{t("Phím tắt: Ctrl/Cmd + S để lưu.")}</p>
       </aside>
     </div>
     {confirm === "leave" && <ConfirmDialog title="Rời khỏi bài viết?" description="Bài có thay đổi chưa lưu. Nếu rời đi, thay đổi sẽ không được lưu lên máy chủ." confirm="Rời đi" busy={false}

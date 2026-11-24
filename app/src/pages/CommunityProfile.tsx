@@ -21,8 +21,10 @@ import ProfileEditor from "@/components/community/ProfileEditor";
 import ActionDialog, {
   type CommunityAction,
 } from "@/components/community/ActionDialog";
+import { useI18n } from "@/lib/i18n";
 
 export default function CommunityProfile() {
+  const { t } = useI18n();
   const { code } = useParams(),
     { user } = useApp();
   const [params, setParams] = useSearchParams();
@@ -139,7 +141,7 @@ export default function CommunityProfile() {
               )}
               {p.tier === "tutor" && (
                 <Button asChild variant="outline">
-                  <Link to={`/tutors/${p.tutor_id}`}>Xem hồ sơ gia sư</Link>
+                  <Link to={`/tutors/${p.tutor_id}`}>{t("Xem hồ sơ gia sư")}</Link>
                 </Button>
               )}
             </div>
@@ -154,8 +156,8 @@ export default function CommunityProfile() {
             {p.bio && <p className="member-bio">{p.bio}</p>}
             {p.mine && (
               <nav className="member-owner-links" aria-label="Hồ sơ của tôi">
-                <Link to="/community/mine">Bài của tôi</Link>
-                <Link to="/settings">Cài đặt tài khoản</Link>
+                <Link to="/community/mine">{t("Bài của tôi")}</Link>
+                <Link to="/settings">{t("Cài đặt tài khoản")}</Link>
               </nav>
             )}
             {p.mine &&
@@ -179,15 +181,15 @@ export default function CommunityProfile() {
               )}
             <dl className="member-stats">
               <div>
-                <dt>Bài viết</dt>
+                <dt>{t("Bài viết")}</dt>
                 <dd>{p.stats.posts}</dd>
               </div>
               <div>
-                <dt>Bình luận</dt>
+                <dt>{t("Bình luận")}</dt>
                 <dd>{p.stats.comments}</dd>
               </div>
               <div>
-                <dt>Hữu ích</dt>
+                <dt>{t("Hữu ích")}</dt>
                 <dd>{p.stats.helpful}</dd>
               </div>
             </dl>
@@ -198,13 +200,13 @@ export default function CommunityProfile() {
             className="community-card member-admin"
             aria-label="Quản trị hồ sơ"
           >
-            <h2>Quản trị hồ sơ</h2>
+            <h2>{t("Quản trị hồ sơ")}</h2>
             <dl>
-              <dt>Họ và tên</dt>
+              <dt>{t("Họ và tên")}</dt>
               <dd>{result.data.admin.name}</dd>
               <dt>Email</dt>
               <dd>{result.data.admin.email}</dd>
-              <dt>Tài khoản</dt>
+              <dt>{t("Tài khoản")}</dt>
               <dd>
                 {{
                   active: "Đang hoạt động",
@@ -212,7 +214,7 @@ export default function CommunityProfile() {
                   deleted: "Đã xóa",
                 }[result.data.admin.status] || result.data.admin.status}
               </dd>
-              <dt>Quyền cộng đồng</dt>
+              <dt>{t("Quyền cộng đồng")}</dt>
               <dd>
                 {result.data.admin.community_locked ? "Đã khóa" : "Đang mở"}
               </dd>
@@ -254,14 +256,14 @@ export default function CommunityProfile() {
                 ))}
               <CommunityLock owner={result.data.admin} />
               <Button asChild variant="outline">
-                <Link to="/admin?tab=users">Quản lý tài khoản</Link>
+                <Link to="/admin?tab=users">{t("Quản lý tài khoản")}</Link>
               </Button>
             </div>
           </section>
         )}
         <section aria-label="Bài viết đã đăng">
           <div className="member-posts-heading">
-            <h2>Bài viết đã đăng</h2>
+            <h2>{t("Bài viết đã đăng")}</h2>
             <Choose
               label="Sắp xếp bài viết"
               value={sort}

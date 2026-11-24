@@ -1,3 +1,4 @@
+import { useI18n } from "@/lib/i18n";
 import { useId, useRef, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import provinces from "../../../shared/vietnam-addresses.json";
@@ -33,6 +34,7 @@ function PlacePicker({
   disabled?: boolean;
   required: boolean;
 }) {
+  const { t } = useI18n();
   const id = useId(),
     trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false),
@@ -81,7 +83,7 @@ function PlacePicker({
               placeholder="Nhập tên để tìm…"
             />
             <CommandList id={`${id}-list`} aria-label={label}>
-              <CommandEmpty>Không tìm thấy địa chỉ.</CommandEmpty>
+              <CommandEmpty>{t("Không tìm thấy địa chỉ.")}</CommandEmpty>
               <CommandGroup>
                 {places.map((place) => (
                   <CommandItem

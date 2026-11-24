@@ -3128,4 +3128,23 @@ test("forgot-password returns the same answer when the mailer is down — no enu
   assert.equal(missing.status, 200);
   assert.deepEqual(exists.data, missing.data, "an existing email must get the byte-identical reply");
   assert.ok(!JSON.stringify(exists.data).match(/token|reset/i) || exists.data.message, "no token leaks in the reply");
+
+test("tutor profile 404: not-found vs unpublished vs live", async (t) => {
+  const { client, db } = await fixture(t);
+  const guest = client();
+  // id without a tutors row at all → not_found
+  const nf = await guest.request("/tutors/99999");
+  assert.equal(nf.status, 404);
+  assert.equal(nf.data.reason, "not_found");
+  // tutors row exists but not live (pending, never published) → unpublished
+  const uid = Number(run(db, "INSERT INTO users(name,email,password,role,status) VALUES ('Ghost Tutor','ghost@demo.giasu.test','x','tutor','active')").lastInsertRowid);
+  run(db, "INSERT INTO tutors(user_id,status,published,headline,subjects) VALUES (?,'pending',NULL,'x','[\"toan\"]')", uid);
+  const up = await guest.request(`/tutors/${uid}`);
+  assert.equal(up.status, 404);
+  assert.equal(up.data.reason, "unpublished");
+  // a live tutor still answers 200
+  const live = await guest.request("/tutors/3");
+  assert.equal(live.status, 200);
+  assert.ok(live.data.user_id);
+});
 });

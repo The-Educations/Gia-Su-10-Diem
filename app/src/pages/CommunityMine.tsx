@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { PostCard } from "@/components/community/shared";
 import Drafts from "@/components/community/Drafts";
 import CommunityWorkspace from "@/components/community/Workspace";
+import { useI18n } from "@/lib/i18n";
 export default function CommunityMine() {
+  const { t } = useI18n();
   const [params, setParams] = useSearchParams(),
     page = Number(params.get("page") || 1),
     result = useLoad<CommunityFeed>(`/community/mine?page=${page}`);
@@ -25,7 +27,7 @@ export default function CommunityMine() {
             title="Bạn chưa có bài viết"
             action={
               <Button asChild>
-                <Link to="/community">Đến cộng đồng</Link>
+                <Link to="/community">{t("Đến cộng đồng")}</Link>
               </Button>
             }
           />

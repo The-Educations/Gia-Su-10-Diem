@@ -10,6 +10,7 @@ import {
 import { Button } from "./ui/button";
 import { Field, FieldGroup, FieldLabel } from "./ui/field";
 import { ErrorState } from "./common";
+import { useI18n } from "@/lib/i18n";
 
 // The canvas is both the preview and exported image, so positioning is identical.
 export function ImageCropDialog({
@@ -23,6 +24,7 @@ export function ImageCropDialog({
   onCancel: () => void;
   onApply: (file: File) => void;
 }) {
+  const { t } = useI18n();
   const canvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{
     x: number;
@@ -105,7 +107,7 @@ export function ImageCropDialog({
     >
       <DialogContent className="crop-dialog" closeDisabled={busy}>
         <DialogHeader>
-          <DialogTitle>Điều chỉnh ảnh</DialogTitle>
+          <DialogTitle>{t("Điều chỉnh ảnh")}</DialogTitle>
           <DialogDescription>
             Kéo ảnh hoặc dùng thanh trượt để căn vị trí.
           </DialogDescription>
@@ -169,7 +171,7 @@ export function ImageCropDialog({
         </div>
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="crop-zoom">Thu phóng</FieldLabel>
+            <FieldLabel htmlFor="crop-zoom">{t("Thu phóng")}</FieldLabel>
             <input
               id="crop-zoom"
               type="range"
@@ -182,7 +184,7 @@ export function ImageCropDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="crop-x">Vị trí ngang</FieldLabel>
+            <FieldLabel htmlFor="crop-x">{t("Vị trí ngang")}</FieldLabel>
             <input
               id="crop-x"
               type="range"
@@ -196,7 +198,7 @@ export function ImageCropDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="crop-y">Vị trí dọc</FieldLabel>
+            <FieldLabel htmlFor="crop-y">{t("Vị trí dọc")}</FieldLabel>
             <input
               id="crop-y"
               type="range"

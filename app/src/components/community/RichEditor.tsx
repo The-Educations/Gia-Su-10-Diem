@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { ErrorState } from "@/components/common";
+import { useI18n } from "@/lib/i18n";
 
 // Tab indents like a word processor: nests a list item, indents code, or adds a tab stop.
 // Escape leaves the editor so the keyboard can move on to the next field.
@@ -81,6 +82,7 @@ export default function RichEditor({
   imageUploadUrl?: string;
   imageBasePath?: string;
 }) {
+  const { t } = useI18n();
   const controls = useId();
   const imageSrc = new RegExp(`^${imageBasePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/[a-f0-9-]{36}$`);
   const [panel, setPanel] = useState<"link" | "image" | null>(null);
@@ -351,7 +353,7 @@ export default function RichEditor({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor={`${controls}-label`}>Chữ hiển thị</FieldLabel>
+            <FieldLabel htmlFor={`${controls}-label`}>{t("Chữ hiển thị")}</FieldLabel>
             <Input
               id={`${controls}-label`}
               value={label}
@@ -394,7 +396,7 @@ export default function RichEditor({
       {panel === "image" && (
         <div className="community-editor-insert">
           <Field>
-            <FieldLabel htmlFor={`${controls}-alt`}>Mô tả ảnh</FieldLabel>
+            <FieldLabel htmlFor={`${controls}-alt`}>{t("Mô tả ảnh")}</FieldLabel>
             <Input
               id={`${controls}-alt`}
               value={alt}
@@ -418,7 +420,7 @@ export default function RichEditor({
               }}
             />
           </Field>
-          {busy && <span role="status">Đang tải ảnh…</span>}
+          {busy && <span role="status">{t("Đang tải ảnh…")}</span>}
         </div>
       )}
       {error && <ErrorState error={error} />}
@@ -453,8 +455,8 @@ export default function RichEditor({
       <EditorContent editor={editor} />
       <footer className="community-editor-foot" aria-live="polite">
         <span>{`${state.words} chữ · ${Math.max(1, Math.round(state.words / 200))} phút đọc`}</span>
-        {busy && <span role="status">Đang tải ảnh…</span>}
-        <span className="community-editor-hint">Tab thụt lề · Esc rời ô soạn · dán hoặc kéo ảnh vào bài</span>
+        {busy && <span role="status">{t("Đang tải ảnh…")}</span>}
+        <span className="community-editor-hint">{t("Tab thụt lề · Esc rời ô soạn · dán hoặc kéo ảnh vào bài")}</span>
       </footer>
     </div>
   );

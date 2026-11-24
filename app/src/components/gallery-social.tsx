@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Field, FieldLabel, FieldGroup } from "./ui/field";
 import { ErrorState, Loading, Submit } from "./common";
+import { useI18n } from "@/lib/i18n";
 
 type Social = {
   likes: number;
@@ -24,6 +25,7 @@ type Social = {
 };
 
 export function GallerySocial({ imageId }: { imageId: string }) {
+  const { t } = useI18n();
   const { user } = useApp(),
     location = useLocation();
   const [before, setBefore] = useState<number | null>(null),
@@ -90,7 +92,7 @@ export function GallerySocial({ imageId }: { imageId: string }) {
                 disabled={busy}
               />
             </Field>
-            <Submit busy={busy}>Gửi bình luận</Submit>
+            <Submit busy={busy}>{t("Gửi bình luận")}</Submit>
           </FieldGroup>
         </form>
       )}
@@ -124,7 +126,7 @@ export function GallerySocial({ imageId }: { imageId: string }) {
             <p className="reading-text">{comment.body}</p>
           </article>
         ))}
-        {!data.comment_count && <p className="muted">Chưa có bình luận.</p>}
+        {!data.comment_count && <p className="muted">{t("Chưa có bình luận.")}</p>}
       </div>
       <div className="actions">
         {before && (

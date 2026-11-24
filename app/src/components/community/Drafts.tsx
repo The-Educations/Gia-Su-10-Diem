@@ -5,8 +5,10 @@ import { api, dateTime, useLoad } from "@/lib/api";
 import type { CommunityDraft } from "@/lib/types";
 import { Loading, ErrorState } from "@/components/common";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 
 export default function Drafts() {
+  const { t } = useI18n();
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -16,9 +18,9 @@ export default function Drafts() {
   return (
     <section className="community-feed" aria-label="Bản nháp">
       <div className="community-write-header">
-        <h2 className="community-group-title">Bản nháp</h2>
+        <h2 className="community-group-title">{t("Bản nháp")}</h2>
         <Button asChild size="sm">
-          <Link to="/community/write">Viết bài</Link>
+          <Link to="/community/write">{t("Viết bài")}</Link>
         </Button>
       </div>
       {result.loading ? (
@@ -26,7 +28,7 @@ export default function Drafts() {
       ) : result.error ? (
         <ErrorState error={result.error} retry={result.reload} />
       ) : !result.data?.items.length ? (
-        <p className="community-drafts-empty">Chưa có bản nháp.</p>
+        <p className="community-drafts-empty">{t("Chưa có bản nháp.")}</p>
       ) : (
         result.data.items.map((d) => (
           <article className="community-card community-draft-card" key={d.id}>

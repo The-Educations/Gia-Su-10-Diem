@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n";
 
 export default function ProfileEditor({
   profile,
@@ -23,6 +24,7 @@ export default function ProfileEditor({
   profile: CommunityMember;
   close: () => void;
 }) {
+  const { t } = useI18n();
   const { user, setUser, refresh } = useApp();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -69,7 +71,7 @@ export default function ProfileEditor({
           closeDisabled={busy}
         >
           <DialogHeader>
-            <DialogTitle>Chỉnh sửa hồ sơ</DialogTitle>
+            <DialogTitle>{t("Chỉnh sửa hồ sơ")}</DialogTitle>
             <DialogDescription className="sr-only">
               Ảnh và giới thiệu trong cộng đồng
             </DialogDescription>
@@ -149,7 +151,7 @@ export default function ProfileEditor({
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="member-name">Tên hiển thị</FieldLabel>
+                <FieldLabel htmlFor="member-name">{t("Tên hiển thị")}</FieldLabel>
                 <Input
                   id="member-name"
                   name="display_name"
@@ -163,7 +165,7 @@ export default function ProfileEditor({
                   disabled={busy}
                 />
                 {["admin", "tutor"].includes(profile.tier) && (
-                  <p>Bạn đang hiển thị bằng họ tên thật.</p>
+                  <p>{t("Bạn đang hiển thị bằng họ tên thật.")}</p>
                 )}
               </Field>
               <Field>
@@ -180,7 +182,7 @@ export default function ProfileEditor({
                 />
               </Field>
               {error && <ErrorState error={error} />}
-              <Submit busy={busy}>Lưu hồ sơ</Submit>
+              <Submit busy={busy}>{t("Lưu hồ sơ")}</Submit>
             </FieldGroup>
           </form>
         </DialogContent>

@@ -16,7 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostCard, useCommunityGate } from "@/components/community/shared";
 import CommunityWorkspace from "@/components/community/Workspace";
+import { useI18n } from "@/lib/i18n";
 export default function Community() {
+  const { t } = useI18n();
   const { user } = useApp(),
     [params, setParams] = useSearchParams(),
     navigate = useNavigate();
@@ -68,7 +70,7 @@ export default function Community() {
             </Button>
           </form>
           <nav className="topic-chips chip-set" aria-label="Lọc theo chủ đề">
-            <button type="button" className="chip" data-checked={!params.get("topic") || undefined} onClick={() => filter("topic", "")}>Tất cả</button>
+            <button type="button" className="chip" data-checked={!params.get("topic") || undefined} onClick={() => filter("topic", "")}>{t("Tất cả")}</button>
             {TOPICS.map(([value, label]) => (
               <button type="button" key={value} className="chip" data-checked={params.get("topic") === value || undefined} onClick={() => filter("topic", value)}>{label}</button>
             ))}

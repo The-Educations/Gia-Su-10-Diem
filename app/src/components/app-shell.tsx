@@ -14,10 +14,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 export function Brand({ to, onClick }: { to: string; onClick?: () => void }) {
+  const { t } = useI18n();
   return (
     <Link className="brand" to={to} aria-label="Gia Sư 10 Điểm" title="Gia Sư 10 Điểm" onClick={onClick} translate="no">
-      <span className="brand-mark" aria-hidden="true">10<span>đ</span></span>
-      <span className="nav-label">Gia Sư<strong>10 Điểm</strong></span>
+      <span className="brand-mark" aria-hidden="true">10<span>{t("đ")}</span></span>
+      <span className="nav-label">{t("Gia Sư")}<strong>{t("10 Điểm")}</strong></span>
     </Link>
   );
 }
@@ -241,7 +242,7 @@ export function MobileBar({
       </nav>
       <SheetContent side="bottom" className="navigation-sheet" onCloseAutoFocus={onCloseAutoFocus}>
         <SheetTitle className="sr-only">{t("Điều hướng")}</SheetTitle>
-        <SheetDescription className="sr-only">Gia Sư 10 Điểm</SheetDescription>
+        <SheetDescription className="sr-only">{t("Gia Sư 10 Điểm")}</SheetDescription>
         <div className="mobile-nav">
           {user ? (
             <div className="mobile-account">

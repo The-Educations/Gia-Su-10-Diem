@@ -9,15 +9,17 @@ import { NEWS_TOPICS, isNewsTopic } from "@/lib/news-topics";
 import { newsPath } from "@/lib/news";
 import { NewsArticle } from "@/components/news/news-article";
 import { NewsCardItem } from "@/components/news/news-cards";
+import { useI18n } from "@/lib/i18n";
 
 const ID_SLUG = /^(\d+)(?:-[a-z0-9-]*)?$/;
 
 function NewsDetailPage({ idSlug }: { idSlug: string }) {
+  const { t } = useI18n();
   const id = idSlug.match(ID_SLUG)?.[1];
   const detail = useLoad<NewsDetail>(id ? `/posts/${id}` : null);
-  if (!id) return <Page><Blank title="Không tìm thấy bài viết" action={<Link className="text-link" to="/news">← Tin tức</Link>} /></Page>;
+  if (!id) return <Page><Blank title="Không tìm thấy bài viết" action={<Link className="text-link" to="/news">{t("← Tin tức")}</Link>} /></Page>;
   if (detail.loading) return <Loading />;
-  if (detail.error) return <Page><ErrorState error={detail.error} retry={detail.reload} /><Link className="text-link" to="/news">← Tin tức</Link></Page>;
+  if (detail.error) return <Page><ErrorState error={detail.error} retry={detail.reload} /><Link className="text-link" to="/news">{t("← Tin tức")}</Link></Page>;
   if (!detail.data) return null;
   // Missing or wrong slug: send the reader (and Google) to the one canonical path.
   if (newsPath(detail.data) !== `/news/${idSlug}`) return <Navigate replace to={newsPath(detail.data)} />;
@@ -28,6 +30,7 @@ type Feed = { key: string; pinned: NewsCard | null; items: NewsCard[]; hasMore: 
 const empty = (key: string): Feed => ({ key, pinned: null, items: [], hasMore: false, page: 0, loading: true, more: false, error: "" });
 
 function NewsListPage() {
+  const { t } = useI18n();
   const [params] = useSearchParams();
   const raw = params.get("topic");
   const topic = isNewsTopic(raw) ? raw : "";
@@ -54,12 +57,12 @@ function NewsListPage() {
   return <Page>
     <Heading title="Tin tức" description="Thông tin tuyển sinh, thi cử và chính sách giáo dục cho học sinh và phụ huynh." />
     <nav className="news-chips" aria-label="Lọc theo chủ đề">
-      <Link to="/news" aria-current={!topic ? "true" : undefined}>Tất cả</Link>
+      <Link to="/news" aria-current={!topic ? "true" : undefined}>{t("Tất cả")}</Link>
       {NEWS_TOPICS.map((t) => <Link key={t.id} to={`/news?topic=${t.id}`} aria-current={topic === t.id ? "true" : undefined}>{t.label}</Link>)}
     </nav>
     {feed.loading ? <Loading />
       : feed.error && !feed.items.length && !feed.pinned ? <ErrorState error={feed.error} retry={() => setAttempt((n) => n + 1)} />
-      : !feed.items.length && !showPinned ? <Blank title="Chưa có tin trong mục này." action={topic ? <Link className="text-link" to="/news">Xem tất cả tin</Link> : undefined} />
+      : !feed.items.length && !showPinned ? <Blank title="Chưa có tin trong mục này." action={topic ? <Link className="text-link" to="/news">{t("Xem tất cả tin")}</Link> : undefined} />
       : <>
         {showPinned && <NewsCardItem post={feed.pinned!} featured />}
         <div className="news-feed">{feed.items.map((post) => <NewsCardItem key={post.id} post={post} />)}</div>
@@ -71,6 +74,7 @@ function NewsListPage() {
 }
 
 export default function News() {
+  const { t } = useI18n();
   const { idSlug } = useParams();
   return idSlug ? <NewsDetailPage idSlug={idSlug} /> : <NewsListPage />;
 }

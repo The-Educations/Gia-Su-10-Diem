@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthorLabel } from "./shared";
 import { CommunityUnread, Notifications } from "./Notifications";
+import { useI18n } from "@/lib/i18n";
 
 export default function CommunityWorkspace() {
+  const { t } = useI18n();
   const { user } = useApp();
   const identity = useLoad<CommunityIdentity>(user ? "/community/me" : null);
   if (!user) return null;
@@ -19,9 +21,9 @@ export default function CommunityWorkspace() {
     >
       <div className="community-workspace-identity">
         <div>
-          <span className="community-identity-label">Hiển thị công khai</span>
+          <span className="community-identity-label">{t("Hiển thị công khai")}</span>
           {identity.loading ? (
-            <span role="status">Đang tải…</span>
+            <span role="status">{t("Đang tải…")}</span>
           ) : identity.error ? (
             <ErrorState error={identity.error} retry={identity.reload} />
           ) : (
@@ -40,7 +42,7 @@ export default function CommunityWorkspace() {
         <NavLink to="/community/mine">
           Bài của tôi <CommunityUnread />
         </NavLink>
-        <NavLink to={`/community/members/${user.profile_code}`}>Hồ sơ</NavLink>
+        <NavLink to={`/community/members/${user.profile_code}`}>{t("Hồ sơ")}</NavLink>
         {user.role === "admin" && (
           <Button asChild size="sm">
             <Link to="/admin?tab=community">

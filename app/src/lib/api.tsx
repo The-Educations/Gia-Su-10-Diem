@@ -20,7 +20,7 @@ export async function api<T>(
   });
   const data = await response.json();
   if (!response.ok)
-    throw Object.assign(new Error(data.error || "Không thể kết nối. Vui lòng thử lại."), { fields: data.fields, problems: data.problems as string[] | undefined });
+    throw Object.assign(new Error(data.error || "Không thể kết nối. Vui lòng thử lại."), { status: response.status, reason: data.reason as string | undefined, fields: data.fields, problems: data.problems as string[] | undefined });
   return data;
 }
 const Context = createContext<{
@@ -95,6 +95,7 @@ export function useLoad<T>(path: string | null) {
     key: string;
     data: T | null;
     error: string;
+    reason?: string;
     pending: boolean;
   }>({ key: "", data: null, error: "", pending: true });
   const [retry, setRetry] = useState(0);
@@ -117,6 +118,7 @@ export function useLoad<T>(path: string | null) {
               ...previous,
               key,
               error: e.message,
+              reason: e.reason,
               pending: false,
             }));
         });
@@ -128,6 +130,7 @@ export function useLoad<T>(path: string | null) {
   return {
     data: current ? state.data : null,
     error: current ? state.error : "",
+    reason: current ? state.reason : undefined,
     loading: !!path && (!current || (state.pending && !state.data)),
     refreshing: current && state.pending,
     reload: () => setRetry((r) => r + 1),

@@ -6,8 +6,10 @@ import { api, useApp, accountDestination } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { Page, Loading, ErrorState } from "@/components/common";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 
 export default function VerifyEmail() {
+  const { t } = useI18n();
   const { user, setUser, loading, authError, retryAuth } = useApp();
   const [params] = useSearchParams(), navigate = useNavigate();
   const location = useLocation();
@@ -56,13 +58,13 @@ export default function VerifyEmail() {
     <h1>{confirmed ? "Email đã được xác nhận" : "Xác nhận email của bạn"}</h1>
     {error && <ErrorState error={error} />}
     {confirmed || (user && !user.email_verification_required && !token) ?
-      <Button disabled={busy} onClick={() => void continueSetup()}>Tiếp tục</Button> : <>
+      <Button disabled={busy} onClick={() => void continueSetup()}>{t("Tiếp tục")}</Button> : <>
       {token ? <Button disabled={busy || confirmed} onClick={() => void confirm()}>{busy ? "Đang xác nhận…" : "Xác nhận email"}</Button> :
-        <p>Mở liên kết từ <strong>contact@giasudiem10.online</strong>{user ? <> được gửi tới <strong>{user.email}</strong></> : " trong hộp thư của bạn"} để hoàn tất tài khoản.</p>}
+        <p>{t("Mở liên kết từ")} <strong>contact@giasudiem10.online</strong>{user ? <> {t("được gửi tới")} <strong>{user.email}</strong></> : " trong hộp thư của bạn"} để hoàn tất tài khoản.</p>}
       {user?.email_verification_required && <Button variant="outline" disabled={busy} onClick={() => void resend()}>{busy ? "Đang xử lý…" : "Gửi lại email xác nhận"}</Button>}
-      {user?.email_verification_required && !token && <Button variant="ghost" disabled={busy} onClick={retryAuth}>Tôi đã xác nhận email</Button>}
-      {sent && <p role="status">Đã gửi email mới. Kiểm tra cả thư mục Spam.</p>}
-      {!user && <Button asChild variant="outline"><Link to="/auth">Đăng nhập</Link></Button>}
+      {user?.email_verification_required && !token && <Button variant="ghost" disabled={busy} onClick={retryAuth}>{t("Tôi đã xác nhận email")}</Button>}
+      {sent && <p role="status">{t("Đã gửi email mới. Kiểm tra cả thư mục Spam.")}</p>}
+      {!user && <Button asChild variant="outline"><Link to="/auth">{t("Đăng nhập")}</Link></Button>}
     </>}
   </section></Page>;
 }

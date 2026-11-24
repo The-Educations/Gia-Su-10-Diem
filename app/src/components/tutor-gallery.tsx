@@ -23,6 +23,7 @@ import {
   DialogDescription,
   DialogHeader,
 } from "./ui/dialog";
+import { useI18n } from "@/lib/i18n";
 
 export function TutorGallery({
   images,
@@ -31,6 +32,7 @@ export function TutorGallery({
   images: GalleryPhoto[];
   name: string;
 }) {
+  const { t } = useI18n();
   const opener = useRef<HTMLButtonElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const index = images.findIndex((image) => image.id === activeId),
@@ -42,7 +44,7 @@ export function TutorGallery({
   return (
     <section className="tutor-gallery" aria-label={`Thư viện ảnh của ${name}`}>
       <div className="section-heading">
-        <h2>Góc flexing</h2>
+        <h2>{t("Góc flexing")}</h2>
         <span className="muted">{images.length} ảnh</span>
       </div>
       <div className="gallery-grid">
@@ -141,6 +143,7 @@ function GalleryEditorItem({
   index: number;
   onChange: (images: GalleryPhoto[], pending: boolean) => void;
 }) {
+  const { t } = useI18n();
   const [caption, setCaption] = useState(image.caption),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -192,7 +195,7 @@ function GalleryEditorItem({
           </Field>
           {error && <ErrorState error={error} />}
           <div className="actions">
-            <Submit busy={busy}>Lưu chú thích</Submit>
+            <Submit busy={busy}>{t("Lưu chú thích")}</Submit>
             <Button
               type="button"
               variant="ghost"
@@ -217,6 +220,7 @@ export function TutorGalleryEditor({
   images: GalleryPhoto[];
   onPending: () => void;
 }) {
+  const { t } = useI18n();
   const { refresh } = useApp();
   const [cropQueue, setCropQueue] = useState<File[]>([]);
   const [items, setItems] = useState(images),
@@ -287,7 +291,7 @@ export function TutorGalleryEditor({
       <form onSubmit={upload} className="gallery-upload">
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="gallery-files">Thêm ảnh vào hồ sơ</FieldLabel>
+            <FieldLabel htmlFor="gallery-files">{t("Thêm ảnh vào hồ sơ")}</FieldLabel>
             <Input
               id="gallery-files"
               type="file"

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n";
 
 // Same labels and limit as server/trust-policy.js.
 export const LESSON_TAGS = [
@@ -49,6 +50,7 @@ function StarPicker({ value, onChange, label }: { value: number; onChange: (n: n
 
 // Quick, private rating of one finished lesson: stars and up to three tags.
 export function LessonRatingDialog({ booking, onClose, onDone }: { booking: Booking | null; onClose: () => void; onDone: () => void }) {
+  const { t } = useI18n();
   return <Dialog open={!!booking} onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent className="lesson-rating">
       {booking && <LessonRatingForm key={booking.id} booking={booking} onClose={onClose} onDone={onDone} />}
@@ -56,6 +58,7 @@ export function LessonRatingDialog({ booking, onClose, onDone }: { booking: Book
   </Dialog>;
 }
 function LessonRatingForm({ booking, onClose, onDone }: { booking: Booking; onClose: () => void; onDone: () => void }) {
+  const { t } = useI18n();
   const [rating, setRating] = useState(booking.my_rating ?? 0),
     [tags, setTags] = useState<string[]>(booking.my_tags ?? []),
     [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -91,7 +94,7 @@ function LessonRatingForm({ booking, onClose, onDone }: { booking: Booking; onCl
       {error && <ErrorState error={error} />}
       <div className="actions">
         <Button type="button" disabled={busy} onClick={() => void submit()}>{busy ? "Đang lưu…" : editing ? "Lưu" : "Gửi"}</Button>
-        <Button type="button" variant="ghost" onClick={onClose}>Để sau</Button>
+        <Button type="button" variant="ghost" onClick={onClose}>{t("Để sau")}</Button>
       </div>
     </FieldGroup>
   </>;
@@ -107,6 +110,7 @@ export function CourseReviewDialog({ offer, onClose, onDone }: { offer: StudyOff
 }
 const intents = [["yes", "Có"], ["unsure", "Chưa chắc"], ["no", "Không"]] as const;
 function CourseReviewForm({ offer, onClose, onDone }: { offer: StudyOffer; onClose: () => void; onDone: () => void }) {
+  const { t } = useI18n();
   const mine = offer.my_review;
   const [rating, setRating] = useState(mine?.rating ?? 0),
     [body, setBody] = useState(mine?.body ?? ""),
@@ -134,11 +138,11 @@ function CourseReviewForm({ offer, onClose, onDone }: { offer: StudyOffer; onClo
       <FieldGroup>
         <StarPicker value={rating} onChange={setRating} label="Số sao cho khóa học" />
         <Field>
-          <FieldLabel htmlFor="course-review-body">Nhận xét (không bắt buộc)</FieldLabel>
+          <FieldLabel htmlFor="course-review-body">{t("Nhận xét (không bắt buộc)")}</FieldLabel>
           <Textarea id="course-review-body" value={body} onChange={e => setBody(e.target.value)} maxLength={1000} placeholder="Từ 10 ký tự. Không ghi số điện thoại, email hay liên kết." />
         </Field>
         <Field>
-          <FieldLabel>Em có muốn học tiếp với gia sư này không? (chỉ lưu nội bộ, không hiện công khai)</FieldLabel>
+          <FieldLabel>{t("Em có muốn học tiếp với gia sư này không? (chỉ lưu nội bộ, không hiện công khai)")}</FieldLabel>
           <div className="tag-choices" role="group" aria-label="Có muốn học tiếp">
             {intents.map(([value, label]) => <button key={value} type="button" aria-pressed={intent === value} onClick={() => setIntent(intent === value ? "" : value)}>{label}</button>)}
           </div>
@@ -152,16 +156,17 @@ function CourseReviewForm({ offer, onClose, onDone }: { offer: StudyOffer; onClo
 
 // Overview card for students: finished courses still waiting for a review.
 export function CoursesToReview({ offers, onReview }: { offers: StudyOffer[]; onReview: (offer: StudyOffer) => void }) {
+  const { t } = useI18n();
   const rows = offers.filter(o => o.review_eligible && !o.my_review);
   if (!rows.length) return null;
   return <section className="courses-to-review" aria-labelledby="courses-to-review-title">
-    <header><h2 id="courses-to-review-title">Khóa học cần đánh giá</h2><span>Đánh giá giúp học sinh khác chọn gia sư</span></header>
+    <header><h2 id="courses-to-review-title">{t("Khóa học cần đánh giá")}</h2><span>{t("Đánh giá giúp học sinh khác chọn gia sư")}</span></header>
     <ul>
       {rows.map(o => <li key={o.id}>
         <div><strong>{o.subject_name} · {o.tutor_name}</strong><span>Đã học {o.completed_lessons} buổi · còn {daysLeft(o.review_open_until)} ngày để đánh giá</span></div>
         <div className="actions">
-          <Button onClick={() => onReview(o)}>Đánh giá khóa học</Button>
-          <Button asChild variant="ghost"><Link to={`/offers?id=${o.id}`}>Xem khóa học</Link></Button>
+          <Button onClick={() => onReview(o)}>{t("Đánh giá khóa học")}</Button>
+          <Button asChild variant="ghost"><Link to={`/offers?id=${o.id}`}>{t("Xem khóa học")}</Link></Button>
         </div>
       </li>)}
     </ul>
