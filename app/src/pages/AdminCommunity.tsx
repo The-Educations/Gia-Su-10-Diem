@@ -4,7 +4,8 @@ import {
   RotateCw,
 } from "lucide-react";
 import { WorkspaceStats } from "@/components/workspace";
-import { useLoad } from "@/lib/api";
+import { toast } from "sonner";
+import { api, useApp, useLoad } from "@/lib/api";
 import type {
   CommunityOwner,
   CommunityPostData,
@@ -80,7 +81,7 @@ export default function AdminCommunity() {
   )
     ? params.get("section")!
     : "queue";
-  const status = ["approved", "hidden", "deleted"].includes(
+  const status = ["approved", "hidden", "deleted", "rejected"].includes(
     params.get("postStatus") || "",
   )
     ? params.get("postStatus")!
@@ -95,6 +96,21 @@ export default function AdminCommunity() {
     setParams(next);
   };
   const navigate = useNavigate();
+  const { refresh } = useApp();
+  const [busyId, setBusyId] = useState<number | null>(null);
+  // Approving needs no reason, so it is one click; a changed post answers 409 and the lists reload.
+  const quick = async (id: number, path: string, version: number, done: string) => {
+    setBusyId(id);
+    try {
+      await api(`/admin/community/posts/${id}/${path}`, "POST", { expected_version: version });
+      toast.success(done);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusyId(null);
+      refresh();
+    }
+  };
   const [action, setAction] = useState<CommunityAction | null>(null),
     [editor, setEditor] = useState<"rules" | null>(null);
   const summary = useLoad<CommunitySummary>("/admin/community/summary");
@@ -204,6 +220,11 @@ export default function AdminCommunity() {
                 <Badge variant="outline">
                   {p.revision_status === "pending" ? "Bản sửa" : "Bài mới"}
                 </Badge>
+                {p.ai_verdict === "escalate" && p.ai_version === p.review_version && (
+                  <p className="text-muted-foreground">
+                    AI chuyển admin xem: {p.ai_reason || "cần người quyết định."}
+                  </p>
+                )}
                 {p.revision_status === "pending" ? (
                   <div className="community-comparison">
                     <section>
@@ -348,6 +369,7 @@ export default function AdminCommunity() {
             options={[
               { value: "approved", label: "Đã đăng" },
               { value: "hidden", label: "Đã ẩn" },
+              { value: "rejected", label: "Bị từ chối" },
               { value: "deleted", label: "Tác giả đã xóa" },
             ]}
           />
@@ -368,7 +390,22 @@ export default function AdminCommunity() {
                   {postStates[p.status || "approved"]}
                 </Badge>
                 <PostBody text={p.body} html={p.body_html} />
-                {p.review_note && <p>{p.review_note}</p>}
+                {p.status === "rejected" || p.is_revision ? (
+                  <>
+                    {p.is_revision && (
+                      <p>
+                        Bản sửa bị từ chối: <strong>{p.revision_title}</strong>
+                      </p>
+                    )}
+                    <p className="text-muted-foreground">
+                      Từ chối bởi {p.reviewer?.name || "không rõ"}
+                      {p.reviewed_at ? ` · ${p.reviewed_at}` : ""}
+                      {p.reason ? ` — ${p.reason}` : ""}
+                    </p>
+                  </>
+                ) : (
+                  p.review_note && <p>{p.review_note}</p>
+                )}
                 {p.status === "deleted" && p.days_left !== undefined && (
                   <p className="text-muted-foreground">
                     Còn {p.days_left} ngày
@@ -401,7 +438,15 @@ export default function AdminCommunity() {
                       {p.status === "deleted" ? "Xóa vĩnh viễn ngay" : "Xóa vĩnh viễn"}
                     </Button>
                   )}
-                  {p.status === "approved" ? (
+                  {(p.status === "rejected" || p.is_revision) && (
+                    <Button
+                      disabled={busyId === p.id}
+                      onClick={() => quick(p.id, "reapprove", p.review_version, "Đã duyệt lại")}
+                    >
+                      Duyệt lại
+                    </Button>
+                  )}
+                  {p.status === "approved" && !p.is_revision ? (
                     <Button
                       variant="outline"
                       onClick={() => review(p.id, "hide", "Ẩn bài", true)}

@@ -68,6 +68,18 @@ export function registerCommunityAdmin(
     if (!["hidden", "deleted"].includes(p.status)) fail(409, "Trạng thái bài không phù hợp.");
     return p;
   };
+  // Copies a pending or rejected edit over the live post and swaps in its images.
+  const applyRevision = (p, actorId) => {
+    run(db, "DELETE FROM community_post_images WHERE post_id=? AND revision=0", p.id);
+    run(db, "UPDATE community_post_images SET revision=0 WHERE post_id=? AND revision=1", p.id);
+    run(
+      db,
+      "UPDATE community_posts SET title=revision_title,body=revision_body,body_html=revision_body_html,revision_body_html='',search_text=?,revision_title=NULL,revision_body=NULL,revision_status=NULL,revision_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      fold(p.revision_title + " " + p.revision_body),
+      actorId,
+      p.id,
+    );
+  };
   const privatePost = (p) => ({
     ...p,
     owner: one(
@@ -111,18 +123,34 @@ export function registerCommunityAdmin(
       .default(1)
       .parse(req.query.page);
     const status = z
-      .enum(["approved", "hidden", "deleted"])
+      .enum(["approved", "hidden", "deleted", "rejected"])
       .default("approved")
       .parse(req.query.status);
-    const rows = all(
-      db,
-      "SELECT * FROM community_posts WHERE status=? AND purged_at IS NULL AND kind!='rules' ORDER BY updated_at DESC,id DESC LIMIT 21 OFFSET ?",
-      status,
-      (page - 1) * 20,
-    );
+    // "Bị từ chối" holds rejected posts and live posts whose latest edit was rejected.
+    const rows = status === "rejected"
+      ? all(
+          db,
+          "SELECT * FROM community_posts WHERE purged_at IS NULL AND kind!='rules' AND (status='rejected' OR (status='approved' AND revision_status='rejected')) ORDER BY reviewed_at DESC,id DESC LIMIT 21 OFFSET ?",
+          (page - 1) * 20,
+        )
+      : all(
+          db,
+          "SELECT * FROM community_posts WHERE status=? AND purged_at IS NULL AND kind!='rules' ORDER BY updated_at DESC,id DESC LIMIT 21 OFFSET ?",
+          status,
+          (page - 1) * 20,
+        );
     res.json({
       items: rows.slice(0, 20).map((p) => ({
         ...privatePost(p),
+        ...(status === "rejected"
+          ? {
+              is_revision: p.status === "approved",
+              reason: p.status === "approved" ? p.revision_note : p.review_note,
+              reviewer: p.reviewed_by
+                ? one(db, "SELECT id,name FROM users WHERE id=?", p.reviewed_by)
+                : null,
+            }
+          : {}),
         ...(status === "deleted"
           ? {
               days_left: Math.max(
@@ -174,23 +202,7 @@ export function registerCommunityAdmin(
         fail(409, "Trạng thái bài không phù hợp.");
       transaction(db, () => {
         if (revision && action === "approve") {
-          run(
-            db,
-            "DELETE FROM community_post_images WHERE post_id=? AND revision=0",
-            p.id,
-          );
-          run(
-            db,
-            "UPDATE community_post_images SET revision=0 WHERE post_id=? AND revision=1",
-            p.id,
-          );
-          run(
-            db,
-            "UPDATE community_posts SET title=revision_title,body=revision_body,body_html=revision_body_html,revision_body_html='',search_text=?,revision_title=NULL,revision_body=NULL,revision_status=NULL,revision_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            fold(p.revision_title + " " + p.revision_body),
-            req.user.id,
-            p.id,
-          );
+          applyRevision(p, req.user.id);
         } else if (revision && action === "reject")
           run(
             db,
@@ -234,6 +246,54 @@ export function registerCommunityAdmin(
       });
       res.json({ ok: true });
     });
+  // Undo a rejection (by the bot or an admin): publish the post, or its rejected edit.
+  app.post(`${base}/posts/:id/reapprove`, admin, (req, res) => {
+    const p = getPost(req.params.id, req.user);
+    const version = z.number().int().nonnegative().parse(req.body.expected_version);
+    if (version !== p.review_version)
+      fail(409, "Bài đã thay đổi. Tải lại danh sách trước khi duyệt lại.");
+    const revision = p.status === "approved" && p.revision_status === "rejected";
+    if (p.kind === "rules" || !(p.status === "rejected" || revision))
+      fail(409, "Bài không ở trạng thái bị từ chối.");
+    transaction(db, () => {
+      if (revision) applyRevision(p, req.user.id);
+      else
+        run(
+          db,
+          "UPDATE community_posts SET status='approved',review_note='',reviewed_by=?,reviewed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,published_at=CURRENT_TIMESTAMP WHERE id=?",
+          req.user.id,
+          p.id,
+        );
+      notify(p.author_id, revision ? "revision_approved" : "post_approved", p.id);
+      audit(req.user.id, `community.${revision ? "revision" : "post"}.reapprove`, JSON.stringify({ id: p.id }));
+    });
+    res.json({ ok: true });
+  });
+  // The moderation bot explains why it handed a post to an admin. It changes nothing else
+  // and applies only to the version it graded, so an edited post drops the old note.
+  app.post(`${base}/posts/:id/ai-note`, admin, (req, res) => {
+    const d = z
+      .object({
+        expected_version: z.number().int().nonnegative(),
+        verdict: z.enum(["escalate", "approve", "reject"]),
+        reason: z.string().trim().max(200).default(""),
+      })
+      .parse(req.body);
+    const p = getPost(req.params.id, req.user);
+    if (d.expected_version !== p.review_version)
+      fail(409, "Bài đã thay đổi.");
+    if (!(p.status === "pending" || (p.status === "approved" && p.revision_status === "pending")))
+      fail(409, "Bài không còn chờ duyệt.");
+    run(
+      db,
+      "UPDATE community_posts SET ai_verdict=?,ai_reason=?,ai_version=?,ai_at=CURRENT_TIMESTAMP WHERE id=?",
+      d.verdict,
+      d.reason,
+      d.expected_version,
+      p.id,
+    );
+    res.json({ ok: true });
+  });
   app.delete(`${base}/posts/:id`, admin, (req, res) => {
     purge([purgeable(req.params.id)], req.user.id, false);
     res.json({ ok: true });

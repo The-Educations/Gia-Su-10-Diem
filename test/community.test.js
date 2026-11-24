@@ -1134,3 +1134,60 @@ test("startup closes reports left pointing at posts or comments that no longer e
   const open = db.prepare("SELECT target_type,target_id FROM community_reports WHERE status='open'").all();
   assert.deepEqual(JSON.parse(JSON.stringify(open)), [{ target_type: "post", target_id: id }]);
 });
+
+test("admin sees rejected posts and edits with who rejected them, and can reverse a rejection", async (t) => {
+  const { call, create, approve, db, ids } = await fixture(t);
+  const notices = (kind) => db.prepare("SELECT COUNT(*) n FROM community_notifications WHERE kind=? AND user_id=?").get(kind, ids.student).n;
+  const bad = await create(), edited = await create();
+  await approve(edited);
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reject`, "POST", { note: "Quảng cáo" })).status, 200);
+  await call("student", `/community/posts/${edited}`, "PUT", { title: "Tiêu đề mới", body: "Nội dung mới đầy đủ hơn." });
+  assert.equal((await call("admin", `/admin/community/posts/${edited}/reject`, "POST", { note: "Sửa chưa đạt" })).status, 200);
+
+  const list = (await call("admin", "/admin/community/posts?status=rejected")).data;
+  const byId = Object.fromEntries(list.items.map((p) => [p.id, p]));
+  assert.deepEqual(Object.keys(byId).map(Number).sort(), [bad, edited].sort());
+  assert.deepEqual([byId[bad].is_revision, byId[bad].reason, byId[bad].reviewer.id], [false, "Quảng cáo", ids.admin]);
+  assert.deepEqual([byId[edited].is_revision, byId[edited].reason, byId[edited].revision_title], [true, "Sửa chưa đạt", "Tiêu đề mới"]);
+  assert.equal((await call("student", "/admin/community/posts?status=rejected")).status, 403);
+  // Rejected posts are not in the queue the bot reads.
+  assert.deepEqual((await call("admin", "/admin/community/queue")).data, []);
+
+  // Reapprove: only with the current version, only from a rejected state, author gets the notice.
+  const body = { expected_version: 0 };
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reapprove`, "POST", { expected_version: 5 })).status, 409);
+  assert.equal((await call("student", `/admin/community/posts/${bad}/reapprove`, "POST", body)).status, 403);
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reapprove`, "POST", body)).status, 200);
+  assert.equal(one(db, "SELECT status FROM community_posts WHERE id=?", bad).status, "approved");
+  assert.equal((await call(null, `/community/posts/${bad}`)).status, 200);
+  assert.equal(notices("post_approved"), 2);
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reapprove`, "POST", body)).status, 409);
+
+  const editVersion = one(db, "SELECT review_version v FROM community_posts WHERE id=?", edited).v;
+  assert.equal((await call("admin", `/admin/community/posts/${edited}/reapprove`, "POST", { expected_version: editVersion })).status, 200);
+  const live = one(db, "SELECT title,revision_status FROM community_posts WHERE id=?", edited);
+  assert.deepEqual([live.title, live.revision_status], ["Tiêu đề mới", null]);
+  assert.equal(notices("revision_approved"), 1);
+  assert.deepEqual((await call("admin", "/admin/community/posts?status=rejected")).data.items, []);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM audit WHERE action IN ('community.post.reapprove','community.revision.reapprove')").get().n, 2);
+});
+
+test("the bot's note on an escalated post is tied to the graded version and changes nothing else", async (t) => {
+  const { call, create, db } = await fixture(t);
+  const id = await create();
+  const note = { expected_version: 0, verdict: "escalate", reason: "  Có thể là quảng cáo, cần admin xem.  " };
+  assert.equal((await call("student", `/admin/community/posts/${id}/ai-note`, "POST", note)).status, 403);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", { ...note, verdict: "x" })).status, 400);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", { ...note, reason: "a".repeat(201) })).status, 400);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", { ...note, expected_version: 3 })).status, 409);
+  assert.equal((await call("admin", `/admin/community/posts/99999/ai-note`, "POST", note)).status, 404);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", note)).status, 200);
+  const row = () => one(db, "SELECT status,ai_verdict,ai_reason,ai_version,review_version FROM community_posts WHERE id=?", id);
+  assert.deepEqual({ ...row() }, { status: "pending", ai_verdict: "escalate", ai_reason: "Có thể là quảng cáo, cần admin xem.", ai_version: 0, review_version: 0 });
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM community_notifications").get().n, 0);
+  const queued = (await call("admin", "/admin/community/queue")).data[0];
+  assert.deepEqual([queued.ai_verdict, queued.ai_reason, queued.ai_version, queued.review_version], ["escalate", "Có thể là quảng cáo, cần admin xem.", 0, 0]);
+  // Once the post is decided the note is refused.
+  await call("admin", `/admin/community/posts/${id}/approve`, "POST");
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", note)).status, 409);
+});

@@ -77,6 +77,14 @@ if (!fatal && pre.candidates.length && (claude.error || typeof claude.stdout !==
 
 const outcomes = [];
 const actions = [];
+// Ghi chú "vì sao AI chuyển admin" gửi lên web cho từng bài chuyển admin. Shadow thì không đổi gì trên web nên bỏ qua.
+// Lỗi của ghi chú không bao giờ làm hỏng lần chạy (xem ô Tổng kết).
+const notes = [];
+const noteFor = (c, reason) => {
+  if (!["approve_only", "full"].includes(cfg.mode)) return;
+  const why = String(reason || "").replace(/^chuyển admin:\\s*/i, "").slice(0, 200) || "AI không chắc, cần admin quyết định.";
+  notes.push({ key: c.key, id: c.id, version: c.version, revision: c.revision, title: String(c.title).slice(0, 160), action: "ai-note", reason: why, body: { expected_version: c.version, verdict: "escalate", reason: why } });
+};
 const logLines = [];
 const logRow = (c, ai, decision, reason, done) =>
   JSON.stringify({ t: new Date(nowMs).toISOString(), id: c.id, version: c.version, kind: c.revision ? "revision" : "new", title: String(c.title).slice(0, 160), ai, decision, reason, done });
@@ -85,6 +93,7 @@ if (!fatal) {
   for (const e of pre.escalations) {
     outcomes.push({ key: e.key, kind: "escalated" });
     logLines.push(logRow(e, null, "escalate", e.reason, true));
+    noteFor(e, e.reason);
   }
   const raw = {};
   for (const line of String(claude.stdout || "").split("\\n")) {
@@ -106,6 +115,7 @@ if (!fatal) {
     } else if (d.action === "escalate") {
       outcomes.push({ key: c.key, kind: "escalated" });
       logLines.push(logRow(c, ai, "escalate", d.reason, true));
+      noteFor(c, d.reason);
     } else {
       if (d.action === "approve") daily.approved += 1;
       else daily.rejected += 1;
@@ -115,14 +125,14 @@ if (!fatal) {
 }
 
 const state = fatal ? state0 : settleModeration(state0, outcomes, today, nowMs);
-return [{ json: { fatal, state, today, nowMs, actions, command: buildWriteCommand(state, logLines, !actions.length) } }];
+return [{ json: { fatal, state, today, nowMs, actions, notes, command: buildWriteCommand(state, logLines, !(actions.length || notes.length)) } }];
 `,
 
   "Việc cần làm": `
 const q = $('Quyết định').first().json;
 if (q.fatal) throw new Error(q.fatal);
 const cookie = $('Lấy cookie').first().json.cookie;
-return q.actions.map((a) => ({ json: { ...a, cookie } }));
+return [...q.actions, ...(q.notes || [])].map((a) => ({ json: { ...a, cookie } }));
 `,
 
   "Tổng kết": `${inline(settleModeration, buildWriteCommand)}
@@ -135,6 +145,11 @@ const logLines = [];
 acts.forEach((a, i) => {
   const r = results[i] || {};
   const status = r.error ? undefined : r.statusCode;
+  if (a.action === "ai-note") {
+    // Ghi chú chỉ để admin dễ xem: 404 (web chưa cập nhật), 409 hay lỗi mạng đều chỉ ghi nhật ký, không đổi trạng thái chấm.
+    logLines.push(JSON.stringify({ t: new Date().toISOString(), id: a.id, version: a.version, decision: "ai-note", reason: a.reason, done: status === 200, result: status === 200 ? "ok" : "HTTP " + (status ?? "?") }));
+    return;
+  }
   const kind = status === 200 ? (a.action === "approve" ? "approved" : "rejected") : status === 409 ? "conflict" : "error";
   outcomes.push({ key: a.key, kind });
   logLines.push(JSON.stringify({
@@ -224,7 +239,7 @@ export function buildWorkflow() {
     add(`Ghi chú ${content.split("\n")[0]}`, "n8n-nodes-base.stickyNote", 1, position, { content, width, height: 140, color });
   note("1–2. Hẹn giờ, khoá, đăng nhập\nMỗi 5 phút, lấy khoá chống chạy chồng rồi đăng nhập bằng tài khoản Bot kiểm duyệt. Máy tắt thì bài nằm trong hàng đợi cho admin duyệt tay như cũ.", [-20, -170], 1480, 7);
   note("3–5. Hàng đợi, Claude chấm, quyết định\nBài có ảnh hoặc nghi cài lệnh không gửi Claude. Haiku chỉ trả approve/reject/escalate; mã quyết định cuối theo chế độ (shadow / approve_only / full) và trần mỗi ngày.", [-20, 130], 1480, 6);
-  note("6–7. Thực hiện trên web\nGọi approve/reject kèm expected_version. Web trả 409 (tác giả vừa sửa) thì bỏ qua. Nhật ký: ~/.n8n/moderation-log.jsonl.", [-20, 430], 960, 4);
+  note("6–7. Thực hiện trên web\nGọi approve/reject kèm expected_version. Web trả 409 (tác giả vừa sửa) thì bỏ qua. Bài chuyển admin được gọi thêm ai-note để admin thấy lý do (lỗi ghi chú không làm hỏng lần chạy). Nhật ký: ~/.n8n/moderation-log.jsonl.", [-20, 430], 960, 4);
 
   const FLOW = [
     "Hẹn giờ", "Cài đặt", "Đọc trạng thái", "Kiểm tra khoá", "Đăng nhập web", "Lấy cookie", "Lấy hàng đợi",
