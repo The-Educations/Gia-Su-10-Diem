@@ -193,7 +193,7 @@ function Shell() {
                 <Route
                   path="/sessions"
                   element={
-                    <Require>
+                    <Require role="admin">
                       <SessionsPage />
                     </Require>
                   }

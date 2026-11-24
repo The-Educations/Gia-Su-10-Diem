@@ -95,37 +95,6 @@ export function TutorPresentation({
   );
   const body = (
     <>
-      {children}
-      {!!t.verified?.length && (
-        <Section title={tr("Đã xác minh")}>
-          <ul className="verified-list">
-            {t.verified.map((v, i) => {
-              const Icon = v.kind === "school" ? GraduationCap : v.kind === "award" ? Award : ScrollText;
-              return (
-                <li key={i}>
-                  <Icon aria-hidden="true" />
-                  <span>{v.label}</span>
-                  <BadgeCheck className="verified-mark" aria-label={tr("Đã đối chiếu minh chứng")} />
-                </li>
-              );
-            })}
-          </ul>
-        </Section>
-      )}
-      {video && (
-        <Section title={tr("Video giới thiệu")}>
-          <div className="intro-video">
-            <iframe src={video} title={tr("Video giới thiệu của {name}", { name: t.name })} loading="lazy" allow="encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
-          </div>
-        </Section>
-      )}
-      {sample && (
-        <Section title={tr("Một buổi học mẫu")}>
-          <div className="intro-video">
-            <iframe src={sample} title={tr("Buổi học mẫu của {name}", { name: t.name })} loading="lazy" allow="encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
-          </div>
-        </Section>
-      )}
       {t.bio && (
         <Section title="Về gia sư">
           <p className="reading-text">{t.bio}</p>
@@ -153,12 +122,43 @@ export function TutorPresentation({
           <p className="reading-text">{t.lesson_plan}</p>
         </Section>
       )}
+      {video && (
+        <Section title={tr("Video giới thiệu")}>
+          <div className="intro-video">
+            <iframe src={video} title={tr("Video giới thiệu của {name}", { name: t.name })} loading="lazy" allow="encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+          </div>
+        </Section>
+      )}
+      {sample && (
+        <Section title={tr("Một buổi học mẫu")}>
+          <div className="intro-video">
+            <iframe src={sample} title={tr("Buổi học mẫu của {name}", { name: t.name })} loading="lazy" allow="encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+          </div>
+        </Section>
+      )}
+      {!!t.verified?.length && (
+        <Section title={tr("Đã xác minh")}>
+          <ul className="verified-list">
+            {t.verified.map((v, i) => {
+              const Icon = v.kind === "school" ? GraduationCap : v.kind === "award" ? Award : ScrollText;
+              return (
+                <li key={i}>
+                  <Icon aria-hidden="true" />
+                  <span>{v.label}</span>
+                  <BadgeCheck className="verified-mark" aria-label={tr("Đã đối chiếu minh chứng")} />
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
       <ProfileSections sections={t.profile_sections} />
       {!!t.demo && (
         <p className="demo-note">
           Hồ sơ và ảnh minh họa cho trải nghiệm sản phẩm.
         </p>
       )}
+      {children}
     </>
   );
   return (
