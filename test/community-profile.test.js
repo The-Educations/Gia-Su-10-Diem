@@ -623,3 +623,16 @@ test("moderation decisions queue one email each in the shared outbox, without a 
   assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='community_mail'").get(), undefined);
   assert.equal((await call("admin", `/admin/users/${ids.student}`, "DELETE", { email: "student@private.test" })).status, 200);
 });
+
+test("removing a profile part closes that part's reports and leaves other parts open", async t => {
+  const { db, ids, call } = await fixture(t);
+  const code = one(db, "SELECT profile_code FROM users WHERE id=?", ids.student).profile_code;
+  await call("student", "/community/me/profile", "PUT", { bio: "Mình thích toán" });
+  for (const user of ["parent", "other"])
+    assert.equal((await call(user, "/community/reports", "POST", { target_type: "profile", target_id: code, part: "bio", reason: "Khác" })).status, 201);
+  run(db, "INSERT INTO community_reports(reporter_id,target_type,target_id,part,reason) VALUES (?,'profile',?,'avatar','Khác')", ids.parent, ids.student);
+  const groups = (await call("admin", "/admin/community/reports")).data;
+  assert.deepEqual(groups.map(g => [g.part, g.report_count]).sort(), [["avatar", 1], ["bio", 2]]);
+  assert.equal((await call("admin", `/admin/community/members/${code}/bio`, "DELETE", { note: "Không phù hợp" })).status, 200);
+  assert.deepEqual((await call("admin", "/admin/community/reports")).data.map(g => g.part), ["avatar"]);
+});

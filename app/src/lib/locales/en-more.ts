@@ -1870,4 +1870,9 @@ export const enMore: Record<string, string> = {
   "cộng {n} lần": "credited {n} times",
   "Lệnh rút": "Withdrawal",
   "Sổ cái lệch {n} chỗ — mở Hệ thống để kiểm tra.": "Ledger off by {n} spots — open System to inspect.",
+  "Quy tắc": "Rules",
+  "Viết thông báo": "Write an announcement",
+  "Duyệt lại": "Approve again",
+  "Tác giả đã xóa": "Deleted by author",
+  "Xóa vĩnh viễn ngay": "Delete permanently now",
 };

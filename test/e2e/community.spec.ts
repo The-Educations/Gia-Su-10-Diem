@@ -94,7 +94,7 @@ test("community submission, rejection, revisions, tutor comments and moderation"
     .locator(".community-card")
     .filter({ has: admin.getByRole("heading", { name: title, exact: true }) });
   await card.getByRole("button", { name: "Duyệt", exact: true }).click();
-  await confirm(admin);
+  await expect(admin.getByText("Đã duyệt", { exact: true }).first()).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Bình luận (0)" }),
@@ -120,7 +120,7 @@ test("community submission, rejection, revisions, tutor comments and moderation"
     admin.getByRole("heading", { name: "Bản đang hiển thị" }),
   ).toBeVisible();
   await admin.getByRole("button", { name: "Duyệt", exact: true }).click();
-  await confirm(admin);
+  await expect(admin.getByText("Đã duyệt", { exact: true }).first()).toBeVisible();
   await login(tutor, "chau", `/community/${postId}`);
   await tutor
     .getByLabel("Bình luận", { exact: true })
@@ -361,7 +361,7 @@ test("role workspaces, public identity and persistent admin navigation", async (
       await expect(
         page.getByRole("combobox", { name: "Trạng thái bài" }),
       ).toContainText("Đã ẩn");
-      await page.getByRole("tab", { name: "Thông báo & Quy tắc" }).focus();
+      await page.getByRole("tab", { name: "Quy tắc", exact: true }).focus();
       await page.keyboard.press("Enter");
       await expect(
         page.getByRole("button", { name: "Sửa Quy tắc cộng đồng" }),
@@ -505,7 +505,7 @@ test("rich editor publishes formatting, links and uploaded images only after rev
     card.locator("strong").filter({ hasText: "Cùng học hình học" }),
   ).toBeVisible();
   await card.getByRole("button", { name: "Duyệt", exact: true }).click();
-  await confirm(admin);
+  await expect(admin.getByText("Đã duyệt", { exact: true }).first()).toBeVisible();
   await guest.goto(path);
   await expect(
     guest.getByRole("img", { name: "Sơ đồ hình học" }),
@@ -564,7 +564,7 @@ test("dedicated composer saves private drafts, reopens them and submits for each
     }
     await page
       .getByRole("button", {
-        name: slug === "admin" ? "Viết bài" : "Đăng bài",
+        name: slug === "admin" ? "Viết thông báo" : "Đăng bài",
         exact: true,
       })
       .click();

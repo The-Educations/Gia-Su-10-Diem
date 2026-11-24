@@ -2549,6 +2549,7 @@
 .community-review-owner span { font-size: .8125rem; color: var(--muted-foreground); }
 .community-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .community-comparison section { min-width: 0; }
+.community-report-reasons { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .community-comparison h3 { font-size: .8125rem; color: var(--muted-foreground); margin-bottom: 12px; }
 .community-comparison h4 { font-weight: 650; margin-bottom: 8px; }
 .community-admin { min-width: 0; }
