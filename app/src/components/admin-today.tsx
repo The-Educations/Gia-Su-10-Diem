@@ -38,7 +38,7 @@ export function AdminToday() {
   return (
     <div className="admin-today">
       {warnings.map((w) => (
-        <Link key={w.kind} to={`/admin?tab=${w.to}`} className="health-warning" role="alert">
+        <Link key={w.kind} to={`/admin?tab=${w.to}`} className="health-warning" aria-label={warnText(w, t)}>
           <span>⚠</span><span>{warnText(w, t)}</span>
         </Link>
       ))}
