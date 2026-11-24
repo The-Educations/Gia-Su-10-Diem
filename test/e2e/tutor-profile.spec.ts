@@ -48,6 +48,17 @@ test("tutor profile: two-column layout on desktop, stacked on mobile, vi + en", 
   await expect(page.locator(".profile-meta .trust-score")).toHaveCount(0);
   await expect(page.locator(".booking-card")).not.toContainText("đánh giá");
   await expect(page.locator("#reviews")).toBeVisible();
+  // Sections read in a sensible order: About first, Reviews last; and every
+  // section is visible without scrolling (the reveal is animation-only now).
+  const order = await page.locator(".tutor-body .section-block h2").allTextContents();
+  expect(order[0]).toMatch(/Về gia sư/i);
+  expect(order.at(-1)).toMatch(/Đánh giá/i);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.reload();
+  const hidden = await page.locator(".tutor-body .section-block").evaluateAll(
+    (els) => els.filter((el) => getComputedStyle(el).opacity !== "1").length,
+  );
+  expect(hidden).toBe(0);
   for (const [width, lang] of [[1440, "vi"], [390, "vi"], [1440, "en"], [390, "en"]] as const) {
     await page.addInitScript((l) => localStorage.setItem("giasu.lang", l), lang);
     await page.reload();
