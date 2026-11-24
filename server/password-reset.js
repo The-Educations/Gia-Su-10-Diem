@@ -32,14 +32,18 @@ export function registerPasswordReset(app, db, { origin, sendEmail, audit }) {
       run(db, `INSERT INTO password_resets(user_id,token_hash,expires,sent_at,window_start,attempts) VALUES (?,?,?,?,?,?)
         ON CONFLICT(user_id) DO UPDATE SET sent_at=excluded.sent_at,window_start=excluded.window_start,attempts=excluded.attempts`,
         user.id, "", 0, now, sameWindow ? previous.window_start : now, sameWindow ? previous.attempts + 1 : 1);
-      await sendEmail({ kind: "password_reset_google", to: user.email, link: `${origin}/app/auth` });
+      // A mail outage must still answer the same 200 — otherwise the status
+      // code itself says the account exists.
+      try { await sendEmail({ kind: "password_reset_google", to: user.email, link: `${origin}/app/auth` }); }
+      catch (e) { console.warn("password reset mail failed:", e.message); }
       return ok();
     }
     const token = randomBytes(32).toString("hex");
     run(db, `INSERT INTO password_resets(user_id,token_hash,expires,used_at,sent_at,window_start,attempts) VALUES (?,?,?,NULL,?,?,?)
       ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,expires=excluded.expires,used_at=NULL,sent_at=excluded.sent_at,window_start=excluded.window_start,attempts=excluded.attempts`,
       user.id, tokenHash(token), now + TOKEN_TTL, now, sameWindow ? previous.window_start : now, sameWindow ? previous.attempts + 1 : 1);
-    await sendEmail({ kind: "password_reset", to: user.email, link: `${origin}/app/reset-password?token=${token}` });
+    try { await sendEmail({ kind: "password_reset", to: user.email, link: `${origin}/app/reset-password?token=${token}` }); }
+    catch (e) { console.warn("password reset mail failed:", e.message); }
     return ok();
   });
 

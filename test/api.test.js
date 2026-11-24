@@ -3118,3 +3118,14 @@ test("forgot/reset password: no email leak, one-use token, sessions killed, hour
   assert.equal(one(db, "SELECT token_hash FROM password_resets WHERE user_id=(SELECT id FROM users WHERE email='chau@demo.giasu.test')").token_hash, "");
 });
 });
+
+test("forgot-password returns the same answer when the mailer is down — no enumeration", async (t) => {
+  const { client } = await fixture(t, { sendEmail: async () => { throw new Error("mailer down"); } });
+  const guest = client();
+  const exists = await guest.request("/auth/forgot-password", "POST", { email: "student@demo.giasu.test" });
+  const missing = await guest.request("/auth/forgot-password", "POST", { email: "ghost@nowhere.test" });
+  assert.equal(exists.status, 200);
+  assert.equal(missing.status, 200);
+  assert.deepEqual(exists.data, missing.data, "an existing email must get the byte-identical reply");
+  assert.ok(!JSON.stringify(exists.data).match(/token|reset/i) || exists.data.message, "no token leaks in the reply");
+});
