@@ -16,6 +16,7 @@ test("tutor profile: two-column layout on desktop, stacked on mobile, vi + en", 
   await page.route("**/api/tutors/3", async (route) => {
     const res = await route.fetch(), json = await res.json();
     json.banner_url = BANNER; json.demo = 0;
+    json.rating = { average: 4.8, count: 12, counts: [0,0,0,0,12], reviews: [] };
     return route.fulfill({ response: res, json });
   });
   await page.goto("/app/tutors/3");
@@ -39,6 +40,14 @@ test("tutor profile: two-column layout on desktop, stacked on mobile, vi + en", 
     return !!b && Math.abs(b.width - b.height) <= 2 && (!img || getComputedStyle(img).objectFit === "cover");
   });
   expect(fills).toBe(true);
+  // Rating lives once: a single star link in the identity rail, none in the
+  // booking card, and it deep-links to the Reviews section.
+  await expect(page.locator(".tutor-aside .rating-link")).toHaveCount(1);
+  await expect(page.locator(".tutor-aside .rating-link")).toHaveAttribute("href", "#reviews");
+  // The trust chip must not repeat the same state next to the rating link.
+  await expect(page.locator(".profile-meta .trust-score")).toHaveCount(0);
+  await expect(page.locator(".booking-card")).not.toContainText("đánh giá");
+  await expect(page.locator("#reviews")).toBeVisible();
   for (const [width, lang] of [[1440, "vi"], [390, "vi"], [1440, "en"], [390, "en"]] as const) {
     await page.addInitScript((l) => localStorage.setItem("giasu.lang", l), lang);
     await page.reload();

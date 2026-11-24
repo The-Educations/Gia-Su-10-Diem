@@ -208,14 +208,16 @@ export function TextLink({
 export function Section({
   title,
   action,
+  id,
   children,
 }: {
   title: string;
   action?: ReactNode;
+  id?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="section-block">
+    <section className="section-block" id={id}>
       <div className="section-heading">
         <h2>{title}</h2>
         {action}

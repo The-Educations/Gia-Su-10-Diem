@@ -2135,6 +2135,16 @@
   border: 1px solid color-mix(in srgb, #2ea36b 38%, transparent);
 }
 .approved-badge svg { width: 14px; height: 14px; }
+.rating-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+.rating-link:hover { text-decoration: underline; }
+.rating-link svg { width: 14px; height: 14px; }
 .booking-card-meta span:first-child {
   font-size: 14px;
   font-weight: 600;

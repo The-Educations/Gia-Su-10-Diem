@@ -13,7 +13,7 @@ export function RatingSection({ tutor }: { tutor: Tutor & { rating?: Rating } })
   // Earlier course reviews stay visible next to the package ratings.
   const comments = [...r.reviews.filter((x) => x.body), ...(tutor.reviews || []).filter((x) => x.body).map((x) => ({ ...x, lessons: x.lessons || 0 }))];
   return (
-    <Section title={t("Đánh giá ({n})", { n: r.count + (tutor.reviews || []).length })}>
+    <Section id="reviews" title={t("Đánh giá ({n})", { n: r.count + (tutor.reviews || []).length })}>
       {r.count ? (
         <div className="rating-summary">
           <div className="rating-big"><strong>{r.average?.toFixed(1)}</strong><Stars value={r.average || 0} /><span>{t("{n} gói học đã hoàn thành", { n: r.count })}</span></div>
