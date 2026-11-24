@@ -143,6 +143,10 @@ CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notificatio
     db.exec(
       "ALTER TABLE community_posts ADD COLUMN review_version INTEGER NOT NULL DEFAULT 0",
     );
+  // The moderation bot's note on why it escalated a post, tied to the review_version it graded.
+  for (const [name, type] of [["ai_verdict", "TEXT"], ["ai_reason", "TEXT NOT NULL DEFAULT ''"], ["ai_version", "INTEGER"], ["ai_at", "TEXT"]])
+    if (!db.prepare("PRAGMA table_info(community_posts)").all().some((c) => c.name === name))
+      db.exec(`ALTER TABLE community_posts ADD COLUMN ${name} ${type}`);
   // A purged post keeps its row (title and body wiped) so its id is never handed to a new post.
   if (!db.prepare("PRAGMA table_info(community_posts)").all().some((c) => c.name === "purged_at"))
     db.exec("ALTER TABLE community_posts ADD COLUMN purged_at TEXT");
