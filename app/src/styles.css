@@ -2101,6 +2101,49 @@
   from { transform: scale(1) translateY(0); }
   to { transform: scale(1.06) translateY(-6px); }
 }
+/* Facebook-style avatar overlapping the cover's bottom edge. */
+.tutor-presentation.tutor-split .hero-on-cover {
+  padding-top: 0;
+}
+.tutor-split .hero-on-cover .person.large {
+  width: 132px;
+  height: 152px;
+  margin-top: -60px;
+  margin-bottom: -6px;
+  box-shadow: 0 0 0 5px var(--background);
+  position: relative;
+  z-index: 1;
+}
+.tutor-split .hero-on-cover > div:last-child {
+  padding-top: 36px;
+}
+.approved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1d6b46;
+  background: color-mix(in srgb, #2ea36b 13%, transparent);
+  border: 1px solid color-mix(in srgb, #2ea36b 38%, transparent);
+}
+.approved-badge svg { width: 14px; height: 14px; }
+.booking-card-meta span:first-child {
+  font-size: 14px;
+  font-weight: 600;
+}
+@media (max-width: 950px) {
+  .tutor-split .hero-on-cover .person.large {
+    width: 104px;
+    height: 122px;
+    margin-top: -46px;
+  }
+  .tutor-split .hero-on-cover > div:last-child {
+    padding-top: 48px;
+  }
+}
 @media (max-width: 950px) {
   .tutor-presentation.tutor-split {
     grid-template-columns: 1fr;

@@ -912,3 +912,10 @@ const enRetire: Record<string, string> = {
   "Luồng đặt lịch cũ đã ngừng — cuộc trò chuyện này chỉ đọc. Lịch sử ở Lớp học.": "The old booking flow is retired — this thread is read-only. History lives in Classes.",
 };
 for (const [vi, text] of Object.entries(enRetire)) en[vi] = text;
+
+// R2: profile polish (approved badge, demo badge)
+const enProfilePolish: Record<string, string> = {
+  "Hồ sơ minh họa": "Sample profile",
+  "Đã được quản trị duyệt": "Admin-approved",
+};
+for (const [vi, text] of Object.entries(enProfilePolish)) en[vi] = text;
