@@ -259,6 +259,10 @@
     "auth": "public",
     "file": "api.js"
   },
+  "POST /api/auth/forgot-password": {
+    "auth": "public",
+    "file": "password-reset.js"
+  },
   "GET /api/auth/google/callback": {
     "auth": "public",
     "file": "google-calendar.js"
@@ -286,6 +290,10 @@
   "POST /api/auth/resend-verification": {
     "auth": "public",
     "file": "email-verification.js"
+  },
+  "POST /api/auth/reset-password": {
+    "auth": "public",
+    "file": "password-reset.js"
   },
   "POST /api/auth/signup/resend": {
     "auth": "public",
