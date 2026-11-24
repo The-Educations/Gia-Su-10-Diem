@@ -53,26 +53,14 @@ function storedLang(): Lang {
   }
 }
 
-// The language cover keeps the DOM re-translation behind a short brand pause:
-// it paints first, the language flips on the next frames, and the cover lifts
-// once the new text is on screen.
-const MIN_COVER_MS = 700, COVER_OUT_MS = 220;
-function LanguageCover({ closing }: { closing: boolean }) {
-  return (
-    <div className="lang-switch" data-done={closing || undefined} aria-hidden="true">
-      <svg className="lang-switch-art" viewBox="0 0 240 240">
-        <path className="ls-one" pathLength={1} d="M90 86 106 72v88" />
-        <path className="ls-zero" pathLength={1} d="M152 72c-21 0-29 25-29 44 0 24 10 44 29 44s27-23 27-45c0-21-8-43-27-43" />
-        <path className="ls-ring" pathLength={1} d="M60 122c-1-49 48-71 90-67 46 5 60 41 55 71-6 40-51 60-93 54-38-6-60-30-52-64 4-18 16-30 32-38" />
-        <text className="ls-d" x="192" y="84">đ</text>
-      </svg>
-    </div>
-  );
-}
+// A language switch reuses the boot cover from index.html: it shows the drawn
+// mark instantly, the DOM re-translates behind it, then boot-open reveals the
+// page in the new language — the same branded transition as app start.
+const MIN_COVER_MS = 700, COVER_OUT_MS = 280;
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(storedLang);
-  const [cover, setCover] = useState<"open" | "closing" | null>(null);
+  const [cover, setCover] = useState(false);
   const coverAt = useRef(0);
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -81,8 +69,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     if (!cover) return;
     const hold = Math.max(200, MIN_COVER_MS - (performance.now() - coverAt.current));
     const closeTimer = setTimeout(() => {
-      setCover("closing");
-      setTimeout(() => setCover(null), COVER_OUT_MS);
+      const boot = document.getElementById("boot");
+      if (boot) {
+        boot.dataset.done = "";
+        setTimeout(() => {
+          boot.style.display = "none";
+          delete boot.dataset.done;
+          setCover(false);
+        }, COVER_OUT_MS);
+      } else {
+        setCover(false);
+      }
     }, hold);
     return () => clearTimeout(closeTimer);
   }, [lang, cover]);
@@ -94,13 +91,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       } catch {
         /* The choice still applies to this visit when storage is unavailable. */
       }
-      if (navigator.webdriver) {
+      const boot = document.getElementById("boot");
+      if (navigator.webdriver || !boot) {
         setLangState(next);
         return;
       }
       // The cover must paint before the translation pass can block the thread.
       coverAt.current = performance.now();
-      setCover("open");
+      boot.style.display = "";
+      setCover(true);
       requestAnimationFrame(() => requestAnimationFrame(() => setLangState(next)));
     },
     [lang],
@@ -114,12 +113,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }),
     [lang, setLang],
   );
-  return (
-    <I18nContext.Provider value={value}>
-      {children}
-      {cover && <LanguageCover closing={cover === "closing"} />}
-    </I18nContext.Provider>
-  );
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 export const useI18n = () => useContext(I18nContext);
