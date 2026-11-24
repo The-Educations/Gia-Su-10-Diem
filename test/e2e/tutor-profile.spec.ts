@@ -31,6 +31,14 @@ test("tutor profile: two-column layout on desktop, stacked on mobile, vi + en", 
     return person && cover && person.getBoundingClientRect().top < cover.getBoundingClientRect().bottom;
   });
   expect(overlap).toBe(true);
+  // The avatar frame is square and the photo fills it (no grey gap below).
+  const fills = await page.evaluate(() => {
+    const person = document.querySelector(".hero-on-cover .person") as HTMLElement,
+      img = person?.querySelector("img"),
+      b = person?.getBoundingClientRect();
+    return !!b && Math.abs(b.width - b.height) <= 2 && (!img || getComputedStyle(img).objectFit === "cover");
+  });
+  expect(fills).toBe(true);
   for (const [width, lang] of [[1440, "vi"], [390, "vi"], [1440, "en"], [390, "en"]] as const) {
     await page.addInitScript((l) => localStorage.setItem("giasu.lang", l), lang);
     await page.reload();
