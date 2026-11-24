@@ -3636,3 +3636,22 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 .password-field { position: relative; }
 .password-field input { padding-right: 44px; }
 .password-field button { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
+
+/* Language switch cover: a short brand pause while the page re-translates. */
+.lang-switch { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: #faf8f3; animation: lang-switch-in 140ms ease-out; }
+.lang-switch[data-done] { animation: lang-switch-out 220ms cubic-bezier(.7,0,.2,1) forwards; }
+.lang-switch-art { width: min(42vw, 150px); overflow: visible; }
+.lang-switch-art path, .lang-switch-art text { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.ls-one, .ls-zero, .ls-ring { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.ls-one, .ls-zero { stroke: #282820; stroke-width: 10; animation: lang-draw 260ms cubic-bezier(.4,0,.2,1) forwards; }
+.ls-zero { animation-duration: 340ms; animation-delay: 80ms; }
+.ls-ring { stroke: #852f36; stroke-width: 7; animation: lang-draw 420ms 180ms cubic-bezier(.3,0,.1,1) forwards; }
+.ls-d { font: 600 58px "Lora", Georgia, serif; fill: #852f36; transform-box: fill-box; transform-origin: center; opacity: 0; animation: lang-stamp 180ms 480ms cubic-bezier(.2,1.6,.4,1) forwards; }
+@keyframes lang-draw { to { stroke-dashoffset: 0; } }
+@keyframes lang-stamp { from { opacity: 0; transform: scale(1.8) rotate(-14deg); } to { opacity: 1; transform: scale(1) rotate(-6deg); } }
+@keyframes lang-switch-in { from { opacity: 0; } }
+@keyframes lang-switch-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .ls-one, .ls-zero, .ls-ring { animation: none; stroke-dashoffset: 0; }
+  .ls-d { animation: none; opacity: 1; transform: rotate(-6deg); }
+}
