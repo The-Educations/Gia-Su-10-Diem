@@ -2107,12 +2107,17 @@
 }
 .tutor-split .hero-on-cover .person.large {
   width: 132px;
-  height: 152px;
+  height: 132px;
   margin-top: -60px;
   margin-bottom: -6px;
   box-shadow: 0 0 0 5px var(--background);
   position: relative;
   z-index: 1;
+}
+.tutor-split .hero-on-cover .person.large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .tutor-split .hero-on-cover > div:last-child {
   padding-top: 36px;
@@ -2137,7 +2142,7 @@
 @media (max-width: 950px) {
   .tutor-split .hero-on-cover .person.large {
     width: 104px;
-    height: 122px;
+    height: 104px;
     margin-top: -46px;
   }
   .tutor-split .hero-on-cover > div:last-child {
