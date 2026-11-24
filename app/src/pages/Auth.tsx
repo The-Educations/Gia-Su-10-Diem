@@ -132,7 +132,7 @@ export default function Auth() {
             <Field>
               <FieldLabel htmlFor="password">Mật khẩu{register ? " (ít nhất 10 ký tự)" : ""}</FieldLabel>
               <Input id="password" name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={10} maxLength={128} required />
-              {!register && <Link className="auth-forgot" to="/forgot-password">Quên mật khẩu?</Link>}
+              {!register && <Link className="auth-forgot" to="/forgot-password">{t("Quên mật khẩu?")}</Link>}
             </Field>
             {register && <Field>
               <FieldLabel htmlFor="confirm-password">{t("Xác nhận mật khẩu")}</FieldLabel>

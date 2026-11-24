@@ -726,6 +726,16 @@ const enPasswordReset: Record<string, string> = {
 };
 for (const [vi, text] of Object.entries(enPasswordReset)) en[vi] = text;
 // Session F: password reset
+const enPostMerge: Record<string, string> = {
+  "Quên mật khẩu?": "Forgot password?",
+  "Có {n} lệnh nạp chờ nhưng webhook SePay chưa về trong 24h.": "{n} deposits are waiting but no SePay webhook arrived in 24h.",
+  "{n} email không gửi được sau nhiều lần thử.": "{n} emails could not be sent after several attempts.",
+  "{n} khoản tiền về chưa khớp mã.": "{n} received payments have no matching code.",
+  "{n} kết nối Google Calendar đang lỗi.": "{n} Google Calendar connections are failing.",
+  "{n} lần thử": "{n} attempts",
+  "{n} webhook bị từ chối chữ ký trong 24h qua.": "{n} webhooks failed signature checks in the last 24h.",
+};
+for (const [vi, text] of Object.entries(enPostMerge)) en[vi] = text;
 // Session J: remaining journey+admin+community keys
 const enJ: Record<string, string> = {
   "Bài giảng": "Lesson plan",
