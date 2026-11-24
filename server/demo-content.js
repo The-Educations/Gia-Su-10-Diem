@@ -168,7 +168,7 @@ function seedClasses(db) {
     sender === "student" && status !== "declined" ? sessions * rate : 0, sender === "tutor" ? 2 : 0, new Date(Date.now() + 40 * 3600000).toISOString(), status === "pending" ? null : new Date().toISOString()).lastInsertRowid);
   db.exec("BEGIN IMMEDIATE");
   try {
-    move(db, student, "deposit", { amount: 5000000, ref: "demo", note: "Nạp mẫu" });
+    move(db, student, "admin_adjustment", { amount: 5000000, ref: "demo", note: "Số dư ban đầu cho tài khoản mẫu" });
     for (const t of [chau, linh, nam]) wallet(db, t);
     // An ongoing maths class with two lessons already confirmed and one waiting for the student.
     const p1 = proposal("student", chau, "toan", 8, 180000, [{ weekday: 1, hour: 18, minute: 0 }, { weekday: 4, hour: 18, minute: 0 }], day(-12), "accepted", "Em cần ôn thi vào lớp 10.");
@@ -194,7 +194,7 @@ function seedClasses(db) {
     if (parent) {
       run(db, "UPDATE users SET learner_type='parent',display_name='Mẹ Minh Anh' WHERE id=?", parent);
       run(db, "INSERT OR IGNORE INTO family_links(parent_id,student_id) VALUES (?,?)", parent, student);
-      move(db, parent, "deposit", { amount: 1000000, ref: "demo", note: "Nạp mẫu" });
+      move(db, parent, "admin_adjustment", { amount: 1000000, ref: "demo", note: "Số dư ban đầu cho tài khoản mẫu" });
     }
     run(db, "INSERT INTO demo_seeds VALUES ('classes-v1')");
     db.exec("COMMIT");
