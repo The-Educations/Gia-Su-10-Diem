@@ -57,15 +57,14 @@ export default function ActionDialog({
             setError("");
             const fields = Object.fromEntries(new FormData(e.currentTarget));
             try {
-              const response = await api<{ email_status?: string }>(action.path, action.method, {
+              await api(action.path, action.method, {
                 ...action.body,
                 ...fields,
                 ...(action.report ? { reason } : {}),
                 ...(action.profileReport ? { part } : {}),
               });
               refresh();
-              if (response.email_status && response.email_status !== "sent") toast.warning("Đã xử lý nội dung. Email chưa gửi được; mở Quản trị cộng đồng để gửi lại.");
-              else toast.success(response.email_status === "sent" ? "Đã xử lý và gửi email thông báo" : "Đã thực hiện");
+              toast.success("Đã thực hiện");
               done?.();
               close();
             } catch (e) {

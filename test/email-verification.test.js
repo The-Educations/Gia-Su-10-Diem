@@ -4,6 +4,7 @@ import { openDatabase } from "../server/local-db.js";
 import { one, run } from "../server/db.js";
 import { createApi } from "../server/api.js";
 import { createMailflareSender } from "../server/email-verification.js";
+import { LINES } from "../server/notice-mail.js";
 
 async function fixture(t, deliveryFails = false, configured = true) {
   const db = openDatabase(":memory:"), emails = [];
@@ -91,16 +92,15 @@ test("missing mail configuration fails before creating an unusable account", asy
   assert.equal(one(db, "SELECT COUNT(*) AS n FROM users").n, 0);
 });
 
-test("moderation template uses admin mailbox, logo, escaped reason and readable details", async t => {
+test("moderation notice escapes the reason and links back to the content", async t => {
   const original = globalThis.fetch; let payload;
   globalThis.fetch = async (_url, options) => { payload = JSON.parse(options.body); return new Response("{}", { status: 200 }); };
   t.after(() => { globalThis.fetch = original; });
-  const message = { to: "member@example.test", kind: "community_moderation", detail: 'Ảnh bìa <img onerror="bad"> đã gỡ', reason: '<script>bad</script> & lý do', occurredAt: "03/11/2026 (giờ Việt Nam)", link: "https://giasudiem10.online/app/community" };
-  await assert.rejects(createMailflareSender({ key: "test", mailboxId: "contact" })(message), /admin mailbox/);
-  await createMailflareSender({ key: "test", mailboxId: "admin", from: "admin@giasudiem10.online" })(message);
-  assert.equal(payload.from, "admin@giasudiem10.online"); assert.equal(payload.mailboxId, "admin");
-  assert.deepEqual(payload.to, [message.to]); assert.equal(payload.trackOpens, false);
-  assert.match(payload.html, /brand-icon-20261031.png/); assert.match(payload.html, /&lt;script&gt;bad&lt;\/script&gt;/);
-  assert.equal(payload.html.includes('<img onerror='), false); assert.match(payload.text, /Lý do:/);
-  assert.match(payload.html, /trả lời email này/); assert.match(payload.text, /giờ Việt Nam/);
+  const [subject, message, action] = LINES.community_post_rejected("", "Bài <b>của tôi</b>", '<script>bad</script> & lý do');
+  await createMailflareSender({ key: "test", mailboxId: "contact" })({ to: "member@example.test", kind: "notice", subject, message, action, link: "https://giasudiem10.online/app/community/mine", settings: "https://giasudiem10.online/app/settings?section=notifications" });
+  assert.deepEqual(payload.to, ["member@example.test"]); assert.equal(payload.trackOpens, false);
+  assert.match(payload.html, /&lt;script&gt;bad&lt;\/script&gt; &amp; lý do/); assert.equal(payload.html.includes("<script>"), false);
+  assert.match(payload.html, /Xem bài của tôi/); assert.match(payload.text, /Lý do: <script>bad<\/script>/);
+  assert.match(LINES.community_comment_removed("", "Bài", JSON.stringify({ reason: "Vi phạm", quote: "Nội dung cũ" }))[1], /Lý do: Vi phạm\nNội dung đã gỡ: “Nội dung cũ”/);
+  assert.match(LINES.community_comment_removed("", "Bài", "chuỗi cũ")[1], /Lý do: chuỗi cũ/);
 });

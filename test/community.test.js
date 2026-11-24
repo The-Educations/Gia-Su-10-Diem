@@ -1035,75 +1035,159 @@ test("draft images stay private and survive upload cleanup until publication", a
   assert.equal((await imageRequest(null, url)).status, 200);
 });
 
-test("admin deletes hidden posts, undoes, purges, and expired posts clean up lazily", async (t) => {
+test("admin wipes hidden or author-deleted posts into tombstones; ids are never reused", async (t) => {
   const { call, create, approve, db, ids } = await fixture(t);
   const id = await create();
   await approve(id);
   const post = (pid) => one(db, "SELECT * FROM community_posts WHERE id=?", pid);
-  const audits = (action) =>
-    db.prepare("SELECT COUNT(*) n FROM audit WHERE action=?").get(action).n;
-  const notes = () =>
-    db.prepare("SELECT COUNT(*) n FROM community_notifications").get().n;
+  const count = (sql, ...a) => db.prepare(sql).get(...a).n;
+  const audits = (action) => count("SELECT COUNT(*) n FROM audit WHERE action=?", action);
 
-  assert.equal((await call("admin", `/admin/community/posts/${id}/delete`, "POST")).status, 409);
-  assert.equal(post(id).status, "approved");
-
-  await call("parent", `/community/posts/${id}/comments`, "POST", { body: "Học đều nhé" });
-  await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
-  const before = notes();
-  const unsentMail = (pid) =>
-    db.prepare("SELECT COUNT(*) n FROM community_mail WHERE post_id=? AND sent_at IS NULL").get(pid).n;
-  assert.equal(unsentMail(id), 1);
-  assert.equal((await call("student", `/admin/community/posts/${id}/delete`, "POST")).status, 403);
-  assert.equal((await call("admin", `/admin/community/posts/${id}/delete`, "POST")).status, 200);
-  assert.equal(post(id).status, "deleted");
-  assert.equal((await call(null, `/community/posts/${id}`)).status, 404);
-  assert.equal(notes(), before);
-  assert.equal(audits("community.post.delete"), 1);
-
-  assert.equal((await call("admin", `/admin/community/posts/${id}/undelete`, "POST")).status, 200);
-  assert.equal(post(id).status, "hidden");
-  assert.equal((await call("admin", `/admin/community/posts/${id}/undelete`, "POST")).status, 409);
+  // The old delete/undelete steps are gone.
+  assert.equal((await call("admin", `/admin/community/posts/${id}/delete`, "POST")).status, 404);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/undelete`, "POST")).status, 404);
+  // An approved post cannot be wiped; it must be hidden first.
   assert.equal((await call("admin", `/admin/community/posts/${id}`, "DELETE")).status, 409);
 
-  await call("admin", `/admin/community/posts/${id}/delete`, "POST");
+  const comment = await call("parent", `/community/posts/${id}/comments`, "POST", { body: "Học đều nhé" });
+  await call("other", "/community/reports", "POST", { target_type: "post", target_id: id, reason: "Quảng cáo", detail: "bài cũ" });
+  await call("other", "/community/reports", "POST", { target_type: "comment", target_id: comment.data.id, reason: "Khác" });
+  run(db, "INSERT INTO community_follows(post_id,user_id) VALUES (?,?)", id, ids.other);
+  await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
   assert.equal((await call("student", `/admin/community/posts/${id}`, "DELETE")).status, 403);
   assert.equal((await call("admin", `/admin/community/posts/${id}`, "DELETE")).status, 200);
-  assert.equal(post(id), undefined);
-  assert.equal(unsentMail(id), 0);
-  assert.equal(db.prepare("SELECT COUNT(*) n FROM community_comments WHERE post_id=?").get(id).n, 0);
-  assert.equal(audits("community.post.purge"), 1);
 
-  const age = async (pid, days) => {
-    await call("admin", `/admin/community/posts/${pid}/hide`, "POST", { note: "x" });
-    await call("admin", `/admin/community/posts/${pid}/delete`, "POST");
+  const wiped = post(id);
+  assert.equal(wiped.status, "deleted");
+  assert.ok(wiped.purged_at);
+  assert.deepEqual([wiped.title, wiped.body, wiped.body_html, wiped.search_text, wiped.review_note], ["", "", "", "", ""]);
+  assert.equal(wiped.author_id, ids.student);
+  assert.equal(count("SELECT COUNT(*) n FROM community_comments WHERE post_id=?", id), 0);
+  assert.equal(count("SELECT COUNT(*) n FROM community_follows WHERE post_id=?", id), 0);
+  assert.equal(count("SELECT COUNT(*) n FROM community_reports WHERE status='open'"), 0);
+  assert.equal(audits("community.post.purge"), 1);
+  // A tombstone is invisible to everyone, admin included, and cannot be wiped twice.
+  assert.equal((await call("admin", `/community/posts/${id}`)).status, 404);
+  assert.equal((await call("admin", `/admin/community/posts/${id}`, "DELETE")).status, 404);
+  for (const status of ["approved", "hidden", "deleted"])
+    assert.ok(!(await call("admin", `/admin/community/posts?status=${status}`)).data.items.some((p) => p.id === id));
+
+  // The next post gets a new id, so old reports cannot attach to it and the same person can report it.
+  const relax = () => run(db, "UPDATE community_posts SET created_at=datetime('now','-2 days') WHERE kind='user'");
+  relax();
+  const next = await create();
+  assert.ok(next > id);
+  await approve(next);
+  assert.equal((await call("other", "/community/reports", "POST", { target_type: "post", target_id: next, reason: "Khác" })).status, 201);
+  const open = (await call("admin", "/admin/community/reports")).data;
+  assert.deepEqual(open.map((r) => r.target_id), [next]);
+
+  // Posts the author deleted can be wiped at once, and expire after 30 days on their own.
+  relax();
+  const own = await create(), young = await create();
+  relax();
+  const old = await create();
+  await approve(own);
+  assert.equal((await call("student", `/community/posts/${own}`, "DELETE")).status, 200);
+  assert.deepEqual((await call("admin", "/admin/community/posts?status=deleted")).data.items.map((p) => p.id), [own]);
+  assert.equal((await call("admin", `/admin/community/posts/${own}`, "DELETE")).status, 200);
+  assert.ok(post(own).purged_at);
+  for (const [pid, days] of [[young, 29], [old, 31]]) {
+    await approve(pid);
+    await call("student", `/community/posts/${pid}`, "DELETE");
     run(db, "UPDATE community_posts SET updated_at=datetime('now',?) WHERE id=?", `-${days} days`, pid);
-  };
-  const young = await create(), old = await create();
-  await approve(young);
-  await approve(old);
-  await age(young, 29);
-  await age(old, 31);
+  }
   const list = (await call("admin", "/admin/community/posts?status=deleted")).data;
   assert.deepEqual(list.items.map((p) => p.id), [young]);
   assert.equal(list.items[0].days_left, 1);
-  assert.equal(post(old), undefined);
-  assert.equal(audits("community.post.purge"), 2);
-  assert.equal((await call("admin", `/admin/community/posts/${young}/undelete`, "POST")).status, 200);
+  assert.ok(post(old).purged_at);
+  assert.equal(post(young).purged_at, null);
+  assert.equal(audits("community.post.purge"), 3);
+  // Running the expiry again changes nothing.
+  await call("admin", "/admin/community/summary");
+  assert.equal(audits("community.post.purge"), 3);
 });
 
-test("admin can dismiss an unsent moderation email but not a sent one", async (t) => {
-  const { call, create, approve, db } = await fixture(t);
+test("a purged post leaves tutors' pitches pointing at the tombstone, not at the next post", async (t) => {
+  const { call, create, approve, db, ids } = await fixture(t);
   const id = await create();
   await approve(id);
-  await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
-  const [mail] = (await call("admin", "/admin/community/mail")).data;
-  assert.ok(mail);
-  assert.equal((await call("student", `/admin/community/mail/${mail.id}`, "DELETE")).status, 403);
-  assert.equal((await call("admin", `/admin/community/mail/${mail.id}`, "DELETE")).status, 200);
-  assert.deepEqual((await call("admin", "/admin/community/mail")).data, []);
-  assert.equal((await call("admin", `/admin/community/mail/${mail.id}`, "DELETE")).status, 404);
-  assert.equal(db.prepare("SELECT COUNT(*) n FROM audit WHERE action='community.mail.dismiss'").get().n, 1);
-  const sent = Number(run(db, "INSERT INTO community_mail(user_id,detail,reason,path,sent_at) SELECT author_id,'x','y','/z',CURRENT_TIMESTAMP FROM community_posts WHERE id=?", id).lastInsertRowid);
-  assert.equal((await call("admin", `/admin/community/mail/${sent}`, "DELETE")).status, 409);
+  run(db, "INSERT INTO proposals(sender,student_id,tutor_id,subject_id,mode,sessions,minutes,rate,total,start_date,expires_at,post_id,boost) VALUES ('tutor',?,?,'toan','online',4,60,100000,400000,'2026-12-01','2026-12-02',?,0)", ids.student, ids.tutor, id);
+  await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "x" });
+  await call("admin", `/admin/community/posts/${id}`, "DELETE");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM proposals WHERE post_id=?").get(id).n, 1);
+  const next = await create();
+  assert.notEqual(next, id);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM proposals WHERE post_id=?").get(next).n, 0);
+});
+
+test("startup closes reports left pointing at posts or comments that no longer exist", async (t) => {
+  const { db, ids, create, approve } = await fixture(t);
+  const id = await create();
+  await approve(id);
+  run(db, "INSERT INTO community_reports(reporter_id,target_type,target_id,reason) VALUES (?,'post',?,'Khác')", ids.other, id);
+  run(db, "INSERT INTO community_reports(reporter_id,target_type,target_id,reason) VALUES (?,'post',9999,'Khác')", ids.other);
+  run(db, "INSERT INTO community_reports(reporter_id,target_type,target_id,reason) VALUES (?,'comment',9999,'Khác')", ids.other);
+  const { migrateCommunity } = await import("../server/community-schema.js");
+  migrateCommunity(db);
+  migrateCommunity(db);
+  const open = db.prepare("SELECT target_type,target_id FROM community_reports WHERE status='open'").all();
+  assert.deepEqual(JSON.parse(JSON.stringify(open)), [{ target_type: "post", target_id: id }]);
+});
+
+test("admin sees rejected posts and edits with who rejected them, and can reverse a rejection", async (t) => {
+  const { call, create, approve, db, ids } = await fixture(t);
+  const notices = (kind) => db.prepare("SELECT COUNT(*) n FROM community_notifications WHERE kind=? AND user_id=?").get(kind, ids.student).n;
+  const bad = await create(), edited = await create();
+  await approve(edited);
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reject`, "POST", { note: "Quảng cáo" })).status, 200);
+  await call("student", `/community/posts/${edited}`, "PUT", { title: "Tiêu đề mới", body: "Nội dung mới đầy đủ hơn." });
+  assert.equal((await call("admin", `/admin/community/posts/${edited}/reject`, "POST", { note: "Sửa chưa đạt" })).status, 200);
+
+  const list = (await call("admin", "/admin/community/posts?status=rejected")).data;
+  const byId = Object.fromEntries(list.items.map((p) => [p.id, p]));
+  assert.deepEqual(Object.keys(byId).map(Number).sort(), [bad, edited].sort());
+  assert.deepEqual([byId[bad].is_revision, byId[bad].reason, byId[bad].reviewer.id], [false, "Quảng cáo", ids.admin]);
+  assert.deepEqual([byId[edited].is_revision, byId[edited].reason, byId[edited].revision_title], [true, "Sửa chưa đạt", "Tiêu đề mới"]);
+  assert.equal((await call("student", "/admin/community/posts?status=rejected")).status, 403);
+  // Rejected posts are not in the queue the bot reads.
+  assert.deepEqual((await call("admin", "/admin/community/queue")).data, []);
+
+  // Reapprove: only with the current version, only from a rejected state, author gets the notice.
+  const body = { expected_version: 0 };
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reapprove`, "POST", { expected_version: 5 })).status, 409);
+  assert.equal((await call("student", `/admin/community/posts/${bad}/reapprove`, "POST", body)).status, 403);
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reapprove`, "POST", body)).status, 200);
+  assert.equal(one(db, "SELECT status FROM community_posts WHERE id=?", bad).status, "approved");
+  assert.equal((await call(null, `/community/posts/${bad}`)).status, 200);
+  assert.equal(notices("post_approved"), 2);
+  assert.equal((await call("admin", `/admin/community/posts/${bad}/reapprove`, "POST", body)).status, 409);
+
+  const editVersion = one(db, "SELECT review_version v FROM community_posts WHERE id=?", edited).v;
+  assert.equal((await call("admin", `/admin/community/posts/${edited}/reapprove`, "POST", { expected_version: editVersion })).status, 200);
+  const live = one(db, "SELECT title,revision_status FROM community_posts WHERE id=?", edited);
+  assert.deepEqual([live.title, live.revision_status], ["Tiêu đề mới", null]);
+  assert.equal(notices("revision_approved"), 1);
+  assert.deepEqual((await call("admin", "/admin/community/posts?status=rejected")).data.items, []);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM audit WHERE action IN ('community.post.reapprove','community.revision.reapprove')").get().n, 2);
+});
+
+test("the bot's note on an escalated post is tied to the graded version and changes nothing else", async (t) => {
+  const { call, create, db } = await fixture(t);
+  const id = await create();
+  const note = { expected_version: 0, verdict: "escalate", reason: "  Có thể là quảng cáo, cần admin xem.  " };
+  assert.equal((await call("student", `/admin/community/posts/${id}/ai-note`, "POST", note)).status, 403);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", { ...note, verdict: "x" })).status, 400);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", { ...note, reason: "a".repeat(201) })).status, 400);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", { ...note, expected_version: 3 })).status, 409);
+  assert.equal((await call("admin", `/admin/community/posts/99999/ai-note`, "POST", note)).status, 404);
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", note)).status, 200);
+  const row = () => one(db, "SELECT status,ai_verdict,ai_reason,ai_version,review_version FROM community_posts WHERE id=?", id);
+  assert.deepEqual({ ...row() }, { status: "pending", ai_verdict: "escalate", ai_reason: "Có thể là quảng cáo, cần admin xem.", ai_version: 0, review_version: 0 });
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM community_notifications").get().n, 0);
+  const queued = (await call("admin", "/admin/community/queue")).data[0];
+  assert.deepEqual([queued.ai_verdict, queued.ai_reason, queued.ai_version, queued.review_version], ["escalate", "Có thể là quảng cáo, cần admin xem.", 0, 0]);
+  // Once the post is decided the note is refused.
+  await call("admin", `/admin/community/posts/${id}/approve`, "POST");
+  assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", note)).status, 409);
 });

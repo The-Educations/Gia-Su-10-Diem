@@ -2,7 +2,7 @@ import { all, one, run } from "./db.js";
 
 const money = (s) => `${Number(s || 0).toLocaleString("vi-VN")}đ`;
 // Subject, one plain sentence and the button for each emailed notice.
-const LINES = {
+export const LINES = {
   proposal_new: (a, s) => [`${a} gửi bạn đề nghị học`, `${a} vừa gửi bạn đề nghị học ${s}. Xem lịch, học phí và trả lời trong 48 giờ.`, "Xem đề nghị"],
   proposal_accepted: (a, s) => [`${a} đã nhận đề nghị học`, `${a} đã nhận đề nghị học ${s}. Lớp học đã được tạo và có trên lịch của bạn.`, "Mở lớp học"],
   proposal_declined: (a, s) => [`${a} chưa nhận đề nghị học`, `${a} đã từ chối đề nghị học ${s}. Số tiền tạm giữ đã trả lại số dư của bạn.`, "Xem đề nghị"],
@@ -12,6 +12,12 @@ const LINES = {
   withdrawal_rejected: (_a, s) => [`Yêu cầu rút ${money(s)} chưa được chuyển`, `Yêu cầu rút ${money(s)} chưa được chuyển; số tiền đã trả lại số dư. Lý do nằm trong hội thoại hỗ trợ.`, "Xem số dư"],
   session_confirm: (a, s) => [`Xác nhận buổi học ${s}`, `${a} đã xác nhận buổi học ${s}. Bạn bấm "Đã học xong" giúp nhé; sau 48 giờ buổi học sẽ tự được xác nhận.`, "Xác nhận buổi học"],
   session_move: (a, s) => [`${a} đề nghị dời buổi học`, `${a} đề nghị dời một buổi ${s}. Đồng ý hoặc từ chối trong lớp học.`, "Xem đề nghị dời"],
+  // Moderation. `d` is the reason; a removed comment carries JSON {reason, quote}.
+  community_post_rejected: (_a, s, d) => [`Bài “${s}” chưa được duyệt`, `Bài “${s}” của bạn chưa được duyệt.\nLý do: ${d}\nBạn có thể sửa bài rồi gửi lại.`, "Xem bài của tôi"],
+  community_revision_rejected: (_a, s, d) => [`Bản sửa bài “${s}” chưa được duyệt`, `Bản sửa bài “${s}” của bạn chưa được duyệt; bài gốc vẫn hiển thị.\nLý do: ${d}\nBạn có thể sửa lại rồi gửi lại.`, "Xem bài của tôi"],
+  community_post_hidden: (_a, s, d) => [`Bài “${s}” đã bị ẩn`, `Bài “${s}” của bạn đã bị quản trị viên ẩn khỏi Cộng đồng.\nLý do: ${d}`, "Xem bài của tôi"],
+  community_comment_removed: (_a, s, d) => { let o; try { o = JSON.parse(d); } catch { o = { reason: d }; } return [`Bình luận của bạn trong bài “${s}” đã được gỡ`, `Bình luận của bạn trong bài “${s}” đã được quản trị viên gỡ.\nLý do: ${o.reason}${o.quote ? `\nNội dung đã gỡ: “${o.quote}”` : ""}`, "Mở bài viết"]; },
+  community_profile_removed: (_a, s, d) => [`${s} trong hồ sơ đã được gỡ`, `${s} trong hồ sơ Cộng đồng của bạn đã được quản trị viên gỡ.\nLý do: ${d}`, "Xem hồ sơ"],
 };
 
 // Sends what is waiting in the outbox, a few at a time; a failed send is retried later, up to five times.
@@ -26,7 +32,7 @@ export function createNoticeMailer(db, { sendEmail, origin }) {
         if (!run(db, "UPDATE email_outbox SET sending_until=? WHERE id=? AND sent_at IS NULL AND sending_until<=?", Date.now() + 60000, row.id, Date.now()).changes) continue;
         const line = LINES[row.kind];
         if (!line || row.status !== "active" || !row.email) { run(db, "UPDATE email_outbox SET sent_at=CURRENT_TIMESTAMP,attempts=attempts+1 WHERE id=?", row.id); continue; }
-        const [subject, message, action] = line(row.actor_name || "Gia Sư 10 Điểm", row.subject);
+        const [subject, message, action] = line(row.actor_name || "Gia Sư 10 Điểm", row.subject, row.detail);
         try {
           await sendEmail({ kind: "notice", to: row.email, subject, message, action, link: `${origin}/app${row.link || "/workspace"}`, settings: `${origin}/app/settings?section=notifications` });
           run(db, "UPDATE email_outbox SET sent_at=CURRENT_TIMESTAMP,sending_until=0,attempts=attempts+1 WHERE id=?", row.id);

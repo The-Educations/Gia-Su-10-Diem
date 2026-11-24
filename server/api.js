@@ -277,7 +277,7 @@ export function createApi(
   registerGallery(app, db, auth, audit, processPhoto);
   registerPosts(app, db, auth, audit);
   registerNewsImages(app, db, auth, audit, processPhoto);
-  registerCommunity(app, db, auth, audit, processPhoto, { sendAdminEmail, origin });
+  registerCommunity(app, db, auth, audit, processPhoto);
   registerCommunityImages(app, db, auth, processPhoto);
   registerInquiries(app, db, auth);
   registerSupport(app, db, auth);

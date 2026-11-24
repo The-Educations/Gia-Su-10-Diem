@@ -1,6 +1,5 @@
 import { topicOf, reactionCounts, trendScore, TOPICS } from "./community-topics.js";
 import { liveTutorSql } from "./tutor-visibility.js";
-import { registerCommunityMail } from "./community-mail.js";
 import { registerCommunityProfile, setMemberProfile, memberByCode } from "./community-profile.js";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
@@ -45,8 +44,7 @@ export function publicCommunityPost(db, id) {
     updated_at: p.updated_at,
   };
 }
-export function registerCommunity(app, db, auth, audit, processPhoto, mailOptions = {}) {
-  const mail = registerCommunityMail(app, db, auth, audit, mailOptions);
+export function registerCommunity(app, db, auth, audit, processPhoto) {
   const fail = (status, message) => {
     throw Object.assign(new Error(message), { status });
   };
@@ -156,7 +154,7 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
         : {}),
     };
   };
-  registerCommunityProfile(app, db, auth, audit, processPhoto, { serialize, mail });
+  registerCommunityProfile(app, db, auth, audit, processPhoto, { serialize });
   const follow = (post, user) =>
     run(
       db,
@@ -821,6 +819,5 @@ export function registerCommunity(app, db, auth, audit, processPhoto, mailOption
     follow,
     rules,
     removeComment,
-    mail,
   });
 }

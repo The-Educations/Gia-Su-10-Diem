@@ -3,6 +3,7 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
+import { queueEmail } from "./notifications.js";
 import {
   LIMITS,
   authorLabel,
@@ -120,7 +121,7 @@ export function registerCommunityProfile(
   auth,
   audit,
   processPhoto,
-  { serialize, mail },
+  { serialize },
 ) {
   const base = "/api/community";
   app.get(`${base}/members/:code`, auth(), (req, res) => {
@@ -198,10 +199,10 @@ export function registerCommunityProfile(
   app.delete(
     "/api/admin/community/members/:code/:part",
     auth("admin"),
-    async (req, res) => {
+    (req, res) => {
       const part = z.enum(["avatar", "cover", "bio"]).parse(req.params.part);
       const note = text(1000).parse(req.body.note);
-      const mailId = transaction(db, () => {
+      transaction(db, () => {
         const user = memberByCode(db, req.params.code, req.user);
         if (part === "bio") {
           if (!user.bio) fail(409, "Giới thiệu đã được xóa.");
@@ -234,9 +235,9 @@ export function registerCommunityProfile(
           "community.profile.remove",
           JSON.stringify({ id: user.id, part, note }),
         );
-        return mail.enqueue(user.id, `${label} trong hồ sơ đã được gỡ.`, note, `/app/community/members/${user.profile_code}`);
+        queueEmail(db, user.id, "community_profile_removed", { subject: label, detail: note, link: `/community/members/${user.profile_code}` });
       });
-      res.json({ ok: true, ...await mail.deliver(mailId, req.user.id) });
+      res.json({ ok: true });
     },
   );
   for (const kind of ["avatar", "cover"]) {
