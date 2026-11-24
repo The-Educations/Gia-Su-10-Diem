@@ -3,7 +3,7 @@ import { EducationTimeline } from "./tutor-education";
 import { TimezoneTag } from "./tutor-timezone";
 import { ProfileSections } from "./tutor-sections";
 import { useEffect, useRef, type ReactNode } from "react";
-import { Award, BadgeCheck, GraduationCap, MapPin, ScrollText, ShieldCheck } from "lucide-react";
+import { Award, BadgeCheck, GraduationCap, MapPin, ScrollText, ShieldCheck, Star } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { embedUrl } from "@/lib/video";
 import type { Tutor, Subject } from "@/lib/types";
@@ -84,9 +84,12 @@ export function TutorPresentation({
             {tr("Dạy trực tiếp trong ~{km} km quanh {location}", { km: String(t.area_km), location: t.location })}
           </span>
         )}
-        {!preview && (
-          <TrustLine trust={t.trust} />
-        )}
+        {!preview && (() => {
+          const r = (t as { rating?: { average?: number | null; count?: number } }).rating;
+          return r?.average
+            ? <a className="rating-link" href="#reviews"><Star aria-hidden="true" className="star-filled" />{r.average.toFixed(1)} · {tr("{n} đánh giá", { n: r.count ?? 0 })}</a>
+            : <TrustLine trust={t.trust} />;
+        })()}
       </div>
     </>
   );

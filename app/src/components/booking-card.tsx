@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BadgeCheck, MessageCircle, Star } from "lucide-react";
+import { BadgeCheck, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, money, useApp } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -18,7 +18,6 @@ export function BookingCard({ tutor, subjects }: { tutor: Tutor & { rating?: Rat
   const { user } = useApp(), { t } = useI18n(), navigate = useNavigate(),
     verification = useVerification(),
     [asking, setAsking] = useState(false), [body, setBody] = useState(""), [busy, setBusy] = useState(false);
-  const r = tutor.rating;
   async function ask() {
     if (!user) return navigate(`/auth?next=/tutors/${tutor.user_id}`);
     setBusy(true);
@@ -32,7 +31,6 @@ export function BookingCard({ tutor, subjects }: { tutor: Tutor & { rating?: Rat
     <aside className="booking-card" aria-label={t("Đặt gia sư")}>
       <div className="booking-card-price"><strong>{money(tutor.rate)}</strong><span>/ {t("buổi")}</span></div>
       <div className="booking-card-meta">
-        {r?.average ? <span><Star aria-hidden="true" className="star-filled" />{r.average.toFixed(1)} · {t("{n} đánh giá", { n: r.count })}</span> : <span className="muted">{t("Chưa có đánh giá")}</span>}
         {!!tutor.verified?.length && <span><BadgeCheck aria-hidden="true" />{t("{n} mục đã xác minh", { n: tutor.verified.length })}</span>}
       </div>
       {(!user || (user.role === "student" && user.learner_type !== "parent")) && (verification.data && verification.data.status !== "approved" ? <VerifyFirst /> : <ProposalComposer tutor={tutor} subjects={subjects} />)}
