@@ -3055,6 +3055,8 @@ test("demo seed money keeps every ledger invariant, idempotent on re-seed", asyn
   const before = one(db, "SELECT held FROM wallets WHERE user_id=?", pending.user_id).held;
   assert.equal(before, pending.amount, "the request holds its amount");
 });
+});
+
 test("hot-path lookups use indexes, not full scans", async (t) => {
   const { db } = await fixture(t);
   const scans = [];
