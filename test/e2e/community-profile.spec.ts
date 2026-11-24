@@ -257,15 +257,14 @@ test("profile report queue removes content with a reason and notifies only its o
     .fill("Vui lòng cập nhật giới thiệu phù hợp hơn.");
   await page.getByRole("button", { name: "Xác nhận", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByText("Giới thiệu đã được xóa", { exact: true }),
-  ).toBeVisible();
+  // Removing the part closes its reports, so the card leaves the queue.
+  await expect(page.getByText("Không có báo cáo chờ xử lý", { exact: true })).toBeVisible();
   // The shared mailer sends after the request, so wait for it.
   await expect.poll(async () => (await (await page.request.get(`/__test/email?email=${encodeURIComponent(user.email)}`)).json())?.kind).toBe("notice");
   const email = await (await page.request.get(`/__test/email?email=${encodeURIComponent(user.email)}`)).json();
   expect(email.message).toContain("Vui lòng cập nhật giới thiệu phù hợp hơn.");
   expect(email.link).toContain(`/app/community/members/${user.profile_code}`);
-  await page.getByRole("link", { name: "Xem hồ sơ", exact: true }).click();
+  await page.goto(`/app/community/members/${user.profile_code}`);
   await expect(
     page.getByRole("region", { name: "Quản trị hồ sơ" }),
   ).toBeVisible();
