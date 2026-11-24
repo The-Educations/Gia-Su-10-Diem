@@ -3,6 +3,7 @@ import { z, text } from "./validation.js";
 import { attachPostImages } from "./community-images.js";
 import { postSchema, fold } from "./community-policy.js";
 import { queueEmail } from "./notifications.js";
+import { resolveReports } from "./community-reports.js";
 
 export function registerCommunityAdmin(
   app,
@@ -20,16 +21,8 @@ export function registerCommunityAdmin(
     transaction(db, () => {
       for (const p of rows) {
         const comments = all(db, "SELECT id FROM community_comments WHERE post_id=?", p.id).map((c) => c.id);
-        const close = (type, id) =>
-          run(
-            db,
-            "UPDATE community_reports SET status='resolved',resolved_by=?,resolution='Nội dung đã bị xóa vĩnh viễn.' WHERE status='open' AND target_type=? AND target_id=?",
-            actorId,
-            type,
-            id,
-          );
-        close("post", p.id);
-        for (const id of comments) close("comment", id);
+        resolveReports(db, "post", p.id, actorId, "Nội dung đã bị xóa vĩnh viễn.");
+        for (const id of comments) resolveReports(db, "comment", id, actorId, "Nội dung đã bị xóa vĩnh viễn.");
         for (const table of [
           "community_comments",
           "community_reactions",
@@ -101,7 +94,7 @@ export function registerCommunityAdmin(
       ),
       reports: one(
         db,
-        "SELECT COUNT(*) total FROM community_reports WHERE status='open'",
+        "SELECT COUNT(*) total FROM (SELECT 1 FROM community_reports WHERE status='open' GROUP BY target_type,target_id,part)",
       ).total,
     });
   });
@@ -237,6 +230,8 @@ export function registerCommunityAdmin(
           `community.${revision && ["approve", "reject"].includes(action) ? "revision" : "post"}.${action}`,
           JSON.stringify({ id: p.id, note }),
         );
+        if (action === "hide" || (action === "reject" && !revision))
+          resolveReports(db, "post", p.id, req.user.id, action === "hide" ? "Đã ẩn bài." : "Đã từ chối bài.");
         if (action === "hide" || action === "reject")
           queueEmail(db, p.author_id, action === "hide" ? "community_post_hidden" : revision ? "community_revision_rejected" : "community_post_rejected", {
             subject: revision && action === "reject" ? p.revision_title : p.title,
@@ -371,6 +366,7 @@ export function registerCommunityAdmin(
     if (!c || c.status !== "visible") fail(404, "Không tìm thấy bình luận.");
     transaction(db, () => {
       removeComment(c.id, "removed_by_admin", note);
+      resolveReports(db, "comment", c.id, req.user.id, "Đã gỡ bình luận.");
       audit(
         req.user.id,
         "community.comment.remove",
@@ -385,66 +381,79 @@ export function registerCommunityAdmin(
     });
     res.json({ ok: true });
   });
+  // What a report points at, with its owner, for the admin card.
+  const describeReport = (r) => {
+    if (r.target_type === "profile") {
+      const user = one(db, "SELECT id,name,email,status,profile_code,bio,community_locked,community_lock_reason FROM users WHERE id=?", r.target_id);
+      const images = user ? all(db, "SELECT kind,id FROM user_images WHERE user_id=? ORDER BY kind", user.id) : [];
+      return { ...r, owner: user, target: user ? {
+        profile_code: user.profile_code, body: user.bio, status: user.status,
+        has_avatar: images.some(i => i.kind === "avatar"), has_cover: images.some(i => i.kind === "cover"), image_version: images.map(i => i.id).join("-"),
+      } : null };
+    }
+    const target = one(
+      db,
+      `SELECT * FROM ${r.target_type === "post" ? "community_posts" : "community_comments"} WHERE id=?`,
+      r.target_id,
+    );
+    return {
+      ...r,
+      target,
+      owner: target
+        ? one(
+            db,
+            "SELECT id,name,email,community_locked,community_lock_reason FROM users WHERE id=?",
+            target.author_id,
+          )
+        : null,
+    };
+  };
+  // Open reports come grouped: one card per piece of content (and profile part) with every reason,
+  // so five people reporting one post is one decision, not five.
   app.get(`${base}/reports`, admin, (req, res) => {
     const status = z
       .enum(["open", "resolved"])
       .default("open")
       .parse(req.query.status);
+    if (status === "resolved")
+      return res.json(
+        all(db, "SELECT r.*,1 report_count FROM community_reports r WHERE r.status='resolved' ORDER BY r.id DESC LIMIT 100").map(describeReport),
+      );
+    const groups = all(
+      db,
+      `SELECT MIN(id) id,COUNT(*) report_count,MAX(created_at) latest_at FROM community_reports WHERE status='open'
+       GROUP BY target_type,target_id,part ORDER BY report_count DESC,latest_at DESC,id LIMIT 50`,
+    );
     res.json(
-      all(
-        db,
-        `SELECT r.*,(SELECT COUNT(*) FROM community_reports x WHERE x.target_type=r.target_type AND x.target_id=r.target_id AND x.part=r.part AND x.status='open') report_count FROM community_reports r WHERE r.status=? ORDER BY report_count DESC,r.id LIMIT 100`,
-        status,
-      ).map((r) => {
-        if (r.target_type === "profile") {
-          const user = one(db, "SELECT id,name,email,status,profile_code,bio,community_locked,community_lock_reason FROM users WHERE id=?", r.target_id);
-          const images = user ? all(db, "SELECT kind,id FROM user_images WHERE user_id=? ORDER BY kind", user.id) : [];
-          return { ...r, owner: user, target: user ? {
-            profile_code: user.profile_code, body: user.bio, status: user.status,
-            has_avatar: images.some(i => i.kind === "avatar"), has_cover: images.some(i => i.kind === "cover"), image_version: images.map(i => i.id).join("-"),
-          } : null };
-        }
-        const target = one(
+      groups.map((g) => {
+        const first = one(db, "SELECT * FROM community_reports WHERE id=?", g.id);
+        const reasons = all(
           db,
-          `SELECT * FROM ${r.target_type === "post" ? "community_posts" : "community_comments"} WHERE id=?`,
-          r.target_id,
+          `SELECT r.reason,r.detail,r.created_at,u.name reporter_name FROM community_reports r JOIN users u ON u.id=r.reporter_id
+           WHERE r.status='open' AND r.target_type=? AND r.target_id=? AND r.part=? ORDER BY r.id`,
+          first.target_type,
+          first.target_id,
+          first.part,
         );
-        return {
-          ...r,
-          target,
-          owner: target
-            ? one(
-                db,
-                "SELECT id,name,email,community_locked,community_lock_reason FROM users WHERE id=?",
-                target.author_id,
-              )
-            : null,
-        };
+        return { ...describeReport(first), report_count: g.report_count, latest_at: g.latest_at, reasons };
       }),
     );
   });
+  // Ends every open report on the same content as report :id with one decision.
   app.post(`${base}/reports/:id/resolve`, admin, (req, res) => {
     const resolution = text(1000).parse(req.body.resolution);
-    if (
-      !one(
-        db,
-        "SELECT id FROM community_reports WHERE id=? AND status='open'",
-        req.params.id,
-      )
-    )
-      fail(409, "Báo cáo đã được xử lý hoặc không tồn tại.");
+    const r = one(
+      db,
+      "SELECT * FROM community_reports WHERE id=? AND status='open'",
+      req.params.id,
+    );
+    if (!r) fail(409, "Báo cáo đã được xử lý hoặc không tồn tại.");
     transaction(db, () => {
-      run(
-        db,
-        "UPDATE community_reports SET status='resolved',resolved_by=?,resolution=? WHERE id=?",
-        req.user.id,
-        resolution,
-        req.params.id,
-      );
+      const closed = resolveReports(db, r.target_type, r.target_id, req.user.id, resolution, r.part);
       audit(
         req.user.id,
         "community.report.resolve",
-        JSON.stringify({ id: req.params.id, resolution }),
+        JSON.stringify({ id: r.id, closed, resolution }),
       );
     });
     res.json({ ok: true });

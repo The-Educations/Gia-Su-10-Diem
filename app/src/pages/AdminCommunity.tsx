@@ -62,6 +62,8 @@ type Report = {
   reason: string;
   detail: string;
   report_count: number;
+  latest_at?: string;
+  reasons?: { reason: string; detail: string; reporter_name: string; created_at: string }[];
   target: {
     profile_code: string;
     has_avatar: boolean;
@@ -164,7 +166,7 @@ export default function AdminCommunity() {
             <RotateCw />
           </Button>
           <Button onClick={() => navigate("/community/write")}>
-            Viết bài
+            Viết thông báo
           </Button>
         </div>
       </header>
@@ -203,7 +205,7 @@ export default function AdminCommunity() {
           <TabsTrigger value="queue">Chờ duyệt</TabsTrigger>
           <TabsTrigger value="reports">Báo cáo</TabsTrigger>
           <TabsTrigger value="posts">Bài viết</TabsTrigger>
-          <TabsTrigger value="publish">Thông báo & Quy tắc</TabsTrigger>
+          <TabsTrigger value="publish">Quy tắc</TabsTrigger>
         </TabsList>
         {tab !== "publish" &&
           (result.loading ? (
@@ -249,15 +251,8 @@ export default function AdminCommunity() {
                 )}
                 <div className="community-actions">
                   <Button
-                    onClick={() =>
-                      review(
-                        p.id,
-                        "approve",
-                        "Duyệt bài",
-                        false,
-                        p.review_version,
-                      )
-                    }
+                    disabled={busyId === p.id}
+                    onClick={() => quick(p.id, "approve", p.review_version, "Đã duyệt")}
                   >
                     Duyệt
                   </Button>
@@ -292,10 +287,18 @@ export default function AdminCommunity() {
               <article className="community-card" key={r.id}>
                 {r.owner && <Owner owner={r.owner} />}
                 <h2>
-                  {r.reason}{" "}
-                  <Badge variant="secondary">{r.report_count} báo cáo</Badge>
+                  {r.reasons?.[0]?.reason ?? r.reason}{" "}
+                  <Badge variant="secondary">{r.report_count} lượt báo cáo</Badge>
                 </h2>
-                {r.detail && <p>{r.detail}</p>}
+                <ul className="community-report-reasons">
+                  {(r.reasons?.length ? r.reasons : [{ reason: r.reason, detail: r.detail, reporter_name: "", created_at: "" }]).map((x, i) => (
+                    <li key={i}>
+                      <strong>{x.reason}</strong>
+                      {x.detail ? ` — ${x.detail}` : ""}
+                      {x.reporter_name ? <span className="text-muted-foreground"> · {x.reporter_name}</span> : null}
+                    </li>
+                  ))}
+                </ul>
                 {r.target_type === "profile" && r.target && <div className="member-report-preview">
                   <Badge variant="outline">Hồ sơ · {{ avatar:"Ảnh đại diện",cover:"Ảnh bìa",bio:"Giới thiệu" }[r.part]}</Badge>
                   {r.part === "bio" ? <p className="member-bio">{r.target.body || "Giới thiệu đã được xóa"}</p> : (r.part === "avatar" ? r.target.has_avatar : r.target.has_cover) ? <img src={memberImageUrl(r.target, r.part)} alt={r.part === "avatar" ? "Ảnh đại diện được báo cáo" : "Ảnh bìa được báo cáo"} /> : <p>Ảnh đã được gỡ</p>}
@@ -345,7 +348,7 @@ export default function AdminCommunity() {
                   <Button
                     onClick={() =>
                       setAction({
-                        title: "Kết thúc báo cáo / Bỏ qua",
+                        title: r.report_count > 1 ? `Kết thúc ${r.report_count} báo cáo / Bỏ qua` : "Kết thúc báo cáo / Bỏ qua",
                         path: `/admin/community/reports/${r.id}/resolve`,
                         method: "POST",
                         reasonField: "resolution",
