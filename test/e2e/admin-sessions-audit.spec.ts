@@ -73,9 +73,9 @@ test("admin sessions page: nav badge, merged worklist, drawers and audit deep li
   await expect(admin).toHaveURL(/\/app\/sessions\?scope=attention/);
   await admin.goto("/app/bookings");
   await expect(admin).toHaveURL(/\/app\/sessions/);
-  // A student keeps the real bookings page.
+  // The retired bookings page sends a student to the classes list instead.
   await student.goto("/app/bookings");
-  await expect(student).toHaveURL(/\/app\/bookings/);
+  await expect(student).toHaveURL(/\/app\/classes/);
 
   // Audit rows deep-link to the exact record on the new page.
   await admin.goto("/app/admin?tab=audit");

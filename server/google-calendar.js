@@ -30,7 +30,7 @@ export function registerGoogleCalendar(app, db, auth, { origin, production, goog
   // Reuse the already registered Google redirect URI without changing login behavior.
   app.get("/api/auth/google/callback", async (req, res, next) => {
     if (typeof req.query.state !== "string" || !req.query.state.startsWith("cal_")) return next();
-    const fail = code => res.redirect(`/app/bookings?calendar_error=${code}`);
+    const fail = code => res.redirect(`/app/schedule?calendar_error=${code}`);
     const browser = req.headers.cookie?.split(";").map(s => s.trim()).find(s => s.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
     res.clearCookie(cookieName, { ...cookieOptions, maxAge: undefined });
     if (!sync.enabled) return fail("unavailable");
@@ -57,7 +57,7 @@ export function registerGoogleCalendar(app, db, auth, { origin, production, goog
       else run(db, "INSERT INTO google_calendars(user_id,generation,subject,email,refresh_token) VALUES (?,?,?,?,?)", state.user_id, random(), claims.sub, claims.email, refresh);
       await wakeCalendar();
       await sync.syncUser(state.user_id);
-      return res.redirect("/app/bookings?calendar=connected");
+      return res.redirect("/app/schedule?calendar=connected");
     } catch { return fail("failed"); }
     finally { run(db, "DELETE FROM google_calendar_states WHERE state=?", state.state); }
   });

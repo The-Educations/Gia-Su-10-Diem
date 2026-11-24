@@ -63,9 +63,9 @@ const Admin = lazy(() => import("./pages/Admin"));
 // proposals list.
 function LegacyRedirect({ from }: { from: "bookings" | "offers" }) {
   const { user } = useApp(), loc = useLocation(), [params] = useSearchParams();
-  if (user?.role === "admin") return <Navigate to={`/app/sessions${loc.search}`} replace />;
-  if (from === "offers" && params.get("id")) return <Navigate to={`/app/proposals${loc.search}`} replace />;
-  return <Navigate to={`/app/classes${loc.search}`} replace />;
+  if (user?.role === "admin") return <Navigate to={`/sessions${loc.search}`} replace />;
+  if (from === "offers" && params.get("id")) return <Navigate to={`/proposals${loc.search}`} replace />;
+  return <Navigate to={`/classes${loc.search}`} replace />;
 }
 
 function Require({

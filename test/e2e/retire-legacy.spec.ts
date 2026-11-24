@@ -5,28 +5,33 @@ async function login(page: Page, slug: string) {
 
 // Retired flows: /bookings and /offers must redirect per role, old data stays
 // readable, and every write endpoint answers 410.
+const expectPath = async (page: Page, path: string) => {
+  await expect(page).toHaveURL(/\/app\//);
+  expect(new URL(page.url()).pathname).toBe(path);
+};
 test.describe("retired booking/offer flow", () => {
   test("student /bookings and /offers redirect to /app/classes", async ({ page }) => {
     await login(page, "student");
     await page.goto("/app/bookings");
-    await expect(page).toHaveURL(/\/app\/classes/);
+    await expectPath(page, "/app/classes");
     await page.goto("/app/offers");
-    await expect(page).toHaveURL(/\/app\/classes/);
+    await expectPath(page, "/app/classes");
   });
   test("tutor /bookings redirects to /app/classes", async ({ page }) => {
     await login(page, "chau");
     await page.goto("/app/bookings");
-    await expect(page).toHaveURL(/\/app\/classes/);
+    await expectPath(page, "/app/classes");
   });
   test("admin /bookings and /offers redirect to /app/sessions; offers?id goes to /app/proposals", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/app/bookings");
-    await expect(page).toHaveURL(/\/app\/sessions/);
+    await expectPath(page, "/app/sessions");
     await page.goto("/app/offers");
-    await expect(page).toHaveURL(/\/app\/sessions/);
+    await expectPath(page, "/app/sessions");
     await login(page, "student");
     await page.goto("/app/offers?id=1");
-    await expect(page).toHaveURL(/\/app\/proposals/);
+    await expectPath(page, "/app/proposals");
+    expect(page.url()).toContain("id=1");
   });
   test("legacy writes answer 410, reads stay 200", async ({ page }) => {
     await login(page, "student");
