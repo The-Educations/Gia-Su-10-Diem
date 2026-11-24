@@ -2,7 +2,7 @@ import { TrustLine } from "@/components/trust";
 import { EducationTimeline } from "./tutor-education";
 import { TimezoneTag } from "./tutor-timezone";
 import { ProfileSections } from "./tutor-sections";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Award, BadgeCheck, GraduationCap, MapPin, ScrollText } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { embedUrl } from "@/lib/video";
@@ -14,22 +14,35 @@ export function TutorPresentation({
   tutor: t,
   subjects,
   preview = false,
+  aside,
   children,
 }: {
   tutor: Tutor;
   subjects: Subject[];
   preview?: boolean;
+  aside?: ReactNode;
   children?: ReactNode;
 }) {
   const { t: tr } = useI18n();
+  const ref = useRef<HTMLElement>(null);
   const Title = preview ? "h3" : "h1";
   const video = t.intro_video ? embedUrl(t.intro_video) : null, sample = t.sample_video ? embedUrl(t.sample_video) : null;
   const kind = { student: "Sinh viên", teacher: "Giáo viên", professional: "Người đi làm" }[t.tutor_kind as string];
-  return (
-    <article
-      className="tutor-presentation"
-      data-theme={t.profile_theme || "paper"}
-    >
+  // Scroll reveal: sections fade+rise as they enter the viewport; CSS keeps
+  // everything visible under prefers-reduced-motion.
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || !aside) return;
+    const items = root.querySelectorAll(".tutor-body > *");
+    items.forEach((el) => el.classList.add("reveal"));
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("is-visible"); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -8% 0px" });
+    items.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [aside]);
+  const head = (
+    <>
       {t.banner_url && <div className="tutor-cover"><img src={t.banner_url} alt={`Ảnh bìa của ${t.name}`} /></div>}
       <div className="profile-hero">
         <Person
@@ -57,7 +70,6 @@ export function TutorPresentation({
           </div>
         </div>
       </div>
-      {children}
       <div className="profile-meta">
         <span>
           <GraduationCap />
@@ -71,6 +83,11 @@ export function TutorPresentation({
           <TrustLine trust={t.trust} />
         )}
       </div>
+    </>
+  );
+  const body = (
+    <>
+      {children}
       {!!t.verified?.length && (
         <Section title={tr("Đã xác minh")}>
           <ul className="verified-list">
@@ -133,6 +150,28 @@ export function TutorPresentation({
         <p className="demo-note">
           Hồ sơ và ảnh minh họa cho trải nghiệm sản phẩm.
         </p>
+      )}
+    </>
+  );
+  return (
+    <article
+      ref={ref}
+      className={`tutor-presentation${aside ? " tutor-split" : ""}`}
+      data-theme={t.profile_theme || "paper"}
+    >
+      {aside ? (
+        <>
+          <div className="tutor-aside">
+            {head}
+            <div className="tutor-aside-sticky">{aside}</div>
+          </div>
+          <div className="tutor-body">{body}</div>
+        </>
+      ) : (
+        <>
+          {head}
+          {body}
+        </>
       )}
     </article>
   );
