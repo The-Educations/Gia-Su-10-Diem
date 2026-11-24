@@ -650,7 +650,7 @@ test("role workspace identity and admin summary stay private and reflect moderat
     pending: 0,
     approved: 0,
     hidden: 1,
-    reports: 1,
+    reports: 0, // hiding the post closed its report
   });
 });
 
@@ -1190,4 +1190,46 @@ test("the bot's note on an escalated post is tied to the graded version and chan
   // Once the post is decided the note is refused.
   await call("admin", `/admin/community/posts/${id}/approve`, "POST");
   assert.equal((await call("admin", `/admin/community/posts/${id}/ai-note`, "POST", note)).status, 409);
+});
+
+test("reports are grouped per content, resolved together, and closed automatically when the content is dealt with", async (t) => {
+  const { call, create, approve, db, ids } = await fixture(t);
+  const open = async () => (await call("admin", "/admin/community/reports")).data;
+  const summaryReports = async () => (await call("admin", "/admin/community/summary")).data.reports;
+  const id = await create();
+  await approve(id);
+  const comment = await call("parent", `/community/posts/${id}/comments`, "POST", { body: "Bình luận cần xem" });
+  const report = (user, target_type, target_id, reason, detail = "") => call(user, "/community/reports", "POST", { target_type, target_id, reason, detail });
+  assert.equal((await report("other", "post", id, "Quảng cáo", "có link")).status, 201);
+  assert.equal((await report("tutor", "post", id, "Xúc phạm")).status, 201);
+  assert.equal((await report("parent", "post", id, "Khác")).status, 201);
+  assert.equal((await report("other", "comment", comment.data.id, "Khác")).status, 201);
+
+  const groups = await open();
+  assert.equal(groups.length, 2, "một thẻ cho mỗi nội dung");
+  assert.equal(await summaryReports(), 2, "bộ đếm tính theo thẻ");
+  const post = groups.find((g) => g.target_type === "post");
+  assert.equal(post.report_count, 3);
+  assert.deepEqual(post.reasons.map((r) => [r.reason, r.detail]), [["Quảng cáo", "có link"], ["Xúc phạm", ""], ["Khác", ""]]);
+  assert.ok(post.reasons.every((r) => r.reporter_name && r.created_at));
+  assert.equal(post.target.id, id);
+  assert.equal(post.owner.id, ids.student);
+  assert.equal(groups[0].target_type, "post", "nhiều báo cáo nhất lên đầu");
+
+  // One decision closes the whole group and is audited once.
+  assert.equal((await call("admin", `/admin/community/reports/${post.id}/resolve`, "POST", { resolution: "Đã xem, không vi phạm" })).status, 200);
+  assert.deepEqual((await open()).map((g) => g.target_type), ["comment"]);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM community_reports WHERE target_type='post' AND status='resolved' AND resolution='Đã xem, không vi phạm'").get().n, 3);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM audit WHERE action='community.report.resolve'").get().n, 1);
+  assert.equal((await call("admin", `/admin/community/reports/${post.id}/resolve`, "POST", { resolution: "x" })).status, 409);
+  assert.equal((await call("admin", "/admin/community/reports?status=resolved")).data.length, 3);
+
+  // Removing a comment closes its reports; hiding a post closes the post's reports (new ones too).
+  assert.equal((await call("admin", `/admin/community/comments/${comment.data.id}`, "DELETE", { note: "Không phù hợp" })).status, 200);
+  assert.deepEqual(await open(), []);
+  assert.equal((await report("pending", "post", id, "Khác")).status, 201);
+  assert.equal((await open()).length, 1);
+  await call("admin", `/admin/community/posts/${id}/hide`, "POST", { note: "Vi phạm" });
+  assert.deepEqual(await open(), []);
+  assert.equal(await summaryReports(), 0);
 });

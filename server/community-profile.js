@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z, text } from "./validation.js";
 import { queueEmail } from "./notifications.js";
+import { resolveReports } from "./community-reports.js";
 import {
   LIMITS,
   authorLabel,
@@ -235,6 +236,7 @@ export function registerCommunityProfile(
           "community.profile.remove",
           JSON.stringify({ id: user.id, part, note }),
         );
+        resolveReports(db, "profile", user.id, req.user.id, `${label} đã được gỡ.`, part);
         queueEmail(db, user.id, "community_profile_removed", { subject: label, detail: note, link: `/community/members/${user.profile_code}` });
       });
       res.json({ ok: true });
