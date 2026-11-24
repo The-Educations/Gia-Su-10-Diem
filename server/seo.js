@@ -20,12 +20,15 @@ export const robots = [
 ].join("\n");
 
 // Static pages get the mtime of the file that lists them (a real change date,
-// not a per-request timestamp); dynamic entries carry their own updated_at.
+// not a per-request timestamp). Workers have no filesystem, so callers may pass
+// a build-time date; `null` means "no lastmod" — a missing date is honest, a
+// wrong one misleads crawlers.
 const pagesMtime = (() => {
   try { return statSync(new URL("../shared/seo-pages.json", import.meta.url)).mtime.toISOString().slice(0, 10); }
-  catch { return "2026-01-01"; }
+  catch { return null; }
 })();
-export const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(pages).map(path => `<url><loc>${siteOrigin}${path}</loc><lastmod>${pagesMtime}</lastmod></url>`).join("")}</urlset>`;
+const staticUrls = (lastmod) => Object.keys(pages).map(path => `<url><loc>${siteOrigin}${path}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`).join("");
+export const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${staticUrls(pagesMtime)}</urlset>`;
 
 // News paths are /app/news/<id>[-<slug>]; the slug is only ever a-z, 0-9 and dashes.
 export const NEWS_PATH = /^\/app\/news\/(\d+)(?:-[a-z0-9-]*)?$/;
@@ -39,15 +42,15 @@ const jsonLd = (data) => JSON.stringify(data).replace(/</g, "\\u003c").replace(/
 const defaultImage = `${siteOrigin}/assets/social-preview.png`;
 const newsImage = (post) => /^\//.test(post.cover_url || "") ? siteOrigin + post.cover_url : /^https:\/\//.test(post.cover_url || "") ? post.cover_url : "";
 
-export function newsSitemap(posts, community = [], tutors = []) {
+export function newsSitemap(posts, community = [], tutors = [], staticLastmod = pagesMtime) {
   const news = posts.map(post => {
     const lastmod = isoTime(post.revised_at || post.published_at || post.updated_at);
     return `<url><loc>${siteOrigin}${newsPath(post)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;
   });
-  const urls = news.join("")
+  const urls = staticUrls(staticLastmod) + news.join("")
     + community.map(post => `<url><loc>${siteOrigin}/app/community/${Number(post.id)}</loc></url>`).join("")
     + tutors.slice(0, 50000).map(t => `<url><loc>${siteOrigin}/app/tutors/${Number(t.user_id)}</loc></url>`).join("");
-  return sitemap.replace("</urlset>", urls + "</urlset>");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`;
 }
 
 // Public snippets of the bio — stripped and clipped for the meta description.

@@ -119,7 +119,10 @@ export default {
         if (!community.ok) return new Response("Temporarily unavailable", { status: 503 });
         const tutors = await stub.fetch(new Request(new URL("/api/tutors", request.url)));
         if (!tutors.ok) return new Response("Temporarily unavailable", { status: 503 });
-        content = newsSitemap(await posts.json(), await community.json(), tutorSitemapIds(await tutors.json()));
+        // Static pages' lastmod comes from the build date — no fs in the bundle.
+        const build = await env.ASSETS.fetch(new Request(new URL("/seo-build.json", request.url)))
+          .then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+        content = newsSitemap(await posts.json(), await community.json(), tutorSitemapIds(await tutors.json()), build.date || null);
       }
       return new Response(content, {
         headers: { "Content-Type": url.pathname === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8", "Cache-Control": "public, max-age=300" },
