@@ -16,7 +16,12 @@ export function finishBoot() {
   const shown = performance.now() - (window.__bootAt ?? 0);
   const timer = setTimeout(() => {
     boot.dataset.done = "";
-    setTimeout(() => boot.remove(), OPEN_MS);
+    setTimeout(() => {
+      // Hidden, not removed: a language switch reuses the same cover, so the
+      // DOM pass happens behind the same brand mark the app opened with.
+      boot.style.display = "none";
+      delete boot.dataset.done;
+    }, OPEN_MS);
   }, Math.max(0, DRAWN_MS - shown));
   return () => clearTimeout(timer);
 }
