@@ -3,7 +3,7 @@ import { EducationTimeline } from "./tutor-education";
 import { TimezoneTag } from "./tutor-timezone";
 import { ProfileSections } from "./tutor-sections";
 import { useEffect, useRef, type ReactNode } from "react";
-import { Award, BadgeCheck, GraduationCap, MapPin, ScrollText } from "lucide-react";
+import { Award, BadgeCheck, GraduationCap, MapPin, ScrollText, ShieldCheck } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { embedUrl } from "@/lib/video";
 import type { Tutor, Subject } from "@/lib/types";
@@ -44,7 +44,7 @@ export function TutorPresentation({
   const head = (
     <>
       {t.banner_url && <div className="tutor-cover"><img src={t.banner_url} alt={`Ảnh bìa của ${t.name}`} /></div>}
-      <div className="profile-hero">
+      <div className={`profile-hero${t.banner_url ? " hero-on-cover" : ""}`}>
         <Person
           name={t.name}
           id={t.user_id}
@@ -62,11 +62,11 @@ export function TutorPresentation({
                 {subjects.find((s) => s.id === id)?.name || id}
               </Badge>
             ))}
-            {!preview && (
-              <Badge variant="outline">
-                {t.demo ? "Hồ sơ minh họa" : "Đã được quản trị duyệt"}
-              </Badge>
-            )}
+            {!preview && (t.demo ? (
+              <Badge variant="outline">{tr("Hồ sơ minh họa")}</Badge>
+            ) : (
+              <span className="approved-badge"><ShieldCheck aria-hidden="true" />{tr("Đã được quản trị duyệt")}</span>
+            ))}
           </div>
         </div>
       </div>
