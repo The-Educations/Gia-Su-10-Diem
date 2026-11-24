@@ -1881,4 +1881,11 @@ export const enMore: Record<string, string> = {
   "Duyệt lại": "Approve again",
   "Tác giả đã xóa": "Deleted by author",
   "Xóa vĩnh viễn ngay": "Delete permanently now",
+  "Bản đồ khu vực dạy": "Teaching area map",
+  "Bán kính": "Radius",
+  "Bán kính khu vực dạy": "Teaching area radius",
+  "Dùng vị trí của tôi": "Use my location",
+  "Kéo điểm đến nơi bạn nhận dạy trực tiếp, chọn bán kính khu vực phục vụ.": "Drag the pin to where you teach in person, then pick the service radius.",
+  "Khu vực dạy trực tiếp": "In-person teaching area",
+  "Dạy trực tiếp trong ~{km} km quanh {location}": "In-person tutoring within ~{km} km of {location}",
 };

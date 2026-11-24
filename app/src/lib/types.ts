@@ -100,6 +100,9 @@ export type Tutor = {
   profile_sections: ProfileSection[];
   bio: string;
   location: string;
+  area_lat?: number | null;
+  area_lng?: number | null;
+  area_km?: number | null;
   province_code: string;
   ward_code: string;
   mode: string;

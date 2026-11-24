@@ -251,7 +251,7 @@ export function createApi(
     WHERE ${preview ? '1=1' : `${liveTutorSql("t")} AND u.status='active' AND u.role='tutor'`}`,
     ).map(({ moderation_note, reserved_weekly_blocks, published, ...draft }) => {
       // Students see the last approved content while an edit awaits review.
-      const { published: _snapshot, ...visible } = publicView({ ...draft, published });
+      const { published: _snapshot, area_lat: _al, area_lng: _lg, ...visible } = publicView({ ...draft, published });
       const t = preview ? draft : visible;
       const score = trust.public(t.user_id);
       return {
@@ -563,11 +563,14 @@ export function createApi(
       if (d.timezone) run(db, "UPDATE users SET timezone=? WHERE id=?", d.timezone, req.user.id);
       run(
         db,
-        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,sample_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
+        `UPDATE tutors SET headline=?,bio=?,location=?,mode=?,area_lat=?,area_lng=?,area_km=?,rate=?,experience=?,education=?,subjects=?,levels=?,goals=?,teaching_style=?,lesson_plan=?,intro_video=?,sample_video=?,profile_theme=COALESCE(?,profile_theme),education_history=COALESCE(?,education_history),profile_sections=COALESCE(?,profile_sections),status=?,published=?,moderation_note=CASE WHEN ? THEN '' ELSE moderation_note END,review_revision=review_revision+? WHERE user_id=?`,
         d.headline,
         d.bio,
         d.location,
         d.mode,
+        d.area_lat ?? null,
+        d.area_lng ?? null,
+        d.area_km ?? null,
         d.rate,
         d.experience,
         d.education,
