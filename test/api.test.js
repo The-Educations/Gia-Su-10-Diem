@@ -3056,3 +3056,23 @@ test("demo seed money keeps every ledger invariant, idempotent on re-seed", asyn
   assert.equal(before, pending.amount, "the request holds its amount");
 });
 });
+
+test("hot-path lookups use indexes, not full scans", async (t) => {
+  const { db } = await fixture(t);
+  const scans = [];
+  for (const [name, q] of [
+    ["inquiry thread", "SELECT * FROM inquiry_messages WHERE inquiry_id=? ORDER BY created_at"],
+    ["booking by student", "SELECT * FROM bookings WHERE student_id=?"],
+    ["booking by tutor", "SELECT * FROM bookings WHERE tutor_id=?"],
+    ["deposit by user", "SELECT * FROM deposits WHERE user_id=?"],
+    ["ledger by ref", "SELECT * FROM wallet_entries WHERE ref='deposit:1'"],
+    ["audit by actor", "SELECT * FROM audit WHERE actor_id=?"],
+    ["audit by target", "SELECT * FROM audit WHERE target='tutor:1'"],
+    ["chat thread", "SELECT * FROM messages WHERE booking_id=? ORDER BY created_at"],
+    ["payment code", "SELECT * FROM sepay_events WHERE code='X'"],
+  ]) {
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${q}`).all().map((r) => r.detail).join(" | ");
+    if (/SCAN/.test(plan) && !/USING (INDEX|COVERING INDEX)/.test(plan)) scans.push(`${name}: ${plan}`);
+  }
+  assert.deepEqual(scans, [], "hot queries doing full table scans");
+});

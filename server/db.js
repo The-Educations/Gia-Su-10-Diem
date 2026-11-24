@@ -223,6 +223,14 @@ export function migrateDatabase(db) {
     thread_kind TEXT NOT NULL, thread_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
     last_read_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(thread_kind,thread_id,user_id)
   )`);
+  // Lookups that ran as full scans: chat threads, per-user booking lists,
+  // payment-code dedup, ledger refs and the audit page filters.
+  db.exec(`CREATE INDEX IF NOT EXISTS inquiry_messages_thread ON inquiry_messages(inquiry_id,created_at);
+    CREATE INDEX IF NOT EXISTS bookings_student ON bookings(student_id);
+    CREATE INDEX IF NOT EXISTS bookings_tutor ON bookings(tutor_id);
+    CREATE INDEX IF NOT EXISTS audit_actor ON audit(actor_id);
+    CREATE INDEX IF NOT EXISTS audit_target ON audit(target);
+    CREATE INDEX IF NOT EXISTS messages_thread ON messages(booking_id,created_at)`);
   for (const table of ["slots", "bookings"]) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === "duration_minutes"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60`);
