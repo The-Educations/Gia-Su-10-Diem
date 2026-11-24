@@ -74,7 +74,8 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
   await dialog.getByLabel("Số buổi").fill("4");
   await dialog.getByLabel("Học phí / buổi").fill("200000");
   await expect(dialog.locator(".proposal-summary")).toContainText("800.000");
-  await dialog.getByLabel("Lời nhắn").fill("Em muốn luyện nói tiếng Anh");
+  const note = `Em muốn luyện nói tiếng Anh ${Date.now()}`;
+  await dialog.getByLabel("Lời nhắn").fill(note);
   await dialog.getByRole("button", { name: /^Gửi đề nghị 800\.000/ }).click();
   await expect(student).toHaveURL(/proposals\?id=\d+/);
   await expect(student.locator(".proposal-card[data-focused]")).toContainText("Chờ trả lời");
@@ -83,12 +84,12 @@ test("student tops up, sends an offer that holds money, and the tutor accepts it
 
   // The tutor sees the payout after the 5% fee and accepts.
   await tutor.goto("/app/proposals");
-  const card = tutor.locator(".proposal-card").filter({ hasText: "Em muốn luyện nói tiếng Anh" });
+  const card = tutor.locator(".proposal-card").filter({ hasText: note });
   await expect(card).toContainText("Bạn nhận 760.000");
   await card.getByRole("button", { name: "Nhận đề nghị" }).click();
   await expect(tutor.getByText("Đã nhận đề nghị", { exact: true })).toBeVisible();
   await tutor.getByRole("link", { name: /Lịch sử/ }).click();
-  await expect(tutor.locator(".proposal-card").filter({ hasText: "Em muốn luyện nói tiếng Anh" })).toContainText("Đã nhận");
+  await expect(tutor.locator(".proposal-card").filter({ hasText: note })).toContainText("Đã nhận");
   await student.goto("/app/workspace");
   await student.getByRole("button", { name: /Thông báo/ }).click();
   await expect(student.locator(".notification-panel")).toContainText("đã nhận đề nghị");
@@ -149,7 +150,7 @@ test("top-up shows an inline VietQR, never a SePay link, and simulates to Đã n
   await expect(page.locator(".deposit-code")).toBeVisible();
   expect(await page.locator('a[href*="sepay.vn"], [href*="pay.sepay"], form[action*="sepay"]').count()).toBe(0);
   await page.getByRole("button", { name: /Giả lập tiền đã về/ }).click();
-  await expect(page.getByText(/Đã nhận 1.000.000/)).toBeVisible();
+  await expect(page.getByText(/Đã nhận 1.000.000/).first()).toBeVisible();
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

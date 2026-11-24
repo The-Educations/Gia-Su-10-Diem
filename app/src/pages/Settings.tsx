@@ -22,6 +22,7 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "security", label: "Bảo mật", icon: ShieldCheck },
   { id: "notifications", label: "Thông báo", icon: Bell },
 ];
+const BELL_LABELS = { proposals: "Chuông đề nghị", money: "Chuông tiền", lessons: "Chuông buổi học", community: "Chuông cộng đồng" } as const;
 const EMAIL_TOPICS: { id: "proposals" | "money" | "lessons" | "community"; label: string }[] = [
   { id: "proposals", label: "Đề nghị học mới và câu trả lời" },
   { id: "money", label: "Tiền vào số dư và rút tiền" },
@@ -32,12 +33,12 @@ const EMAIL_TOPICS: { id: "proposals" | "money" | "lessons" | "community"; label
 // Email for the events that matter; in-app notices are always on.
 function NotificationSettings() {
   const { t } = useI18n();
-  const prefs = useLoad<Record<string, boolean>>("/account/notifications"),
+  const prefs = useLoad<{ email: Record<string, boolean>; bell: Record<string, boolean> }>("/account/notifications"),
     [saving, setSaving] = useState("");
   if (prefs.error) return <ErrorState error={prefs.error} retry={prefs.reload} />;
-  async function toggle(id: string, value: boolean) {
-    setSaving(id);
-    try { await api("/account/notifications", "PUT", { [id]: value }); prefs.reload(); toast.success("Đã lưu"); }
+  async function toggle(group: "email" | "bell", id: string, value: boolean) {
+    setSaving(group === "bell" ? `bell-${id}` : id);
+    try { await api("/account/notifications", "PUT", { [group]: { [id]: value } }); prefs.reload(); toast.success("Đã lưu"); }
     catch (e) { toast.error((e as Error).message); }
     finally { setSaving(""); }
   }
@@ -49,7 +50,17 @@ function NotificationSettings() {
           <li key={topic.id}>
             <label htmlFor={`notify-${topic.id}`}>{topic.label}</label>
             <input id={`notify-${topic.id}`} type="checkbox" role="switch" className="switch" disabled={!prefs.data || saving === topic.id}
-              checked={prefs.data?.[topic.id] ?? true} onChange={(e) => toggle(topic.id, e.target.checked)} />
+              checked={prefs.data?.email?.[topic.id] ?? true} onChange={(e) => toggle("email", topic.id, e.target.checked)} />
+          </li>
+        ))}
+      </ul>
+      <h2>{t("Hiện trên chuông khi có")}</h2>
+      <ul className="settings-switches">
+        {EMAIL_TOPICS.map((topic) => (
+          <li key={`bell-${topic.id}`}>
+            <label htmlFor={`bell-${topic.id}`}>{topic.label} · {t("chuông")}</label>
+            <input id={`bell-${topic.id}`} type="checkbox" role="switch" className="switch" aria-label={t(BELL_LABELS[topic.id])} disabled={!prefs.data || saving === `bell-${topic.id}`}
+              checked={prefs.data?.bell?.[topic.id] ?? true} onChange={(e) => toggle("bell", topic.id, e.target.checked)} />
           </li>
         ))}
       </ul>

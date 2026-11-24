@@ -607,7 +607,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       // The request appears as a wallet event card in the user's support thread.
       supportNote(req.user.id, `Yêu cầu rút tiền #${wid}: ${d.amount.toLocaleString("vi-VN")}đ về ${d.bank_name} ****${d.account_number.slice(-4)} (${d.account_name.toUpperCase()}).`, null, req.user.id);
       for (const admin of all(db, "SELECT id FROM users WHERE role='admin' AND status='active'"))
-        notify(db, admin.id, "withdrawal_requested", { actor: req.user.name, subject: String(d.amount), link: "/admin?tab=finance" });
+        notify(db, admin.id, "withdrawal_requested", { actor: req.user.name, subject: String(d.amount), link: `/admin?tab=finance&fin=payouts&withdrawal=${wid}` });
       return wid;
     });
     res.status(201).json({ id, ...view(req.user.id) });

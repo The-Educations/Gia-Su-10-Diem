@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Bell,
@@ -91,7 +91,11 @@ const communityTemplates: Record<string, string> = {
   post_hidden: "Bài “{title}” đã bị ẩn",
   new_comment: "Có bình luận mới ở “{title}”",
 };
-const POLL_MS = 60000;
+const POLL_MS = 12000;
+const PAGE = 20;
+// Kinds worth a toast the moment they arrive — money movement, a new offer or
+// proposal on your desk, and a session someone cancelled or disputed.
+const IMPORTANT = new Set(["deposit_received", "withdrawal_paid", "offer_new", "proposal_new", "session_cancelled", "lesson_cancelled", "session_disputed"]);
 
 export function NotificationBell() {
   const { user, revision, refresh } = useApp(),
@@ -100,18 +104,32 @@ export function NotificationBell() {
     [count, setCount] = useState(0),
     [open, setOpen] = useState(false),
     [rows, setRows] = useState<Row[] | null>(null),
-    [unreadOnly, setUnreadOnly] = useState(false);
+    [unreadOnly, setUnreadOnly] = useState(false),
+    [page, setPage] = useState(PAGE);
   const active = !!user && !user.email_verification_required;
+  const toasted = useRef(new Set<string>()), seeded = useRef(false);
 
   const loadCount = useCallback(() => {
     if (!active || document.visibilityState !== "visible") return;
     Promise.all([
       api<{ count: number }>("/notifications/unread-count"),
       api<{ count: number }>("/community/notifications/unread-count"),
+      api<Notice[]>("/notifications"),
     ])
-      .then(([a, b]) => setCount(a.count + b.count))
+      .then(([a, b, latest]) => {
+        setCount(a.count + b.count);
+        // First load only seeds what already arrived — toasts are for new arrivals from poll 2 on.
+        for (const n of latest.filter((n) => !n.read_at && IMPORTANT.has(n.kind))) {
+          if (toasted.current.has(`n${n.id}`)) continue;
+          toasted.current.add(`n${n.id}`);
+          if (!seeded.current) continue;
+          const [template] = templates[n.kind] || ["{actor}"];
+          toast.info(t(template, { actor: n.actor_name, subject: n.subject, money: /^\d+$/.test(n.subject) ? new Intl.NumberFormat("vi-VN").format(Number(n.subject)) + "đ" : "" }), { duration: 5000 });
+        }
+        seeded.current = true;
+      })
       .catch(() => {});
-  }, [active]);
+  }, [active, t]);
 
   useEffect(() => {
     loadCount();
@@ -188,6 +206,14 @@ export function NotificationBell() {
 
   if (!active) return null;
   const shown = (rows || []).filter((r) => !unreadOnly || r.unread);
+  // Group by day: Hôm nay / Hôm qua / the date, newest first.
+  const today = new Date().toDateString(), yesterday = new Date(Date.now() - 86400000).toDateString();
+  const dayLabel = (iso: string) => { const d = new Date(iso.replace(" ", "T")).toDateString(); return d === today ? t("Hôm nay") : d === yesterday ? t("Hôm qua") : new Date(iso.replace(" ", "T")).toLocaleDateString(undefined, { day: "numeric", month: "short" }); };
+  const groups: [string, Row[]][] = [];
+  for (const r of shown.slice(0, page)) {
+    const g = dayLabel(r.created_at);
+    (groups.at(-1)?.[0] === g ? groups.at(-1)![1] : groups[groups.push([g, []]) - 1][1]).push(r);
+  }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -230,32 +256,44 @@ export function NotificationBell() {
         ) : !shown.length ? (
           <p className="notification-empty">{t(unreadOnly ? "Bạn đã đọc hết thông báo" : "Chưa có thông báo")}</p>
         ) : (
-          <ul className="notification-list">
-            {shown.map((row) => {
-              const Icon = row.icon;
-              return (
-                <li key={row.key}>
-                  <Link
-                    to={row.link}
-                    data-unread={row.unread || undefined}
-                    onClick={() => {
-                      void markRead(row);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="notification-icon" aria-hidden="true">
-                      <Icon />
-                    </span>
-                    <span className="notification-text">
-                      {row.text}
-                      <time dateTime={row.created_at}>{ago(row.created_at)}</time>
-                    </span>
-                    {row.unread && <span className="notification-dot" aria-label={t("Chưa đọc")} />}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            {groups.map(([day, items]) => (
+              <section key={day} className="notification-day">
+                <h3 className="notification-day-label">{day}</h3>
+                <ul className="notification-list">
+                  {items.map((row) => {
+                    const Icon = row.icon;
+                    return (
+                      <li key={row.key}>
+                        <Link
+                          to={row.link}
+                          data-unread={row.unread || undefined}
+                          onClick={() => {
+                            void markRead(row);
+                            setOpen(false);
+                          }}
+                        >
+                          <span className="notification-icon" aria-hidden="true">
+                            <Icon />
+                          </span>
+                          <span className="notification-text">
+                            {row.text}
+                            <time dateTime={row.created_at}>{ago(row.created_at)}</time>
+                          </span>
+                          {row.unread && <span className="notification-dot" aria-label={t("Chưa đọc")} />}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+            {shown.length > page && (
+              <div className="notification-more">
+                <Button variant="ghost" size="sm" onClick={() => setPage((p) => p + PAGE)}>{t("Xem thêm")}</Button>
+              </div>
+            )}
+          </>
         )}
       </PopoverContent>
     </Popover>

@@ -17,6 +17,8 @@ export function migrateNotifications(db) {
     db.exec("ALTER TABLE email_outbox ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "email_prefs"))
     db.exec("ALTER TABLE users ADD COLUMN email_prefs TEXT NOT NULL DEFAULT '{}'");
+  if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "bell_prefs"))
+    db.exec("ALTER TABLE users ADD COLUMN bell_prefs TEXT NOT NULL DEFAULT '{}'");
 }
 
 // Which important events also arrive by email. Everything is on until the person turns it off.
@@ -24,6 +26,13 @@ export const EMAIL_TOPICS = ["proposals", "money", "lessons", "community"];
 export function emailPrefs(db, userId) {
   let stored = {};
   try { stored = JSON.parse(one(db, "SELECT email_prefs FROM users WHERE id=?", userId)?.email_prefs || "{}"); } catch { /* keep defaults */ }
+  return Object.fromEntries(EMAIL_TOPICS.map((k) => [k, stored[k] !== false]));
+}
+
+// In-app bell follows the same groups — a muted group no longer creates a row.
+export function bellPrefs(db, userId) {
+  let stored = {};
+  try { stored = JSON.parse(one(db, "SELECT bell_prefs FROM users WHERE id=?", userId)?.bell_prefs || "{}"); } catch { /* keep defaults */ }
   return Object.fromEntries(EMAIL_TOPICS.map((k) => [k, stored[k] !== false]));
 }
 
@@ -47,6 +56,7 @@ export function queueEmail(db, userId, kind, { actor = "", subject = "", detail 
 // Unread message notices for one conversation collapse into the latest.
 export function notify(db, userId, kind, { actor = "", subject = "", link = "" } = {}) {
   if (!userId) return;
+  if (EMAIL_KINDS[kind] && !bellPrefs(db, userId)[EMAIL_KINDS[kind]]) return;
   if (kind === "message_new") {
     const existing = one(db, "SELECT id FROM notifications WHERE user_id=? AND kind=? AND link=? AND read_at IS NULL", userId, kind, link);
     if (existing) return run(db, "UPDATE notifications SET actor_name=?,created_at=CURRENT_TIMESTAMP WHERE id=?", actor, existing.id);
@@ -63,11 +73,15 @@ export function registerNotifications(app, db, auth) {
   app.get("/api/notifications/unread-count", auth(), (req, res) => {
     res.json(one(db, "SELECT COUNT(*) count FROM notifications WHERE user_id=? AND read_at IS NULL", req.user.id));
   });
-  app.get("/api/account/notifications", auth(), (req, res) => res.json(emailPrefs(db, req.user.id)));
+  app.get("/api/account/notifications", auth(), (req, res) => res.json({ email: emailPrefs(db, req.user.id), bell: bellPrefs(db, req.user.id) }));
   app.put("/api/account/notifications", auth(), (req, res) => {
-    const d = z.object(Object.fromEntries(EMAIL_TOPICS.map((k) => [k, z.boolean()]))).partial().strict().parse(req.body);
-    run(db, "UPDATE users SET email_prefs=? WHERE id=?", JSON.stringify({ ...emailPrefs(db, req.user.id), ...d }), req.user.id);
-    res.json(emailPrefs(db, req.user.id));
+    const topics = z.object(Object.fromEntries(EMAIL_TOPICS.map((k) => [k, z.boolean()]))).partial();
+    const d = z.union([topics.strict(), z.object({ email: topics, bell: topics }).partial().strict()]).parse(req.body);
+    if ("email" in d || "bell" in d) {
+      if (d.email) run(db, "UPDATE users SET email_prefs=? WHERE id=?", JSON.stringify({ ...emailPrefs(db, req.user.id), ...d.email }), req.user.id);
+      if (d.bell) run(db, "UPDATE users SET bell_prefs=? WHERE id=?", JSON.stringify({ ...bellPrefs(db, req.user.id), ...d.bell }), req.user.id);
+    } else run(db, "UPDATE users SET email_prefs=? WHERE id=?", JSON.stringify({ ...emailPrefs(db, req.user.id), ...d }), req.user.id);
+    res.json({ email: emailPrefs(db, req.user.id), bell: bellPrefs(db, req.user.id) });
   });
   app.post("/api/notifications/read", auth(), (req, res) => {
     const d = z.union([z.object({ id: z.number().int().positive() }).strict(), z.object({ all: z.literal(true) }).strict()]).parse(req.body);
