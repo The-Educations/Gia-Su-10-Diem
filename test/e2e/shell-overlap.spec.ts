@@ -4,6 +4,9 @@ import { test, expect } from "@playwright/test";
 // the DOM never overlaps. These specs lock in the real geometry so it can't regress.
 test("the desktop sidebar never covers page content", async ({ page }) => {
   await page.goto("/app/tutors");
+  // Wait for the SPA to mount — goto resolves before React renders the shell.
+  await page.waitForSelector(".sidebar");
+  await page.waitForSelector("main h1, main h2");
   const box = await page.evaluate(() => {
     const sidebar = document.querySelector(".sidebar")!.getBoundingClientRect();
     const heading = document.querySelector("main h1, main h2")!.getBoundingClientRect();
@@ -16,7 +19,9 @@ test("the desktop sidebar never covers page content", async ({ page }) => {
 
 test("the bottom bar never covers the last content on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.goto("/app/tutors/3");
+  await page.goto("/app/tutors");
+  await page.waitForSelector(".mobile-bar");
+  await page.waitForSelector("main");
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await page.waitForFunction(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2);
   const box = await page.evaluate(() => {
