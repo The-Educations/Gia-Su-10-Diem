@@ -296,6 +296,11 @@ test("class review moderation: report, safety queue, hide removes it from public
   assert.equal((await student.request(`/members/${member.id}/end`, "POST", {})).status, 200);
   assert.equal((await student.request(`/members/${member.id}/review`, "PUT", { body: "Gia sư đến trễ nhiều lần." })).status, 200);
   const before = trustReader(db).full(teacher.id);
+  // IDOR: a student outside the package cannot report its review — 404, no data.
+  const s2pw = one(db, "SELECT password FROM users WHERE email='student@demo.giasu.test'").password;
+  run(db, "INSERT INTO users(name,email,password,role,status) VALUES ('Other Student','s2@demo.giasu.test',?,'student','active')", s2pw);
+  const outside = client(); await outside.login("s2");
+  assert.equal((await outside.request(`/members/${member.id}/report`, "POST", { reason: "x" })).status, 404);
   // Tutor reports the review → it lands in the admin safety queue as a member row.
   assert.equal((await tutor.request(`/members/${member.id}/report`, "POST", { reason: "Sai sự thật" })).status, 201);
   const queue = (await admin.request("/admin/reviews/queue")).data;

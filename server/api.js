@@ -230,8 +230,8 @@ export function createApi(
   retireLegacyFlow(db);
   // Retired flows: writes to the old booking/offer/weekly-request endpoints
   // answer 410 Gone; GETs stay so history keeps loading.
-  for (const p of ["/api/bookings", "/api/bookings/:id", "/api/bookings/:id/start", "/api/bookings/:id/lesson", "/api/bookings/:id/messages", "/api/bookings/:id/review", "/api/bookings/:id/report", "/api/bookings/:id/rating", "/api/offers", "/api/offers/:id", "/api/offers/preview", "/api/weekly-requests", "/api/weekly-requests/:id"])
-    app.all(p, (req, res, next) => (req.method === "GET" ? next() : gone(res)));
+  for (const [p, roles] of [["/api/bookings", ["student"]], ["/api/bookings/:id", []], ["/api/bookings/:id/start", ["tutor"]], ["/api/bookings/:id/lesson", ["tutor"]], ["/api/bookings/:id/messages", ["student", "tutor"]], ["/api/bookings/:id/review", ["student"]], ["/api/bookings/:id/report", ["student", "tutor"]], ["/api/bookings/:id/rating", ["student"]], ["/api/offers", ["student"]], ["/api/offers/preview", ["student"]], ["/api/offers/:id", ["student", "tutor"]], ["/api/weekly-requests", ["student"]], ["/api/weekly-requests/:id", ["student", "tutor"]]])
+    app.all(p, (req, res, next) => { if (req.method === "GET") return next(); auth(...roles)(req, res, () => gone(res)); });
   const booking = (req) => {
     const b = one(db, "SELECT * FROM bookings WHERE id=?", req.params.id);
     if (!b) fail(404, "Không tìm thấy buổi học.");
