@@ -4189,9 +4189,8 @@ button.admin-row-title:hover strong { text-decoration: underline; }
   [data-slot="dialog-overlay"][data-state="closed"] {
     animation: overlay-out2 130ms ease-in both;
   }
-  [data-slot="popover-content"][data-state="open"],
-  [data-slot="sheet-content"][data-state="open"] {
-    animation: popup-in 200ms var(--ease-out) both;
+  [data-slot="popover-content"][data-state="open"] {
+    animation: pop-rise 180ms var(--ease-out) both;
   }
   @keyframes popup-in {
     from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
