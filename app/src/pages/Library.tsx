@@ -7,6 +7,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useLoad, fold } from "@/lib/api";
+import { useUrlField } from "@/lib/use-url-field";
 import type { Subject, Resource } from "@/lib/types";
 import {
   Page,
@@ -33,13 +34,14 @@ export default function Library() {
     value ? p.set(key, value) : p.delete(key);
     setParams(p, { replace: true });
   };
+  const [search, setSearch] = useUrlField(q, (v) => set("q", v));
   const exams = (resources.data || []).filter(
     (r) =>
-      (!q || fold(r.title + " " + r.category).includes(fold(q))) &&
+      (!search || fold(r.title + " " + r.category).includes(fold(search))) &&
       (!category || r.category === category),
   );
   const courses = (subjects.data || []).filter((s) =>
-    fold(s.name + " " + s.stage).includes(fold(q)),
+    fold(s.name + " " + s.stage).includes(fold(search)),
   );
   return (
     <Page>
@@ -69,8 +71,8 @@ export default function Library() {
               <Search size={18} />
               <Input
                 id="catalog-search"
-                value={q}
-                onChange={(e) => set("q", e.target.value)}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm môn học, cấp học hoặc kỳ thi…"
               />
             </div>
