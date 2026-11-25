@@ -5,6 +5,7 @@ import { move, settings, sepayConfig } from "./wallet.js";
 import { childrenOf } from "./family.js";
 import { sessionChatEvent } from "./chat-media.js";
 import { flaggedList, flaggedThread, reviewQueue, warnThread } from "./trust-safety.js";
+import { attachSessionNotes, classExtrasPayload, memberProgressStats, tutorClassStats, assignmentBadge } from "./class-extras.js";
 
 // A class has one tutor, one or more students and a weekly rhythm. Each student
 // brings their own package (an accepted offer): a number of lessons paid in
@@ -180,16 +181,25 @@ export function registerClasses(app, db, auth, audit) {
     res.json(ids.map((id) => {
       const c = classFor(id, req.user);
       const next = one(db, "SELECT starts_at FROM class_sessions WHERE class_id=? AND status='scheduled' AND starts_at>? ORDER BY starts_at LIMIT 1", id, new Date().toISOString());
-      return { ...c, next_at: next?.starts_at || null };
+      return { ...c, next_at: next?.starts_at || null, assignment_badge: assignmentBadge(db, id, req.user) };
     }).sort((a, b) => (a.status === b.status ? (a.next_at || "z").localeCompare(b.next_at || "z") : a.status === "active" ? -1 : 1)));
   });
   app.get("/api/classes/:id", auth(), (req, res) => {
     upkeep(db);
     const id = z.coerce.number().int().positive().parse(req.params.id), c = classFor(id, req.user);
     const own = new Set(c.members.map((m) => m.student_id));
-    const sessions = all(db, `${sessionSql} WHERE cs.class_id=? ORDER BY cs.starts_at`, id).filter((s) => c.tutor_id === req.user.id || req.user.role === "admin" || own.has(s.student_id));
+    const sessions = attachSessionNotes(db, all(db, `${sessionSql} WHERE cs.class_id=? ORDER BY cs.starts_at`, id).filter((s) => c.tutor_id === req.user.id || req.user.role === "admin" || own.has(s.student_id)));
+    const progress = memberProgressStats(db, id);
+    for (const m of c.members) {
+      const st = progress.get(m.id) || { minutes_done: 0, upcoming: 0 };
+      m.minutes_done = st.minutes_done || 0;
+      m.hours_done = Math.round((m.minutes_done / 60) * 10) / 10;
+      m.completion_rate = Math.min(100, Math.round((m.done / Math.max(1, m.sessions_total)) * 100));
+      m.paid_total = (m.done || 0) * m.rate;
+    }
     res.json({ ...c, sessions, materials: all(db, "SELECT * FROM class_materials WHERE class_id=? ORDER BY id DESC", id),
-      moves: all(db, "SELECT mv.* FROM session_moves mv JOIN class_sessions cs ON cs.id=mv.session_id WHERE cs.class_id=? AND mv.status='pending'", id) });
+      moves: all(db, "SELECT mv.* FROM session_moves mv JOIN class_sessions cs ON cs.id=mv.session_id WHERE cs.class_id=? AND mv.status='pending'", id),
+      tutor_stats: tutorClassStats(db, id), ...classExtrasPayload(db, id, req.user) });
   });
   app.get("/api/schedule", auth("student", "tutor"), (req, res) => {
     upkeep(db);

@@ -8,6 +8,7 @@ import { celebrate } from "@/lib/celebrate";
 import type { ClassInfo, ClassSession } from "@/lib/types";
 import { Blank, ErrorState, Heading, Loading, Page, Person, Submit } from "@/components/common";
 import { SessionActions, dayOf, timeOf } from "@/components/session-actions";
+import { Assignments, ClassMessages, ClassPosts, ClassStats, IcsLink, SessionNote, nextCountdown } from "@/components/class-extras";
 import { WEEKDAYS, timeLabel } from "@/components/proposal-composer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,8 @@ export function ClassList() {
                 <span className="class-card-band" />
                 <h2>{c.title}</h2>
                 <p>{rhythm(c, t)} · {t("{n} phút", { n: c.minutes })}</p>
-                {c.next_at ? <p className="class-next"><CalendarDays aria-hidden="true" />{dayOf(c.next_at)} · {timeOf(c.next_at)}</p> : <p className="class-next muted">{t("Không còn buổi sắp tới")}</p>}
+                {c.next_at ? <p className="class-next"><CalendarDays aria-hidden="true" /><strong>{nextCountdown(c.next_at, t)}</strong><span>{dayOf(c.next_at)} · {timeOf(c.next_at)}</span></p> : <p className="class-next muted">{t("Không còn buổi sắp tới")}</p>}
+                {!!c.assignment_badge && <span className="class-card-badge">{t("{n} bài tập cần xử lý", { n: c.assignment_badge })}</span>}
                 {me ? (
                   <div className="class-progress" aria-label={t("{done}/{total} buổi", { done: me.done, total })}>
                     <span style={{ width: `${Math.min(100, (me.done / Math.max(1, me.sessions_total)) * 100)}%` }} />
@@ -162,6 +164,7 @@ export function ClassDetail() {
         <p>{c.subject_name} · {rhythm(c, t)} · {t("{n} phút", { n: c.minutes })} · {t(c.mode === "online" ? "Trực tuyến" : "Trực tiếp")}</p>
         {!tutor && <p className="muted">{t("Gia sư")} {c.tutor_name}</p>}
       </header>
+      <ClassStats c={c} tutor={tutor} me={me} />
       {(c.moves || []).filter((m) => m.requested_by !== user?.id).map((m) => {
         const s = lessons.find((x) => x.id === m.session_id);
         return s ? (
@@ -172,14 +175,15 @@ export function ClassDetail() {
         ) : null;
       })}
       <nav className="segmented" aria-label={t("Mục lớp học")}>
-        {[["schedule", "Lịch học"], ["materials", "Bài giảng"], ["people", tutor ? "Học sinh" : "Gói học"]].map(([k, label]) => (
+        {[["schedule", "Lịch học"], ["assignments", "Bài tập"], ["materials", "Bài giảng"], ["people", tutor ? "Học sinh" : "Gói học"], ["messages", "Tin nhắn"]].map(([k, label]) => (
           <a key={k} href={`?tab=${k}`} aria-current={tab === k ? "page" : undefined} onClick={(e) => { e.preventDefault(); setParams({ tab: k }); }}>{t(label)}</a>
         ))}
       </nav>
       {tab === "schedule" && (
         <>
+          <ClassPosts c={c} tutor={tutor} onChanged={result.reload} />
           <section className="class-section">
-            <header><h2>{t("Sắp tới")}</h2></header>
+            <header><h2>{t("Sắp tới")}</h2><IcsLink id={c.id} /></header>
             {upcoming.length ? <ul className="session-list">{upcoming.map((s) => <SessionRow key={s.id} s={sessionFor(s)} tutor={tutor} onChanged={result.reload} />)}</ul> : <p className="credential-empty">{t("Không còn buổi sắp tới.")}</p>}
           </section>
           {past.length > 0 && (
@@ -190,7 +194,9 @@ export function ClassDetail() {
           )}
         </>
       )}
+      {tab === "assignments" && <Assignments c={c} tutor={tutor} me={me} onChanged={result.reload} />}
       {tab === "materials" && <Materials c={c} tutor={tutor} onChanged={result.reload} />}
+      {tab === "messages" && <ClassMessages c={c} tutor={tutor} />}
       {tab === "people" && (
         <section className="class-section">
           <ul className="member-list">
@@ -259,6 +265,7 @@ function SessionRow({ s, tutor, onChanged }: { s: ClassSession; tutor: boolean; 
       <div>
         <span>{tutor ? s.student_name : s.tutor_name}{s.moved_from && ` · ${t("đã dời lịch")}`}</span>
         <SessionActions s={s} onChanged={onChanged} />
+        <SessionNote s={s} tutor={tutor} onChanged={onChanged} />
       </div>
     </li>
   );

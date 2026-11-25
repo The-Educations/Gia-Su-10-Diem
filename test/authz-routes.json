@@ -255,6 +255,14 @@
     "auth": "admin",
     "file": "wallet.js"
   },
+  "POST /api/assignments/{id}/review": {
+    "auth": "tutor",
+    "file": "class-extras.js"
+  },
+  "POST /api/assignments/{id}/submit": {
+    "auth": "student",
+    "file": "class-extras.js"
+  },
   "GET /api/auth/demo": {
     "auth": "public",
     "file": "api.js"
@@ -383,6 +391,18 @@
     "auth": "user",
     "file": "chat-media.js"
   },
+  "DELETE /api/classes/{id}/assignments/{aid}": {
+    "auth": "tutor",
+    "file": "class-extras.js"
+  },
+  "POST /api/classes/{id}/assignments": {
+    "auth": "tutor",
+    "file": "class-extras.js"
+  },
+  "GET /api/classes/{id}/ics": {
+    "auth": "user",
+    "file": "class-extras.js"
+  },
   "DELETE /api/classes/{id}/materials/{material}": {
     "auth": "tutor",
     "file": "classes.js"
@@ -390,6 +410,10 @@
   "POST /api/classes/{id}/materials": {
     "auth": "tutor",
     "file": "classes.js"
+  },
+  "POST /api/classes/{id}/posts": {
+    "auth": "tutor",
+    "file": "class-extras.js"
   },
   "GET /api/classes/{id}": {
     "auth": "user",
@@ -710,6 +734,10 @@
   "POST /api/sessions/{id}/move": {
     "auth": "student,tutor",
     "file": "classes.js"
+  },
+  "PUT /api/sessions/{id}/note": {
+    "auth": "tutor",
+    "file": "class-extras.js"
   },
   "PUT /api/sessions/{id}/rating": {
     "auth": "student",

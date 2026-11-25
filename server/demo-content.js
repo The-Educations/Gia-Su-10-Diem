@@ -6,6 +6,7 @@ import { normalizeCredential } from "./credentials.js";
 import { startClass } from "./classes.js";
 import { move, wallet } from "./wallet.js";
 import { seedShowcase } from "./demo-showcase.js";
+import { seedClassesRich } from "./demo-classes-rich.js";
 
 const profiles = [
   [
@@ -240,6 +241,7 @@ export async function enrichDemo(db, { activity = false, hash = "" } = {}) {
   }
   if (activity) {
     seedClasses(db);
+    seedClassesRich(db, hash);
     await seedShowcase(db, hash);
   }
   if (

@@ -354,11 +354,22 @@ export type ClassSession = {
   member_id: number | null; tutor_confirmed_at: string | null; student_confirmed_at: string | null;
   outcome: "pending" | "confirmed" | "charged" | "refunded" | "disputed" | null; rating: number | null; survey?: string; comment?: string;
   student_id: number | null; student_name: string | null; tutor_name: string;
+  teacher_note?: string; teacher_note_updated_at?: string | null;
 };
 export type ClassMember = {
   id: number; class_id: number; student_id: number; name: string; sessions_total: number; rate: number; held: number;
   status: string; done: number; remaining: number; published_rating: number | null; review: string; reminded_at: string | null;
+  minutes_done?: number; hours_done?: number; completion_rate?: number; paid_total?: number;
 };
+export type AssignmentSubmission = {
+  assignment_id: number; member_id: number; status: "pending" | "submitted" | "reviewed"; note: string; feedback: string;
+  submitted_at: string | null; reviewed_at: string | null; student_id: number; student_name: string;
+};
+export type ClassAssignment = {
+  id: number; class_id: number; session_id: number | null; title: string; note: string; due_at: string | null; created_at: string;
+  session_starts_at?: string | null; total: number; submitted: number; waiting_review: number; reviewed: number; submissions: AssignmentSubmission[];
+};
+export type ClassPost = { id: number; class_id: number; author_id: number; author_name: string; body: string; created_at: string };
 export type ClassInfo = {
   id: number; tutor_id: number; tutor_name: string; title: string; subject_id: string; subject_name: string; mode: string; area: string;
   color: string; minutes: number; schedule: { weekday: number; hour: number; minute: number }[]; meeting_url: string; status: string;
@@ -366,6 +377,8 @@ export type ClassInfo = {
   sessions?: ClassSession[];
   materials?: { id: number; session_id: number | null; title: string; url: string; note: string; created_at: string }[];
   moves?: { id: number; session_id: number; requested_by: number; starts_at: string }[];
+  assignments?: ClassAssignment[]; posts?: ClassPost[]; assignment_badge?: number;
+  tutor_stats?: { upcoming_7d: number; gross_confirmed: number; gross_settled: number };
 };
 
 export type CalendarEvent = { id: number; title: string; starts_at: string; ends_at: string; color: string; note: string };
