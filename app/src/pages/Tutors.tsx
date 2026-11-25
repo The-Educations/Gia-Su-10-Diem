@@ -13,6 +13,7 @@ import { BadgeCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useApp, useLoad, fold, money } from "@/lib/api";
+import { useUrlField } from "@/lib/use-url-field";
 import { useI18n } from "@/lib/i18n";
 import type { Tutor, Subject, Resource } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ export default function Tutors({
     value ? p.set(key, value) : p.delete(key);
     setParams(p, { replace: true });
   };
+  const [search, setSearch] = useUrlField(q, (v) => set("q", v));
   const rows = (tutors.data || [])
     .filter(
       (t) =>
@@ -67,10 +69,10 @@ export default function Tutors({
         (!subject || t.subjects.includes(subject)) &&
         (!level || t.levels.includes(level)) &&
         (!goal || t.goals.includes(goal)) &&
-        (!q ||
+        (!search ||
           fold(
             `${t.name} ${t.headline} ${t.education} ${t.location} ${t.subjects.map((id) => subjects.data?.find((s) => s.id === id)?.name || id).join(" ")} ${t.goals.join(" ")}`,
-          ).includes(fold(q))) &&
+          ).includes(fold(search))) &&
         (!mode || t.mode === mode || t.mode === "both") &&
         (!location || t.location === location) &&
         (!budget || t.rate <= Number(budget)),
@@ -123,8 +125,8 @@ export default function Tutors({
                 <Input
                   id="tutor-search"
                   placeholder={t("Tên gia sư, trường hoặc từ khóa…")}
-                  value={q}
-                  onChange={(e) => set("q", e.target.value)}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
             </Field>
