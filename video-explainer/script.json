@@ -1,0 +1,12 @@
+[
+"Mô hình gia sư kiểu Upwork. Bốn bước vận hành, và những điều cần xử lý về pháp lý trước khi công khai website.",
+"Bước một: credit. Mỗi gia sư có hai mươi credit mỗi tháng ở gói miễn phí. Gói nâng cấp được gợi ý hồ sơ nhiều hơn và có thêm credit, tối đa một trăm. Mỗi credit dùng để nhận một offer từ học sinh.",
+"Bước hai: đặt cọc. Học sinh muốn gửi offer phải đặt cọc đúng bằng giá trị offer. Ví dụ gia sư dạy một trăm nghìn đồng một giờ. Học sinh đề nghị ba buổi, mỗi buổi hai giờ, tổng cộng sáu giờ. Số tiền đặt cọc là sáu trăm nghìn đồng.",
+"Bước ba: điểm danh. Sau mỗi buổi học, cả học sinh và gia sư đều phải xác nhận buổi học, trong vòng hai mươi bốn giờ.",
+"Bước bốn: giải ngân. Khi offer kết thúc, hệ thống tự đối chiếu với bảng điểm danh, rồi chuyển tiền của các buổi đã xác nhận về tài khoản gia sư.",
+"Về dòng tiền: học sinh nạp tiền đặt cọc qua SePay. Muốn rút tiền, gia sư nhắn admin trên web hoặc gửi email.",
+"Vấn đề pháp lý thứ nhất, và nghiêm trọng nhất: giữ tiền hộ. Nền tảng nhận tiền của học sinh rồi mới trả cho gia sư, hoạt động này có thể bị xem là dịch vụ trung gian thanh toán, loại hình cần giấy phép của Ngân hàng Nhà nước. SePay chủ yếu giúp nhận biết giao dịch chuyển khoản, và không thay thế giấy phép này. Cần tra lại Nghị định một trăm linh một năm hai nghìn không trăm mười hai, Thông tư ba mươi chín năm hai nghìn không trăm mười bốn, và các văn bản mới hơn.",
+"Thứ hai: tư cách pháp lý và thương mại điện tử. Nên lập doanh nghiệp hoặc hộ kinh doanh, và tách tài khoản ngân hàng của nền tảng khỏi tài khoản cá nhân. Website của bạn là nền tảng thương mại điện tử, chịu Luật Thương mại điện tử số một trăm hai mươi hai năm hai nghìn không trăm hai mươi lăm, có hiệu lực từ ngày một tháng bảy năm hai nghìn không trăm hai mươi sáu. Cần làm thủ tục với Bộ Công Thương, và công bố điều khoản, chính sách hoàn tiền, quy tắc giải quyết tranh chấp.",
+"Thứ ba: dữ liệu cá nhân và thuế. Hồ sơ gia sư và thông tin học sinh, có thể là trẻ em, chịu Luật Bảo vệ dữ liệu cá nhân số chín mươi mốt năm hai nghìn không trăm hai mươi lăm. Cần chính sách bảo mật và sự đồng ý rõ ràng. Phí nền tảng và thu nhập của gia sư đều phát sinh nghĩa vụ thuế, hãy hỏi kế toán.",
+"Cách đi an toàn hơn. Giai đoạn đầu, để học sinh trả trực tiếp cho gia sư, nền tảng chỉ thu phí credit và gói nâng cấp. Khi cần giữ tiền, dùng đối tác thanh toán đã có giấy phép trung gian. Đây là thông tin tham khảo, không phải tư vấn pháp lý. Hãy hỏi luật sư trước khi mở công khai."
+]

@@ -115,6 +115,8 @@ export type Tutor = {
   status: string;
   moderation_note: string;
   review_count: number;
+  active_students?: number;
+  area_blurred?: number;
   trust: Trust;
   slots: Slot[];
   reviews: { author: string; rating: number; body: string; created_at: string; lessons: number }[];
