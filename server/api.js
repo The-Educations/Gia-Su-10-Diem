@@ -11,6 +11,7 @@ import { registerCredentials, verifiedCredentials } from "./credentials.js";
 import { registerWallet, sepayConfig } from "./wallet.js";
 import { registerProposals } from "./proposals.js";
 import { registerClasses, classRatings } from "./classes.js";
+import { registerClassExtras } from "./class-extras.js";
 import { registerCommunityTopics } from "./community-topics.js";
 import { registerFamily } from "./family.js";
 import { registerStudentVerification } from "./student-verification.js";
@@ -296,6 +297,7 @@ export function createApi(
   const walletApi = registerWallet(app, db, auth, audit, { production, sepay, origin });
   registerProposals(app, db, auth, audit, walletApi);
   registerClasses(app, db, auth, audit);
+  registerClassExtras(app, db, auth);
   registerCommunityTopics(app, db, auth);
   registerFamily(app, db, auth);
   registerTrust(app, db, auth, audit);
