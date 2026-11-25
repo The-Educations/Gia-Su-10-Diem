@@ -6,7 +6,6 @@ import { Person } from "@/components/common";
 import { memberImageUrl } from "@/components/community/shared";
 
 const SPEED = 45; // px per second, slow enough to read
-const STILL = "(prefers-reduced-motion: reduce), (hover: none)";
 const REDUCED = "(prefers-reduced-motion: reduce)";
 
 // The The Educations ident takes over the strip now and then (docs/quang-cao-dai-chay.md).
@@ -19,6 +18,9 @@ const AD_VIDEO = "/assets/video/the-educations-ident.mp4";
 const AD_POSTER = "/assets/video/the-educations-ident.png";
 const AD_LABEL = "The Educations. Làm Giáo Dục, vì Giáo Dục. Make EDU, for EDU";
 const AD_KEY = "giasu.tickerAd.lastShown";
+
+// On a touch screen :hover sticks to the last thing touched, so it must not count as "the reader is busy".
+const canHover = () => typeof matchMedia === "function" && matchMedia("(hover: hover)").matches;
 
 function useMedia(query: string) {
   const [matches, setMatches] = useState(
@@ -209,7 +211,6 @@ export function RequestStrip({ role }: { role: "tutor" | "student" | null }) {
 
 function PostsStrip({ role, items }: { role: "tutor" | "student"; items: CommunityRequest[] }) {
   const strip = STRIPS[role],
-    still = useMedia(STILL),
     reduced = useMedia(REDUCED),
     section = useRef<HTMLElement>(null),
     frame = useRef<HTMLDivElement>(null),
@@ -217,6 +218,7 @@ function PostsStrip({ role, items }: { role: "tutor" | "student"; items: Communi
     list = useRef<HTMLUListElement>(null),
     [width, setWidth] = useState({ list: 0, frame: 0 }),
     [ad, setAd] = useState<"off" | "on" | "leaving">("off"),
+    [held, setHeld] = useState(false), // a finger is resting on the strip
     since = useRef(lastShown() ?? Date.now());
   useEffect(() => {
     const f = frame.current,
@@ -230,15 +232,16 @@ function PostsStrip({ role, items }: { role: "tutor" | "student"; items: Communi
     observer.observe(l);
     return () => observer.disconnect();
   }, [items.length]);
-  // Even one long summary does not fit the bar, so it runs whenever it overflows.
-  const marquee = !still && width.list > width.frame;
+  // Even one long summary does not fit the bar, so it runs whenever it overflows. A phone runs it
+  // too (a finger on the strip holds it); only "reduce motion" keeps it still.
+  const marquee = !reduced && width.list > width.frame;
 
   // Schedule the next showing while the posts are on screen.
   useEffect(() => {
     if (ad !== "off") return;
     let timer: ReturnType<typeof setTimeout>;
     const busy = () =>
-      document.hidden || !!section.current?.matches(":hover, :focus-within");
+      document.hidden || !!section.current?.matches(canHover() ? ":hover, :focus-within" : ":focus-within");
     const show = () => {
       if (busy()) return void (timer = setTimeout(show, AD_RETRY));
       setAd("on");
@@ -282,7 +285,13 @@ function PostsStrip({ role, items }: { role: "tutor" | "student"; items: Communi
       <div
         className="ticker-frame"
         data-mode={marquee ? "marquee" : "static"}
+        data-held={held || undefined}
         ref={frame}
+        // :active is not reliable on a phone (iOS ignores it without touch listeners), so hold the run
+        // explicitly while a finger is down; a mouse is covered by :hover instead.
+        onPointerDown={(e) => e.pointerType !== "mouse" && setHeld(true)}
+        onPointerUp={() => setHeld(false)}
+        onPointerCancel={() => setHeld(false)}
       >
         <div
           className="ticker-track"

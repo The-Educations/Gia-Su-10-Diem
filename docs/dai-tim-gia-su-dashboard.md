@@ -199,7 +199,8 @@ Cho trình đọc màn hình [ĐỀ XUẤT]: khối là `<section aria-label="Đ
 - **Cách chạy:** danh sách mục được nhân đôi nối tiếp nhau. Bản thứ hai có `aria-hidden="true"` và các liên kết trong đó `tabIndex={-1}`. CSS `@keyframes` dịch `translateX` từ `0` đến `-50%`, lặp vô hạn, `linear`.
 - **Tốc độ** khoảng **45 px/giây** (chữ phải đọc được). Thời lượng một vòng = chiều rộng một bản danh sách ÷ 45, tính lại khi khung đổi kích thước (`ResizeObserver`).
 - **Dừng** khi chuột ở trên phần chạy (`:hover`) hoặc có mục đang được focus bằng bàn phím (`:focus-within`).
-- **Giảm chuyển động** (`prefers-reduced-motion: reduce`) và **thiết bị cảm ứng** (`(hover: none)`): không chạy; hiện một hàng tĩnh **vuốt ngang được** (`overflow-x: auto`, ẩn thanh cuộn), chỉ một bản danh sách.
+- **Giảm chuyển động** (`prefers-reduced-motion: reduce`): không chạy; hiện một hàng tĩnh **vuốt ngang được** (`overflow-x: auto`, ẩn thanh cuộn), chỉ một bản danh sách.
+- **Điện thoại / cảm ứng**: chạy như trên máy tính (trước đây tắt vì không có hover; đã đổi 11/2026). Đặt ngón tay lên dải thì dừng, nhấc ra thì chạy tiếp, để chạm vào bài.
 - Hai mép trái và phải mờ dần để chữ trượt vào ra mềm mại.
 - Theo `docs/ui-motion.md`: chỉ animate `transform`, không blur, không đổi kích thước khung; chiều cao thanh trên cùng giữ nguyên 80 px trên máy tính.
 

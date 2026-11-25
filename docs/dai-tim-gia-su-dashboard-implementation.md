@@ -15,7 +15,7 @@ Triển khai theo `docs/dai-tim-gia-su-dashboard.md` (Phần 1). Nhánh `feat/da
 - Chuẩn hóa NFC, chữ thường, bỏ dấu bằng `fold()`, ký tự không phải chữ/số thành khoảng trắng, khớp trọn từ.
 - "cần tìm cô" khớp trên bản còn dấu; thêm `can tim co giao`, `can tim co day` trên bản bỏ dấu cho người gõ không dấu.
 - Môn: bỏ cụm ngắn dưới 4 ký tự, lấy môn xuất hiện sớm nhất, hiện tên chuẩn. Cấp: nhãn nhóm, lấy nhóm xuất hiện sớm nhất.
-- Chạy ngang bằng nhân đôi danh sách (bản sau `aria-hidden`, link `tabIndex=-1`), `@keyframes` chỉ dịch `translateX` 0 → -50%, 30 px/giây, tính lại bằng `ResizeObserver`. Dừng khi `:hover` / `:focus-within`. Không chạy khi giảm chuyển động hoặc thiết bị `(hover: none)`: một hàng cuộn ngang được.
+- Chạy ngang bằng nhân đôi danh sách (bản sau `aria-hidden`, link `tabIndex=-1`), `@keyframes` chỉ dịch `translateX` 0 → -50%, 30 px/giây, tính lại bằng `ResizeObserver`. Dừng khi `:hover` (chỉ nơi `(hover: hover)`, vì trên cảm ứng `:hover` bị dính sau lần chạm), `:focus-within`, hoặc khi có ngón tay đặt trên dải (`pointerdown` không phải chuột → `data-held`; không dùng `:active` vì iOS bỏ qua). Chỉ không chạy khi giảm chuyển động: một hàng cuộn ngang được.
 - Đang tải hoặc API lỗi: không hiện gì.
 - Thẻ rộng 240 px (220 px từ 640 px trở xuống).
 

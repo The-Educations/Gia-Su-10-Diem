@@ -315,3 +315,31 @@ test("an account with no posts to scroll, like the admin, gets the ident alone: 
   expect(await page.locator(".topbar").evaluate((el) => el.getBoundingClientRect().height)).toBe(64);
 });
 });
+
+// A phone has no hover, so the strip used to switch itself off there and sat still. It now runs
+// like on desktop; only "reduce motion" stops it, and a finger resting on it holds it for the tap.
+test.describe("on a touch phone", () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 800 } });
+
+  test("the strip runs, holds while a finger is on it and carries on when it lifts", async ({ page, request }) => {
+    for (const title of SEEKING) await add(request, { author: "profile-student", title, body: LONG_BODY });
+    await login(page, "chau");
+    await expect(ticker(page)).toBeVisible();
+    expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true); // really a touch device
+    await expect(ticker(page).locator("ul")).toHaveCount(2);
+    expect(await animation(page)).toBe("ticker-scroll");
+    const x1 = await shiftX(page);
+    await page.waitForTimeout(700);
+    expect(await shiftX(page)).toBeLessThan(x1);
+    // Finger down on the strip: it holds still so the post can be tapped.
+    const state = () => page.locator(".ticker-track").evaluate((el) => getComputedStyle(el).animationPlayState);
+    const box = (await page.locator(".ticker-frame").boundingBox())!;
+    const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [at] });
+    await expect.poll(state).toBe("paused");
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(state).toBe("running");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
