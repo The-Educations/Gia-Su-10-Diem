@@ -987,6 +987,7 @@ const enClassExtrasScan: Record<string, string> = {
   "{actor} đã nộp bài tập “{subject}”": "{actor} submitted “{subject}”",
   "{actor} đã nhận xét bài tập “{subject}”": "{actor} reviewed “{subject}”",
   "{actor} đăng thông báo ở lớp {subject}": "{actor} posted in {subject}",
+};
 for (const [vi, text] of Object.entries(enClassExtrasScan)) en[vi] = text;
 // Worker B: public tutor area map
 const enTutorArea: Record<string, string> = {
@@ -995,6 +996,7 @@ const enTutorArea: Record<string, string> = {
   "Bản xem trước của riêng bạn hiển thị đúng tâm khu vực đã chọn.": "Your own preview shows the exact center you chose.",
   "Vị trí hiển thị là khu vực ước lượng, không phải địa chỉ chính xác.": "The mapped location is an approximate area, not an exact address.",
   "Không tải được bản đồ, nhưng khu vực phục vụ vẫn trong khoảng {km} km.": "The map could not load, but the service area is still within {km} km.",
+};
 for (const [vi, text] of Object.entries(enTutorArea)) en[vi] = text;
 const enTutorProfileRedesign: Record<string, string> = {
   "Ảnh bìa của {name}": "Cover photo of {name}",
@@ -1017,4 +1019,5 @@ const enTutorProfileRedesign: Record<string, string> = {
   "Một buổi học cùng tôi": "A lesson with me",
   "Đã xác minh": "Verified",
   "Hồ sơ và ảnh minh họa cho trải nghiệm sản phẩm.": "Profile and images are samples for the product experience.",
+};
 for (const [vi, text] of Object.entries(enTutorProfileRedesign)) en[vi] = text;
