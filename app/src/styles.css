@@ -3207,9 +3207,13 @@
   animation: ticker-scroll var(--ticker-duration, 40s) linear infinite;
   will-change: transform;
 }
-.ticker-frame[data-mode="marquee"]:hover .ticker-track,
+.ticker-frame[data-mode="marquee"][data-held] .ticker-track,
 .ticker-frame[data-mode="marquee"]:focus-within .ticker-track {
   animation-play-state: paused;
+}
+/* :hover only where a pointer really hovers; on a phone it sticks after a touch and would freeze the strip. */
+@media (hover: hover) {
+  .ticker-frame[data-mode="marquee"]:hover .ticker-track { animation-play-state: paused; }
 }
 @keyframes ticker-scroll { to { transform: translateX(-50%); } }
 .topbar-ticker ul {
