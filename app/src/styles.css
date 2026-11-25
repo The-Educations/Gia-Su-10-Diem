@@ -3766,3 +3766,347 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 .area-km { display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 180px; }
 .area-km input[type="range"] { flex: 1; accent-color: var(--accent); }
 .area-note { display: inline-flex; }
+
+/* Worker B: tutor profile presentation — warm editorial hero, clear sections, sticky conversion rail. */
+.tutor-presentation {
+  --tutor-card-line: color-mix(in srgb, var(--border) 82%, transparent);
+}
+.tutor-presentation .tutor-hero-panel {
+  position: relative;
+  margin-bottom: 30px;
+}
+.tutor-presentation .tutor-cover {
+  aspect-ratio: 4.4 / 1;
+  min-height: 178px;
+  border-radius: 24px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cover-ink) 13%, transparent);
+}
+.tutor-presentation .tutor-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--background) 70%, transparent), transparent 62%),
+    radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--cover-ink) 12%, transparent), transparent 34%);
+  pointer-events: none;
+}
+.tutor-presentation .tutor-cover img {
+  position: relative;
+  display: block;
+  filter: saturate(.94) contrast(1.02);
+}
+.tutor-presentation .profile-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+  padding: 0 30px;
+}
+.tutor-presentation .hero-on-cover {
+  margin-top: -62px;
+}
+.tutor-presentation .profile-hero .person.large,
+.tutor-split .hero-on-cover .person.large {
+  width: 116px;
+  height: 116px;
+  margin: 0;
+  border: 5px solid var(--background);
+  box-shadow: 0 8px 22px rgb(40 40 32 / 13%);
+}
+.tutor-presentation .tutor-hero-copy {
+  min-width: 0;
+  padding: 76px 0 4px;
+}
+.tutor-presentation .profile-hero h1,
+.tutor-presentation .profile-hero h3 {
+  font-family: "Lora", serif;
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+.tutor-presentation .profile-hero h3 { font-size: clamp(24px, 3vw, 32px); }
+.tutor-presentation .tutor-headline {
+  max-width: 760px;
+  margin: 9px 0 14px;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--secondary-foreground);
+}
+.tutor-presentation .subject-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+.tutor-presentation .subject-tags [data-slot="badge"],
+.tutor-presentation .subject-tags .tutor-local-time {
+  min-height: 28px;
+  border-radius: 999px;
+  transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  .tutor-presentation .subject-tags [data-slot="badge"]:hover { transform: translateY(-1px); border-color: var(--primary); }
+}
+.tutor-presentation .approved-badge {
+  min-height: 28px;
+  color: var(--positive);
+  background: var(--positive-soft);
+  border-color: color-mix(in srgb, var(--positive) 28%, transparent);
+}
+.tutor-presentation .profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 18px;
+  margin: 16px 30px 0;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+}
+.tutor-presentation .profile-meta > span,
+.tutor-presentation .profile-meta > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tutor-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 22px 30px 0;
+}
+.tutor-stat {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  padding: 13px 15px;
+  border: 1px solid var(--tutor-card-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card) 84%, var(--muted));
+  transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+.tutor-stat > svg {
+  grid-row: span 2;
+  width: 20px;
+  height: 20px;
+  color: var(--primary);
+}
+.tutor-stat span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.25;
+}
+.tutor-stat strong {
+  font-family: "Lora", serif;
+  font-size: 19px;
+  line-height: 1.2;
+}
+.tutor-stat small { grid-column: 2; color: var(--muted-foreground); }
+@media (hover: hover) {
+  .tutor-stat:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 38%, var(--border)); }
+}
+.tutor-presentation.tutor-split {
+  display: block;
+}
+.tutor-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(292px, 340px);
+  gap: 34px;
+  align-items: start;
+}
+.tutor-presentation .tutor-body {
+  display: grid;
+  gap: 18px;
+  padding-top: 0;
+}
+.tutor-presentation .tutor-body > .section-block,
+.tutor-presentation .tutor-gallery {
+  margin-top: 0;
+  padding: 25px;
+  border: 1px solid var(--tutor-card-line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--card) 92%, var(--background));
+}
+.tutor-presentation .section-heading {
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.tutor-presentation .section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: "Lora", serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.tutor-presentation .section-heading h2 svg {
+  width: 19px;
+  height: 19px;
+  color: var(--primary);
+  flex: none;
+}
+.tutor-presentation .reading-text {
+  font-size: 14.5px;
+  line-height: 1.86;
+  color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+}
+.tutor-presentation .tutor-aside-sticky {
+  position: sticky;
+  top: calc(var(--topbar-height, 64px) + 18px);
+  margin-top: 0;
+}
+.tutor-presentation .booking-card {
+  position: static;
+  gap: 15px;
+  padding: 23px;
+  border-radius: 22px;
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card) 88%, var(--pastel-rose)), var(--card) 42%);
+  box-shadow: 0 14px 34px rgb(93 48 52 / 8%);
+}
+.booking-card-price {
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.booking-card-price strong {
+  font-size: 34px;
+  letter-spacing: -0.035em;
+}
+.booking-steps {
+  padding: 14px 0 0 20px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  line-height: 1.55;
+}
+.tutor-area-map {
+  margin: 0;
+}
+.tutor-area-canvas {
+  height: 300px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  position: relative;
+  z-index: 0;
+}
+.tutor-area-map figcaption {
+  margin-top: 9px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.tutor-presentation .education-timeline {
+  margin-top: 20px;
+}
+.tutor-presentation .education-timeline li {
+  gap: 14px;
+  padding-bottom: 20px;
+}
+.tutor-presentation .education-marker {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+  background: var(--pastel-rose);
+  color: var(--pastel-rose-ink);
+}
+.tutor-presentation .verified-list {
+  display: grid;
+  gap: 10px;
+}
+.tutor-presentation .verified-list li {
+  align-items: flex-start;
+  padding: 12px 13px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--muted) 54%, transparent);
+}
+.tutor-presentation .rating-summary {
+  align-items: start;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--muted);
+}
+.tutor-presentation .rating-big {
+  justify-items: center;
+  text-align: center;
+}
+.tutor-presentation .rating-bars li {
+  grid-template-columns: 16px 14px minmax(80px, 1fr) 28px;
+}
+.tutor-presentation .review {
+  padding: 16px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+.tutor-presentation .gallery-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.tutor-presentation .gallery-tile {
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgb(40 40 32 / 8%);
+}
+.tutor-presentation .demo-note {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+@media (max-width: 1100px) {
+  .tutor-content-grid { grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; }
+  .tutor-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 950px) {
+  .tutor-content-grid { grid-template-columns: 1fr; }
+  .tutor-presentation .tutor-aside-sticky { position: static; }
+  .tutor-presentation .tutor-aside { max-width: 560px; }
+}
+@media (max-width: 640px) {
+  .tutor-presentation .tutor-cover { aspect-ratio: 2.25 / 1; min-height: 142px; border-radius: 18px; }
+  .tutor-presentation .profile-hero { gap: 14px; padding-inline: 18px; align-items: flex-start; }
+  .tutor-presentation .hero-on-cover { margin-top: -44px; }
+  .tutor-presentation .profile-hero .person.large,
+  .tutor-split .hero-on-cover .person.large { width: 88px; height: 88px; border-width: 4px; }
+  .tutor-presentation .tutor-hero-copy { padding-top: 53px; }
+  .tutor-presentation .profile-hero h1 { font-size: 29px; }
+  .tutor-presentation .tutor-headline { font-size: 14.5px; }
+  .tutor-presentation .profile-meta { margin-inline: 18px; font-size: 13px; }
+  .tutor-stats { margin-inline: 18px; gap: 8px; }
+  .tutor-stat { padding: 11px 12px; border-radius: 14px; }
+  .tutor-presentation .tutor-body > .section-block,
+  .tutor-presentation .tutor-gallery { padding: 19px; border-radius: 17px; }
+  .tutor-area-canvas { height: 245px; }
+  .tutor-presentation .gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tutor-presentation .rating-summary { grid-template-columns: 1fr; gap: 18px; }
+}
+@media (max-width: 390px) {
+  .tutor-stats { grid-template-columns: 1fr 1fr; }
+  .tutor-stat strong { font-size: 17px; }
+  .tutor-presentation .section-heading h2 { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutor-stat, .tutor-presentation .subject-tags [data-slot="badge"] { transition: none; }
+}
+/* Width must come from the layout, never from the cover ratio on narrow screens. */
+.tutor-presentation .tutor-cover {
+  aspect-ratio: auto;
+  height: clamp(158px, 18vw, 224px);
+  min-height: 0;
+}
+@media (max-width: 640px) {
+  .tutor-presentation .tutor-cover { height: 148px; }
+}
+/* Keep the tutor's name fully below the cover; only the portrait overlaps it. */
+.tutor-presentation .hero-on-cover { margin-top: -42px; }
+.tutor-presentation .tutor-hero-copy { padding-top: 50px; }
+@media (max-width: 640px) {
+  .tutor-presentation .hero-on-cover { margin-top: -32px; }
+  .tutor-presentation .tutor-hero-copy { padding-top: 38px; }
+}
+@media (max-width: 640px) {
+  /* Chips use the full row under the overlapping portrait instead of one narrow column. */
+  .tutor-presentation .subject-tags {
+    margin-left: -102px;
+    width: calc(100% + 102px);
+  }
+}

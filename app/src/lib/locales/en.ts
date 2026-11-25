@@ -919,3 +919,36 @@ const enProfilePolish: Record<string, string> = {
   "Đã được quản trị duyệt": "Admin-approved",
 };
 for (const [vi, text] of Object.entries(enProfilePolish)) en[vi] = text;
+// Worker B: public tutor area map
+const enTutorArea: Record<string, string> = {
+  "Khu vực dạy trực tiếp": "In-person teaching area",
+  "Bản đồ khu vực dạy trực tiếp trong khoảng {km} km": "Map of the in-person teaching area within {km} km",
+  "Bản xem trước của riêng bạn hiển thị đúng tâm khu vực đã chọn.": "Your own preview shows the exact center you chose.",
+  "Vị trí hiển thị là khu vực ước lượng, không phải địa chỉ chính xác.": "The mapped location is an approximate area, not an exact address.",
+  "Không tải được bản đồ, nhưng khu vực phục vụ vẫn trong khoảng {km} km.": "The map could not load, but the service area is still within {km} km.",
+};
+for (const [vi, text] of Object.entries(enTutorArea)) en[vi] = text;
+// Worker B: tutor profile redesign
+const enTutorProfileRedesign: Record<string, string> = {
+  "Ảnh bìa của {name}": "Cover photo of {name}",
+  "Trực tuyến": "Online",
+  "Trực tiếp": "In person",
+  "Trực tuyến & trực tiếp": "Online & in person",
+  "Thông tin nhanh về gia sư": "Tutor highlights",
+  "Kinh nghiệm": "Experience",
+  "{n} năm": "{n} years",
+  "{n} lượt": "{n} ratings",
+  "Mới": "New",
+  "Chưa có lượt": "No ratings yet",
+  "Học sinh đang học": "Current students",
+  "Minh chứng": "Credentials",
+  "{n} mục": "{n} items",
+  "Về gia sư": "About the tutor",
+  "Nhận dạy": "Teaching offered",
+  "Học vấn": "Education",
+  "Phương pháp giảng dạy": "Teaching approach",
+  "Một buổi học cùng tôi": "A lesson with me",
+  "Đã xác minh": "Verified",
+  "Hồ sơ và ảnh minh họa cho trải nghiệm sản phẩm.": "Profile and images are samples for the product experience.",
+};
+for (const [vi, text] of Object.entries(enTutorProfileRedesign)) en[vi] = text;

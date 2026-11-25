@@ -203,6 +203,95 @@ function seedClasses(db) {
     throw e;
   }
 }
+
+// Rich public tutor profiles for visual testing: exact local teaching areas,
+// education timelines, banners, gallery pieces and finished-package ratings.
+async function demoImage(title, subtitle, palette, wide = false) {
+  const [a, b, ink] = palette;
+  const w = wide ? 1280 : 720, h = wide ? 420 : 720;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <rect width="${w}" height="${h}" fill="${a}"/><circle cx="${w*.82}" cy="${h*.18}" r="${h*.42}" fill="${b}" opacity=".42"/>
+    <circle cx="${w*.12}" cy="${h*.86}" r="${h*.5}" fill="#fff" opacity=".32"/><path d="M0 ${h*.72}Q${w*.28} ${h*.5} ${w*.52} ${h*.66}T${w} ${h*.54}V${h}H0Z" fill="${b}" opacity=".34"/>
+    <rect x="${w*.07}" y="${h*.1}" width="${wide?w*.25:w*.56}" height="10" rx="5" fill="${ink}" opacity=".24"/>
+    <rect x="${w*.07}" y="${h*.1+28}" width="${wide?w*.16:w*.38}" height="10" rx="5" fill="${ink}" opacity=".14"/>
+    <text x="${w*.07}" y="${h*.84}" fill="${ink}" font-family="Be Vietnam Pro,Arial,sans-serif" font-size="${wide?42:34}" font-weight="700">${title}</text>
+    <text x="${w*.07}" y="${h*.84+(wide?42:38)}" fill="${ink}" opacity=".72" font-family="Be Vietnam Pro,Arial,sans-serif" font-size="${wide?22:20}">${subtitle}</text>
+  </svg>`;
+  return sharp(Buffer.from(svg)).webp({ quality: 86 }).toBuffer();
+}
+async function seedRichTutorProfiles(db, hash) {
+  if (one(db, "SELECT key FROM demo_seeds WHERE key='rich-tutor-profiles-v1'")) return;
+  const uid = (slug) => one(db, "SELECT id FROM users WHERE email=? AND demo=1", `${slug}@demo.giasu.test`)?.id;
+  const student = uid("student");
+  const learner = (slug, name) => {
+    const existing = uid(slug);
+    if (existing) return existing;
+    return Number(run(db, "INSERT INTO users(name,email,password,role,demo) VALUES (?,?,?,?,1)", name, `${slug}@demo.giasu.test`, hash || "demo", "student").lastInsertRowid);
+  };
+  const configs = [
+    ["chau", "Hà Nội", 21.0298, 105.8525, 7, "both", "Toán tư duy", "bản đồ tri thức", ["#f6e1e1", "#d59aa0", "#7d3038"], "toan",
+      "Mỗi buổi học bắt đầu bằng một bản đồ lỗ hổng nhỏ: em nói cách mình nghĩ, tôi ghi lại điểm nào chưa chắc, rồi cả hai cùng chọn một ví dụ điển hình để chữa. Cuối buổi em tự tóm tắt lại bằng lời của mình.",
+      "10 phút mở đầu kiểm tra bài cũ bằng một câu hỏi ngắn; 35 phút cùng giải một dạng trọng tâm; 25 phút em làm độc lập có gợi ý từng lớp; 15 phút chữa chi tiết và chốt phiếu luyện về nhà; 5 phút cuối em tự đánh giá mức hiểu.",
+      [{ level: "university", institution: "Đại học Sư phạm Hà Nội", field: "Sư phạm Toán", start_year: 2014, end_year: 2018 }, { level: "other", institution: "Bồi dưỡng giáo viên dạy tư duy Toán", field: "Thiết kế hoạt động học tập", start_year: 2019, end_year: 2020 }],
+      ["Kinh nghiệm giảng dạy|6 năm luyện thi vào lớp 10, từng kèm học sinh mất gốc đại số và hình học.", "Thành tích|Giải Nhì học sinh giỏi quốc gia Toán, nhiều năm dạy nhóm nhỏ 1–3 học sinh."],
+      [[5,"Cô dạy rất chắc, em hiểu gốc thay vì học công thức."],[5,"Bài tập vừa sức nhưng mỗi buổi đều có tiến bộ."],[5,"Phản hồi sau buổi học cụ thể, phụ huynh theo dõi được."],[4,"Nhịp hơi nhanh ở hai buổi đầu nhưng sau cô điều chỉnh tốt."],[5,"Con em tự tin hơn hẳn khi làm hình."]]],
+    ["nam", "TP. Hồ Chí Minh", 10.7772, 106.6982, 5, "both", "Vật lí gần gũi", "thí nghiệm đời thường", ["#dde9f3", "#8db2cf", "#2e5070"], "vat-li",
+      "Tôi luôn bắt đầu từ một hiện tượng quen thuộc: xe đạp xuống dốc, ấm nước sôi hay mạch đèn trong nhà. Khi học sinh đã hình dung được hiện tượng, công thức xuất hiện như một cách ghi lại điều vừa quan sát.",
+      "Buổi học xoay quanh một chuỗi câu hỏi ngắn. Em dự đoán trước, tôi mô phỏng hoặc vẽ mô hình, rồi em tự kiểm tra lại bằng bài toán. Những lỗi sai được giữ lại thành sổ lỗi để ôn ở buổi sau.",
+      [{ level: "university", institution: "Đại học Bách khoa TP.HCM", field: "Kỹ thuật Cơ khí", start_year: 2016, end_year: 2020 }, { level: "other", institution: "Hội thảo STEM cho giáo viên", field: "Thí nghiệm mô phỏng", start_year: 2021, end_year: 2021 }],
+      ["Kinh nghiệm giảng dạy|4 năm luyện Vật lí THPT, đặc biệt điện và dao động cơ.", "Thành tích|Huy chương Vàng Olympic truyền thống 30/4 Vật lí."],
+      [[5,"Thầy giải thích điện học dễ hiểu hơn trên lớp nhiều."],[4,"Bài khó nhưng được dẫn từng lớp."],[5,"Em thích phần mô phỏng và sổ lỗi sai."],[5,"Điểm kiểm tra học kỳ tăng rõ."]]],
+    ["linh", "Đà Nẵng", 16.068, 108.212, 8, "both", "Tiếng Anh thật", "giọng nói tự tin", ["#d8ece5", "#7fb8aa", "#275b4d"], "tieng-anh",
+      "Buổi học là một cuộc trò chuyện có mục tiêu. Học sinh nói thật nhiều, tôi ghi lại lỗi phát âm và cách diễn đạt chưa tự nhiên, rồi chúng ta luyện lại theo nhịp ngắn. Ngữ pháp được học qua tình huống cần dùng.",
+      "Mở đầu bằng một chủ đề gần với em; phần giữa luyện nghe nói và sửa âm theo cặp vai; cuối buổi em thu một đoạn nói hoàn chỉnh. Với người đi làm, tình huống lấy trực tiếp từ email, họp hoặc phỏng vấn.",
+      [{ level: "university", institution: "Đại học Ngoại ngữ", field: "Sư phạm Tiếng Anh", start_year: 2013, end_year: 2017 }, { level: "other", institution: "TESOL/TEFL", field: "Giảng dạy giao tiếp", start_year: 2019, end_year: 2019 }],
+      ["Chứng chỉ|IELTS Academic 8.0, chứng chỉ TESOL, 6 năm dạy giao tiếp.", "Ngôn ngữ|Tiếng Anh chuyên ngành, tiếng Việt là ngôn ngữ giảng dạy chính."],
+      [[5,"Cô sửa phát âm rất kỹ mà không làm em ngại nói."],[5,"Buổi nào em cũng được nói nhiều."],[4,"Nội dung email công việc rất thực tế."],[5,"Tài liệu sau buổi gọn và dễ ôn."],[5,"Em tự tin thuyết trình hơn sau 2 tháng."]]],
+    ["ha", "Cần Thơ", 10.0365, 105.787, 4, "both", "Nhịp học nhỏ", "kiên nhẫn từng bước", ["#f4ecca", "#d6bd62", "#66561a"], "toan",
+      "Với học sinh tiểu học, điều quan trọng nhất là em cảm thấy mình làm được. Tôi chia mỗi kỹ năng thành bước rất nhỏ, dùng đồ vật và hình vẽ trước khi viết phép tính. Cuối buổi luôn có một việc em hoàn thành tốt để ghi nhận.",
+      "Buổi học có nhịp vận động nhẹ: đọc đề, thao tác bằng hình, em kể lại cách làm, sau đó mới luyện viết. Phụ huynh nhận một ghi chú ngắn về phần con đã hiểu và trò chơi luyện thêm 10 phút ở nhà.",
+      [{ level: "university", institution: "Đại học Cần Thơ", field: "Giáo dục Tiểu học", start_year: 2012, end_year: 2016 }, { level: "other", institution: "Bồi dưỡng giáo viên tiểu học", field: "Dạy Toán qua thao tác", start_year: 2018, end_year: 2018 }],
+      ["Kinh nghiệm giảng dạy|8 năm đứng lớp và kèm cá nhân học sinh tiểu học.", "Kỹ năng giảng dạy|Kiên nhẫn, phối hợp rõ với phụ huynh, dùng trò chơi học Toán và Tiếng Việt."],
+      [[5,"Con rất thích học cô, không còn sợ Toán."],[5,"Cô nhắn lại sau buổi rất cụ thể."],[4,"Nhịp nhẹ nhàng, hợp với con mình."],[5,"Con đọc trôi chảy hơn sau một tháng."]]],
+  ];
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const [index, [slug, location, lat, lng, km, mode, title, subtitle, palette, subjectId, teaching, plan, education, sections, ratings]] of configs.entries()) {
+      const id = uid(slug);
+      if (!id) continue;
+      run(db, `UPDATE tutors SET location=?,mode=?,area_lat=?,area_lng=?,area_km=?,teaching_style=?,lesson_plan=?,education_history=?,profile_sections=? WHERE user_id=?`,
+        location, mode, lat, lng, km, teaching, plan, JSON.stringify(education), JSON.stringify(sections.map((x) => { const [title, body] = x.split("|"); return { title, body }; })), id);
+      if (!one(db, "SELECT id FROM tutor_banners WHERE tutor_id=?", id))
+        saveUpload(db, id, "banner", await demoImage(title, subtitle, palette, true), "image/webp", "banner.webp");
+      if (!one(db, "SELECT id FROM tutor_gallery WHERE tutor_id=?", id)) {
+        for (const [gi, caption] of [`Góc học tập của ${title}`, `Tài liệu chuẩn bị cho buổi học`, `Hoạt động luyện tập cùng học sinh`].entries()) {
+          const gid = `demo-gallery-${id}-${gi}`;
+          const img = await demoImage(caption, subtitle, palette, false);
+          run(db, "INSERT INTO tutor_gallery(id,tutor_id,caption,created_at) VALUES (?,?,?,?)", gid, id, caption, new Date(Date.now() - gi * 86400000).toISOString());
+          for (let off = 0, part = 0; off < img.length; off += 100000, part++) run(db, "INSERT INTO gallery_chunks VALUES (?,?,?)", gid, part, img.subarray(off, off + 100000));
+        }
+      }
+      const cid = Number(run(db, "INSERT INTO classes(tutor_id,title,subject_id,mode,minutes,schedule,status) VALUES (?,?,?,?,90,'[]','active')", id, title, subjectId, mode).lastInsertRowid);
+      const sessionIds = [];
+      for (let si = 0; si < 12; si++)
+        sessionIds.push(Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes,status) VALUES (?,?,90,'cancelled')", cid, new Date(Date.now() - (30 - si * 2) * 86400000).toISOString()).lastInsertRowid));
+      for (const [ri, [stars, body]] of ratings.entries()) {
+        const sid = ri % 2 === 0 ? student : learner(`profile-student-${ri}`, ["Nhật Hạ", "Gia Hân", "Tú Anh", "Bảo Châu", "Minh Khuê", "An Nhiên"][ri] || `Học sinh ${ri}`);
+        if (!sid) continue;
+        const memberId = Number(run(db, `INSERT INTO class_members(class_id,student_id,sessions_total,rate,held,status,review,reviewed_at,published_rating,ended_at) VALUES (?,?,?,0,0,'ended',?,?,?,?)`,
+          cid, sid, 8 + ri, body, new Date(Date.now() - (20 + ri * 7) * 86400000).toISOString(), stars, new Date(Date.now() - (18 + ri * 7) * 86400000).toISOString()).lastInsertRowid);
+        for (const sessionId of sessionIds.slice(0, 8 + ri))
+          run(db, "INSERT INTO session_members(session_id,member_id,outcome,rating,tutor_confirmed_at,student_confirmed_at) VALUES (?,?,'confirmed',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", sessionId, memberId, stars);
+      }
+    }
+    run(db, "INSERT INTO demo_seeds VALUES ('rich-tutor-profiles-v1')");
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 export async function enrichDemo(db, { activity = false, hash = "" } = {}) {
   for (const [i, [slug, , , bio]] of profiles.entries()) {
     const tutor = one(
@@ -240,6 +329,7 @@ export async function enrichDemo(db, { activity = false, hash = "" } = {}) {
   }
   if (activity) {
     seedClasses(db);
+    await seedRichTutorProfiles(db, hash);
     await seedShowcase(db, hash);
   }
   if (

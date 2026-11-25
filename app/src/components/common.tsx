@@ -209,17 +209,19 @@ export function Section({
   title,
   action,
   id,
+  icon,
   children,
 }: {
   title: string;
   action?: ReactNode;
   id?: string;
+  icon?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="section-block" id={id}>
       <div className="section-heading">
-        <h2>{title}</h2>
+        <h2>{icon}{title}</h2>
         {action}
       </div>
       {children}
