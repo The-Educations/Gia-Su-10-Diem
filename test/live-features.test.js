@@ -11,6 +11,7 @@ import { seedCatalog, seedDemo } from "../server/seed.js";
 import { createApi } from "../server/api.js";
 import { processPhoto } from "../server/photo.js";
 import { trustReader } from "../server/trust.js";
+import { migrateClasses } from "../server/classes.js";
 
 async function fixture(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "giasu-live-")), file = join(dir, "db.sqlite");
@@ -201,7 +202,7 @@ test("students rate finished lessons privately; ratings publish to the tutor's p
   assert.equal((await rate(guest, { rating: 5 })).status, 401);
   assert.equal((await rate(tutor, { rating: 5 })).status, 403);
   assert.equal((await rate(student, { rating: 6 })).status, 400);
-  run(db, "UPDATE session_members SET outcome='completed',settled=1 WHERE session_id=? AND member_id=?", session.id, member.id);
+  run(db, "UPDATE session_members SET outcome='confirmed',settled=1 WHERE session_id=? AND member_id=?", session.id, member.id);
   assert.equal((await rate(student, { rating: 4 })).status, 200);
   assert.equal(one(db, "SELECT rating FROM session_members WHERE session_id=? AND member_id=?", session.id, member.id).rating, 4);
   // Published rating lands on the member row when the class ends.
@@ -226,7 +227,7 @@ test("ending a membership early keeps history and records the published rating",
   const student = client(), tutor = client(), guest = client();
   const learner = await student.login("student"), teacher = await tutor.login("chau");
   const { session, member } = await makeClass(db, student, tutor, learner.id, teacher.id);
-  run(db, "UPDATE session_members SET outcome='completed',settled=1,rating=5 WHERE session_id=? AND member_id=?", session.id, member.id);
+  run(db, "UPDATE session_members SET outcome='confirmed',settled=1,rating=5 WHERE session_id=? AND member_id=?", session.id, member.id);
   assert.equal((await student.request(`/members/${member.id}/end`, "POST", {})).status, 200);
   assert.equal((await student.request(`/members/${member.id}/review`, "PUT", { body: "Học rất tốt" })).status, 200);
   const ended = one(db, "SELECT * FROM class_members WHERE id=?", member.id);
@@ -318,4 +319,92 @@ test("class review moderation: report, safety queue, hide removes it from public
   const restored = trustReader(db).full(teacher.id);
   assert.equal(restored.detail.rating_count, before.detail.rating_count);
   await new Promise((r) => setTimeout(r, 50));
+});
+
+// Lỗi 15: only a lesson that really happened is rated and counted.
+const pastSessions = (db, classId) => {
+  const rows = all(db, "SELECT id FROM class_sessions WHERE class_id=? ORDER BY starts_at", classId);
+  rows.forEach((r, i) => run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - (50 - i) * 3600000).toISOString(), r.id));
+  return rows.map((r) => r.id);
+};
+
+test("a lesson that did not happen cannot be rated", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { cls } = await makeClass(db, student, tutor, learner.id, teacher.id);
+  const [sid] = pastSessions(db, cls.id);
+  const rate = () => student.request(`/sessions/${sid}/rating`, "PUT", { rating: 1, answers: {}, comment: "" });
+  const stored = () => one(db, "SELECT rating FROM session_members WHERE session_id=?", sid).rating;
+  for (const [outcome, message] of [["refunded", /hủy/], ["charged", /hủy/], ["disputed", /báo cáo/]]) {
+    run(db, "UPDATE session_members SET outcome=?,rating=NULL WHERE session_id=?", outcome, sid);
+    const r = await rate();
+    assert.equal(r.status, 409, `${outcome}: ${JSON.stringify(r.data)}`);
+    assert.match(r.data.error, message, outcome);
+    assert.equal(stored(), null, `${outcome} must not store a rating`);
+  }
+  for (const outcome of ["pending", "confirmed"]) {
+    run(db, "UPDATE session_members SET outcome=?,rating=NULL WHERE session_id=?", outcome, sid);
+    assert.equal((await rate()).status, 200, outcome);
+    assert.equal(stored(), 1, outcome);
+  }
+});
+
+test("stars given before a lesson was cancelled do not reach the published rating", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { cls, member } = await makeClass(db, student, tutor, learner.id, teacher.id);
+  const [a, b] = pastSessions(db, cls.id);
+  run(db, "UPDATE session_members SET outcome='confirmed' WHERE session_id=?", a);
+  assert.equal((await student.request(`/sessions/${a}/rating`, "PUT", { rating: 5 })).status, 200);
+  // Rated while still waiting for confirmation (allowed), then the lesson turns out not to have happened.
+  assert.equal((await student.request(`/sessions/${b}/rating`, "PUT", { rating: 1 })).status, 200);
+  run(db, "UPDATE session_members SET outcome='refunded' WHERE session_id=?", b);
+  await student.request("/classes");
+  const ended = one(db, "SELECT status,published_rating FROM class_members WHERE id=?", member.id);
+  assert.equal(ended.status, "ended");
+  assert.equal(ended.published_rating, 5);
+});
+
+test("the trust score ignores stars on lessons that were not confirmed", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const baseline = trustReader(db).full(teacher.id).detail.rating_count;
+  const { cls } = await makeClass(db, student, tutor, learner.id, teacher.id);
+  const [a, b] = pastSessions(db, cls.id);
+  run(db, "UPDATE session_members SET outcome='confirmed',rating=5 WHERE session_id=?", a);
+  run(db, "UPDATE session_members SET outcome='disputed',rating=1 WHERE session_id=?", b);
+  assert.equal(trustReader(db).full(teacher.id).detail.rating_count, baseline + 1);
+  run(db, "UPDATE session_members SET outcome='refunded' WHERE session_id=?", b);
+  assert.equal(trustReader(db).full(teacher.id).detail.rating_count, baseline + 1);
+  run(db, "UPDATE session_members SET outcome='confirmed' WHERE session_id=?", b); // resolved as "it happened": it counts again
+  assert.equal(trustReader(db).full(teacher.id).detail.rating_count, baseline + 2);
+});
+
+test("startup repair recomputes published ratings that counted lessons which never happened, and is safe to repeat", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { cls, member } = await makeClass(db, student, tutor, learner.id, teacher.id);
+  const [a, b] = pastSessions(db, cls.id);
+  run(db, "UPDATE session_members SET outcome='confirmed',rating=5 WHERE session_id=?", a);
+  run(db, "UPDATE session_members SET outcome='refunded',rating=1 WHERE session_id=?", b);
+  run(db, "UPDATE class_members SET status='ended',published_rating=3 WHERE id=?", member.id);
+  const published = () => one(db, "SELECT published_rating FROM class_members WHERE id=?", member.id).published_rating;
+  migrateClasses(db);
+  assert.equal(published(), 5);
+  migrateClasses(db);
+  assert.equal(published(), 5);
+  // A package whose only stars sit on lessons that never happened has no public rating at all.
+  run(db, "UPDATE session_members SET outcome='refunded' WHERE session_id=?", a);
+  migrateClasses(db);
+  assert.equal(published(), null);
+  // An untouched, correct package is left exactly as it was.
+  run(db, "UPDATE session_members SET outcome='confirmed' WHERE session_id=?", a);
+  run(db, "UPDATE class_members SET published_rating=5 WHERE id=?", member.id);
+  run(db, "UPDATE session_members SET rating=NULL WHERE session_id=?", b);
+  migrateClasses(db);
+  assert.equal(published(), 5);
 });

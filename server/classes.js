@@ -16,6 +16,9 @@ import { attachSessionNotes, classExtrasPayload, memberProgressStats, tutorClass
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const COLORS = ["rose", "sky", "sage", "butter", "lilac", "peach", "mint", "sand"];
 const HOUR = 3600000;
+// A lesson may be rated once it is over, unless it was cancelled or is under report; only a lesson that
+// was confirmed counts towards the published rating and the tutor's trust score (trust.js applies the same rule).
+const RATEABLE = ["pending", "confirmed"];
 const vnMonth = (iso) => new Date(Date.parse(iso) + 7 * HOUR).toISOString().slice(0, 7);
 
 export function migrateClasses(db) {
@@ -54,6 +57,18 @@ export function migrateClasses(db) {
   const cm = db.prepare("PRAGMA table_info(class_members)").all().map((c) => c.name);
   for (const [col, ddl] of [["reported", "INTEGER NOT NULL DEFAULT 0"], ["reported_reason", "TEXT"], ["reported_by", "INTEGER"], ["hidden", "INTEGER NOT NULL DEFAULT 0"], ["reply", "TEXT"], ["reply_at", "TEXT"]])
     if (!cm.includes(col)) db.exec(`ALTER TABLE class_members ADD COLUMN ${col} ${ddl}`);
+  repairPublishedRatings(db);
+}
+
+// Ended packages once averaged stars given to lessons that never happened (cancelled or reported).
+// Recompute only those, and write only when the number actually changes, so repeating it is harmless.
+function repairPublishedRatings(db) {
+  for (const m of all(db, `SELECT DISTINCT m.id,m.published_rating FROM class_members m JOIN session_members sm ON sm.member_id=m.id
+    WHERE m.status='ended' AND sm.rating IS NOT NULL AND sm.outcome<>'confirmed'`)) {
+    const avg = one(db, "SELECT AVG(rating) a FROM session_members WHERE member_id=? AND rating IS NOT NULL AND outcome='confirmed'", m.id).a;
+    const fixed = avg === null ? null : Math.round(avg * 10) / 10;
+    if (fixed !== m.published_rating) run(db, "UPDATE class_members SET published_rating=? WHERE id=?", fixed, m.id);
+  }
 }
 
 // Lesson start times from a weekly rhythm, in Vietnam time, from a start date.
@@ -124,7 +139,7 @@ function settle(db, memberId, { final = false } = {}) {
     if (left > 0) move(db, m.student_id, "lesson_refund", { amount: left, held: -left, ref: `member:${memberId}` });
     // Lessons still ahead are no longer this student's.
     run(db, "DELETE FROM session_members WHERE member_id=? AND outcome='pending' AND session_id IN (SELECT id FROM class_sessions WHERE starts_at>?)", memberId, new Date().toISOString());
-    const avg = one(db, "SELECT AVG(rating) a FROM session_members WHERE member_id=? AND rating IS NOT NULL", memberId).a;
+    const avg = one(db, "SELECT AVG(rating) a FROM session_members WHERE member_id=? AND rating IS NOT NULL AND outcome='confirmed'", memberId).a;
     run(db, "UPDATE class_members SET held=0,status='ended',ended_at=CURRENT_TIMESTAMP,published_rating=? WHERE id=?", avg ? Math.round(avg * 10) / 10 : null, memberId);
     notify(db, m.student_id, "package_ended", { link: `/classes/${m.class_id}` });
     notify(db, m.tutor_id, "package_settled", { subject: String(pay), link: "/wallet" });
@@ -299,7 +314,9 @@ export function registerClasses(app, db, auth, audit) {
     }).parse(req.body);
     const { mine, session } = member(id, req.user);
     if (!ended(session)) fail(409, "Chấm sau khi buổi học kết thúc.");
-    for (const r of mine) run(db, "UPDATE session_members SET rating=?,survey=?,comment=? WHERE session_id=? AND member_id=?", d.rating, JSON.stringify(d.answers), d.comment, id, r.member_id);
+    const open = mine.filter((r) => r.member_id && RATEABLE.includes(r.outcome));
+    if (!open.length) fail(409, mine.some((r) => r.outcome === "disputed") ? "Buổi này đang được xử lý báo cáo nên chưa chấm được." : "Buổi này đã hủy nên không chấm được.");
+    for (const r of open) run(db, "UPDATE session_members SET rating=?,survey=?,comment=? WHERE session_id=? AND member_id=?", d.rating, JSON.stringify(d.answers), d.comment, id, r.member_id);
     res.json({ ok: true });
   });
 

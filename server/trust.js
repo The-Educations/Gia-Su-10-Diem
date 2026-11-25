@@ -76,7 +76,7 @@ function loadFacts(db) {
   for (const r of latest) pair(of(r.tutor_id), r.student_id).course = r.rating;
   for (const r of all(db, `SELECT b.student_id,b.tutor_id,lr.rating,lr.tags AS tags FROM lesson_ratings lr JOIN bookings b ON b.id=lr.booking_id WHERE b.status='completed'
     UNION ALL
-    SELECT m.student_id,c.tutor_id,sm.rating,'[]' AS tags FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.rating IS NOT NULL`)) {
+    SELECT m.student_id,c.tutor_id,sm.rating,'[]' AS tags FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.rating IS NOT NULL AND sm.outcome='confirmed'`)) {
     const f = of(r.tutor_id), p = pair(f, r.student_id);
     p.lessonSum += r.rating; p.lessonN++;
     f.lessonSum += r.rating; f.lessonCount++; f.ratingCount++; f.raters.add(r.student_id);
