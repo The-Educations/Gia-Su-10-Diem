@@ -4174,10 +4174,10 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 }
 @media (prefers-reduced-motion: no-preference) {
   [data-slot="dialog-content"][data-state="open"] {
-    animation: popup-in 240ms var(--ease-out) both;
+    animation: popup-in 180ms var(--ease-out) both;
   }
   [data-slot="dialog-content"][data-state="closed"] {
-    animation: popup-out 130ms ease-in both;
+    animation: popup-out 120ms ease-in both;
   }
   [data-slot="dialog-overlay"][data-state="open"] {
     animation: overlay-in 200ms ease-out both;
@@ -4190,8 +4190,8 @@ button.admin-row-title:hover strong { text-decoration: underline; }
     animation: popup-in 200ms var(--ease-out) both;
   }
   @keyframes popup-in {
-    from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)) scale(0.985); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
   }
   @keyframes popup-out {
     from { opacity: 1; transform: translate(-50%, -50%); }
