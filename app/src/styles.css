@@ -3823,6 +3823,8 @@ button.admin-row-title:hover strong { text-decoration: underline; }
   padding: 0 30px;
 }
 .tutor-presentation .hero-on-cover {
+  position: relative;
+  z-index: 1;
   margin-top: -62px;
 }
 .tutor-presentation .profile-hero .person.large,

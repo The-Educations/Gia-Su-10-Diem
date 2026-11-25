@@ -29,8 +29,8 @@ export function TutorAreaView({ lat, lng, km, exact = false }: Props) {
         map = L.map(host.current, {
           attributionControl: true,
           zoomControl: true,
-          scrollWheelZoom: false,
-          dragging: false,
+          scrollWheelZoom: true,
+          dragging: true,
           touchZoom: true,
           doubleClickZoom: false,
           boxZoom: false,
