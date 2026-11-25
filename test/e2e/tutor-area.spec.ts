@@ -46,11 +46,14 @@ test("offline mode shows the teaching-area map; radius and location persist", as
   expect(saved.area_km).toBeGreaterThanOrEqual(1);
   expect(saved.area_km).toBeLessThanOrEqual(30);
 
-  // Students see the radius but never the exact center coordinates.
+  // Students see an approximate center for the map, never the exact center coordinates.
   const publicView = await (await page.request.get(`/api/tutors/${saved.user_id}`)).json();
   expect(publicView.area_km).toBe(saved.area_km);
-  expect(publicView.area_lat).toBeUndefined();
-  expect(publicView.area_lng).toBeUndefined();
+  expect(publicView.area_blurred).toBe(1);
+  expect(publicView.area_lat).not.toBeCloseTo(saved.area_lat, 4);
+  expect(publicView.area_lng).not.toBeCloseTo(saved.area_lng, 4);
+  expect(typeof publicView.area_lat).toBe("number");
+  expect(typeof publicView.area_lng).toBe("number");
 
   // The public profile shows the service text, no coordinates.
   await page.goto(`/app/tutors/${saved.user_id}`);
