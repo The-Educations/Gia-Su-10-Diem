@@ -9,6 +9,7 @@ import {
   MessageCircle,
   MessagesSquare,
   Send,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -16,6 +17,8 @@ import { toast } from "sonner";
 import { api, useApp } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { CommunityNotice } from "@/lib/types";
+import { childNotice, type ChildNoticeIcon } from "@/lib/child-notices";
+import { dayOf, timeOf } from "@/components/session-actions";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +31,9 @@ type Notice = {
   link: string;
   created_at: string;
   read_at: string | null;
+  child_id: number | null;
+  child_name: string | null;
+  detail: string;
 };
 type Row = {
   key: string;
@@ -95,11 +101,16 @@ const POLL_MS = 12000;
 const PAGE = 20;
 // Kinds worth a toast the moment they arrive — money movement, a new offer or
 // proposal on your desk, and a session someone cancelled or disputed.
-const IMPORTANT = new Set(["deposit_received", "withdrawal_paid", "offer_new", "proposal_new", "session_cancelled", "lesson_cancelled", "session_disputed"]);
+// A parent also hears at once when their child's lesson is off or disputed, money
+// is leaving, or an offer is waiting.
+const IMPORTANT = new Set(["deposit_received", "withdrawal_paid", "offer_new", "proposal_new", "session_cancelled", "lesson_cancelled", "session_disputed",
+  "child_session_cancelled", "child_session_disputed", "child_withdrawal_requested", "child_proposal_new"]);
+const CHILD_ICONS: Record<ChildNoticeIcon, LucideIcon> = { users: Users, calendar: CalendarDays, wallet: Wallet };
+const vnd = (amount: number) => new Intl.NumberFormat("vi-VN").format(amount) + "đ";
 
 export function NotificationBell() {
   const { user, revision, refresh } = useApp(),
-    { t, ago } = useI18n(),
+    { t, ago, lang } = useI18n(),
     loc = useLocation(),
     [count, setCount] = useState(0),
     [open, setOpen] = useState(false),
@@ -108,6 +119,16 @@ export function NotificationBell() {
     [page, setPage] = useState(PAGE);
   const active = !!user && !user.email_verification_required;
   const toasted = useRef(new Set<string>()), seeded = useRef(false);
+
+  const describe = useCallback((n: Notice): { text: string; icon: LucideIcon } => {
+    const child = childNotice(n, { t, when: (iso) => `${timeOf(iso)} ${dayOf(iso, lang)}`, money: vnd });
+    if (child) return { text: child.text, icon: CHILD_ICONS[child.icon] };
+    const [template, icon] = templates[n.kind] || ["{actor}", Bell];
+    return {
+      text: t(n.kind === "message_new" && !n.actor_name ? "Hỗ trợ Gia Sư 10 Điểm nhắn tin cho bạn" : template, { actor: n.actor_name, subject: n.subject, money: /^\d+$/.test(n.subject) ? vnd(Number(n.subject)) : "" }),
+      icon,
+    };
+  }, [t, lang]);
 
   const loadCount = useCallback(() => {
     if (!active || document.visibilityState !== "visible") return;
@@ -123,13 +144,12 @@ export function NotificationBell() {
           if (toasted.current.has(`n${n.id}`)) continue;
           toasted.current.add(`n${n.id}`);
           if (!seeded.current) continue;
-          const [template] = templates[n.kind] || ["{actor}"];
-          toast.info(t(template, { actor: n.actor_name, subject: n.subject, money: /^\d+$/.test(n.subject) ? new Intl.NumberFormat("vi-VN").format(Number(n.subject)) + "đ" : "" }), { duration: 5000 });
+          toast.info(describe(n).text, { duration: 5000 });
         }
         seeded.current = true;
       })
       .catch(() => {});
-  }, [active, t]);
+  }, [active, describe]);
 
   useEffect(() => {
     loadCount();
@@ -151,19 +171,15 @@ export function NotificationBell() {
       .then(([app, community]) => {
         if (!live) return;
         const merged: Row[] = [
-          ...app.map((n) => {
-            const [template, icon] = templates[n.kind] || ["{actor}", Bell];
-            return {
-              key: `a${n.id}`,
-              source: "app" as const,
-              id: n.id,
-              text: t(n.kind === "message_new" && !n.actor_name ? "Hỗ trợ Gia Sư 10 Điểm nhắn tin cho bạn" : template, { actor: n.actor_name, subject: n.subject, money: /^\d+$/.test(n.subject) ? new Intl.NumberFormat("vi-VN").format(Number(n.subject)) + "đ" : "" }),
-              link: n.link,
-              icon,
-              created_at: n.created_at,
-              unread: !n.read_at,
-            };
-          }),
+          ...app.map((n) => ({
+            key: `a${n.id}`,
+            source: "app" as const,
+            id: n.id,
+            ...describe(n),
+            link: n.link,
+            created_at: n.created_at,
+            unread: !n.read_at,
+          })),
           ...community.map((n) => ({
             key: `c${n.id}`,
             source: "community" as const,

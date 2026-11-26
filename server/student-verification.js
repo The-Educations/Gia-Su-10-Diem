@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
+import { notifyParents } from "./family-notify.js";
 
 // Students prove they are students with a photo or PDF of their school record
 // (học bạ) or transcript. An administrator checks it before the student can
@@ -110,8 +111,11 @@ export function registerStudentVerification(app, db, auth, audit, processPhoto) 
     if (d.status === "rejected" && !d.note) fail(400, "Ghi lý do để học sinh biết cần bổ sung gì.");
     // A decision can be changed later: approve after a fix, or withdraw an approval.
     if (d.status === "approved" && !one(db, "SELECT 1 FROM verification_files WHERE user_id=?", id)) fail(409, "Học sinh chưa gửi ảnh học bạ.");
-    if (!run(db, "UPDATE student_verifications SET status=?,note=?,reviewed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status IN ('pending','approved','rejected') AND status<>?", d.status, d.note, id, d.status).changes) fail(404, "Không tìm thấy yêu cầu xác minh.");
-    notify(db, id, `verification_${d.status}`, { subject: d.note, link: "/settings" });
+    transaction(db, () => {
+      if (!run(db, "UPDATE student_verifications SET status=?,note=?,reviewed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status IN ('pending','approved','rejected') AND status<>?", d.status, d.note, id, d.status).changes) fail(404, "Không tìm thấy yêu cầu xác minh.");
+      notify(db, id, `verification_${d.status}`, { subject: d.note, link: "/settings" });
+      notifyParents(db, id, "child_verification", { detail: { status: d.status } });
+    });
     audit(req.user.id, `student.verification.${d.status}`, id, { user_id: id, status: d.status, note: d.note });
     res.json({ ok: true });
   });

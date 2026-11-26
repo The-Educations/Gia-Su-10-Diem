@@ -2,6 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
+import { notifyParents, subjectName } from "./family-notify.js";
 import { insertChatEvent } from "./chat-media.js";
 import { isParentOf } from "./family.js";
 import banks from "../shared/banks.json" with { type: "json" };
@@ -211,6 +212,7 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       transaction(db, () => {
         if (!run(db, "UPDATE proposals SET status='expired',decided_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'", p.id).changes) return;
         if (p.held) move(db, p.student_id, "offer_released", { amount: p.held, held: -p.held, ref: `proposal:${p.id}` });
+        notifyParents(db, p.student_id, "child_proposal_closed", { subject: subjectName(db, p.subject_id), link: `/proposals?id=${p.id}`, detail: { amount: p.held, outcome: "expired" } });
         // The expiry is announced once, inside the same inquiry the proposal
         // arrived in — not lazily when someone happens to list proposals.
         run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", p.student_id, p.tutor_id);
@@ -608,6 +610,8 @@ export function registerWallet(app, db, auth, audit, { production, sepay, origin
       supportNote(req.user.id, `Yêu cầu rút tiền #${wid}: ${d.amount.toLocaleString("vi-VN")}đ về ${d.bank_name} ****${d.account_number.slice(-4)} (${d.account_name.toUpperCase()}).`, null, req.user.id);
       for (const admin of all(db, "SELECT id FROM users WHERE role='admin' AND status='active'"))
         notify(db, admin.id, "withdrawal_requested", { actor: req.user.name, subject: String(d.amount), link: `/admin?tab=finance&fin=payouts&withdrawal=${wid}` });
+      // Only the last four digits: the account may not be the family's own.
+      if (req.user.role === "student") notifyParents(db, req.user.id, "child_withdrawal_requested", { detail: { amount: d.amount, last4: d.account_number.slice(-4) } });
       return wid;
     });
     res.status(201).json({ id, ...view(req.user.id) });
