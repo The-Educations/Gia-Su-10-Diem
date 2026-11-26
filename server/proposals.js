@@ -72,6 +72,11 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
       if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND trial=1 AND status IN ('pending','accepted')", studentId, tutorId)) fail(409, "Bạn đã học thử với gia sư này.");
       Object.assign(d, { sessions: 1, minutes: 60, rate: 0, schedule: d.schedule.slice(0, 1) });
     } else if (d.rate < 50000) fail(400, "Học phí tối thiểu 50.000đ / buổi.");
+    // Two weekly slots on one day must not overlap: the second lesson would start before the first ends.
+    const slots = [...d.schedule].sort((a, b) => a.weekday - b.weekday || a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+    for (let i = 1; i < slots.length; i++)
+      if (slots[i].weekday === slots[i - 1].weekday && slots[i].hour * 60 + slots[i].minute - (slots[i - 1].hour * 60 + slots[i - 1].minute) < d.minutes)
+        fail(400, "Các khung giờ trong tuần không được chồng lên nhau.");
     const total = d.sessions * d.rate;
     const id = transaction(db, () => {
       if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND status='pending'", studentId, tutorId)) fail(409, "Đang có một đề nghị chờ trả lời giữa hai bạn.");

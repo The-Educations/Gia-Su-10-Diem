@@ -372,9 +372,12 @@ test("bell and email switches for the child's learning work independently", asyn
   f.grant(student.id, 20000000);
   const prefs = (body) => ok(parent.request("/account/notifications", "PUT", body));
   // Each round: one emailed notice (class started) and one bell-only notice (offer sent).
+  // Each round starts a week later: the same tutor and student cannot hold two lessons in one hour.
+  let week = 0;
   const round = async () => {
     const before = { bell: f.bells(f.parentId).length, mail: f.mails(f.parentId).length };
-    const { cls } = await openClass(student, tutor, { sessions: 1 });
+    const start_date = new Date(Date.now() + (9 + 7 * week++) * DAY).toISOString().slice(0, 10);
+    const { cls } = await openClass(student, tutor, { sessions: 1, start_date });
     assert.ok(cls.id);
     return [f.bells(f.parentId).length - before.bell, f.mails(f.parentId).length - before.mail];
   };

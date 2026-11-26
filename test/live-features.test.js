@@ -408,3 +408,127 @@ test("startup repair recomputes published ratings that counted lessons which nev
   migrateClasses(db);
   assert.equal(published(), 5);
 });
+
+// Lỗi 5, 6, 9: a lesson is never booked twice at the same time and never starts in the past.
+const HOUR_MS = 3600000, DAY_MS = 86400000;
+const fund = (db, id) => run(db, "INSERT OR REPLACE INTO wallets(user_id,available,held,credits_free,credits_paid) VALUES (?,10000000,0,0,0)", id);
+// A second verified student (the demo data has only one).
+const extraStudent = (db, slug) => {
+  run(db, "INSERT INTO users(name,email,password,role,status,onboarding_step) SELECT 'Học sinh hai',?,password,role,'active',onboarding_step FROM users WHERE email='student@demo.giasu.test'", `${slug}@demo.giasu.test`);
+  run(db, "INSERT INTO student_verifications(user_id,status) SELECT id,'approved' FROM users WHERE email=?", `${slug}@demo.giasu.test`);
+  return slug;
+};
+const offer = (who, tutorId, extra = {}) => who.request("/proposals", "POST", {
+  tutor_id: tutorId, subject_id: "toan", level: "cap2", mode: "online", area: "", sessions: 2, minutes: 60, rate: 180000, message: "",
+  schedule: [{ weekday: 2, hour: 18 }], start_date: new Date(Date.now() + DAY_MS).toISOString().slice(0, 10), ...extra,
+});
+const sessionsOf = (db, classId) => all(db, "SELECT * FROM class_sessions WHERE class_id=? ORDER BY starts_at", classId);
+
+test("an offer cannot list weekly slots that overlap each other", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  fund(db, learner.id);
+  const sent = (schedule, minutes = 60) => offer(student, teacher.id, { schedule, minutes });
+  assert.equal((await sent([{ weekday: 2, hour: 18 }, { weekday: 2, hour: 18 }])).status, 400, "same slot twice");
+  assert.equal((await sent([{ weekday: 2, hour: 18, minute: 0 }, { weekday: 2, hour: 18, minute: 30 }])).status, 400, "second slot starts before the first ends");
+  assert.equal((await sent([{ weekday: 2, hour: 18 }, { weekday: 4, hour: 18 }])).status, 201, "different days are fine");
+  const ok = await offer(student, (await client().login("linh")).id, { schedule: [{ weekday: 2, hour: 18 }, { weekday: 2, hour: 19 }] });
+  assert.equal(ok.status, 201, "back to back lessons do not overlap");
+});
+
+test("accepting an offer late never creates a lesson in the past", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  fund(db, learner.id);
+  const p = await offer(student, teacher.id, { sessions: 3, schedule: [{ weekday: 1, hour: 19 }] });
+  assert.equal(p.status, 201, JSON.stringify(p.data));
+  // The tutor answers days after the offer's own start date.
+  run(db, "UPDATE proposals SET start_date=? WHERE id=?", new Date(Date.now() - 10 * DAY_MS).toISOString().slice(0, 10), p.data.id);
+  const accepted = await tutor.request(`/proposals/${p.data.id}`, "PATCH", { action: "accept" });
+  assert.equal(accepted.status, 200, JSON.stringify(accepted.data));
+  const lessons = sessionsOf(db, accepted.data.class_id);
+  assert.equal(lessons.length, 3, "still the full number of lessons");
+  for (const l of lessons) assert.ok(Date.parse(l.starts_at) >= Date.now() + HOUR_MS - 5000, `${l.starts_at} is not at least an hour ahead`);
+});
+
+test("a tutor cannot accept two offers for the same hour, and the failed accept changes nothing", async (t) => {
+  const { db, client } = await fixture(t);
+  const a = client(), b = client(), tutor = client();
+  const sa = await a.login("student"), sb = await b.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  fund(db, sa.id); fund(db, sb.id);
+  const pa = await offer(a, teacher.id), pb = await offer(b, teacher.id);
+  assert.equal(pa.status, 201, JSON.stringify(pa.data)); assert.equal(pb.status, 201, JSON.stringify(pb.data));
+  assert.equal((await tutor.request(`/proposals/${pa.data.id}`, "PATCH", { action: "accept" })).status, 200);
+  const classes = one(db, "SELECT COUNT(*) n FROM classes").n, held = one(db, "SELECT held FROM wallets WHERE user_id=?", sb.id).held;
+  const second = await tutor.request(`/proposals/${pb.data.id}`, "PATCH", { action: "accept" });
+  assert.equal(second.status, 409, JSON.stringify(second.data));
+  assert.match(second.data.error, /Gia sư đã có buổi học khác lúc/);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM classes").n, classes, "no class was created");
+  assert.equal(one(db, "SELECT status FROM proposals WHERE id=?", pb.data.id).status, "pending", "the offer is still waiting");
+  assert.equal(one(db, "SELECT held FROM wallets WHERE user_id=?", sb.id).held, held, "the student's money is still held, not lost");
+  // The tutor can still turn it down and the money goes back.
+  assert.equal((await tutor.request(`/proposals/${pb.data.id}`, "PATCH", { action: "decline" })).status, 200);
+});
+
+test("a student cannot be booked with two tutors at the same hour", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), chau = client(), linh = client();
+  const learner = await student.login("student"), c = await chau.login("chau"), l = await linh.login("linh");
+  fund(db, learner.id);
+  const p1 = await offer(student, c.id), p2 = await offer(student, l.id);
+  assert.equal(p1.status, 201, JSON.stringify(p1.data)); assert.equal(p2.status, 201, JSON.stringify(p2.data));
+  assert.equal((await chau.request(`/proposals/${p1.data.id}`, "PATCH", { action: "accept" })).status, 200);
+  const clash = await linh.request(`/proposals/${p2.data.id}`, "PATCH", { action: "accept" });
+  assert.equal(clash.status, 409, JSON.stringify(clash.data));
+  assert.match(clash.data.error, /Học sinh đã có buổi học khác lúc/);
+});
+
+test("a cancelled lesson frees its hour for another offer", async (t) => {
+  const { db, client } = await fixture(t);
+  const a = client(), b = client(), tutor = client();
+  const sa = await a.login("student"), sb = await b.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  fund(db, sa.id); fund(db, sb.id);
+  const pa = await offer(a, teacher.id, { sessions: 1 }), pb = await offer(b, teacher.id, { sessions: 1 });
+  const accepted = await tutor.request(`/proposals/${pa.data.id}`, "PATCH", { action: "accept" });
+  const [lesson] = sessionsOf(db, accepted.data.class_id);
+  assert.equal((await a.request(`/sessions/${lesson.id}/cancel`, "POST")).status, 200);
+  assert.equal((await tutor.request(`/proposals/${pb.data.id}`, "PATCH", { action: "accept" })).status, 200, "the hour is free again");
+});
+
+test("a move cannot land on a booked hour, and a stale or clashing move cannot be accepted", async (t) => {
+  const { db, client } = await fixture(t);
+  const a = client(), b = client(), tutor = client();
+  const sa = await a.login("student"), sb = await b.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  fund(db, sa.id); fund(db, sb.id);
+  const pa = await offer(a, teacher.id), pb = await offer(b, teacher.id, { schedule: [{ weekday: 3, hour: 10 }] });
+  const ca = (await tutor.request(`/proposals/${pa.data.id}`, "PATCH", { action: "accept" })).data.class_id;
+  const cb = (await tutor.request(`/proposals/${pb.data.id}`, "PATCH", { action: "accept" })).data.class_id;
+  const busy = sessionsOf(db, ca)[0].starts_at, mine = sessionsOf(db, cb)[0];
+  // Asking for a booked hour is refused straight away.
+  const refused = await b.request(`/sessions/${mine.id}/move`, "POST", { starts_at: busy });
+  assert.equal(refused.status, 409, JSON.stringify(refused.data));
+  assert.match(refused.data.error, /Gia sư đã có buổi học khác lúc/);
+  // A free hour is accepted as a request.
+  const free = new Date(Date.parse(busy) + 10 * DAY_MS + 5 * HOUR_MS).toISOString();
+  assert.equal((await b.request(`/sessions/${mine.id}/move`, "POST", { starts_at: free })).status, 201);
+  const mv = one(db, "SELECT * FROM session_moves WHERE session_id=? AND status='pending'", mine.id);
+  const accept = () => tutor.request(`/moves/${mv.id}`, "PATCH", { accept: true });
+  // The hour was taken in the meantime.
+  run(db, "UPDATE session_moves SET starts_at=? WHERE id=?", busy, mv.id);
+  assert.equal((await accept()).status, 409);
+  // The new hour is now too close, or already past.
+  run(db, "UPDATE session_moves SET starts_at=? WHERE id=?", new Date(Date.now() + 10 * 60000).toISOString(), mv.id);
+  assert.equal((await accept()).status, 409);
+  run(db, "UPDATE session_moves SET starts_at=? WHERE id=?", free, mv.id);
+  // The lesson itself has already started.
+  const original = mine.starts_at;
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - 3 * HOUR_MS).toISOString(), mine.id);
+  assert.equal((await accept()).status, 409);
+  assert.equal(one(db, "SELECT starts_at FROM class_sessions WHERE id=?", mine.id).starts_at.slice(0, 13), new Date(Date.now() - 3 * HOUR_MS).toISOString().slice(0, 13), "the lesson was not moved");
+  // A good request still works end to end.
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", original, mine.id);
+  assert.equal((await accept()).status, 200);
+  assert.equal(one(db, "SELECT starts_at FROM class_sessions WHERE id=?", mine.id).starts_at, free);
+});
