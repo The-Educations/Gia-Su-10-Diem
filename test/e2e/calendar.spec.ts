@@ -45,7 +45,7 @@ test("dragging makes an event at once, its panel edits it, the bottom edge resiz
   const height = async () => (await page.locator(".cal-columns").boundingBox())!.height;
   const before = await height();
   await page.getByRole("button", { name: "Phóng to" }).click();
-  expect(await height()).toBeCloseTo(before * 1.5, 0);
+  await expect.poll(height).toBeCloseTo(before * 1.5, 0);
 
   await renamed.click();
   await page.locator(".event-pop").getByRole("button", { name: "Xóa sự kiện" }).click();

@@ -6,6 +6,7 @@ import { migrateNotifications } from "./notifications.js";
 import { migrateCredentials } from "./credentials.js";
 import { migrateWallet } from "./wallet.js";
 import { migrateClasses } from "./classes.js";
+import { migrateClassExtras } from "./class-extras.js";
 import { migrateCommunityTopics } from "./community-topics.js";
 import { migrateFamily } from "./family.js";
 import { migrateStudentVerification } from "./student-verification.js";
@@ -278,6 +279,7 @@ export function migrateDatabase(db) {
   migrateCredentials(db);
   migrateWallet(db);
   migrateClasses(db);
+  migrateClassExtras(db);
   migrateCommunityTopics(db);
   migrateFamily(db);
   migrateStudentVerification(db);

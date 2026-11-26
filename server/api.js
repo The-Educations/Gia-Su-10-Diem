@@ -11,6 +11,7 @@ import { registerCredentials, verifiedCredentials } from "./credentials.js";
 import { registerWallet, sepayConfig } from "./wallet.js";
 import { registerProposals } from "./proposals.js";
 import { registerClasses, classRatings } from "./classes.js";
+import { registerClassExtras } from "./class-extras.js";
 import { registerCommunityTopics } from "./community-topics.js";
 import { registerFamily } from "./family.js";
 import { registerStudentVerification } from "./student-verification.js";
@@ -26,6 +27,7 @@ import { pairReview } from "./reviews.js";
 import { registerTrust, trustReader, publicReviews, lessonRatingFields } from "./trust.js";
 import { TUTOR_NO_SHOW_WAIT_MINUTES, TUTOR_NO_SHOW_WINDOW_HOURS } from "./trust-policy.js";
 import { liveTutorSql, isLiveTutor, publicView, publishedView, contentSnapshot, changedContent } from "./tutor-visibility.js";
+import { publicAreaFields } from "./area-privacy.js";
 import { registerTutorThemes, themeCatalog, themeInventory, ownsTheme } from "./tutor-themes.js";
 import { overlaps, weeklySchedule, reconcileAvailability, refreshAvailability } from "./availability.js";
 import { registerEmailVerification, needsEmailVerification } from "./email-verification.js";
@@ -244,6 +246,7 @@ export function createApi(
   };
   const tutorRows = (preview = false) => {
     const trust = trustReader(db), verified = verifiedCredentials(db), ratings = classRatings(db);
+    const activeStudents = new Map(all(db, `SELECT c.tutor_id,COUNT(DISTINCT m.student_id) AS n FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.status='active' GROUP BY c.tutor_id`).map((r) => [r.tutor_id, r.n]));
     return all(
       db,
       `SELECT t.*,u.name,u.demo,u.timezone,COALESCE(w.blocks,'[]') AS weekly_blocks,(SELECT json_group_array(json(blocks)) FROM weekly_requests WHERE tutor_id=t.user_id AND status='accepted') AS reserved_weekly_blocks
@@ -252,7 +255,7 @@ export function createApi(
     ).map(({ moderation_note, reserved_weekly_blocks, published, ...draft }) => {
       // Students see the last approved content while an edit awaits review.
       const { published: _snapshot, area_lat: _al, area_lng: _lg, ...visible } = publicView({ ...draft, published });
-      const t = preview ? draft : visible;
+      const t = preview ? draft : { ...visible, ...publicAreaFields(draft) };
       const score = trust.public(t.user_id);
       return {
       ...t,
@@ -260,6 +263,7 @@ export function createApi(
       review_count: score.review_count,
       verified: verified.get(t.user_id) || [],
       rating: ratings(t.user_id),
+      active_students: activeStudents.get(t.user_id) || 0,
       ...(preview && { published: publishedView(published) }),
       ...uploadMetadata(db, t.user_id),
       weekly_blocks: JSON.parse(t.weekly_blocks).filter(b => !JSON.parse(reserved_weekly_blocks || "[]").flat().some(r => r.weekday === b.weekday && r.hour === b.hour)),
@@ -296,6 +300,7 @@ export function createApi(
   const walletApi = registerWallet(app, db, auth, audit, { production, sepay, origin });
   registerProposals(app, db, auth, audit, walletApi);
   registerClasses(app, db, auth, audit);
+  registerClassExtras(app, db, auth);
   registerCommunityTopics(app, db, auth);
   registerFamily(app, db, auth);
   registerTrust(app, db, auth, audit);

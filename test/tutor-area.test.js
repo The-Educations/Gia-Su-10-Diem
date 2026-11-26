@@ -59,11 +59,20 @@ test("tutor profile saves the offline teaching area and hides exact coordinates 
   assert.equal(after.area_lng, 105.8542);
   assert.equal(after.area_km, 8);
 
-  // The public card keeps the radius but never the exact center coordinates.
+  // The public card keeps the radius, but its center is a stable approximate
+  // offset rather than the exact coordinates the tutor chose.
   const publicView = (await tutor.request(`/tutors/${after.user_id}`)).data;
   assert.equal(publicView.area_km, 8);
-  assert.equal(publicView.area_lat, undefined);
-  assert.equal(publicView.area_lng, undefined);
+  assert.equal(publicView.area_blurred, 1);
+  assert.notEqual(publicView.area_lat, 21.0285);
+  assert.notEqual(publicView.area_lng, 105.8542);
+  const latDistance = Math.abs(publicView.area_lat - 21.0285) * 110.574;
+  const lngDistance = Math.abs(publicView.area_lng - 105.8542) * 111.32 * Math.cos(21.0285 * Math.PI / 180);
+  const distance = Math.hypot(latDistance, lngDistance);
+  assert.ok(distance >= 1.4 && distance <= 2.1, `unexpected blur distance ${distance}`);
+  const repeat = (await tutor.request(`/tutors/${after.user_id}`)).data;
+  assert.equal(repeat.area_lat, publicView.area_lat);
+  assert.equal(repeat.area_lng, publicView.area_lng);
 });
 
 test("area fields reject out-of-range values", async (t) => {

@@ -271,7 +271,7 @@ function TimeGrid({ days, byDay, today, now, lang, row, free, onZoom, onOpen, on
   }, [onZoom]);
   const nowTop = ((minutesInDay(new Date(now).toISOString()) - HOURS[0] * 60) / 60) * row;
   const topOf = (minutes: number) => ((minutes - HOURS[0] * 60) / 60) * row;
-  const heightOf = (minutes: number) => Math.max(18, (minutes / 60) * row - 3);
+  const heightOf = (minutes: number) => Math.max(Math.min(18, row / 2), (minutes / 60) * row - 3);
   function geometry(e: React.PointerEvent, step = 30) {
     const grid = body.current!.querySelector(".cal-columns")!.getBoundingClientRect();
     const day = Math.max(0, Math.min(days.length - 1, Math.floor(((e.clientX - grid.left) / grid.width) * days.length)));

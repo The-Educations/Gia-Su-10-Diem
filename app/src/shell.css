@@ -26,7 +26,7 @@
   gap: 10px;
   min-width: 0;
   min-height: 44px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
   color: var(--muted-foreground);
 }
@@ -136,7 +136,7 @@
 }
 .nav-group-label {
   padding: 0 12px 6px;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted-foreground);
 }
 .sidebar .nav-label {
@@ -180,12 +180,12 @@
   line-height: 1.4;
 }
 .account-summary strong {
-  font-size: 13px;
+  font-size: 13.5px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .account-summary small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .account-timezone {
@@ -313,7 +313,7 @@
   padding: 3px 8px;
   border: 1px solid #d9c8a3;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--warning);
 }
 .language-switch {
@@ -332,7 +332,7 @@
   border-radius: 999px;
   background: transparent;
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -372,7 +372,7 @@
   border-radius: 999px;
   background: var(--primary);
   color: var(--primary-foreground);
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   line-height: 14px;
   text-align: center;
@@ -414,7 +414,7 @@
   border-radius: 999px;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--muted-foreground);
   cursor: pointer;
 }
@@ -437,7 +437,7 @@
   gap: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.45;
   color: var(--secondary-foreground);
 }
@@ -446,7 +446,7 @@
 }
 .notification-day + .notification-day { margin-top: 4px; }
 .notification-day-label {
-  margin: 4px 12px 2px; font-size: 11px; font-weight: 600; letter-spacing: .05em;
+  margin: 4px 12px 2px; font-size: 12px; font-weight: 600; letter-spacing: .05em;
   text-transform: uppercase; color: var(--muted-foreground);
 }
 .notification-more { display: flex; justify-content: center; padding: 4px 12px 8px; }
@@ -479,7 +479,7 @@
   overflow-wrap: anywhere;
 }
 .notification-text time {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted-foreground);
 }
 .notification-dot {
@@ -491,7 +491,7 @@
 }
 .notification-empty {
   padding: 32px 18px 40px;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--muted-foreground);
   text-align: center;
 }
@@ -523,7 +523,7 @@ main {
   margin: 0 var(--gutter);
   padding: 16px 0 calc(16px + var(--mobile-bar-height));
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted-foreground);
 }
 
@@ -554,7 +554,7 @@ main {
     font-size: 32px;
   }
   .mobile-brand .brand-mark > span {
-    font-size: 13px;
+    font-size: 13.5px;
   }
   .topbar-location {
     font-size: 15px;
@@ -581,7 +581,7 @@ main {
     border-radius: 12px;
     background: none;
     font: inherit;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.2;
     color: var(--muted-foreground);
     cursor: pointer;
@@ -719,8 +719,8 @@ main {
 .setup-required p { color: var(--muted-foreground); }
 .setup-later { margin-top: 8px; width: 100%; }
 
-.balance-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; transition: background-color var(--duration-fast) ease-out; }
+.balance-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; transition: background-color var(--duration-fast) ease-out; }
 .balance-chip:hover { background: var(--muted); }
 .balance-chip svg { width: 15px; height: 15px; color: var(--positive); }
-@media (max-width: 420px) { .balance-chip span { font-size: 12px; } .balance-chip { padding: 0 9px; } }
+@media (max-width: 420px) { .balance-chip span { font-size: 12.5px; } .balance-chip { padding: 0 9px; } }
 .balance-chip-error { cursor: pointer; border-style: dashed; }
