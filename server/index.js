@@ -81,7 +81,11 @@ const sendApp = async (req, res, html) => {
     .status(seo.status).type("html").send(renderSeo(html, req.path, post, community, tutor, crawl));
 };
 if (production || process.env.SERVE_BUILD === "1") {
-  app.use("/app/assets", express.static(path.resolve("dist/app/assets")));
+  app.use("/app/assets", express.static(path.resolve("dist/app/assets"), {
+    // Vite content-hashes every asset filename: safe to cache forever.
+    immutable: true,
+    maxAge: "365d",
+  }));
   app.get("/app{/*path}", async (req, res) =>
     await sendApp(req, res, await readFile("dist/app/index.html", "utf8")),
   );
