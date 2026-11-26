@@ -27,6 +27,7 @@ async function fixture(t) {
 test("class extras: notes, assignments, posts, badges and ICS", async (t) => {
   const { db, client } = await fixture(t), tutor = client(), student = client(), outsider = client();
   await tutor.login("chau"); await student.login("student"); await outsider.login("nam");
+  const studentId = one(db, "SELECT id FROM users WHERE email='student@demo.giasu.test'").id;
   const list = (await tutor.req("/classes")).data; assert.ok(list.length >= 3); assert.ok(list.some((c) => c.assignment_badge >= 0));
   const cls = list.find((c) => c.members.some((m) => m.name === "Minh Anh")) || list[0];
   let detail = (await tutor.req(`/classes/${cls.id}`)).data;
@@ -47,6 +48,25 @@ test("class extras: notes, assignments, posts, badges and ICS", async (t) => {
   assert.ok(sub); assert.equal((await tutor.req(`/assignments/${assignment.id}/review`, "POST", { member_id: sub.member_id, feedback: "Làm tốt, câu 5 xem lại dấu." })).status, 200);
   assert.equal((await tutor.req(`/classes/${cls.id}/posts`, "POST", { body: "Tuần sau học đúng giờ, nhớ mang vở." })).status, 201);
   const ics = await student.req(`/classes/${cls.id}/ics`); assert.equal(ics.status, 200); assert.match(String(ics.data), /BEGIN:VCALENDAR/); assert.match(ics.headers.get("content-type"), /text\/calendar/);
+  const parent = client();
+  await parent.login("parent");
+  const parentList = await parent.req("/classes");
+  assert.equal(parentList.status, 200, JSON.stringify(parentList.data));
+  assert.ok(parentList.data.some((c) => c.id === cls.id), "parent list includes the child's class");
+  const parentDetail = await parent.req(`/classes/${cls.id}`);
+  assert.equal(parentDetail.status, 200, JSON.stringify(parentDetail.data));
+  assert.ok(parentDetail.data.sessions.some((s) => s.id === session.id), "parent sees the child's sessions");
+  assert.equal(parentDetail.data.sessions.find((s) => s.id === session.id).teacher_note.includes("căn bậc hai"), true);
+  assert.ok(parentDetail.data.posts.some((p) => p.body.includes("Tuần sau học đúng giờ")));
+  const parentAssignment = parentDetail.data.assignments.find((a) => a.id === assignment.id);
+  assert.ok(parentAssignment.submissions.length);
+  assert.ok(parentAssignment.submissions.every((s) => s.student_id === studentId), "parent only sees the child's submissions");
+  assert.equal((await parent.req(`/sessions/${session.id}/confirm`, "POST")).status, 404);
+  assert.equal((await parent.req(`/sessions/${session.id}/cancel`, "POST")).status, 404);
+  assert.equal((await parent.req(`/sessions/${session.id}/dispute`, "POST", { reason: "phụ huynh không được báo" })).status, 404);
+  assert.equal((await parent.req(`/sessions/${session.id}/move`, "POST", { starts_at: new Date(Date.now() + 86400000).toISOString() })).status, 404);
+  assert.equal((await parent.req(`/assignments/${assignment.id}/submit`, "POST", { note: "phụ huynh nộp thay" })).status, 404);
+  assert.equal((await parent.req(`/classes/${cls.id}/posts`, "POST", { body: "phụ huynh đăng thông báo" })).status, 403);
   const notification = one(db, "SELECT * FROM notifications WHERE kind='assignment_new' ORDER BY id DESC LIMIT 1"); assert.ok(notification);
   run(db, "DELETE FROM notifications WHERE id=?", notification.id);
 });

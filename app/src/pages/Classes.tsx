@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, money, useApp, useLoad } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { celebrate } from "@/lib/celebrate";
-import type { ClassInfo, ClassSession } from "@/lib/types";
+import type { ClassInfo, ClassSession, User } from "@/lib/types";
 import { Blank, ErrorState, Heading, Loading, Page, Person, Submit } from "@/components/common";
 import { SessionActions, dayOf, timeOf } from "@/components/session-actions";
 import { Assignments, ClassMessages, ClassPosts, ClassStats, IcsLink, SessionNote, nextCountdown } from "@/components/class-extras";
@@ -18,6 +18,20 @@ import "@/calendar.css";
 import "@/money.css";
 
 const rhythm = (c: ClassInfo, t: (s: string) => string) => c.schedule.map((s) => `${t(WEEKDAYS[s.weekday])} ${timeLabel(s)}`).join(" · ");
+// A parent watches the children's package rows; the cards aggregate them without
+// turning the parent into a class participant.
+const watchedPackage = (c: ClassInfo, user: User | null | undefined) => {
+  const own = c.members.find((m) => m.student_id === user?.id);
+  if (own || user?.learner_type !== "parent" || !c.members.length) return own;
+  const done = c.members.reduce((n, m) => n + m.done, 0), total = c.members.reduce((n, m) => n + m.sessions_total, 0);
+  return {
+    ...c.members[0], done, sessions_total: total,
+    minutes_done: c.members.reduce((n, m) => n + (m.minutes_done || 0), 0),
+    hours_done: c.members.reduce((n, m) => n + (m.hours_done || 0), 0),
+    completion_rate: Math.min(100, Math.round((done / Math.max(1, total)) * 100)),
+    paid_total: c.members.reduce((n, m) => n + (m.paid_total || 0), 0),
+  };
+};
 
 export function ClassList() {
   const { user } = useApp(),
@@ -32,7 +46,7 @@ export function ClassList() {
       {rows.length ? (
         <div className="class-grid">
           {rows.map((c) => {
-            const me = c.members.find((m) => m.student_id === user?.id);
+            const me = watchedPackage(c, user);
             const total = me ? me.sessions_total : c.members.reduce((n, m) => n + (m.status === "active" ? 1 : 0), 0);
             return (
               <Link key={c.id} to={`/classes/${c.id}`} className="class-card" data-color={c.color} data-ended={c.members.every((m) => m.status !== "active") || undefined}>
@@ -140,13 +154,15 @@ export function ClassDetail() {
     [renewing, setRenewing] = useState(4);
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
-  const c = result.data, tutor = user?.id === c.tutor_id || user?.role === "admin", me = c.members.find((m) => m.student_id === user?.id);
+  const c = result.data, tutor = user?.id === c.tutor_id || user?.role === "admin", parent = user?.learner_type === "parent",
+    me = c.members.find((m) => m.student_id === user?.id), watched = watchedPackage(c, user);
   const tab = params.get("tab") || "schedule";
-  const sessions = (c.sessions || []).filter((s) => tutor || s.student_id === user?.id);
-  const lessons = sessions.filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
+  const visibleStudents = new Set(c.members.map((m) => m.student_id));
+  const sessions = (c.sessions || []).filter((s) => tutor || visibleStudents.has(s.student_id ?? 0));
+  const lessons = sessions.filter((s, i, a) => a.findIndex((x) => x.id === s.id && (!parent || x.student_id === s.student_id)) === i);
   const upcoming = lessons.filter((s) => Date.parse(s.starts_at) + s.minutes * 60000 > Date.now() && s.status !== "cancelled");
   const past = lessons.filter((s) => !upcoming.includes(s)).reverse();
-  const sessionFor = (s: ClassSession) => (tutor ? s : sessions.find((x) => x.id === s.id && x.student_id === user?.id) || s);
+  const sessionFor = (s: ClassSession) => s;
   async function respond(moveId: number, accept: boolean) {
     try { await api(`/moves/${moveId}`, "PATCH", { accept }); toast.success(t(accept ? "Đã đồng ý dời lịch" : "Đã từ chối dời lịch")); result.reload(); }
     catch (e) { toast.error((e as Error).message); }
@@ -164,8 +180,8 @@ export function ClassDetail() {
         <p>{c.subject_name} · {rhythm(c, t)} · {t("{n} phút", { n: c.minutes })} · {t(c.mode === "online" ? "Trực tuyến" : "Trực tiếp")}</p>
         {!tutor && <p className="muted">{t("Gia sư")} {c.tutor_name}</p>}
       </header>
-      <ClassStats c={c} tutor={tutor} me={me} />
-      {(c.moves || []).filter((m) => m.requested_by !== user?.id).map((m) => {
+      <ClassStats c={c} tutor={tutor} me={watched} />
+      {!parent && (c.moves || []).filter((m) => m.requested_by !== user?.id).map((m) => {
         const s = lessons.find((x) => x.id === m.session_id);
         return s ? (
           <div key={m.id} className="move-request" role="status">
@@ -194,7 +210,7 @@ export function ClassDetail() {
           )}
         </>
       )}
-      {tab === "assignments" && <Assignments c={c} tutor={tutor} me={me} onChanged={result.reload} />}
+      {tab === "assignments" && <Assignments c={c} tutor={tutor} me={me} readOnly={parent} onChanged={result.reload} />}
       {tab === "materials" && <Materials c={c} tutor={tutor} onChanged={result.reload} />}
       {tab === "messages" && <ClassMessages c={c} tutor={tutor} />}
       {tab === "people" && (
@@ -206,7 +222,7 @@ export function ClassDetail() {
                 <li key={m.id} data-status={m.status}>
                   <Person name={m.name} id={m.student_id} />
                   <div>
-                    <strong>{tutor ? m.name : t("Gói của bạn")}</strong>
+                    <strong>{tutor || parent ? m.name : t("Gói của bạn")}</strong>
                     <small>{t("{done}/{total} buổi đã học", { done: m.done, total: m.sessions_total })} · {money(m.rate)}/{t("buổi")}{m.status !== "active" && ` · ${t("Đã kết thúc")}`}</small>
                     <div className="class-progress"><span style={{ width: `${Math.min(100, (m.done / Math.max(1, m.sessions_total)) * 100)}%` }} /></div>
                   </div>
@@ -263,8 +279,8 @@ function SessionRow({ s, tutor, onChanged }: { s: ClassSession; tutor: boolean; 
     <li className="session-row" data-color={s.color}>
       <time dateTime={s.starts_at}><strong>{dayOf(s.starts_at)}</strong><span>{timeOf(s.starts_at)}</span></time>
       <div>
-        <span>{tutor ? s.student_name : s.tutor_name}{s.moved_from && ` · ${t("đã dời lịch")}`}</span>
-        <SessionActions s={s} onChanged={onChanged} />
+        <span>{tutor || user?.learner_type === "parent" ? s.student_name : s.tutor_name}{s.moved_from && ` · ${t("đã dời lịch")}`}</span>
+        {user?.learner_type !== "parent" && <SessionActions s={s} onChanged={onChanged} />}
         <SessionNote s={s} tutor={tutor} onChanged={onChanged} />
       </div>
     </li>
