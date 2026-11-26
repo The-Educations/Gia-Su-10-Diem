@@ -53,7 +53,7 @@ export function ClassPosts({ c, tutor, onChanged }: { c: ClassInfo; tutor: boole
   </section>;
 }
 
-export function Assignments({ c, tutor, me, onChanged }: { c: ClassInfo; tutor: boolean; me?: ClassMember; onChanged: () => void }) {
+export function Assignments({ c, tutor, me, readOnly = false, onChanged }: { c: ClassInfo; tutor: boolean; me?: ClassMember; readOnly?: boolean; onChanged: () => void }) {
   const { t } = useI18n(), [adding, setAdding] = useState(false), [busy, setBusy] = useState(false);
   async function add(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); const f = new FormData(e.currentTarget); setBusy(true);
@@ -70,13 +70,13 @@ export function Assignments({ c, tutor, me, onChanged }: { c: ClassInfo; tutor: 
       <Field><FieldLabel htmlFor="a-session">{t("Gắn với buổi")}</FieldLabel><select id="a-session" name="session_id" className="native-select"><option value="">{t("Không gắn buổi")}</option>{(c.sessions || []).filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i).map((s) => <option key={s.id} value={s.id}>{when(s.starts_at)}</option>)}</select></Field>
       <div className="actions dialog-actions"><Button type="button" variant="ghost" onClick={() => setAdding(false)}>{t("Hủy")}</Button><Button type="submit" disabled={busy}>{t("Giao bài tập")}</Button></div>
     </FieldGroup></form>}
-    {(c.assignments || []).length ? <div className="assignment-list">{c.assignments!.map((a) => <AssignmentCard key={a.id} a={a} c={c} tutor={tutor} me={me} onChanged={onChanged} />)}</div> : <p className="credential-empty">{t(tutor ? "Chưa có bài tập. Giao bài đầu tiên để lớp theo dõi." : "Gia sư chưa giao bài tập.")}</p>}
+    {(c.assignments || []).length ? <div className="assignment-list">{c.assignments!.map((a) => <AssignmentCard key={a.id} a={a} c={c} tutor={tutor} me={me} readOnly={readOnly} onChanged={onChanged} />)}</div> : <p className="credential-empty">{t(tutor ? "Chưa có bài tập. Giao bài đầu tiên để lớp theo dõi." : "Gia sư chưa giao bài tập.")}</p>}
   </section>;
 }
 
-function AssignmentCard({ a, c, tutor, me, onChanged }: { a: ClassAssignment; c: ClassInfo; tutor: boolean; me?: ClassMember; onChanged: () => void }) {
+function AssignmentCard({ a, c, tutor, me, readOnly = false, onChanged }: { a: ClassAssignment; c: ClassInfo; tutor: boolean; me?: ClassMember; readOnly?: boolean; onChanged: () => void }) {
   const { t } = useI18n(), [note, setNote] = useState(""), [feedback, setFeedback] = useState<Record<number, string>>({});
-  const mine = a.submissions.find((s) => me && s.member_id === me.id), state = dueState(a.due_at);
+  const mine = readOnly ? undefined : a.submissions.find((s) => me && s.member_id === me.id), state = dueState(a.due_at);
   async function run(action: () => Promise<unknown>, ok: string) {
     try { await action(); toast.success(t(ok)); onChanged(); } catch (err) { toast.error((err as Error).message); }
   }
@@ -91,6 +91,10 @@ function AssignmentCard({ a, c, tutor, me, onChanged }: { a: ClassAssignment; c:
       <Button type="submit" size="sm"><CheckCheck data-icon="inline-start" />{t(mine.status === "pending" ? "Nộp bài" : "Cập nhật bài nộp")}</Button>
     </form>}
     {!tutor && mine?.feedback && <p className="assignment-feedback"><strong>{t("Nhận xét của gia sư")}</strong> {mine.feedback}</p>}
+    {readOnly && <div className="assignment-submissions">{a.submissions.map((s) => <div key={s.member_id} className="assignment-submission" data-status={s.status}>
+      <div><strong>{s.student_name}</strong><small>{s.status === "pending" ? t("Chưa nộp") : s.status === "submitted" ? t("Chờ nhận xét") : t("Đã nhận xét")}{s.note ? ` · ${s.note}` : ""}</small></div>
+      {s.feedback && <p className="assignment-feedback"><strong>{t("Nhận xét của gia sư")}</strong> {s.feedback}</p>}
+    </div>)}</div>}
     {tutor && <div className="assignment-submissions">{a.submissions.map((s) => <div key={s.member_id} className="assignment-submission" data-status={s.status}>
       <div><strong>{s.student_name}</strong><small>{s.status === "pending" ? t("Chưa nộp") : s.status === "submitted" ? t("Chờ nhận xét") : t("Đã nhận xét")}{s.note ? ` · ${s.note}` : ""}</small></div>
       {s.status === "submitted" && <span className="assignment-review"><Input value={feedback[s.member_id] || ""} onChange={(e) => setFeedback({ ...feedback, [s.member_id]: e.target.value })} placeholder={t("Nhận xét ngắn")} maxLength={1000} /><Button size="sm" variant="outline" onClick={() => run(() => api(`/assignments/${a.id}/review`, "POST", { member_id: s.member_id, feedback: feedback[s.member_id] || "" }), "Đã lưu nhận xét")}>{t("Nhận xét")}</Button></span>}

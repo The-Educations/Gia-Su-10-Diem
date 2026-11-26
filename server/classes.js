@@ -244,7 +244,8 @@ export function registerClasses(app, db, auth, audit) {
 
   app.get("/api/classes", auth("student", "tutor"), (req, res) => {
     upkeep(db);
-    const ids = all(db, "SELECT id FROM classes WHERE tutor_id=? UNION SELECT class_id FROM class_members WHERE student_id=?", req.user.id, req.user.id).map((r) => r.id);
+    const people = [req.user.id, ...childrenOf(db, req.user.id)], marks = people.map(() => "?").join(",");
+    const ids = all(db, `SELECT id FROM classes WHERE tutor_id=? UNION SELECT class_id FROM class_members WHERE student_id IN (${marks})`, req.user.id, ...people).map((r) => r.id);
     res.json(ids.map((id) => {
       const c = classFor(id, req.user);
       const next = one(db, "SELECT starts_at FROM class_sessions WHERE class_id=? AND status='scheduled' AND starts_at>? ORDER BY starts_at LIMIT 1", id, new Date().toISOString());
