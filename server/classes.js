@@ -3,6 +3,7 @@ import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { move, settings, sepayConfig } from "./wallet.js";
 import { childrenOf } from "./family.js";
+import { notifyParents, subjectName } from "./family-notify.js";
 import { sessionChatEvent } from "./chat-media.js";
 import { flaggedList, flaggedThread, reviewQueue, warnThread } from "./trust-safety.js";
 
@@ -121,7 +122,7 @@ export function startClass(db, p, classId = null) {
 }
 
 function settle(db, memberId, { final = false } = {}) {
-  const m = one(db, "SELECT m.*,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=?", memberId);
+  const m = one(db, "SELECT m.*,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=?", memberId);
   if (!m || m.status !== "active") return;
   const due = all(db, "SELECT session_id FROM session_members WHERE member_id=? AND settled=0 AND outcome IN ('confirmed','charged')", memberId);
   const pay = Math.min(m.held, due.length * m.rate);
@@ -134,6 +135,7 @@ function settle(db, memberId, { final = false } = {}) {
   }
   run(db, "UPDATE session_members SET settled=1 WHERE member_id=? AND outcome IN ('confirmed','charged','refunded')", memberId);
   if (final) {
+    // What was never taught goes back to the child.
     const left = one(db, "SELECT held FROM class_members WHERE id=?", memberId).held;
     if (left > 0) move(db, m.student_id, "lesson_refund", { amount: left, held: -left, ref: `member:${memberId}` });
     // Lessons still ahead are no longer this student's.
@@ -142,6 +144,7 @@ function settle(db, memberId, { final = false } = {}) {
     run(db, "UPDATE class_members SET held=0,status='ended',ended_at=CURRENT_TIMESTAMP,published_rating=? WHERE id=?", avg ? Math.round(avg * 10) / 10 : null, memberId);
     notify(db, m.student_id, "package_ended", { link: `/classes/${m.class_id}` });
     notify(db, m.tutor_id, "package_settled", { subject: String(pay), link: "/wallet" });
+    notifyParents(db, m.student_id, "child_package_ended", { subject: subjectName(db, m.subject_id), detail: { amount: left } });
   }
 }
 
@@ -232,9 +235,13 @@ export function registerClasses(app, db, auth, audit) {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     const { reason } = z.object({ reason: z.string().trim().min(5).max(1000) }).parse(req.body);
     transaction(db, () => {
-      const { mine, session } = member(id, req.user);
+      const { mine, tutor, session } = member(id, req.user);
       if (!ended(session)) fail(409, "Chỉ báo vấn đề sau khi buổi học kết thúc.");
-      for (const r of mine.filter((r) => r.outcome === "pending")) run(db, "UPDATE session_members SET outcome='disputed',note=? WHERE session_id=? AND member_id=?", reason, id, r.member_id);
+      for (const r of mine.filter((r) => r.outcome === "pending")) {
+        run(db, "UPDATE session_members SET outcome='disputed',note=? WHERE session_id=? AND member_id=?", reason, id, r.member_id);
+        // The parent learns there is a report, never what was written in it.
+        notifyParents(db, r.student_id, "child_session_disputed", { subject: subjectName(db, r.subject_id), detail: { when: r.starts_at, by: tutor ? "tutor" : "student" } });
+      }
       run(db, "INSERT OR IGNORE INTO support_threads(user_id) VALUES (?)", req.user.id);
       const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", req.user.id);
       run(db, "INSERT INTO support_messages(thread_id,sender_id,body) VALUES (?,?,?)", thread.id, req.user.id, `Báo vấn đề buổi học #${id} (${session.title}): ${reason}`);
@@ -255,6 +262,9 @@ export function registerClasses(app, db, auth, audit) {
       for (const r of mine.filter((r) => r.outcome === "pending")) {
         run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", outcome, id, r.member_id);
         notify(db, tutor ? r.student_id : r.tutor_id, "session_cancelled", { actor: req.user.name, subject: r.title, link: `/classes/${r.class_id}` });
+        // A free trial costs nothing, however late it is cancelled.
+        const charged = outcome === "charged" && one(db, "SELECT rate FROM class_members WHERE id=?", r.member_id).rate > 0;
+        notifyParents(db, r.student_id, "child_session_cancelled", { actor: req.user.name, subject: subjectName(db, r.subject_id), detail: { when: r.starts_at, late, charged, by: tutor ? "tutor" : "student" } });
       }
       if (tutor || !one(db, "SELECT 1 FROM session_members WHERE session_id=? AND outcome='pending'", id)) run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=?", id);
       if (tutor && late) run(db, "UPDATE tutors SET violations=violations+1 WHERE user_id=?", req.user.id);
@@ -288,7 +298,12 @@ export function registerClasses(app, db, auth, audit) {
       const { session } = member(mv.session_id, req.user);
       if (mv.requested_by === req.user.id) fail(403, "Bên còn lại cần đồng ý.");
       run(db, "UPDATE session_moves SET status=? WHERE id=?", accept ? "accepted" : "declined", id);
-      if (accept) run(db, "UPDATE class_sessions SET moved_from=COALESCE(moved_from,starts_at),starts_at=? WHERE id=?", mv.starts_at, mv.session_id);
+      if (accept) {
+        run(db, "UPDATE class_sessions SET moved_from=COALESCE(moved_from,starts_at),starts_at=? WHERE id=?", mv.starts_at, mv.session_id);
+        // `session` still holds the old time. Students who already left this lesson are not told.
+        for (const r of all(db, "SELECT m.student_id FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome='pending'", mv.session_id))
+          notifyParents(db, r.student_id, "child_session_moved", { subject: subjectName(db, session.subject_id), detail: { from: session.starts_at, when: mv.starts_at } });
+      }
       sessionChatEvent(db, mv.session_id, req.user, accept ? "đã đồng ý dời buổi học" : "đã từ chối dời buổi học");
       notify(db, mv.requested_by, accept ? "session_moved" : "session_move_declined", { actor: req.user.name, subject: session.title, link: `/classes/${session.class_id}` });
     });
@@ -335,23 +350,27 @@ export function registerClasses(app, db, auth, audit) {
     res.json({ ok: true });
   });
   app.post("/api/members/:id/remind", auth("tutor"), (req, res) => {
-    const m = one(db, "SELECT m.*,c.title,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND c.tutor_id=? AND m.status='active'", req.params.id, req.user.id);
+    const m = one(db, "SELECT m.*,c.title,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND c.tutor_id=? AND m.status='active'", req.params.id, req.user.id);
     if (!m) fail(404, "Không tìm thấy học sinh.");
     if (m.reminded_at && Date.now() - Date.parse(m.reminded_at + "Z") < 24 * HOUR) fail(429, "Đã nhắc trong 24 giờ qua.");
-    run(db, "UPDATE class_members SET reminded_at=CURRENT_TIMESTAMP WHERE id=?", m.id);
-    notify(db, m.student_id, "renew_reminder", { actor: req.user.name, subject: m.title, link: `/classes/${m.class_id}?renew=${m.id}` });
+    transaction(db, () => {
+      run(db, "UPDATE class_members SET reminded_at=CURRENT_TIMESTAMP WHERE id=?", m.id);
+      notify(db, m.student_id, "renew_reminder", { actor: req.user.name, subject: m.title, link: `/classes/${m.class_id}?renew=${m.id}` });
+      notifyParents(db, m.student_id, "child_renew_reminder", { actor: req.user.name, subject: subjectName(db, m.subject_id), link: `/wallet?for=${m.student_id}` });
+    });
     res.json({ ok: true });
   });
   app.post("/api/members/:id/renew", auth("student"), (req, res) => {
     const { sessions } = z.object({ sessions: z.number().int().min(1).max(60) }).parse(req.body);
     transaction(db, () => {
-      const m = one(db, "SELECT m.*,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND m.student_id=? AND m.status='active'", req.params.id, req.user.id);
+      const m = one(db, "SELECT m.*,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND m.student_id=? AND m.status='active'", req.params.id, req.user.id);
       if (!m) fail(404, "Gói học đã kết thúc. Gửi đề nghị mới để học tiếp.");
       const cost = sessions * m.rate;
       move(db, req.user.id, "offer_hold", { amount: -cost, held: cost, ref: `member:${m.id}` });
       run(db, "UPDATE class_members SET sessions_total=sessions_total+?,held=held+? WHERE id=?", sessions, cost, m.id);
       attachSessions(db, one(db, "SELECT * FROM classes WHERE id=?", m.class_id), m.id, sessions);
       notify(db, m.tutor_id, "package_renewed", { actor: req.user.name, subject: String(sessions), link: `/classes/${m.class_id}` });
+      notifyParents(db, m.student_id, "child_package_renewed", { subject: subjectName(db, m.subject_id), detail: { n: sessions, amount: cost } });
     });
     res.json({ ok: true });
   });
@@ -667,9 +686,13 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       if (!run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=? AND status='scheduled'", id).changes) fail(409, "Buổi học không còn hoạt động.");
       const refunded = all(db, "SELECT m.student_id, m.rate AS amount FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome IN ('pending','disputed')", id);
+      const lesson = one(db, "SELECT cs.starts_at,c.subject_id FROM class_sessions cs JOIN classes c ON c.id=cs.class_id WHERE cs.id=?", id);
       run(db, "UPDATE session_members SET outcome='refunded',note=? WHERE session_id=? AND outcome IN ('pending','disputed')", note, id);
       for (const r of all(db, "SELECT DISTINCT m.student_id,c.tutor_id,c.title,m.class_id FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=?", id))
         for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "session_cancelled", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` });
+      // Parents only of the students whose lesson this actually takes away.
+      for (const r of refunded)
+        notifyParents(db, r.student_id, "child_session_cancelled", { actor: "Quản trị viên", subject: subjectName(db, lesson.subject_id), detail: { when: lesson.starts_at, late: false, charged: false, by: "admin" } });
       audit(req.user.id, "session.admin_cancel", id, { note, refunded });
     });
     upkeep(db);
@@ -689,10 +712,13 @@ export function registerClasses(app, db, auth, audit) {
   app.post("/api/admin/sessions/:id/resolve", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     const d = z.object({ member_id: z.number().int().positive(), outcome: z.enum(["confirmed", "refunded"]) }).parse(req.body);
-    const r = one(db, "SELECT sm.*,m.student_id,m.class_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
+    const r = one(db, "SELECT sm.*,m.student_id,m.class_id,m.rate,c.tutor_id,c.title,c.subject_id,cs.starts_at FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id JOIN class_sessions cs ON cs.id=sm.session_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
     if (!r) fail(404, "Không tìm thấy báo cáo.");
-    run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
-    for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: `/classes/${r.class_id}` });
+    transaction(db, () => {
+      run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
+      for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: `/classes/${r.class_id}` });
+      notifyParents(db, r.student_id, "child_dispute_resolved", { subject: subjectName(db, r.subject_id), detail: { when: r.starts_at, outcome: d.outcome, ...(r.rate ? {} : { free: true }) } });
+    });
     audit(req.user.id, `session.resolve.${d.outcome}`, id, { member_id: d.member_id, outcome: d.outcome, user_id: r.student_id });
     upkeep(db);
     res.json({ ok: true });

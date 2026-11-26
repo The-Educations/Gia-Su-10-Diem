@@ -1212,9 +1212,9 @@ test("notifications reach the other party, collapse per conversation and stay pr
   assert.equal((await tutor.request("/notifications/read", "POST", {})).status, 400);
   assert.equal((await client().request("/notifications")).status, 401);
   // Email for important events is on until turned off, per topic.
-  const allOn = { proposals: true, money: true, lessons: true, community: true };
+  const allOn = { proposals: true, money: true, lessons: true, community: true, children: true };
   assert.deepEqual((await tutor.request("/account/notifications")).data, { email: allOn, bell: allOn });
-  assert.deepEqual((await tutor.request("/account/notifications", "PUT", { money: false })).data.email, { proposals: true, money: false, lessons: true, community: true });
+  assert.deepEqual((await tutor.request("/account/notifications", "PUT", { money: false })).data.email, { ...allOn, money: false });
   assert.equal((await tutor.request("/account/notifications", "PUT", { spam: true })).status, 400);
   assert.equal((await tutor.request("/account/notifications")).data.email.money, false);
 });
