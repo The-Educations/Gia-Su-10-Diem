@@ -19,10 +19,14 @@ export function migrateNotifications(db) {
     db.exec("ALTER TABLE users ADD COLUMN email_prefs TEXT NOT NULL DEFAULT '{}'");
   if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "bell_prefs"))
     db.exec("ALTER TABLE users ADD COLUMN bell_prefs TEXT NOT NULL DEFAULT '{}'");
+  // Parent notices say which child they are about, plus a few facts for the sentence.
+  const columns = db.prepare("PRAGMA table_info(notifications)").all().map((c) => c.name);
+  if (!columns.includes("child_id")) db.exec("ALTER TABLE notifications ADD COLUMN child_id INTEGER");
+  if (!columns.includes("detail")) db.exec("ALTER TABLE notifications ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
 }
 
 // Which important events also arrive by email. Everything is on until the person turns it off.
-export const EMAIL_TOPICS = ["proposals", "money", "lessons", "community"];
+export const EMAIL_TOPICS = ["proposals", "money", "lessons", "community", "children"];
 export function emailPrefs(db, userId) {
   let stored = {};
   try { stored = JSON.parse(one(db, "SELECT email_prefs FROM users WHERE id=?", userId)?.email_prefs || "{}"); } catch { /* keep defaults */ }
@@ -68,7 +72,9 @@ export function notify(db, userId, kind, { actor = "", subject = "", link = "" }
 
 export function registerNotifications(app, db, auth) {
   app.get("/api/notifications", auth(), (req, res) => {
-    res.json(all(db, "SELECT id,kind,actor_name,subject,link,created_at,read_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 100", req.user.id));
+    // The child's name is joined at read time, so a deleted account reads as deleted.
+    res.json(all(db, `SELECT n.id,n.kind,n.actor_name,n.subject,n.link,n.created_at,n.read_at,n.child_id,n.detail,u.name AS child_name
+      FROM notifications n LEFT JOIN users u ON u.id=n.child_id WHERE n.user_id=? ORDER BY n.id DESC LIMIT 100`, req.user.id));
   });
   app.get("/api/notifications/unread-count", auth(), (req, res) => {
     res.json(one(db, "SELECT COUNT(*) count FROM notifications WHERE user_id=? AND read_at IS NULL", req.user.id));

@@ -30,7 +30,7 @@ export function createMailflareSender({ url = "https://mail.giasudiem10.online",
         headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
         signal: AbortSignal.timeout(15000),
         body: JSON.stringify({ mailboxId, from, to: [to], subject: `${noticeSubject} — Gia Sư 10 Điểm`, undoSend: false, trackOpens: false,
-          text: `${noticeMessage}\n${link}\n\nTắt email thông báo: ${settings || link}`, html: emailFrame(noticeSubject, content, footer) }),
+          text: `${noticeMessage}\n${link}\n\nTắt email thông báo: ${settings || link}`, html: emailFrame(escapeHtml(noticeSubject), content, footer) }),
       });
       if (!response.ok) throw new Error("Mail delivery unavailable");
       return;

@@ -22,17 +22,20 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "security", label: "Bảo mật", icon: ShieldCheck },
   { id: "notifications", label: "Thông báo", icon: Bell },
 ];
-const BELL_LABELS = { proposals: "Chuông đề nghị", money: "Chuông tiền", lessons: "Chuông buổi học", community: "Chuông cộng đồng" } as const;
-const EMAIL_TOPICS: { id: "proposals" | "money" | "lessons" | "community"; label: string }[] = [
+const BELL_LABELS = { proposals: "Chuông đề nghị", money: "Chuông tiền", lessons: "Chuông buổi học", community: "Chuông cộng đồng", children: "Chuông việc học của con" } as const;
+const EMAIL_TOPICS: { id: keyof typeof BELL_LABELS; label: string }[] = [
   { id: "proposals", label: "Đề nghị học mới và câu trả lời" },
   { id: "money", label: "Tiền vào số dư và rút tiền" },
   { id: "lessons", label: "Buổi học cần xác nhận" },
   { id: "community", label: "Cộng đồng: bài viết, bình luận hoặc hồ sơ bị ẩn, gỡ" },
+  { id: "children", label: "Việc học của con" },
 ];
 
 // Email for the events that matter; in-app notices are always on.
-function NotificationSettings() {
+function NotificationSettings({ parent }: { parent: boolean }) {
   const { t } = useI18n();
+  // Only parent accounts receive notices about a child, so only they see that switch.
+  const topics = EMAIL_TOPICS.filter((topic) => parent || topic.id !== "children");
   const prefs = useLoad<{ email: Record<string, boolean>; bell: Record<string, boolean> }>("/account/notifications"),
     [saving, setSaving] = useState("");
   if (prefs.error) return <ErrorState error={prefs.error} retry={prefs.reload} />;
@@ -46,7 +49,7 @@ function NotificationSettings() {
     <section className="settings-card" aria-labelledby="notify-title">
       <h2 id="notify-title">{t("Gửi email cho tôi khi có")}</h2>
       <ul className="settings-switches">
-        {EMAIL_TOPICS.map((topic) => (
+        {topics.map((topic) => (
           <li key={topic.id}>
             <label htmlFor={`notify-${topic.id}`}>{topic.label}</label>
             <input id={`notify-${topic.id}`} type="checkbox" role="switch" className="switch" disabled={!prefs.data || saving === topic.id}
@@ -56,7 +59,7 @@ function NotificationSettings() {
       </ul>
       <h2>{t("Hiện trên chuông khi có")}</h2>
       <ul className="settings-switches">
-        {EMAIL_TOPICS.map((topic) => (
+        {topics.map((topic) => (
           <li key={`bell-${topic.id}`}>
             <label htmlFor={`bell-${topic.id}`}>{topic.label} · {t("chuông")}</label>
             <input id={`bell-${topic.id}`} type="checkbox" role="switch" className="switch" aria-label={t(BELL_LABELS[topic.id])} disabled={!prefs.data || saving === `bell-${topic.id}`}
@@ -192,7 +195,7 @@ export default function Settings() {
               )}
             </>
           )}
-          {section === "notifications" && <NotificationSettings />}
+          {section === "notifications" && <NotificationSettings parent={parent} />}
         </div>
       </div>
     </Page>

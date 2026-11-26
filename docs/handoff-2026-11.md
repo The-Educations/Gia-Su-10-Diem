@@ -9,7 +9,7 @@ Tài liệu này mô tả những gì đang chạy trên production sau các PR 
 | Khách | Xem gia sư, môn học, cộng đồng, trang giới thiệu | Mọi thứ cần tài khoản |
 | Tài khoản chưa thiết lập | Bấm "Để sau" để xem gia sư, môn học, cộng đồng | Các trang khác hiện thẻ "Hoàn tất thiết lập" |
 | Học sinh | Tìm gia sư, gửi/nhận offer, học thử, lớp học, lịch, số dư, đánh giá, cộng đồng | Gửi/nhận offer khi **chưa xác minh** học bạ |
-| Phụ huynh | Liên kết con bằng mã 6 ký tự, xem lớp, lịch và số dư của con, nạp tiền cho con | Gửi hoặc trả lời offer (con làm từ tài khoản học sinh) |
+| Phụ huynh | Liên kết con bằng mã 6 ký tự, xem lớp, lịch và số dư của con, nạp tiền cho con; được báo (chuông, một số kèm email) khi đề nghị, lịch học, tiền hoặc xác minh của con thay đổi, bấm vào mở đúng thẻ con ở `/family` (`server/family-notify.js`) | Gửi hoặc trả lời offer (con làm từ tài khoản học sinh) |
 | Gia sư | Hồ sơ 7 bước có minh chứng, nhận offer, gửi hồ sơ vào bài Tìm gia sư (credit), lớp học, bài giảng, lịch, số dư, rút tiền | Gửi offer khi hết credit |
 | Admin | Hôm nay (việc cần làm), Lớp học, Gia sư, Tài khoản (Tổng quan từng người), Tài chính, Cộng đồng, Nhật ký, lịch toàn hệ thống | — (một vai trò, toàn quyền, mọi thao tác ghi nhật ký) |
 

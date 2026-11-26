@@ -1,8 +1,34 @@
 import { all, one, run } from "./db.js";
 
 const money = (s) => `${Number(s || 0).toLocaleString("vi-VN")}đ`;
+// Parent notices carry a JSON detail with the child's name. A damaged one must not stop the queue.
+const facts = (d) => {
+  let o = null;
+  try { o = JSON.parse(d); } catch { /* fall back to plain words */ }
+  return o && typeof o === "object" ? o : {};
+};
+const when = (iso) => Number.isNaN(Date.parse(iso)) ? "đã hẹn"
+  : new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const amount = (n) => money(Number.isFinite(Number(n)) ? n : 0);
+const WATCH = "Xem việc học của con";
+// Written to the parent. Each takes (actor, subject, facts) and the child's name is in the facts.
+const parent = (line) => (a, s, d) => { const f = facts(d); return line(a, s, { ...f, child: f.child || "" }); };
+const CHILD_LINES = {
+  child_proposal_new: parent((a, s, f) => [`${a} gửi con bạn đề nghị học`, `${a} vừa gửi con bạn ${f.child} đề nghị học ${s}: ${amount(f.amount)}. ${f.short > 0 ? `Số dư của con còn thiếu ${amount(f.short)}.` : "Số dư của con đủ để nhận đề nghị."}`, f.short > 0 ? "Nạp cho con" : "Xem đề nghị"]),
+  child_class_started: parent((a, s, f) => [`Con bạn ${f.child} bắt đầu lớp ${s}`, `Con bạn ${f.child} bắt đầu lớp ${s} với ${a}. Tiến độ và buổi kế tiếp nằm trong trang Con của tôi.`, WATCH]),
+  child_session_cancelled: parent((a, s, f) => [`Một buổi ${s} của ${f.child} đã bị hủy`, `${a} đã hủy buổi ${s} lúc ${when(f.when)} của con bạn ${f.child}. ${f.charged ? "Con hủy sát giờ nên buổi này vẫn tính phí." : "Buổi này không bị tính phí."}`, WATCH]),
+  child_session_moved: parent((_a, s, f) => [`Buổi ${s} của ${f.child} đã đổi giờ`, `Buổi ${s} của con bạn ${f.child} dời từ ${when(f.from)} sang ${when(f.when)}.`, WATCH]),
+  child_session_disputed: parent((_a, s, f) => [`Buổi ${s} của ${f.child} đang được xử lý`, `Buổi ${s} lúc ${when(f.when)} của con bạn ${f.child} bị báo có vấn đề và đang được quản trị viên xử lý.`, WATCH]),
+  child_dispute_resolved: parent((_a, s, f) => [`Đã xử lý buổi ${s} của ${f.child}`, `Quản trị viên đã xử lý buổi ${s} của con bạn ${f.child}: ${f.outcome !== "refunded" ? "tính là đã học" : f.free ? "buổi học thử nên không tính phí" : "hoàn tiền buổi học"}.`, WATCH]),
+  child_renew_reminder: parent((a, s, f) => [`${a} nhắc gia hạn lớp ${s} của ${f.child}`, `${a} nhắc gia hạn lớp ${s} của con bạn ${f.child}. Bạn có thể nạp thêm để con gia hạn.`, "Nạp cho con"]),
+  child_package_ended: parent((_a, s, f) => [`Gói ${s} của ${f.child} đã kết thúc`, `Gói ${s} của con bạn ${f.child} đã kết thúc.${f.amount > 0 ? ` ${amount(f.amount)} chưa học đã hoàn vào số dư của con.` : ""}`, WATCH]),
+  child_withdrawal_requested: parent((_a, _s, f) => [`${f.child} yêu cầu rút ${amount(f.amount)}`, `Con bạn ${f.child} yêu cầu rút ${amount(f.amount)} về tài khoản ngân hàng ****${f.last4 || ""}.`, WATCH]),
+  child_unlinked: parent((_a, _s, f) => [`${f.child} đã gỡ liên kết`, `Con bạn ${f.child} đã gỡ liên kết với tài khoản của bạn. Bạn sẽ không nhận thông báo về ${f.child} nữa.`, WATCH]),
+};
+
 // Subject, one plain sentence and the button for each emailed notice.
 export const LINES = {
+  ...CHILD_LINES,
   proposal_new: (a, s) => [`${a} gửi bạn đề nghị học`, `${a} vừa gửi bạn đề nghị học ${s}. Xem lịch, học phí và trả lời trong 48 giờ.`, "Xem đề nghị"],
   proposal_accepted: (a, s) => [`${a} đã nhận đề nghị học`, `${a} đã nhận đề nghị học ${s}. Lớp học đã được tạo và có trên lịch của bạn.`, "Mở lớp học"],
   proposal_declined: (a, s) => [`${a} chưa nhận đề nghị học`, `${a} đã từ chối đề nghị học ${s}. Số tiền tạm giữ đã trả lại số dư của bạn.`, "Xem đề nghị"],
