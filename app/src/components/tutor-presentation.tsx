@@ -56,7 +56,7 @@ export function TutorPresentation({
   const head = (
     <header className="tutor-hero-panel">
       <div className="tutor-cover" aria-hidden={!t.banner_url}>
-        {t.banner_url && <img src={t.banner_url} alt={tr("Ảnh bìa của {name}", { name: t.name })} />}
+        {t.banner_url && <img src={t.banner_url} alt={tr("Ảnh bìa của {name}", { name: t.name })} loading="lazy" decoding="async" />}
       </div>
       <div className="profile-hero hero-on-cover">
         <Person name={t.name} id={t.user_id} src={t.photo_url || undefined} large />
