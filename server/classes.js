@@ -128,7 +128,7 @@ function attachSessions(db, cls, memberId, count, studentId) {
   let fresh = [];
   if (ids.length < count) {
     // New lessons start after the last shared one, and never sooner than an hour from now.
-    const after = Math.max(Date.parse(future.at(-1)?.starts_at || 0), Date.now() + HOUR);
+    const after = Math.max(future.length ? Date.parse(future.at(-1).starts_at) : 0, Date.now() + HOUR);
     const startDate = new Date(after + 7 * HOUR).toISOString().slice(0, 10);
     fresh = lessonTimes(JSON.parse(cls.schedule), startDate, count - ids.length, after);
   }
