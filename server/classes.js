@@ -83,15 +83,60 @@ export function lessonTimes(schedule, startDate, count, after = 0) {
   return out;
 }
 
-function attachSessions(db, cls, memberId, count) {
-  const future = all(db, "SELECT id,starts_at FROM class_sessions WHERE class_id=? AND status='scheduled' AND starts_at>? ORDER BY starts_at", cls.id, new Date().toISOString());
-  const ids = future.slice(0, count).map((s) => s.id);
-  if (ids.length < count) {
-    const last = future.at(-1)?.starts_at || new Date().toISOString();
-    const startDate = new Date(Date.parse(last) + 7 * HOUR).toISOString().slice(0, 10);
-    for (const at of lessonTimes(JSON.parse(cls.schedule), startDate, count - ids.length, Date.parse(last)))
-      ids.push(Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cls.id, at, cls.minutes).lastInsertRowid));
+// Lessons already booked, as [start, end) in ms: a tutor's lessons that still have a student waiting, or a student's own.
+function bookedLessons(db, who, id, { skipMember = null, skipSession = null } = {}) {
+  const from = new Date(Date.now() - 6 * HOUR).toISOString();
+  const rows = who === "tutor"
+    ? all(db, `SELECT cs.starts_at,cs.minutes FROM class_sessions cs JOIN classes c ON c.id=cs.class_id
+        WHERE c.tutor_id=? AND cs.status='scheduled' AND cs.starts_at>? AND (? IS NULL OR cs.id<>?)
+        AND EXISTS (SELECT 1 FROM session_members sm WHERE sm.session_id=cs.id AND sm.outcome='pending')`, id, from, skipSession, skipSession)
+    : all(db, `SELECT cs.starts_at,cs.minutes FROM class_sessions cs JOIN session_members sm ON sm.session_id=cs.id JOIN class_members m ON m.id=sm.member_id
+        WHERE m.student_id=? AND cs.status='scheduled' AND sm.outcome='pending' AND cs.starts_at>? AND (? IS NULL OR cs.id<>?) AND (? IS NULL OR sm.member_id<>?)`,
+        id, from, skipSession, skipSession, skipMember, skipMember);
+  return rows.map((r) => [Date.parse(r.starts_at), Date.parse(r.starts_at) + r.minutes * 60000]);
+}
+
+// Two lessons clash when each starts before the other ends. A slot with tutor:false is one of the tutor's own
+// class lessons being shared, so only the student can clash with it.
+function findClash(db, { tutorId, studentId, slots, skipMember = null, skipSession = null }) {
+  const booked = {};
+  for (const slot of slots) {
+    const start = Date.parse(slot.at), end = start + slot.minutes * 60000;
+    for (const who of slot.tutor === false ? ["student"] : ["tutor", "student"]) {
+      booked[who] ??= bookedLessons(db, who, who === "tutor" ? tutorId : studentId, { skipMember, skipSession });
+      const hit = booked[who].find(([a, b]) => start < b && a < end);
+      if (hit) return { who, at: new Date(hit[0]).toISOString() };
+    }
   }
+  return null;
+}
+const when = (iso) => new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+function failOnClash(db, query, tail) {
+  const clash = findClash(db, query);
+  if (clash) fail(409, `${clash.who === "tutor" ? "Gia sư" : "Học sinh"} đã có buổi học khác lúc ${when(clash.at)}. ${tail}`);
+}
+
+// The new hour of a moved lesson must be free for the tutor and for every student in it (the lesson itself is ignored).
+function failOnMoveClash(db, session, rows, startsAt) {
+  for (const studentId of new Set(rows.map((r) => r.student_id).filter(Boolean)))
+    failOnClash(db, { tutorId: session.tutor_id, studentId, skipSession: session.id, slots: [{ at: startsAt, minutes: session.minutes, tutor: true }] }, "Không thể dời buổi học sang giờ này.");
+}
+
+function attachSessions(db, cls, memberId, count, studentId) {
+  const future = all(db, "SELECT id,starts_at FROM class_sessions WHERE class_id=? AND status='scheduled' AND starts_at>? ORDER BY starts_at", cls.id, new Date().toISOString());
+  const shared = future.slice(0, count), ids = shared.map((s) => s.id);
+  let fresh = [];
+  if (ids.length < count) {
+    // New lessons start after the last shared one, and never sooner than an hour from now.
+    const after = Math.max(Date.parse(future.at(-1)?.starts_at || 0), Date.now() + HOUR);
+    const startDate = new Date(after + 7 * HOUR).toISOString().slice(0, 10);
+    fresh = lessonTimes(JSON.parse(cls.schedule), startDate, count - ids.length, after);
+  }
+  failOnClash(db, { tutorId: cls.tutor_id, studentId, skipMember: memberId, slots: [
+    ...shared.map((s) => ({ at: s.starts_at, minutes: cls.minutes, tutor: false })),
+    ...fresh.map((at) => ({ at, minutes: cls.minutes, tutor: true })),
+  ] }, "Không thể nhận đề nghị này.");
+  for (const at of fresh) ids.push(Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cls.id, at, cls.minutes).lastInsertRowid));
   for (const id of ids) run(db, "INSERT OR IGNORE INTO session_members(session_id,member_id) VALUES (?,?)", id, memberId);
 }
 
@@ -101,7 +146,12 @@ export function startClass(db, p, classId = null) {
   if (classId) {
     cls = one(db, "SELECT * FROM classes WHERE id=? AND tutor_id=? AND status='active'", classId, p.tutor_id);
     if (!cls) fail(404, "Không tìm thấy lớp để thêm học sinh.");
-  } else {
+  }
+  // A new class follows the offer's own weekly rhythm from its start date, but only from an hour ahead: an
+  // offer answered late must not create lessons that are already over.
+  const times = classId ? [] : lessonTimes(JSON.parse(p.schedule), p.start_date, p.sessions, Date.now() + HOUR);
+  if (!classId) {
+    failOnClash(db, { tutorId: p.tutor_id, studentId: p.student_id, slots: times.map((at) => ({ at, minutes: p.minutes, tutor: true })) }, "Không thể nhận đề nghị này.");
     const subject = one(db, "SELECT name FROM subjects WHERE id=?", p.subject_id)?.name || p.subject_id;
     const student = one(db, "SELECT name FROM users WHERE id=?", p.student_id).name;
     const color = COLORS[one(db, "SELECT COUNT(*) n FROM classes WHERE tutor_id=?", p.tutor_id).n % COLORS.length];
@@ -110,10 +160,9 @@ export function startClass(db, p, classId = null) {
     cls = one(db, "SELECT * FROM classes WHERE id=?", id);
   }
   const memberId = Number(run(db, "INSERT INTO class_members(class_id,student_id,proposal_id,sessions_total,rate,held) VALUES (?,?,?,?,?,?)", cls.id, p.student_id, p.id, p.sessions, p.rate, p.total).lastInsertRowid);
-  if (classId) attachSessions(db, cls, memberId, p.sessions);
+  if (classId) attachSessions(db, cls, memberId, p.sessions, p.student_id);
   else
-    // A new class follows the offer's own dates, whatever day it is accepted.
-    for (const at of lessonTimes(JSON.parse(p.schedule), p.start_date, p.sessions)) {
+    for (const at of times) {
       const sid = run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cls.id, at, p.minutes).lastInsertRowid;
       run(db, "INSERT INTO session_members(session_id,member_id) VALUES (?,?)", sid, memberId);
     }
@@ -271,6 +320,7 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       const { rows, tutor, session } = member(id, req.user);
       if (session.status !== "scheduled" || Date.parse(session.starts_at) <= Date.now()) fail(409, "Chỉ dời được buổi chưa bắt đầu.");
+      failOnMoveClash(db, session, rows, starts_at);
       run(db, "UPDATE session_moves SET status='replaced' WHERE session_id=? AND status='pending'", id);
       run(db, "INSERT INTO session_moves(session_id,requested_by,starts_at) VALUES (?,?,?)", id, req.user.id, starts_at);
       for (const uid of tutor ? [...new Set(rows.map((r) => r.student_id).filter(Boolean))] : [session.tutor_id])
@@ -285,8 +335,14 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       const mv = one(db, "SELECT * FROM session_moves WHERE id=? AND status='pending'", id);
       if (!mv) fail(404, "Đề nghị dời lịch không còn.");
-      const { session } = member(mv.session_id, req.user);
+      const { session, rows } = member(mv.session_id, req.user);
       if (mv.requested_by === req.user.id) fail(403, "Bên còn lại cần đồng ý.");
+      if (accept) {
+        // An answer that comes late: the lesson may have started and the new hour may be too close, past or taken.
+        if (session.status !== "scheduled" || Date.parse(session.starts_at) <= Date.now()) fail(409, "Buổi học đã bắt đầu hoặc đã hủy nên không dời được. Bạn có thể từ chối đề nghị này.");
+        if (Date.parse(mv.starts_at) <= Date.now() + HOUR) fail(409, "Giờ mới đã quá gần hoặc đã qua. Bạn có thể từ chối và đề nghị giờ khác.");
+        failOnMoveClash(db, session, rows, mv.starts_at);
+      }
       run(db, "UPDATE session_moves SET status=? WHERE id=?", accept ? "accepted" : "declined", id);
       if (accept) run(db, "UPDATE class_sessions SET moved_from=COALESCE(moved_from,starts_at),starts_at=? WHERE id=?", mv.starts_at, mv.session_id);
       sessionChatEvent(db, mv.session_id, req.user, accept ? "đã đồng ý dời buổi học" : "đã từ chối dời buổi học");
@@ -350,7 +406,7 @@ export function registerClasses(app, db, auth, audit) {
       const cost = sessions * m.rate;
       move(db, req.user.id, "offer_hold", { amount: -cost, held: cost, ref: `member:${m.id}` });
       run(db, "UPDATE class_members SET sessions_total=sessions_total+?,held=held+? WHERE id=?", sessions, cost, m.id);
-      attachSessions(db, one(db, "SELECT * FROM classes WHERE id=?", m.class_id), m.id, sessions);
+      attachSessions(db, one(db, "SELECT * FROM classes WHERE id=?", m.class_id), m.id, sessions, m.student_id);
       notify(db, m.tutor_id, "package_renewed", { actor: req.user.name, subject: String(sessions), link: `/classes/${m.class_id}` });
     });
     res.json({ ok: true });
