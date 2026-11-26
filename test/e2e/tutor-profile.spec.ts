@@ -26,10 +26,10 @@ test("tutor profile: two-column layout on desktop, stacked on mobile, vi + en", 
   await expect(page.locator(".tutor-body").first()).toBeVisible();
   await expect(page.locator(".hero-on-cover")).toBeVisible();
   await expect(page.locator(".approved-badge")).toBeVisible();
-  // Facebook-style: the avatar's top edge sits above the cover's bottom edge.
+  // Facebook-style: the hero row starts above the cover's bottom edge.
   const overlap = await page.evaluate(() => {
-    const person = document.querySelector(".hero-on-cover .person"), cover = document.querySelector(".tutor-cover");
-    return person && cover && person.getBoundingClientRect().top < cover.getBoundingClientRect().bottom;
+    const hero = document.querySelector(".hero-on-cover"), cover = document.querySelector(".tutor-cover");
+    return hero && cover && hero.getBoundingClientRect().top < cover.getBoundingClientRect().bottom;
   });
   expect(overlap).toBe(true);
   // The avatar frame is square and the photo fills it (no grey gap below).
@@ -42,8 +42,8 @@ test("tutor profile: two-column layout on desktop, stacked on mobile, vi + en", 
   expect(fills).toBe(true);
   // Rating lives once: a single star link in the identity rail, none in the
   // booking card, and it deep-links to the Reviews section.
-  await expect(page.locator(".tutor-aside .rating-link")).toHaveCount(1);
-  await expect(page.locator(".tutor-aside .rating-link")).toHaveAttribute("href", "#reviews");
+  await expect(page.locator(".tutor-presentation .rating-link")).toHaveCount(1);
+  await expect(page.locator(".tutor-presentation .rating-link")).toHaveAttribute("href", "#reviews");
   // The trust chip must not repeat the same state next to the rating link.
   await expect(page.locator(".profile-meta .trust-score")).toHaveCount(0);
   await expect(page.locator(".booking-card")).not.toContainText("đánh giá");

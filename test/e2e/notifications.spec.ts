@@ -1,4 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
+
+// These journeys use the shared demo tutor Châu; restore the public baseline so
+// an earlier review journey cannot change what this file observes.
+test.beforeEach(async ({ playwright }) => {
+  const admin = await playwright.request.newContext();
+  expect((await admin.post("/api/auth/login", { data: { email: "admin@demo.giasu.test", password: "BrowserStudy2026!" } })).ok()).toBe(true);
+  expect((await admin.patch("/api/admin/tutors/3", { data: { status: "approved" } })).ok()).toBe(true);
+  await admin.dispose();
+});
 async function login(page: Page, slug: string) {
   expect((await page.request.post("/api/auth/login", { data: { email: `${slug}@demo.giasu.test`, password: "BrowserStudy2026!" } })).ok()).toBe(true);
 }

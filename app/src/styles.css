@@ -4193,12 +4193,12 @@ button.admin-row-title:hover strong { text-decoration: underline; }
     animation: pop-rise 180ms var(--ease-out) both;
   }
   @keyframes popup-in {
-    from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
-    to { opacity: 1; transform: translate(-50%, -50%); }
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
   }
   @keyframes popup-out {
-    from { opacity: 1; transform: translate(-50%, -50%); }
-    to { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+    from { opacity: 1; transform: none; }
+    to { opacity: 0; transform: translateY(6px); }
   }
   @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
   @keyframes overlay-out2 { from { opacity: 1; } to { opacity: 0; } }
