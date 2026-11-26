@@ -220,10 +220,21 @@
   try { lang = localStorage.getItem("giasu.lang") === "en" ? "en" : "vi"; } catch {}
   for (const b of document.querySelectorAll(".lang-switch button"))
     b.addEventListener("click", () => {
+      if (b.dataset.lang === lang) return;
       lang = b.dataset.lang;
       try { localStorage.setItem("giasu.lang", lang); } catch {}
-      apply(lang);
-      observer.takeRecords();
+      // Fade the page out, swap the text mid-transition, fade back in.
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        apply(lang);
+        observer.takeRecords();
+        return;
+      }
+      document.documentElement.classList.add("lang-fading");
+      setTimeout(() => {
+        apply(lang);
+        observer.takeRecords();
+        requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove("lang-fading")));
+      }, 150);
     });
   // Subject lists and counters change after load; translate them as they appear.
   const observer = new MutationObserver((records) => {
