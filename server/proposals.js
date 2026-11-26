@@ -1,6 +1,7 @@
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
+import { notifyParents } from "./family-notify.js";
 import { isLiveTutor } from "./tutor-visibility.js";
 import { move, settings, spendCredits, wallet } from "./wallet.js";
 import { startClass } from "./classes.js";
@@ -71,6 +72,11 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
       if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND trial=1 AND status IN ('pending','accepted')", studentId, tutorId)) fail(409, "Bạn đã học thử với gia sư này.");
       Object.assign(d, { sessions: 1, minutes: 60, rate: 0, schedule: d.schedule.slice(0, 1) });
     } else if (d.rate < 50000) fail(400, "Học phí tối thiểu 50.000đ / buổi.");
+    // Two weekly slots on one day must not overlap: the second lesson would start before the first ends.
+    const slots = [...d.schedule].sort((a, b) => a.weekday - b.weekday || a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+    for (let i = 1; i < slots.length; i++)
+      if (slots[i].weekday === slots[i - 1].weekday && slots[i].hour * 60 + slots[i].minute - (slots[i - 1].hour * 60 + slots[i - 1].minute) < d.minutes)
+        fail(400, "Các khung giờ trong tuần không được chồng lên nhau.");
     const total = d.sessions * d.rate;
     const id = transaction(db, () => {
       if (one(db, "SELECT 1 FROM proposals WHERE student_id=? AND tutor_id=? AND status='pending'", studentId, tutorId)) fail(409, "Đang có một đề nghị chờ trả lời giữa hai bạn.");
@@ -83,7 +89,14 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
       run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", studentId, tutorId);
       const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", studentId, tutorId);
       insertChatEvent(db, "inquiry", thread.id, req.user, "đã gửi đề nghị học", { kind: "proposal", id: pid });
-      notify(db, byStudent ? tutorId : studentId, "proposal_new", { actor: req.user.name, subject: one(db, "SELECT name FROM subjects WHERE id=?", d.subject_id).name, link: `/proposals?id=${pid}` });
+      const subject = one(db, "SELECT name FROM subjects WHERE id=?", d.subject_id).name;
+      notify(db, byStudent ? tutorId : studentId, "proposal_new", { actor: req.user.name, subject, link: `/proposals?id=${pid}` });
+      if (byStudent) notifyParents(db, studentId, "child_proposal_sent", { actor: one(db, "SELECT name FROM users WHERE id=?", tutorId).name, subject, link: `/proposals?id=${pid}`, detail: { amount: total } });
+      else {
+        // A tutor's offer is paid on acceptance, so the parent learns how much the child is short.
+        const short = Math.max(0, total - wallet(db, studentId).available);
+        notifyParents(db, studentId, "child_proposal_new", { actor: req.user.name, subject, link: short ? `/wallet?for=${studentId}` : `/proposals?id=${pid}`, detail: { amount: total, short } });
+      }
       return pid;
     });
     audit(req.user.id, "proposal.created", id);
@@ -119,6 +132,8 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
       const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", p.student_id, p.tutor_id);
       insertChatEvent(db, "inquiry", thread.id, req.user, { accepted: "đã chấp nhận đề nghị học", declined: "đã từ chối đề nghị học", withdrawn: "đã rút đề nghị học" }[status], { kind: "proposal", id });
       notify(db, req.user.id === p.student_id ? p.tutor_id : p.student_id, `proposal_${status}`, { actor: req.user.name, subject: p.subject_name, link: `/proposals?id=${id}` });
+      if (action === "accept") notifyParents(db, p.student_id, "child_class_started", { actor: p.tutor_name, subject: p.subject_name });
+      else notifyParents(db, p.student_id, "child_proposal_closed", { subject: p.subject_name, link: `/proposals?id=${id}`, detail: { amount: p.held, outcome: status } });
     });
     audit(req.user.id, `proposal.${action}`, id);
     res.json({ ...proposalView(db, [get(id)], req.user)[0], class_id: classId });

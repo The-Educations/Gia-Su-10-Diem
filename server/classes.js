@@ -3,6 +3,7 @@ import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { move, settings, sepayConfig } from "./wallet.js";
 import { childrenOf } from "./family.js";
+import { notifyParents, subjectName } from "./family-notify.js";
 import { sessionChatEvent } from "./chat-media.js";
 import { flaggedList, flaggedThread, reviewQueue, warnThread } from "./trust-safety.js";
 import { attachSessionNotes, classExtrasPayload, memberProgressStats, tutorClassStats, assignmentBadge } from "./class-extras.js";
@@ -84,15 +85,60 @@ export function lessonTimes(schedule, startDate, count, after = 0) {
   return out;
 }
 
-function attachSessions(db, cls, memberId, count) {
-  const future = all(db, "SELECT id,starts_at FROM class_sessions WHERE class_id=? AND status='scheduled' AND starts_at>? ORDER BY starts_at", cls.id, new Date().toISOString());
-  const ids = future.slice(0, count).map((s) => s.id);
-  if (ids.length < count) {
-    const last = future.at(-1)?.starts_at || new Date().toISOString();
-    const startDate = new Date(Date.parse(last) + 7 * HOUR).toISOString().slice(0, 10);
-    for (const at of lessonTimes(JSON.parse(cls.schedule), startDate, count - ids.length, Date.parse(last)))
-      ids.push(Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cls.id, at, cls.minutes).lastInsertRowid));
+// Lessons already booked, as [start, end) in ms: a tutor's lessons that still have a student waiting, or a student's own.
+function bookedLessons(db, who, id, { skipMember = null, skipSession = null } = {}) {
+  const from = new Date(Date.now() - 6 * HOUR).toISOString();
+  const rows = who === "tutor"
+    ? all(db, `SELECT cs.starts_at,cs.minutes FROM class_sessions cs JOIN classes c ON c.id=cs.class_id
+        WHERE c.tutor_id=? AND cs.status='scheduled' AND cs.starts_at>? AND (? IS NULL OR cs.id<>?)
+        AND EXISTS (SELECT 1 FROM session_members sm WHERE sm.session_id=cs.id AND sm.outcome='pending')`, id, from, skipSession, skipSession)
+    : all(db, `SELECT cs.starts_at,cs.minutes FROM class_sessions cs JOIN session_members sm ON sm.session_id=cs.id JOIN class_members m ON m.id=sm.member_id
+        WHERE m.student_id=? AND cs.status='scheduled' AND sm.outcome='pending' AND cs.starts_at>? AND (? IS NULL OR cs.id<>?) AND (? IS NULL OR sm.member_id<>?)`,
+        id, from, skipSession, skipSession, skipMember, skipMember);
+  return rows.map((r) => [Date.parse(r.starts_at), Date.parse(r.starts_at) + r.minutes * 60000]);
+}
+
+// Two lessons clash when each starts before the other ends. A slot with tutor:false is one of the tutor's own
+// class lessons being shared, so only the student can clash with it.
+function findClash(db, { tutorId, studentId, slots, skipMember = null, skipSession = null }) {
+  const booked = {};
+  for (const slot of slots) {
+    const start = Date.parse(slot.at), end = start + slot.minutes * 60000;
+    for (const who of slot.tutor === false ? ["student"] : ["tutor", "student"]) {
+      booked[who] ??= bookedLessons(db, who, who === "tutor" ? tutorId : studentId, { skipMember, skipSession });
+      const hit = booked[who].find(([a, b]) => start < b && a < end);
+      if (hit) return { who, at: new Date(hit[0]).toISOString() };
+    }
   }
+  return null;
+}
+const when = (iso) => new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+function failOnClash(db, query, tail) {
+  const clash = findClash(db, query);
+  if (clash) fail(409, `${clash.who === "tutor" ? "Gia sư" : "Học sinh"} đã có buổi học khác lúc ${when(clash.at)}. ${tail}`);
+}
+
+// The new hour of a moved lesson must be free for the tutor and for every student in it (the lesson itself is ignored).
+function failOnMoveClash(db, session, rows, startsAt) {
+  for (const studentId of new Set(rows.map((r) => r.student_id).filter(Boolean)))
+    failOnClash(db, { tutorId: session.tutor_id, studentId, skipSession: session.id, slots: [{ at: startsAt, minutes: session.minutes, tutor: true }] }, "Không thể dời buổi học sang giờ này.");
+}
+
+function attachSessions(db, cls, memberId, count, studentId) {
+  const future = all(db, "SELECT id,starts_at FROM class_sessions WHERE class_id=? AND status='scheduled' AND starts_at>? ORDER BY starts_at", cls.id, new Date().toISOString());
+  const shared = future.slice(0, count), ids = shared.map((s) => s.id);
+  let fresh = [];
+  if (ids.length < count) {
+    // New lessons start after the last shared one, and never sooner than an hour from now.
+    const after = Math.max(future.length ? Date.parse(future.at(-1).starts_at) : 0, Date.now() + HOUR);
+    const startDate = new Date(after + 7 * HOUR).toISOString().slice(0, 10);
+    fresh = lessonTimes(JSON.parse(cls.schedule), startDate, count - ids.length, after);
+  }
+  failOnClash(db, { tutorId: cls.tutor_id, studentId, skipMember: memberId, slots: [
+    ...shared.map((s) => ({ at: s.starts_at, minutes: cls.minutes, tutor: false })),
+    ...fresh.map((at) => ({ at, minutes: cls.minutes, tutor: true })),
+  ] }, "Không thể nhận đề nghị này.");
+  for (const at of fresh) ids.push(Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cls.id, at, cls.minutes).lastInsertRowid));
   for (const id of ids) run(db, "INSERT OR IGNORE INTO session_members(session_id,member_id) VALUES (?,?)", id, memberId);
 }
 
@@ -102,7 +148,12 @@ export function startClass(db, p, classId = null) {
   if (classId) {
     cls = one(db, "SELECT * FROM classes WHERE id=? AND tutor_id=? AND status='active'", classId, p.tutor_id);
     if (!cls) fail(404, "Không tìm thấy lớp để thêm học sinh.");
-  } else {
+  }
+  // A new class follows the offer's own weekly rhythm from its start date, but only from an hour ahead: an
+  // offer answered late must not create lessons that are already over.
+  const times = classId ? [] : lessonTimes(JSON.parse(p.schedule), p.start_date, p.sessions, Date.now() + HOUR);
+  if (!classId) {
+    failOnClash(db, { tutorId: p.tutor_id, studentId: p.student_id, slots: times.map((at) => ({ at, minutes: p.minutes, tutor: true })) }, "Không thể nhận đề nghị này.");
     const subject = one(db, "SELECT name FROM subjects WHERE id=?", p.subject_id)?.name || p.subject_id;
     const student = one(db, "SELECT name FROM users WHERE id=?", p.student_id).name;
     const color = COLORS[one(db, "SELECT COUNT(*) n FROM classes WHERE tutor_id=?", p.tutor_id).n % COLORS.length];
@@ -111,10 +162,9 @@ export function startClass(db, p, classId = null) {
     cls = one(db, "SELECT * FROM classes WHERE id=?", id);
   }
   const memberId = Number(run(db, "INSERT INTO class_members(class_id,student_id,proposal_id,sessions_total,rate,held) VALUES (?,?,?,?,?,?)", cls.id, p.student_id, p.id, p.sessions, p.rate, p.total).lastInsertRowid);
-  if (classId) attachSessions(db, cls, memberId, p.sessions);
+  if (classId) attachSessions(db, cls, memberId, p.sessions, p.student_id);
   else
-    // A new class follows the offer's own dates, whatever day it is accepted.
-    for (const at of lessonTimes(JSON.parse(p.schedule), p.start_date, p.sessions)) {
+    for (const at of times) {
       const sid = run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cls.id, at, p.minutes).lastInsertRowid;
       run(db, "INSERT INTO session_members(session_id,member_id) VALUES (?,?)", sid, memberId);
     }
@@ -122,7 +172,7 @@ export function startClass(db, p, classId = null) {
 }
 
 function settle(db, memberId, { final = false } = {}) {
-  const m = one(db, "SELECT m.*,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=?", memberId);
+  const m = one(db, "SELECT m.*,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=?", memberId);
   if (!m || m.status !== "active") return;
   const due = all(db, "SELECT session_id FROM session_members WHERE member_id=? AND settled=0 AND outcome IN ('confirmed','charged')", memberId);
   const pay = Math.min(m.held, due.length * m.rate);
@@ -135,6 +185,7 @@ function settle(db, memberId, { final = false } = {}) {
   }
   run(db, "UPDATE session_members SET settled=1 WHERE member_id=? AND outcome IN ('confirmed','charged','refunded')", memberId);
   if (final) {
+    // What was never taught goes back to the child.
     const left = one(db, "SELECT held FROM class_members WHERE id=?", memberId).held;
     if (left > 0) move(db, m.student_id, "lesson_refund", { amount: left, held: -left, ref: `member:${memberId}` });
     // Lessons still ahead are no longer this student's.
@@ -143,6 +194,7 @@ function settle(db, memberId, { final = false } = {}) {
     run(db, "UPDATE class_members SET held=0,status='ended',ended_at=CURRENT_TIMESTAMP,published_rating=? WHERE id=?", avg ? Math.round(avg * 10) / 10 : null, memberId);
     notify(db, m.student_id, "package_ended", { link: `/classes/${m.class_id}` });
     notify(db, m.tutor_id, "package_settled", { subject: String(pay), link: "/wallet" });
+    notifyParents(db, m.student_id, "child_package_ended", { subject: subjectName(db, m.subject_id), detail: { amount: left } });
   }
 }
 
@@ -242,9 +294,13 @@ export function registerClasses(app, db, auth, audit) {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     const { reason } = z.object({ reason: z.string().trim().min(5).max(1000) }).parse(req.body);
     transaction(db, () => {
-      const { mine, session } = member(id, req.user);
+      const { mine, tutor, session } = member(id, req.user);
       if (!ended(session)) fail(409, "Chỉ báo vấn đề sau khi buổi học kết thúc.");
-      for (const r of mine.filter((r) => r.outcome === "pending")) run(db, "UPDATE session_members SET outcome='disputed',note=? WHERE session_id=? AND member_id=?", reason, id, r.member_id);
+      for (const r of mine.filter((r) => r.outcome === "pending")) {
+        run(db, "UPDATE session_members SET outcome='disputed',note=? WHERE session_id=? AND member_id=?", reason, id, r.member_id);
+        // The parent learns there is a report, never what was written in it.
+        notifyParents(db, r.student_id, "child_session_disputed", { subject: subjectName(db, r.subject_id), detail: { when: r.starts_at, by: tutor ? "tutor" : "student" } });
+      }
       run(db, "INSERT OR IGNORE INTO support_threads(user_id) VALUES (?)", req.user.id);
       const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", req.user.id);
       run(db, "INSERT INTO support_messages(thread_id,sender_id,body) VALUES (?,?,?)", thread.id, req.user.id, `Báo vấn đề buổi học #${id} (${session.title}): ${reason}`);
@@ -265,6 +321,9 @@ export function registerClasses(app, db, auth, audit) {
       for (const r of mine.filter((r) => r.outcome === "pending")) {
         run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", outcome, id, r.member_id);
         notify(db, tutor ? r.student_id : r.tutor_id, "session_cancelled", { actor: req.user.name, subject: r.title, link: `/classes/${r.class_id}` });
+        // A free trial costs nothing, however late it is cancelled.
+        const charged = outcome === "charged" && one(db, "SELECT rate FROM class_members WHERE id=?", r.member_id).rate > 0;
+        notifyParents(db, r.student_id, "child_session_cancelled", { actor: req.user.name, subject: subjectName(db, r.subject_id), detail: { when: r.starts_at, late, charged, by: tutor ? "tutor" : "student" } });
       }
       if (tutor || !one(db, "SELECT 1 FROM session_members WHERE session_id=? AND outcome='pending'", id)) run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=?", id);
       if (tutor && late) run(db, "UPDATE tutors SET violations=violations+1 WHERE user_id=?", req.user.id);
@@ -281,6 +340,7 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       const { rows, tutor, session } = member(id, req.user);
       if (session.status !== "scheduled" || Date.parse(session.starts_at) <= Date.now()) fail(409, "Chỉ dời được buổi chưa bắt đầu.");
+      failOnMoveClash(db, session, rows, starts_at);
       run(db, "UPDATE session_moves SET status='replaced' WHERE session_id=? AND status='pending'", id);
       run(db, "INSERT INTO session_moves(session_id,requested_by,starts_at) VALUES (?,?,?)", id, req.user.id, starts_at);
       for (const uid of tutor ? [...new Set(rows.map((r) => r.student_id).filter(Boolean))] : [session.tutor_id])
@@ -295,10 +355,21 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       const mv = one(db, "SELECT * FROM session_moves WHERE id=? AND status='pending'", id);
       if (!mv) fail(404, "Đề nghị dời lịch không còn.");
-      const { session } = member(mv.session_id, req.user);
+      const { session, rows } = member(mv.session_id, req.user);
       if (mv.requested_by === req.user.id) fail(403, "Bên còn lại cần đồng ý.");
+      if (accept) {
+        // An answer that comes late: the lesson may have started and the new hour may be too close, past or taken.
+        if (session.status !== "scheduled" || Date.parse(session.starts_at) <= Date.now()) fail(409, "Buổi học đã bắt đầu hoặc đã hủy nên không dời được. Bạn có thể từ chối đề nghị này.");
+        if (Date.parse(mv.starts_at) <= Date.now() + HOUR) fail(409, "Giờ mới đã quá gần hoặc đã qua. Bạn có thể từ chối và đề nghị giờ khác.");
+        failOnMoveClash(db, session, rows, mv.starts_at);
+      }
       run(db, "UPDATE session_moves SET status=? WHERE id=?", accept ? "accepted" : "declined", id);
-      if (accept) run(db, "UPDATE class_sessions SET moved_from=COALESCE(moved_from,starts_at),starts_at=? WHERE id=?", mv.starts_at, mv.session_id);
+      if (accept) {
+        run(db, "UPDATE class_sessions SET moved_from=COALESCE(moved_from,starts_at),starts_at=? WHERE id=?", mv.starts_at, mv.session_id);
+        // `session` still holds the old time. Students who already left this lesson are not told.
+        for (const r of all(db, "SELECT m.student_id FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome='pending'", mv.session_id))
+          notifyParents(db, r.student_id, "child_session_moved", { subject: subjectName(db, session.subject_id), detail: { from: session.starts_at, when: mv.starts_at } });
+      }
       sessionChatEvent(db, mv.session_id, req.user, accept ? "đã đồng ý dời buổi học" : "đã từ chối dời buổi học");
       notify(db, mv.requested_by, accept ? "session_moved" : "session_move_declined", { actor: req.user.name, subject: session.title, link: `/classes/${session.class_id}` });
     });
@@ -345,23 +416,27 @@ export function registerClasses(app, db, auth, audit) {
     res.json({ ok: true });
   });
   app.post("/api/members/:id/remind", auth("tutor"), (req, res) => {
-    const m = one(db, "SELECT m.*,c.title,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND c.tutor_id=? AND m.status='active'", req.params.id, req.user.id);
+    const m = one(db, "SELECT m.*,c.title,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND c.tutor_id=? AND m.status='active'", req.params.id, req.user.id);
     if (!m) fail(404, "Không tìm thấy học sinh.");
     if (m.reminded_at && Date.now() - Date.parse(m.reminded_at + "Z") < 24 * HOUR) fail(429, "Đã nhắc trong 24 giờ qua.");
-    run(db, "UPDATE class_members SET reminded_at=CURRENT_TIMESTAMP WHERE id=?", m.id);
-    notify(db, m.student_id, "renew_reminder", { actor: req.user.name, subject: m.title, link: `/classes/${m.class_id}?renew=${m.id}` });
+    transaction(db, () => {
+      run(db, "UPDATE class_members SET reminded_at=CURRENT_TIMESTAMP WHERE id=?", m.id);
+      notify(db, m.student_id, "renew_reminder", { actor: req.user.name, subject: m.title, link: `/classes/${m.class_id}?renew=${m.id}` });
+      notifyParents(db, m.student_id, "child_renew_reminder", { actor: req.user.name, subject: subjectName(db, m.subject_id), link: `/wallet?for=${m.student_id}` });
+    });
     res.json({ ok: true });
   });
   app.post("/api/members/:id/renew", auth("student"), (req, res) => {
     const { sessions } = z.object({ sessions: z.number().int().min(1).max(60) }).parse(req.body);
     transaction(db, () => {
-      const m = one(db, "SELECT m.*,c.tutor_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND m.student_id=? AND m.status='active'", req.params.id, req.user.id);
+      const m = one(db, "SELECT m.*,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND m.student_id=? AND m.status='active'", req.params.id, req.user.id);
       if (!m) fail(404, "Gói học đã kết thúc. Gửi đề nghị mới để học tiếp.");
       const cost = sessions * m.rate;
       move(db, req.user.id, "offer_hold", { amount: -cost, held: cost, ref: `member:${m.id}` });
       run(db, "UPDATE class_members SET sessions_total=sessions_total+?,held=held+? WHERE id=?", sessions, cost, m.id);
-      attachSessions(db, one(db, "SELECT * FROM classes WHERE id=?", m.class_id), m.id, sessions);
+      attachSessions(db, one(db, "SELECT * FROM classes WHERE id=?", m.class_id), m.id, sessions, m.student_id);
       notify(db, m.tutor_id, "package_renewed", { actor: req.user.name, subject: String(sessions), link: `/classes/${m.class_id}` });
+      notifyParents(db, m.student_id, "child_package_renewed", { subject: subjectName(db, m.subject_id), detail: { n: sessions, amount: cost } });
     });
     res.json({ ok: true });
   });
@@ -677,9 +752,13 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       if (!run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=? AND status='scheduled'", id).changes) fail(409, "Buổi học không còn hoạt động.");
       const refunded = all(db, "SELECT m.student_id, m.rate AS amount FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome IN ('pending','disputed')", id);
+      const lesson = one(db, "SELECT cs.starts_at,c.subject_id FROM class_sessions cs JOIN classes c ON c.id=cs.class_id WHERE cs.id=?", id);
       run(db, "UPDATE session_members SET outcome='refunded',note=? WHERE session_id=? AND outcome IN ('pending','disputed')", note, id);
       for (const r of all(db, "SELECT DISTINCT m.student_id,c.tutor_id,c.title,m.class_id FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=?", id))
         for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "session_cancelled", { actor: "Quản trị viên", subject: r.title, link: `/classes/${r.class_id}` });
+      // Parents only of the students whose lesson this actually takes away.
+      for (const r of refunded)
+        notifyParents(db, r.student_id, "child_session_cancelled", { actor: "Quản trị viên", subject: subjectName(db, lesson.subject_id), detail: { when: lesson.starts_at, late: false, charged: false, by: "admin" } });
       audit(req.user.id, "session.admin_cancel", id, { note, refunded });
     });
     upkeep(db);
@@ -699,10 +778,13 @@ export function registerClasses(app, db, auth, audit) {
   app.post("/api/admin/sessions/:id/resolve", auth("admin"), (req, res) => {
     const id = z.coerce.number().int().positive().parse(req.params.id);
     const d = z.object({ member_id: z.number().int().positive(), outcome: z.enum(["confirmed", "refunded"]) }).parse(req.body);
-    const r = one(db, "SELECT sm.*,m.student_id,m.class_id,c.tutor_id,c.title FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
+    const r = one(db, "SELECT sm.*,m.student_id,m.class_id,m.rate,c.tutor_id,c.title,c.subject_id,cs.starts_at FROM session_members sm JOIN class_members m ON m.id=sm.member_id JOIN classes c ON c.id=m.class_id JOIN class_sessions cs ON cs.id=sm.session_id WHERE sm.session_id=? AND sm.member_id=? AND sm.outcome='disputed'", id, d.member_id);
     if (!r) fail(404, "Không tìm thấy báo cáo.");
-    run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
-    for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: `/classes/${r.class_id}` });
+    transaction(db, () => {
+      run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", d.outcome, id, d.member_id);
+      for (const uid of [r.student_id, r.tutor_id]) notify(db, uid, "dispute_resolved", { subject: r.title, link: `/classes/${r.class_id}` });
+      notifyParents(db, r.student_id, "child_dispute_resolved", { subject: subjectName(db, r.subject_id), detail: { when: r.starts_at, outcome: d.outcome, ...(r.rate ? {} : { free: true }) } });
+    });
     audit(req.user.id, `session.resolve.${d.outcome}`, id, { member_id: d.member_id, outcome: d.outcome, user_id: r.student_id });
     upkeep(db);
     res.json({ ok: true });

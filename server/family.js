@@ -3,6 +3,7 @@ import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { wallet } from "./wallet.js";
+import { notifyParents } from "./family-notify.js";
 
 // A parent links to a child's student account with the child's invite code.
 // Linked parents follow the child's classes, money and offers, top up the
@@ -72,7 +73,11 @@ export function registerFamily(app, db, auth) {
   });
   app.delete("/api/family/:id", auth("student"), (req, res) => {
     const other = z.coerce.number().int().positive().parse(req.params.id);
-    run(db, "DELETE FROM family_links WHERE (parent_id=? AND student_id=?) OR (parent_id=? AND student_id=?)", req.user.id, other, other, req.user.id);
+    transaction(db, () => {
+      // When the child ends the link, that parent is told while the link still exists.
+      if (req.user.learner_type !== "parent") notifyParents(db, req.user.id, "child_unlinked", { link: "/family", parentId: other });
+      run(db, "DELETE FROM family_links WHERE (parent_id=? AND student_id=?) OR (parent_id=? AND student_id=?)", req.user.id, other, other, req.user.id);
+    });
     res.json({ ok: true });
   });
 }

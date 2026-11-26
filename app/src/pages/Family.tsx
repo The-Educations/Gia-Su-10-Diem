@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { CalendarDays, Copy, RefreshCw, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { api, money, useApp, useLoad } from "@/lib/api";
@@ -46,6 +46,7 @@ export function StudentCode() {
     <section className="family-code-card">
       <h2>{t("Liên kết với phụ huynh")}</h2>
       <p>{t("Phụ huynh nhập mã này để theo dõi lịch học và nạp tiền cho bạn.")}</p>
+      <p>{t("Phụ huynh được báo khi buổi học bị hủy, dời hoặc báo vấn đề, khi có đề nghị, gia hạn, gói kết thúc và khi bạn rút tiền. Thông báo không kèm tin nhắn, đánh giá riêng hay lý do bạn báo vấn đề.")}</p>
       <div className="family-code">
         <strong>{f.code}</strong>
         <Button variant="ghost" size="icon" aria-label={t("Chép mã")} onClick={() => navigator.clipboard?.writeText(f.code).then(() => toast.success(t("Đã chép")))}><Copy /></Button>
@@ -56,8 +57,26 @@ export function StudentCode() {
   );
 }
 
+// A notice links to /family?child=<id>: bring that card into view and mark it for a moment.
+// A child who is no longer linked has no card, and the page simply shows as usual.
+function useChildFocus(ready: boolean) {
+  const [params] = useSearchParams(), { key } = useLocation(), wanted = Number(params.get("child")) || 0;
+  const [focused, setFocused] = useState(0);
+  useEffect(() => {
+    const card = ready && wanted ? document.getElementById(`child-${wanted}`) : null;
+    if (!card) return;
+    setFocused(wanted);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const frame = requestAnimationFrame(() => card.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" }));
+    const timer = setTimeout(() => setFocused(0), 4000);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); setFocused(0); };
+  }, [ready, wanted, key]);
+  return focused;
+}
+
 export default function FamilyPage() {
   const { user } = useApp(), { t } = useI18n(), result = useLoad<Family>("/family");
+  const focused = useChildFocus(result.data?.role === "parent");
   if (result.loading) return <Loading />;
   if (result.error || !result.data) return <ErrorState error={result.error} retry={result.reload} />;
   if (result.data.role === "student") return <Page><Heading title={t("Gia đình")} /><StudentCode /></Page>;
@@ -68,7 +87,7 @@ export default function FamilyPage() {
       {!kids.length && <Blank title={t("Chưa liên kết với tài khoản của con")} />}
       <div className="family-grid">
         {kids.map((k) => (
-          <article key={k.id} className="family-child">
+          <article key={k.id} id={`child-${k.id}`} className="family-child" data-focus={focused === k.id || undefined}>
             <header>
               <Person name={k.name} id={k.id} />
               <div><strong>{k.name}</strong>{k.school && <small>{k.school}</small>}</div>
