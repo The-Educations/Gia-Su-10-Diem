@@ -1,0 +1,90 @@
+/*
+ * Nền tảng đa trình duyệt và đa thiết bị, dùng chung cho web và kit.
+ * Chép từ repo UI-UX-GIASU10DIEM (tokens/platform.css); nguồn và lý do từng luật: guidelines/platforms.md ở đó.
+ * Bản web bỏ khối chữ 16px trên cảm ứng (web đã có luật riêng, đã đo), khối bàn phím ảo (chưa có thanh dưới data-slot="mobile-nav") và khối reduced-motion (web đã có luật riêng).
+ * Import SAU tailwind và theme.css, TRƯỚC các luật riêng của từng trang.
+ * Mức hỗ trợ tối thiểu (do Tailwind 4): Chrome 111, Safari 16.4, Firefox 128.
+ */
+
+html {
+  /* iOS Safari xoay ngang không tự phóng chữ. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * Ô ngày giờ gốc: iOS bỏ viền, co chiều cao và canh trái khác Android/máy tính.
+ * Ép về cùng một hình dạng với ô nhập khác.
+ */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.5em;
+}
+
+/* Thanh cuộn mỏng cho khung cuộn ngang trên Windows (macOS, iOS dùng thanh nổi nên không ảnh hưởng). */
+:where([class*="overflow-x-auto"], [class*="overflow-y-auto"], [data-scroll]) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--input) transparent;
+}
+
+/* Cuộn trong khung không kéo trang theo. */
+[data-slot="dialog-content"],
+[data-slot="sheet-content"],
+[role="listbox"],
+[data-slot="command-list"] {
+  overscroll-behavior: contain;
+}
+
+/*
+ * Windows High Contrast (forced-colors): trình duyệt đè hết màu nền, nên trạng thái
+ * "đang chọn" chỉ dựa vào màu nền sẽ biến mất. Thêm viền và màu hệ thống.
+ */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  button[data-variant],
+  a[data-variant],
+  [data-slot="button"] {
+    border: 1px solid ButtonText;
+  }
+  [aria-checked="true"],
+  [aria-pressed="true"],
+  [aria-current="page"],
+  [aria-current="step"],
+  [data-state="checked"],
+  [data-state="active"],
+  [data-state="on"],
+  label:has(:checked) {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  [role="radio"][data-state="checked"] > span,
+  [data-slot="progress-indicator"] {
+    background-color: Highlight;
+  }
+  [role="switch"] {
+    border: 1px solid ButtonText;
+  }
+  [role="switch"] > span {
+    background-color: ButtonText;
+  }
+  [disabled],
+  [aria-disabled="true"] {
+    color: GrayText;
+    border-color: GrayText;
+  }
+}
