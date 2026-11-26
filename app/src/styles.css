@@ -170,6 +170,20 @@
 [data-slot="button"]:not(:disabled):active {
   transform: scale(0.98);
 }
+/* Button đặt trong Trigger của Radix (asChild) mất data-slot="button"; data-variant và data-size thì còn.
+   :where() giữ độ ưu tiên bằng 0 để các luật riêng của từng trang (admin 36px) vẫn thắng. */
+:where(button, a):where([data-variant][data-size]) {
+  min-height: 44px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+:where(button, a):where([data-size="icon"], [data-size="icon-lg"]) {
+  min-width: 44px;
+}
+[data-slot="command-input-wrapper"],
+[data-slot="command-input"] {
+  min-height: 44px;
+}
 [data-slot="input"],
 [data-slot="select-trigger"] {
   min-height: 44px;
@@ -232,12 +246,13 @@
   padding: 3px 8px;
 }
 [data-slot="tabs-list"] {
+  min-height: 50px;
   height: 44px;
   background: var(--muted);
   gap: 4px;
 }
 [data-slot="tabs-trigger"] {
-  min-height: 36px;
+  min-height: 44px;
   gap: 8px;
   padding: 0 16px;
 }
