@@ -246,13 +246,12 @@
   padding: 3px 8px;
 }
 [data-slot="tabs-list"] {
-  min-height: 50px;
   height: 44px;
   background: var(--muted);
   gap: 4px;
 }
 [data-slot="tabs-trigger"] {
-  min-height: 44px;
+  min-height: 36px;
   gap: 8px;
   padding: 0 16px;
 }
