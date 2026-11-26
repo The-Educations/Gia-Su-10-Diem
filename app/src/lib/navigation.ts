@@ -59,9 +59,9 @@ export function navigationFor(user: User | null): NavModel {
     const family = item("/family", "Con của tôi", UsersRound, "Con");
     return {
       home: "/workspace",
-      primary: [overview, family, schedule, find, messages],
+      primary: [overview, family, classes, schedule, find, messages],
       groups: [{ label: "Của tôi", items: [wallet, community, news] }],
-      bar: [overview, family, schedule, find],
+      bar: [overview, family, classes, schedule, find],
     };
   }
   return {

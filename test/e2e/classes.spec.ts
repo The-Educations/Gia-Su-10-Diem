@@ -51,3 +51,38 @@ test("an accepted offer opens a class with lessons on the calendar, materials an
   expect(errors).toEqual([]);
   await sc.close(); await tc.close();
 });
+
+test("a parent follows the child's classes read-only on mobile", async ({ page }) => {
+  const made = await (await page.request.post("/__test/session-class", { data: {} })).json();
+  await login(page, "nam");
+  await page.request.put(`/api/sessions/${made.upcoming}/note`, { data: { body: `Ghi chú ${made.slug}` } });
+  await page.request.post(`/api/classes/${made.class_id}/assignments`, { data: { title: `Bài tập ${made.slug}`, note: "", due_at: "", session_id: made.upcoming } });
+  await page.request.post(`/api/classes/${made.class_id}/posts`, { data: { body: `Thông báo ${made.slug}` } });
+  await login(page, "student");
+  const family = await (await page.request.get("/api/family")).json();
+  await login(page, "profile-parent");
+  expect((await page.request.post("/api/family/link", { data: { code: family.code } })).status()).toBe(201);
+
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto("/app/classes");
+  await expect(page.getByRole("link", { name: "Lớp học" }).first()).toBeVisible();
+  await expect(page.locator(".class-card").first()).toBeVisible();
+  await page.goto(`/app/classes/${made.class_id}`);
+  await expect(page.locator(".class-stats-strip")).toBeVisible();
+  await expect(page.locator(".session-row").first()).toBeVisible();
+  await expect(page.locator(".class-posts")).toContainText(`Thông báo ${made.slug}`);
+  await expect(page.locator(".session-note")).toContainText(`Ghi chú ${made.slug}`);
+  for (const name of ["Xác nhận", "Hủy buổi", "Báo vấn đề", "Dời lịch"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Bài tập" }).click();
+  await expect(page.locator(".assignment-submission").first()).toBeVisible();
+  await expect(page.locator(".assignment-submission")).toContainText("Minh Anh");
+  await expect(page.getByRole("button", { name: "Nộp bài" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Giao bài tập" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Bài giảng" }).click();
+  await expect(page.getByRole("button", { name: "Thêm bài giảng" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Gói học" }).click();
+  await expect(page.locator(".member-list")).toContainText("Minh Anh");
+  await expect(page.getByRole("button", { name: /Gia hạn/ })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
