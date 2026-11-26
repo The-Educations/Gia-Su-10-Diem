@@ -3684,7 +3684,7 @@ button.admin-row-title:hover strong { text-decoration: underline; }
 .conversation-search:focus-within { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 25%, transparent); }
 .conversation-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: inherit; font-size: 13.5px; color: var(--foreground); }
 .conversation-filter { display: flex; flex-wrap: wrap; gap: 6px; }
-.conversation-filter button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-size: 12.5px; color: var(--muted-foreground); }
+.conversation-filter button { min-height: 32px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); font-size: 12.5px; color: var(--muted-foreground); }
 .conversation-filter button[aria-pressed="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--card)); color: var(--primary); font-weight: 600; }
 .conversation-none { padding: 18px 14px; font-size: 12.5px; color: var(--muted-foreground); }
 .conversation-list > button { align-items: center; padding: 12px 14px; }
