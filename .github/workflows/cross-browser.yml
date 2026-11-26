@@ -1,0 +1,44 @@
+name: Cross-browser smoke
+
+# Quick pass on Firefox, Safari (WebKit), iPhone and Android profiles. Informational: it is NOT part of
+# the "Validate" gate that branch protection requires, so a browser quirk never blocks a deploy.
+# iPhone and Pixel run on the browser engines with phone viewport and touch emulation; real devices are not tested.
+on:
+  pull_request:
+    branches: [main]
+    paths: [app/**, test/cross-browser/**, playwright.cross-browser.config.ts, .github/workflows/cross-browser.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cross-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [firefox, safari, iphone, android]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps firefox webkit chromium
+      - name: Smoke test on ${{ matrix.project }}
+        run: npx playwright test -c playwright.cross-browser.config.ts --project=${{ matrix.project }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cross-browser-${{ matrix.project }}-${{ github.sha }}
+          path: test-results
+          retention-days: 7
