@@ -14,6 +14,8 @@ import { trustReader } from "../server/trust.js";
 import { migrateClasses } from "../server/classes.js";
 import { contentSnapshot } from "../server/tutor-visibility.js";
 import { wallet } from "../server/wallet.js";
+import { sessionChatEvent } from "../server/chat-media.js";
+import { repairMisplacedChatEvents } from "../server/db.js";
 
 async function fixture(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "giasu-live-")), file = join(dir, "db.sqlite");
@@ -812,4 +814,86 @@ test("startup repair gives a short active package the lessons it is missing, onc
   migrateClasses(db);
   assert.equal(rowsOf(db, member.id).length, 6, "running it again changes nothing");
   assert.equal(notices().length, 2, "and tells nobody twice");
+});
+
+// Lỗi 13: in a group class a student's action reaches only that student's own conversation with the tutor.
+const cards = (db, studentId, tutorId) => all(db, "SELECT m.sender_id,m.body FROM inquiry_messages m JOIN inquiries i ON i.id=m.inquiry_id WHERE i.student_id=? AND i.tutor_id=? AND m.is_event=1 AND m.context_kind IS NULL ORDER BY m.id", studentId, tutorId);
+const groupClass = async (db, b, a, tutor, sb, sa, teacher, sessions = 3) => {
+  const { classId } = await openCourse(db, b, tutor, sb.id, teacher.id, { sessions });
+  const { member } = await openCourse(db, a, tutor, sa.id, teacher.id, { sessions, class_id: classId });
+  return { classId, member, lessons: sessionsOf(db, classId) };
+};
+
+test("group class: what student A does never appears in student B's conversation", async (t) => {
+  const { db, client } = await fixture(t);
+  const b = client(), a = client(), tutor = client();
+  const sb = await b.login("student"), sa = await a.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  const { classId, lessons } = await groupClass(db, b, a, tutor, sb, sa, teacher);
+  const [s1, s2, s3] = lessons;
+  const strayInB = () => cards(db, sb.id, teacher.id).filter((c) => c.sender_id === sa.id);
+  // Cancel a lesson that is still ahead.
+  assert.equal((await a.request(`/sessions/${s1.id}/cancel`, "POST")).status, 200);
+  assert.deepEqual(cards(db, sa.id, teacher.id).map((c) => [c.sender_id, c.body]), [[sa.id, "đã hủy buổi học"]], "A's own thread has the card");
+  // Ask to move another lesson to a free hour.
+  const free = new Date(Date.parse(s3.starts_at) + 10 * DAY_MS + 5 * HOUR_MS).toISOString();
+  assert.equal((await a.request(`/sessions/${s2.id}/move`, "POST", { starts_at: free })).status, 201);
+  assert.ok(cards(db, sa.id, teacher.id).some((c) => c.body === "đã đề nghị dời buổi học"));
+  // The last lesson is over: A confirms it and then reports a problem.
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - 3 * HOUR_MS).toISOString(), s3.id);
+  assert.equal((await a.request(`/sessions/${s3.id}/confirm`, "POST")).status, 200);
+  assert.equal((await a.request(`/sessions/${s3.id}/dispute`, "POST", { reason: "Gia sư vắng mặt" })).status, 200);
+  const mine = cards(db, sa.id, teacher.id).map((c) => c.body);
+  for (const text of ["đã xác nhận buổi học", "đã báo vấn đề buổi học"]) assert.ok(mine.includes(text), `A's thread has "${text}"`);
+  assert.deepEqual(strayInB(), [], "none of it reached B");
+  assert.equal(classId > 0, true);
+});
+
+test("group class: a tutor's action on a whole lesson reaches every student it changed, and only them", async (t) => {
+  const { db, client } = await fixture(t);
+  const b = client(), a = client(), tutor = client();
+  const sb = await b.login("student"), sa = await a.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  const { lessons } = await groupClass(db, b, a, tutor, sb, sa, teacher, 3);
+  const [s1, s2] = lessons;
+  const bodies = (id) => cards(db, id, teacher.id).map((c) => c.body);
+  // The tutor cancels a whole lesson: both students are told, by the tutor.
+  assert.equal((await tutor.request(`/sessions/${s1.id}/cancel`, "POST")).status, 200);
+  for (const id of [sa.id, sb.id]) assert.deepEqual(cards(db, id, teacher.id).filter((c) => c.body === "đã hủy buổi học").map((c) => c.sender_id), [teacher.id]);
+  // A already cancelled lesson 2 (refunded); once it is over the tutor's confirmation only concerns B.
+  assert.equal((await a.request(`/sessions/${s2.id}/cancel`, "POST")).status, 200);
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - 3 * HOUR_MS).toISOString(), s2.id);
+  assert.equal((await tutor.request(`/sessions/${s2.id}/confirm`, "POST")).status, 200);
+  assert.ok(bodies(sb.id).includes("đã xác nhận buổi học"), "B (still waiting) is told");
+  assert.ok(!bodies(sa.id).includes("đã xác nhận buổi học"), "A (already refunded) is not");
+});
+
+test("sessionChatEvent forces a student's card into their own conversation, whatever list it is given", async (t) => {
+  const { db, client } = await fixture(t);
+  const b = client(), a = client(), tutor = client();
+  const sb = await b.login("student"), sa = await a.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  const { lessons } = await groupClass(db, b, a, tutor, sb, sa, teacher, 1);
+  sessionChatEvent(db, lessons[0].id, { id: sa.id, role: "student" }, "thử", [sa.id, sb.id]);
+  assert.deepEqual(cards(db, sa.id, teacher.id).map((c) => c.body), ["thử"]);
+  assert.deepEqual(cards(db, sb.id, teacher.id), [], "B got nothing");
+  sessionChatEvent(db, lessons[0].id, { id: teacher.id, role: "tutor" }, "không ai", []);
+  assert.equal(cards(db, sa.id, teacher.id).length + cards(db, sb.id, teacher.id).length, 1, "an empty list writes nothing");
+});
+
+test("startup repair removes event cards sent by someone outside the conversation, and nothing else", async (t) => {
+  const { db, client } = await fixture(t);
+  const b = client(), a = client(), tutor = client();
+  const sb = await b.login("student"), sa = await a.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  await groupClass(db, b, a, tutor, sb, sa, teacher, 1);
+  const thread = one(db, "INSERT INTO inquiries(student_id,tutor_id) VALUES (?,?) ON CONFLICT DO NOTHING RETURNING id", sb.id, teacher.id)?.id || one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", sb.id, teacher.id).id;
+  const add = (sender, body, isEvent) => Number(run(db, "INSERT INTO inquiry_messages(inquiry_id,sender_id,body,is_event) VALUES (?,?,?,?)", thread, sender, body, isEvent).lastInsertRowid);
+  const stray = add(sa.id, "đã báo vấn đề buổi học", 1);       // A's card in B's conversation: the bug
+  const own = add(sb.id, "đã hủy buổi học", 1);                  // B's own card: valid
+  const tutors = add(teacher.id, "đã xác nhận buổi học", 1);     // the tutor's card: valid
+  const chat = add(sa.id, "tin nhắn thường", 0);                 // not an event: never touched
+  repairMisplacedChatEvents(db);
+  const left = new Set(all(db, "SELECT id FROM inquiry_messages WHERE inquiry_id=?", thread).map((r) => r.id));
+  assert.equal(left.has(stray), false, "the misplaced card is gone");
+  assert.deepEqual([own, tutors, chat].map((id) => left.has(id)), [true, true, true], "valid cards and real messages stay");
+  const count = one(db, "SELECT COUNT(*) n FROM inquiry_messages").n;
+  repairMisplacedChatEvents(db);
+  assert.equal(one(db, "SELECT COUNT(*) n FROM inquiry_messages").n, count, "running it again changes nothing");
 });

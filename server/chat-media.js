@@ -34,12 +34,16 @@ export function insertChatEvent(db, kind, threadId, user, text, context = null, 
     return Number(run(db, `INSERT INTO ${table}(${column},sender_id,body,context_kind,context_id,is_event,event_href) VALUES (?,?,?,?,?,1,?)`, threadId, user.id, text, context?.kind || null, context?.id || null, href).lastInsertRowid);
   return Number(run(db, `INSERT INTO ${table}(${column},sender_id,body,is_event,event_href) VALUES (?,?,?,1,?)`, threadId, user.id, text, href).lastInsertRowid);
 }
-// Every student–tutor pair affected by a class-session change gets a card
-// in their own conversation, so it shows up where they actually talk.
-export function sessionChatEvent(db, sessionId, user, text) {
+// A class-session change leaves a card in the conversation of each student–tutor pair it affects, so it
+// shows up where they actually talk. `studentIds` says which students' conversations: a student's own action
+// only ever goes to their own conversation (enforced here whatever the caller passes), a tutor's action goes to
+// the students it changed. A card never lands in a conversation whose other student did not do or get it.
+export function sessionChatEvent(db, sessionId, user, text, studentIds) {
+  const ids = user.role === "student" ? [user.id] : [...new Set(studentIds || [])];
+  if (!ids.length) return;
   const rows = all(db, `SELECT DISTINCT cm.student_id,c.tutor_id,c.id AS class_id FROM class_sessions cs
     JOIN classes c ON c.id=cs.class_id JOIN session_members sm ON sm.session_id=cs.id
-    JOIN class_members cm ON cm.id=sm.member_id WHERE cs.id=?`, sessionId);
+    JOIN class_members cm ON cm.id=sm.member_id WHERE cs.id=? AND cm.student_id IN (${ids.map(() => "?").join(",")})`, sessionId, ...ids);
   for (const r of rows) {
     run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", r.student_id, r.tutor_id);
     const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", r.student_id, r.tutor_id);

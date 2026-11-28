@@ -284,7 +284,18 @@ export function migrateDatabase(db) {
   migrateFamily(db);
   migrateStudentVerification(db);
   migrateCalendarEvents(db);
+  repairMisplacedChatEvents(db);
   return db;
+}
+
+// sessionChatEvent used to write a student's card into every classmate's conversation with the tutor, so
+// a conversation held cards sent by someone who is not in it. Every other writer of these cards uses one of
+// the two people in the conversation as the sender, so a card from anyone else can only be that bug. Only
+// event cards are removed, never real messages; running it again does nothing.
+export function repairMisplacedChatEvents(db) {
+  db.exec(`DELETE FROM inquiry_messages WHERE is_event=1 AND id IN (
+    SELECT m.id FROM inquiry_messages m JOIN inquiries i ON i.id=m.inquiry_id
+    WHERE m.is_event=1 AND m.sender_id NOT IN (i.student_id, i.tutor_id))`);
 }
 export const all = (db, sql, ...args) => db.prepare(sql).all(...args);
 export const one = (db, sql, ...args) => db.prepare(sql).get(...args);
@@ -325,3 +336,4 @@ export function transaction(db, callback) {
     throw error;
   }
 }
+
