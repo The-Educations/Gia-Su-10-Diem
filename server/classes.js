@@ -316,13 +316,14 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       const { mine, tutor, session } = member(id, req.user);
       if (!ended(session)) fail(409, "Buổi học chưa kết thúc.");
-      for (const r of mine.filter((r) => r.member_id && r.outcome === "pending")) {
+      const confirming = mine.filter((r) => r.member_id && r.outcome === "pending");
+      for (const r of confirming) {
         run(db, `UPDATE session_members SET ${tutor ? "tutor_confirmed_at" : "student_confirmed_at"}=COALESCE(${tutor ? "tutor_confirmed_at" : "student_confirmed_at"},CURRENT_TIMESTAMP) WHERE session_id=? AND member_id=?`, id, r.member_id);
         const now = one(db, "SELECT * FROM session_members WHERE session_id=? AND member_id=?", id, r.member_id);
         if (now.tutor_confirmed_at && now.student_confirmed_at) run(db, "UPDATE session_members SET outcome='confirmed' WHERE session_id=? AND member_id=?", id, r.member_id);
         else notify(db, tutor ? r.student_id : r.tutor_id, "session_confirm", { actor: req.user.name, subject: r.title, link: `/classes/${r.class_id}` });
       }
-      sessionChatEvent(db, id, req.user, "đã xác nhận buổi học");
+      sessionChatEvent(db, id, req.user, "đã xác nhận buổi học", tutor ? confirming.map((r) => r.student_id) : [req.user.id]);
     });
     upkeep(db);
     res.json({ ok: true });
@@ -333,7 +334,8 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       const { mine, tutor, session } = member(id, req.user);
       if (!ended(session)) fail(409, "Chỉ báo vấn đề sau khi buổi học kết thúc.");
-      for (const r of mine.filter((r) => r.outcome === "pending")) {
+      const reported = mine.filter((r) => r.outcome === "pending");
+      for (const r of reported) {
         run(db, "UPDATE session_members SET outcome='disputed',note=? WHERE session_id=? AND member_id=?", reason, id, r.member_id);
         // The parent learns there is a report, never what was written in it.
         notifyParents(db, r.student_id, "child_session_disputed", { subject: subjectName(db, r.subject_id), detail: { when: r.starts_at, by: tutor ? "tutor" : "student" } });
@@ -342,7 +344,7 @@ export function registerClasses(app, db, auth, audit) {
       const thread = one(db, "SELECT id FROM support_threads WHERE user_id=?", req.user.id);
       run(db, "INSERT INTO support_messages(thread_id,sender_id,body) VALUES (?,?,?)", thread.id, req.user.id, `Báo vấn đề buổi học #${id} (${session.title}): ${reason}`);
       for (const a of all(db, "SELECT id FROM users WHERE role='admin' AND status='active'")) notify(db, a.id, "session_disputed", { actor: req.user.name, subject: session.title, link: "/admin?tab=classes" });
-      sessionChatEvent(db, id, req.user, "đã báo vấn đề buổi học");
+      sessionChatEvent(db, id, req.user, "đã báo vấn đề buổi học", tutor ? reported.map((r) => r.student_id) : [req.user.id]);
     });
     res.json({ ok: true });
   });
@@ -355,7 +357,8 @@ export function registerClasses(app, db, auth, audit) {
       const late = Date.parse(session.starts_at) - Date.now() < s.cancel_hours * HOUR;
       // A late cancellation by the student still pays the tutor; a late one by the tutor is a violation.
       const outcome = late && !tutor ? "charged" : "refunded";
-      for (const r of mine.filter((r) => r.outcome === "pending")) {
+      const cancelling = mine.filter((r) => r.outcome === "pending");
+      for (const r of cancelling) {
         run(db, "UPDATE session_members SET outcome=? WHERE session_id=? AND member_id=?", outcome, id, r.member_id);
         notify(db, tutor ? r.student_id : r.tutor_id, "session_cancelled", { actor: req.user.name, subject: r.title, link: `/classes/${r.class_id}` });
         // A free trial costs nothing, however late it is cancelled.
@@ -364,7 +367,7 @@ export function registerClasses(app, db, auth, audit) {
       }
       if (tutor || !one(db, "SELECT 1 FROM session_members WHERE session_id=? AND outcome='pending'", id)) run(db, "UPDATE class_sessions SET status='cancelled' WHERE id=?", id);
       if (tutor && late) run(db, "UPDATE tutors SET violations=violations+1 WHERE user_id=?", req.user.id);
-      sessionChatEvent(db, id, req.user, "đã hủy buổi học");
+      sessionChatEvent(db, id, req.user, "đã hủy buổi học", tutor ? cancelling.map((r) => r.student_id) : [req.user.id]);
       result = { outcome, late };
     });
     upkeep(db);
@@ -382,7 +385,7 @@ export function registerClasses(app, db, auth, audit) {
       run(db, "INSERT INTO session_moves(session_id,requested_by,starts_at) VALUES (?,?,?)", id, req.user.id, starts_at);
       for (const uid of tutor ? [...new Set(rows.map((r) => r.student_id).filter(Boolean))] : [session.tutor_id])
         notify(db, uid, "session_move", { actor: req.user.name, subject: session.title, link: `/classes/${session.class_id}` });
-      sessionChatEvent(db, id, req.user, "đã đề nghị dời buổi học");
+      sessionChatEvent(db, id, req.user, "đã đề nghị dời buổi học", tutor ? rows.filter((r) => r.outcome === "pending").map((r) => r.student_id) : [req.user.id]);
     });
     res.status(201).json({ ok: true });
   });
@@ -407,7 +410,7 @@ export function registerClasses(app, db, auth, audit) {
         for (const r of all(db, "SELECT m.student_id FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE sm.session_id=? AND sm.outcome='pending'", mv.session_id))
           notifyParents(db, r.student_id, "child_session_moved", { subject: subjectName(db, session.subject_id), detail: { from: session.starts_at, when: mv.starts_at } });
       }
-      sessionChatEvent(db, mv.session_id, req.user, accept ? "đã đồng ý dời buổi học" : "đã từ chối dời buổi học");
+      sessionChatEvent(db, mv.session_id, req.user, accept ? "đã đồng ý dời buổi học" : "đã từ chối dời buổi học", req.user.role === "student" ? [req.user.id] : [mv.requested_by]);
       notify(db, mv.requested_by, accept ? "session_moved" : "session_move_declined", { actor: req.user.name, subject: session.title, link: `/classes/${session.class_id}` });
     });
     res.json({ ok: true });
