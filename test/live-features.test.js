@@ -618,3 +618,69 @@ test("a pitch into a 'Tìm gia sư' post is checked the same way and costs no Xu
   assert.equal(xuOf(db, teacher.id), before, "no Xu taken");
   assert.equal((await tutor.request(`/community/posts/${post.data.id}/pitches`, "POST", pitch)).status, 201);
 });
+
+// Lỗi 2 + 17: a free trial is one lesson, never renewable; the renew reminder counts what is really left.
+const openTrial = async (db, student, tutor, studentId, tutorId) => {
+  run(db, "UPDATE tutors SET accepts_trial=1 WHERE user_id=?", tutorId);
+  const sent = await offer(student, tutorId, { trial: true });
+  assert.equal(sent.status, 201, JSON.stringify(sent.data));
+  const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" });
+  assert.equal(accepted.status, 200, JSON.stringify(accepted.data));
+  return { classId: accepted.data.class_id, member: one(db, "SELECT * FROM class_members WHERE class_id=? AND student_id=?", accepted.data.class_id, studentId) };
+};
+
+test("a free trial package cannot be renewed or reminded, and nothing changes", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  fund(db, learner.id);
+  const { classId, member } = await openTrial(db, student, tutor, learner.id, teacher.id);
+  assert.equal(member.rate, 0);
+  const lessons = () => one(db, "SELECT COUNT(*) n FROM session_members WHERE member_id=?", member.id).n;
+  const money = () => one(db, "SELECT available,held FROM wallets WHERE user_id=?", learner.id);
+  const before = { lessons: lessons(), money: money() };
+  const renew = await student.request(`/members/${member.id}/renew`, "POST", { sessions: 20 });
+  assert.equal(renew.status, 409, JSON.stringify(renew.data));
+  assert.match(renew.data.error, /Buổi học thử chỉ có một buổi/);
+  assert.equal(one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, 1);
+  assert.equal(lessons(), before.lessons, "no lesson was added");
+  assert.deepEqual(money(), before.money, "no money moved");
+  const remind = await tutor.request(`/members/${member.id}/remind`, "POST");
+  assert.equal(remind.status, 409, JSON.stringify(remind.data));
+  assert.equal(one(db, "SELECT reminded_at FROM class_members WHERE id=?", member.id).reminded_at, null);
+  // Even a package that somehow has a zero rate is never renewable, trial or not.
+  run(db, "UPDATE proposals SET trial=0 WHERE id=?", member.proposal_id);
+  assert.equal((await student.request(`/members/${member.id}/renew`, "POST", { sessions: 3 })).status, 409);
+  // The class page says it is a trial.
+  const detail = (await student.request(`/classes/${classId}`)).data;
+  assert.equal(detail.members[0].trial, true);
+});
+
+test("an ordinary package can still be renewed and reminded", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { member, cls } = await makeClass(db, student, tutor, learner.id, teacher.id);
+  assert.equal((await tutor.request(`/members/${member.id}/remind`, "POST")).status, 200);
+  assert.equal((await student.request(`/members/${member.id}/renew`, "POST", { sessions: 2 })).status, 200);
+  assert.equal(one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, 4);
+  const detail = (await student.request(`/classes/${cls.id}`)).data;
+  assert.equal(detail.members[0].trial, false);
+});
+
+test("the class page reports the lessons still ahead, not total minus done", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  fund(db, learner.id);
+  const sent = await offer(student, teacher.id, { sessions: 3, schedule: [{ weekday: 2, hour: 18 }] });
+  assert.equal(sent.status, 201, JSON.stringify(sent.data));
+  const classId = (await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept" })).data.class_id;
+  const [first] = sessionsOf(db, classId);
+  let member = (await student.request(`/classes/${classId}`)).data.members[0];
+  assert.deepEqual([member.sessions_total, member.done, member.upcoming], [3, 0, 3]);
+  assert.equal((await student.request(`/sessions/${first.id}/cancel`, "POST")).status, 200);
+  member = (await student.request(`/classes/${classId}`)).data.members[0];
+  assert.equal(member.upcoming, 2, "a cancelled lesson is not 'left'");
+  assert.equal(member.sessions_total - member.done, 3, "the old arithmetic would still say 3");
+});

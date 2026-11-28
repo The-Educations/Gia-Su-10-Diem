@@ -217,17 +217,17 @@ export function ClassDetail() {
         <section className="class-section">
           <ul className="member-list">
             {c.members.map((m) => {
-              const left = m.sessions_total - m.done;
+              const ahead = m.upcoming ?? 0; // lessons still waiting in the future; a cancelled lesson is not "left"
               return (
                 <li key={m.id} data-status={m.status}>
                   <Person name={m.name} id={m.student_id} />
                   <div>
                     <strong>{tutor || parent ? m.name : t("Gói của bạn")}</strong>
-                    <small>{t("{done}/{total} buổi đã học", { done: m.done, total: m.sessions_total })} · {money(m.rate)}/{t("buổi")}{m.status !== "active" && ` · ${t("Đã kết thúc")}`}</small>
+                    <small>{t("{done}/{total} buổi đã học", { done: m.done, total: m.sessions_total })}{m.trial ? ` · ${t("Học thử")}` : ` · ${money(m.rate)}/${t("buổi")}`}{m.status === "active" ? ` · ${t("Còn {n} buổi sắp tới", { n: ahead })}` : ` · ${t("Đã kết thúc")}`}</small>
                     <div className="class-progress"><span style={{ width: `${Math.min(100, (m.done / Math.max(1, m.sessions_total)) * 100)}%` }} /></div>
                   </div>
                   <span className="member-actions">
-                    {tutor && m.status === "active" && left <= 2 && (
+                    {tutor && m.status === "active" && !m.trial && ahead <= 2 && (
                       <Button size="sm" variant="outline" onClick={async () => { try { await api(`/members/${m.id}/remind`, "POST"); toast.success(t("Đã nhắc gia hạn")); } catch (e) { toast.error((e as Error).message); } }}>
                         <BellRing data-icon="inline-start" />{t("Nhắc gia hạn")}
                       </Button>
@@ -240,7 +240,13 @@ export function ClassDetail() {
               );
             })}
           </ul>
-          {me && me.status === "active" && (
+          {me?.trial && (
+            <p className="trial-note" role="note">
+              {t("Đây là buổi học thử. Muốn học tiếp với {name}, hãy gửi đề nghị theo khóa.", { name: c.tutor_name })}{" "}
+              <Button asChild size="sm" variant="outline"><Link to={`/tutors/${c.tutor_id}`}>{t("Gửi đề nghị học tiếp")}</Link></Button>
+            </p>
+          )}
+          {me && !me.trial && me.status === "active" && (
             <form className="renew-form" onSubmit={async (e) => {
               e.preventDefault();
               try { await api(`/members/${me.id}/renew`, "POST", { sessions: renewing }); celebrate(e.currentTarget as HTMLElement); toast.success(t("Đã gia hạn {n} buổi", { n: renewing })); result.reload(); }
