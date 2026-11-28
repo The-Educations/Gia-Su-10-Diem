@@ -398,6 +398,7 @@ export const en: Record<string, string> = {
   "{actor} thêm bài giảng “{subject}”": "{actor} added the material “{subject}”",
   "{actor} nhắc gia hạn lớp {subject}": "{actor} reminds you to renew {subject}",
   "{actor} đã gia hạn {subject} buổi": "{actor} renewed {subject} lessons",
+  "Đã bổ sung {subject} buổi còn thiếu cho gói học": "Added the {subject} missing lessons to your package",
   "{actor} đã kết thúc gói học sớm": "{actor} ended the package early",
   "Gói học đã kết thúc. Bạn có thể để lại nhận xét": "Your package ended. You can leave a comment",
   "Đã chuyển {money} học phí vào số dư": "{money} in lesson fees added to your balance",
