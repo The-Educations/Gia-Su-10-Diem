@@ -457,11 +457,11 @@ test("a free trial is never described as charged or refunded", async (t) => {
   const { childNotice } = await import("../app/src/lib/child-notices.ts");
   const f = await fixture(t), student = await f.login("student"), admin = await f.login("admin"), parent = await f.login("parent");
   run(f.db, "UPDATE tutors SET accepts_trial=1");
-  const trial = async (slug) => (await openClass(student, await f.login(slug), { trial: true, sessions: 1, rate: 0 })).cls;
+  const trial = async (slug, subject_id = "toan") => (await openClass(student, await f.login(slug), { trial: true, sessions: 1, rate: 0, subject_id })).cls; // each tutor teaches their own subject
   const first = await trial("chau");
   f.sessionAt(first.sessions[0].id, HOUR);
   await ok(student.request(`/sessions/${first.sessions[0].id}/cancel`, "POST"));
-  const second = await trial("linh");
+  const second = await trial("linh", "tieng-anh");
   f.sessionAt(second.sessions[0].id, -3 * HOUR);
   await ok(student.request(`/sessions/${second.sessions[0].id}/dispute`, "POST", { reason: "Gia sư vắng mặt" }));
   await ok(admin.request(`/admin/sessions/${second.sessions[0].id}/resolve`, "POST", { member_id: second.members[0].id, outcome: "refunded" }));
