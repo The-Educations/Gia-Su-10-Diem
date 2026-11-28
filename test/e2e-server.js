@@ -130,6 +130,19 @@ app.post("/__test/session-class", express.json(), (req, res) => {
 
 // Test-only: a class with three finished sessions a student can rate, plus an
 // endable membership — used by ratings.spec.ts on the new class flow.
+// A free-trial package (rate 0, one lesson still ahead) so the class page can be checked end to end.
+app.post("/__test/trial-class", express.json(), (req, res) => {
+  const db = openDatabase();
+  try {
+    const student = one(db, "SELECT id FROM users WHERE email=?", `${req.body.student}@demo.giasu.test`);
+    const tutor = one(db, "SELECT id FROM users WHERE email='chau@demo.giasu.test'");
+    const cid = Number(run(db, "INSERT INTO classes(tutor_id,title,subject_id,mode,color,minutes,schedule) VALUES (?,?,?,?,?,?,?)", tutor.id, `Học thử · T${Date.now().toString(36)}`, "toan", "online", "sky", 60, "[]").lastInsertRowid);
+    const mid = Number(run(db, "INSERT INTO class_members(class_id,student_id,sessions_total,rate,held) VALUES (?,?,1,0,0)", cid, student.id).lastInsertRowid);
+    const sid = Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,60)", cid, new Date(Date.now() + 2 * 86400000).toISOString()).lastInsertRowid);
+    run(db, "INSERT INTO session_members(session_id,member_id,outcome) VALUES (?,?,'pending')", sid, mid);
+    res.json({ class_id: cid, member: mid, tutor_id: tutor.id });
+  } finally { db.close(); }
+});
 app.post("/__test/rated-class", express.json(), (req, res) => {
   const db = openDatabase();
   try {

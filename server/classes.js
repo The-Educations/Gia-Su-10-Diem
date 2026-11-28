@@ -229,13 +229,17 @@ export function registerClasses(app, db, auth, audit) {
     return { rows, mine, tutor, session: rows[0] };
   };
   const ended = (s) => Date.parse(s.starts_at) + s.minutes * 60000 <= Date.now();
+  // A free trial is one lesson and costs nothing, so it has nothing to renew. rate 0 is enough on its own
+  // (an ordinary offer is at least 50.000đ a lesson); the proposal's trial flag is checked as well.
+  const isTrialMember = (m) => m.rate <= 0 || !!one(db, "SELECT trial FROM proposals WHERE id=?", m.proposal_id)?.trial;
   const classFor = (id, user) => {
     const c = one(db, "SELECT c.*,t.name AS tutor_name,sub.name AS subject_name FROM classes c JOIN users t ON t.id=c.tutor_id LEFT JOIN subjects sub ON sub.id=c.subject_id WHERE c.id=?", id);
     if (!c) fail(404, "Không tìm thấy lớp.");
     const members = all(db, `SELECT m.*,u.name,
       (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome IN ('confirmed','charged')) AS done,
-      (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome='pending') AS remaining
-      FROM class_members m JOIN users u ON u.id=m.student_id WHERE m.class_id=? ORDER BY m.status, m.id`, id);
+      (SELECT COUNT(*) FROM session_members WHERE member_id=m.id AND outcome='pending') AS remaining,
+      COALESCE((SELECT trial FROM proposals WHERE id=m.proposal_id),0) AS trial
+      FROM class_members m JOIN users u ON u.id=m.student_id WHERE m.class_id=? ORDER BY m.status, m.id`, id).map((m) => ({ ...m, trial: !!m.trial || m.rate === 0 }));
     const kids = childrenOf(db, user.id), mine = (m) => m.student_id === user.id || kids.includes(m.student_id);
     const allowed = c.tutor_id === user.id || members.some(mine) || user.role === "admin";
     if (!allowed) fail(404, "Không tìm thấy lớp.");
@@ -261,6 +265,7 @@ export function registerClasses(app, db, auth, audit) {
     for (const m of c.members) {
       const st = progress.get(m.id) || { minutes_done: 0, upcoming: 0 };
       m.minutes_done = st.minutes_done || 0;
+      m.upcoming = st.upcoming || 0; // lessons still waiting in the future (a cancelled one is not "left")
       m.hours_done = Math.round((m.minutes_done / 60) * 10) / 10;
       m.completion_rate = Math.min(100, Math.round((m.done / Math.max(1, m.sessions_total)) * 100));
       m.paid_total = (m.done || 0) * m.rate;
@@ -419,6 +424,7 @@ export function registerClasses(app, db, auth, audit) {
   app.post("/api/members/:id/remind", auth("tutor"), (req, res) => {
     const m = one(db, "SELECT m.*,c.title,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND c.tutor_id=? AND m.status='active'", req.params.id, req.user.id);
     if (!m) fail(404, "Không tìm thấy học sinh.");
+    if (isTrialMember(m)) fail(409, "Gói học thử không có gia hạn.");
     if (m.reminded_at && Date.now() - Date.parse(m.reminded_at + "Z") < 24 * HOUR) fail(429, "Đã nhắc trong 24 giờ qua.");
     transaction(db, () => {
       run(db, "UPDATE class_members SET reminded_at=CURRENT_TIMESTAMP WHERE id=?", m.id);
@@ -432,6 +438,7 @@ export function registerClasses(app, db, auth, audit) {
     transaction(db, () => {
       const m = one(db, "SELECT m.*,c.tutor_id,c.subject_id FROM class_members m JOIN classes c ON c.id=m.class_id WHERE m.id=? AND m.student_id=? AND m.status='active'", req.params.id, req.user.id);
       if (!m) fail(404, "Gói học đã kết thúc. Gửi đề nghị mới để học tiếp.");
+      if (isTrialMember(m)) fail(409, "Buổi học thử chỉ có một buổi. Gửi đề nghị theo khóa cho gia sư để học tiếp.");
       const cost = sessions * m.rate;
       move(db, req.user.id, "offer_hold", { amount: -cost, held: cost, ref: `member:${m.id}` });
       run(db, "UPDATE class_members SET sessions_total=sessions_total+?,held=held+? WHERE id=?", sessions, cost, m.id);

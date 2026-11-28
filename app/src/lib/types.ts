@@ -362,6 +362,7 @@ export type ClassMember = {
   id: number; class_id: number; student_id: number; name: string; sessions_total: number; rate: number; held: number;
   status: string; done: number; remaining: number; published_rating: number | null; review: string; reminded_at: string | null;
   minutes_done?: number; hours_done?: number; completion_rate?: number; paid_total?: number;
+  trial?: boolean; upcoming?: number; // a free trial package; lessons still waiting in the future
 };
 export type AssignmentSubmission = {
   assignment_id: number; member_id: number; status: "pending" | "submitted" | "reviewed"; note: string; feedback: string;
