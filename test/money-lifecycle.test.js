@@ -9,6 +9,7 @@ import { all, one, run } from "../server/db.js";
 import { seedCatalog, seedDemo } from "../server/seed.js";
 import { createApi } from "../server/api.js";
 import { processPhoto } from "../server/photo.js";
+import { migrateWallet, settings, wallet } from "../server/wallet.js";
 
 async function fixture(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "giasu-money-")), file = join(dir, "db.sqlite");
@@ -340,4 +341,97 @@ test("concurrency: confirm, assign, payout each take effect once", async (t) => 
   const tw2 = await walletOf(tutor);
   assert.equal(tw2.held, 0, "hold released once");
   checkLedger(db, [u.id], "double payout");
+});
+
+// Lỗi 4: Xu are the fee a TUTOR pays for sending an offer; a student's offer never touches them.
+const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const baseOffer = (extra = {}) => ({ subject_id: "toan", mode: "online", sessions: 2, minutes: 60, rate: 200000, schedule: [{ weekday: 2, hour: 18 }], start_date: tomorrow(), ...extra });
+const xu = (db, id) => { const w = one(db, "SELECT credits_free f,credits_paid p FROM wallets WHERE user_id=?", id); return w ? w.f + w.p : 0; };
+const spentFor = (db, proposalId) => all(db, "SELECT * FROM wallet_entries WHERE kind='credits_spent' AND ref=?", `proposal:${proposalId}`);
+// Give a user Xu through the ledger so the invariants keep holding.
+const giveXu = (db, id, n) => { wallet(db, id); run(db, "UPDATE wallets SET credits_free=credits_free+? WHERE user_id=?", n, id); run(db, "INSERT INTO wallet_entries(user_id,kind,credits,ref) VALUES (?,'test_grant',?,'grant')", id, n); };
+const drainXu = (db, id) => { wallet(db, id); const n = xu(db, id); run(db, "UPDATE wallets SET credits_free=0,credits_paid=0 WHERE user_id=?", id); if (n) run(db, "INSERT INTO wallet_entries(user_id,kind,credits,ref) VALUES (?,'test_drain',?,'drain')", id, -n); };
+
+test("a student's offer never spends the tutor's Xu, trial or paid", async (t) => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client();
+  const s = await student.login("student"), u = await tutor.login("chau");
+  grant(db, s.id, 5000000);
+  run(db, "UPDATE tutors SET accepts_trial=1 WHERE user_id=?", u.id);
+  giveXu(db, u.id, 10);
+  const before = xu(db, u.id);
+  // Free trial: no money held, and no Xu taken from the tutor.
+  const trial = await student.request("/proposals", "POST", baseOffer({ tutor_id: u.id, trial: true }));
+  assert.equal(trial.status, 201, JSON.stringify(trial.data));
+  assert.equal(xu(db, u.id), before, "tutor Xu unchanged by a student's trial");
+  assert.equal(spentFor(db, trial.data.id).length, 0, "no credits_spent row for the trial");
+  assert.equal(one(db, "SELECT credits FROM proposals WHERE id=?", trial.data.id).credits, 0);
+  await student.request(`/proposals/${trial.data.id}`, "PATCH", { action: "withdraw" });
+  // A normal offer holds the money and still leaves the Xu alone.
+  const paid = await student.request("/proposals", "POST", baseOffer({ tutor_id: u.id }));
+  assert.equal(paid.status, 201, JSON.stringify(paid.data));
+  assert.equal(xu(db, u.id), before, "tutor Xu unchanged by a student's paid offer");
+  assert.equal(spentFor(db, paid.data.id).length, 0);
+  assert.equal(one(db, "SELECT held FROM proposals WHERE id=?", paid.data.id).held, 400000, "the student's money is held");
+  checkLedger(db, [s.id, u.id], "student offers");
+});
+
+test("a tutor with no Xu cannot block a student's trial request", async (t) => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client();
+  const s = await student.login("student"), u = await tutor.login("chau");
+  run(db, "UPDATE tutors SET accepts_trial=1 WHERE user_id=?", u.id);
+  drainXu(db, u.id);
+  const trial = await student.request("/proposals", "POST", baseOffer({ tutor_id: u.id, trial: true }));
+  assert.equal(trial.status, 201, JSON.stringify(trial.data));
+  assert.equal(xu(db, u.id), 0);
+  checkLedger(db, [s.id, u.id], "no-Xu tutor");
+});
+
+test("a tutor's own offer still costs the tutor offer_credits", async (t) => {
+  const { client, db } = await fixture(t);
+  const student = client(), tutor = client();
+  const s = await student.login("student"), u = await tutor.login("chau");
+  giveXu(db, u.id, 10);
+  const before = xu(db, u.id), cost = settings(db).offer_credits;
+  const sent = await tutor.request("/proposals", "POST", baseOffer({ student_id: s.id }));
+  assert.equal(sent.status, 201, JSON.stringify(sent.data));
+  assert.equal(xu(db, u.id), before - cost);
+  assert.equal(spentFor(db, sent.data.id).length, 1);
+  assert.equal(one(db, "SELECT credits FROM proposals WHERE id=?", sent.data.id).credits, cost);
+  checkLedger(db, [s.id, u.id], "tutor offer");
+  // Out of Xu: the tutor (not the student) is told to buy more.
+  drainXu(db, u.id);
+  await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "withdraw" });
+  const blocked = await tutor.request("/proposals", "POST", baseOffer({ student_id: s.id }));
+  assert.equal(blocked.status, 402);
+  assert.match(blocked.data.error, /Xu/);
+});
+
+test("startup repair refunds Xu once taken for a student's offer, and leaves tutor offers alone", async (t) => {
+  const { client, db } = await fixture(t);
+  const student = client(), chau = client(), linh = client();
+  const s = await student.login("student"), c = await chau.login("chau"), l = await linh.login("linh");
+  run(db, "UPDATE tutors SET accepts_trial=1 WHERE user_id=?", c.id);
+  grant(db, s.id, 3000000);
+  giveXu(db, c.id, 10); giveXu(db, l.id, 10);
+  // What the old code did: a student's trial took 2 Xu from the tutor.
+  const trial = await student.request("/proposals", "POST", baseOffer({ tutor_id: c.id, trial: true }));
+  assert.equal(trial.status, 201, JSON.stringify(trial.data));
+  run(db, "UPDATE wallets SET credits_free=credits_free-2 WHERE user_id=?", c.id);
+  run(db, "INSERT INTO wallet_entries(user_id,kind,credits,ref) VALUES (?,'credits_spent',-2,?)", c.id, `proposal:${trial.data.id}`);
+  // A tutor's own offer legitimately cost Xu.
+  const own = await linh.request("/proposals", "POST", baseOffer({ student_id: s.id }));
+  assert.equal(own.status, 201, JSON.stringify(own.data));
+  const linhAfterOffer = xu(db, l.id), chauBefore = xu(db, c.id);
+  migrateWallet(db);
+  migrateWallet(db);
+  const refunds = all(db, "SELECT * FROM wallet_entries WHERE kind='credits_refunded' AND user_id=?", c.id);
+  assert.equal(refunds.length, 1, "exactly one refund after two runs");
+  assert.deepEqual([refunds[0].credits, refunds[0].ref], [2, `proposal:${trial.data.id}`]);
+  assert.equal(one(db, "SELECT credits_paid FROM wallets WHERE user_id=?", c.id).credits_paid, 2, "refunded as paid Xu (free Xu reset monthly)");
+  assert.equal(xu(db, c.id), chauBefore + 2);
+  assert.equal(xu(db, l.id), linhAfterOffer, "the tutor's own offer is not refunded");
+  assert.equal(all(db, "SELECT 1 FROM wallet_entries WHERE kind='credits_refunded' AND user_id=?", l.id).length, 0);
+  checkLedger(db, [s.id, c.id, l.id], "after repair");
 });
