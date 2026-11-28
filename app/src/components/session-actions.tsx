@@ -21,6 +21,9 @@ const OUTCOME: Record<string, string> = {
   disputed: "Đang xử lý báo cáo",
 };
 
+// How each student's part of a lesson is described when several are listed together (OUTCOME has no "pending").
+export const LESSON_STATUS: Record<string, string> = { ...OUTCOME, pending: "Chờ xác nhận" };
+
 // Everything a person can do with one lesson, shown where the lesson is shown.
 export function SessionActions({ s, onChanged, compact = false }: { s: ClassSession; onChanged: () => void; compact?: boolean }) {
   const { user } = useApp(),

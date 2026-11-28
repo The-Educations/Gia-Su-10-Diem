@@ -7,7 +7,8 @@ import { useI18n } from "@/lib/i18n";
 import { celebrate } from "@/lib/celebrate";
 import type { ClassInfo, ClassSession, User } from "@/lib/types";
 import { Blank, ErrorState, Heading, Loading, Page, Person, Submit } from "@/components/common";
-import { SessionActions, dayOf, timeOf } from "@/components/session-actions";
+import { SessionActions, LESSON_STATUS, dayOf, timeOf } from "@/components/session-actions";
+import { tutorLessons, type TutorLesson } from "@/lib/lesson-rows";
 import { Assignments, ClassMessages, ClassPosts, ClassStats, IcsLink, SessionNote, nextCountdown } from "@/components/class-extras";
 import { WEEKDAYS, timeLabel } from "@/components/proposal-composer";
 import { Button } from "@/components/ui/button";
@@ -159,7 +160,9 @@ export function ClassDetail() {
   const tab = params.get("tab") || "schedule";
   const visibleStudents = new Set(c.members.map((m) => m.student_id));
   const sessions = (c.sessions || []).filter((s) => tutor || visibleStudents.has(s.student_id ?? 0));
-  const lessons = sessions.filter((s, i, a) => a.findIndex((x) => x.id === s.id && (!parent || x.student_id === s.student_id)) === i);
+  // The tutor (not an administrator) sees each lesson as a whole: the row they can still act on, plus every student's state.
+  const asTutor = tutor && user?.role !== "admin";
+  const lessons: ClassSession[] = asTutor ? tutorLessons(sessions) : sessions.filter((s, i, a) => a.findIndex((x) => x.id === s.id && (!parent || x.student_id === s.student_id)) === i);
   const upcoming = lessons.filter((s) => Date.parse(s.starts_at) + s.minutes * 60000 > Date.now() && s.status !== "cancelled");
   const past = lessons.filter((s) => !upcoming.includes(s)).reverse();
   const sessionFor = (s: ClassSession) => s;
@@ -285,7 +288,14 @@ function SessionRow({ s, tutor, onChanged }: { s: ClassSession; tutor: boolean; 
     <li className="session-row" data-color={s.color}>
       <time dateTime={s.starts_at}><strong>{dayOf(s.starts_at)}</strong><span>{timeOf(s.starts_at)}</span></time>
       <div>
-        <span>{tutor || user?.learner_type === "parent" ? s.student_name : s.tutor_name}{s.moved_from && ` · ${t("đã dời lịch")}`}</span>
+        {(s as TutorLesson).students?.length > 1 ? (
+          // A group lesson: say what each student is doing, so a cancelled one does not hide the rest.
+          <ul className="lesson-students">
+            {(s as TutorLesson).students.map((st) => <li key={st.student_id}>{st.student_name} · {t(LESSON_STATUS[st.outcome || "pending"] || "Chờ xác nhận")}</li>)}
+          </ul>
+        ) : (
+          <span>{tutor || user?.learner_type === "parent" ? s.student_name : s.tutor_name}{s.moved_from && ` · ${t("đã dời lịch")}`}</span>
+        )}
         {user?.learner_type !== "parent" && <SessionActions s={s} onChanged={onChanged} />}
         <SessionNote s={s} tutor={tutor} onChanged={onChanged} />
       </div>

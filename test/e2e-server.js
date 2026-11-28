@@ -95,11 +95,12 @@ app.post("/__test/course", express.json(), (req, res) => {
 });
 // Test-only: age a lesson and set its members' outcome, so the admin "Buổi học" queues have work.
 app.post("/__test/class-session", express.json(), (req, res) => {
-  const { session_id, hours_from_now, outcome = "pending", note = "" } = req.body;
+  const { session_id, hours_from_now, outcome = "pending", note = "", keep_outcome = false } = req.body;
   const db = openDatabase();
   try {
     run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() + hours_from_now * 3600000).toISOString(), session_id);
-    run(db, "UPDATE session_members SET outcome=?,note=? WHERE session_id=?", outcome, note || (outcome === "disputed" ? "Gia sư không vào lớp" : ""), session_id);
+    // keep_outcome: only move the lesson in time, leaving each student's own outcome as it is (group classes).
+    if (!keep_outcome) run(db, "UPDATE session_members SET outcome=?,note=? WHERE session_id=?", outcome, note || (outcome === "disputed" ? "Gia sư không vào lớp" : ""), session_id);
     res.json({ ok: true });
   } finally { db.close(); }
 });

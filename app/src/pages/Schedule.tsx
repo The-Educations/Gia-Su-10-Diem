@@ -9,6 +9,7 @@ import type { CalendarEvent, ClassSession, Tutor } from "@/lib/types";
 import { EventDialog, EventPopover, type EventDraft } from "@/components/event-dialog";
 import { ErrorState, Heading, Page } from "@/components/common";
 import { SessionActions, timeOf } from "@/components/session-actions";
+import { tutorLessons } from "@/lib/lesson-rows";
 import { GoogleCalendar } from "@/components/google-calendar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -101,14 +102,16 @@ export default function Schedule() {
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id); }, []);
   const byDay = useMemo(() => {
     const map = new Map<string, Item[]>();
-    // One block per lesson even when a group lesson has several students.
-    const lessons = (result.data || []).filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
+    // One block per lesson even when a group lesson has several students. A tutor's own lessons keep the row
+    // they can still act on (not just the first student's); everyone else sees their own row.
+    const rows = result.data || [], own = rows.filter((s) => user?.role === "tutor" && s.tutor_id === user.id);
+    const lessons = [...tutorLessons(own), ...rows.filter((s) => !own.includes(s)).filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i)];
     for (const item of asItems(lessons, mine).sort((a, b) => a.starts_at.localeCompare(b.starts_at))) {
       const key = vnDate(Date.parse(item.starts_at));
       map.set(key, [...(map.get(key) || []), item]);
     }
     return map;
-  }, [result.data, mine]);
+  }, [result.data, mine, user?.id, user?.role]);
   async function saveEvent(next: CalendarEvent) {
     const before = mine;
     setMine((list) => list.map((e) => (e.id === next.id ? next : e)));
