@@ -684,3 +684,132 @@ test("the class page reports the lessons still ahead, not total minus done", asy
   assert.equal(member.upcoming, 2, "a cancelled lesson is not 'left'");
   assert.equal(member.sessions_total - member.done, 3, "the old arithmetic would still say 3");
 });
+
+// Lỗi 3: renewing N lessons gives the package exactly N new lessons, all after the last one it has.
+const vnSlot = (iso) => { const d = new Date(Date.parse(iso) + 7 * HOUR_MS); return { weekday: (d.getUTCDay() + 6) % 7, hour: d.getUTCHours() }; };
+const rowsOf = (db, memberId) => all(db, "SELECT cs.id,cs.starts_at,sm.outcome FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id WHERE sm.member_id=? ORDER BY cs.starts_at", memberId);
+const openCourse = async (db, student, tutor, studentId, tutorId, extra = {}) => {
+  fund(db, studentId);
+  const sent = await offer(student, tutorId, { sessions: 2, schedule: [{ weekday: 2, hour: 18 }], ...extra });
+  assert.equal(sent.status, 201, JSON.stringify(sent.data));
+  const accepted = await tutor.request(`/proposals/${sent.data.id}`, "PATCH", { action: "accept", ...(extra.class_id ? { class_id: extra.class_id } : {}) });
+  assert.equal(accepted.status, 200, JSON.stringify(accepted.data));
+  return { classId: accepted.data.class_id, member: one(db, "SELECT * FROM class_members WHERE class_id=? AND student_id=?", accepted.data.class_id, studentId) };
+};
+
+test("renewing with lessons still ahead adds exactly the lessons paid for, after the last one", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { member } = await openCourse(db, student, tutor, learner.id, teacher.id);
+  const before = rowsOf(db, member.id), heldBefore = one(db, "SELECT held FROM class_members WHERE id=?", member.id).held;
+  assert.equal((await student.request(`/members/${member.id}/renew`, "POST", { sessions: 4 })).status, 200);
+  const rows = rowsOf(db, member.id);
+  assert.equal(one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, 6);
+  assert.equal(rows.length, 6, "one lesson row per lesson in the package");
+  const last = before.at(-1).starts_at;
+  for (const r of rows.slice(2)) {
+    assert.ok(r.starts_at > last, `${r.starts_at} comes after the old last lesson ${last}`);
+    assert.deepEqual(vnSlot(r.starts_at), { weekday: 2, hour: 18 }, "on the class's own weekly rhythm");
+  }
+  assert.equal(one(db, "SELECT held FROM class_members WHERE id=?", member.id).held, heldBefore + 4 * 180000);
+});
+
+test("renewing with one lesson left, or none ahead, still adds the full number an hour or more from now", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { member } = await openCourse(db, student, tutor, learner.id, teacher.id);
+  const [first, second] = rowsOf(db, member.id);
+  // One lesson left: the first is over and waiting for confirmation, the second is still ahead.
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - 5 * HOUR_MS).toISOString(), first.id);
+  assert.equal((await student.request(`/members/${member.id}/renew`, "POST", { sessions: 3 })).status, 200);
+  assert.equal(rowsOf(db, member.id).length, 5);
+  // None ahead: every lesson is over and waiting for confirmation.
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", new Date(Date.now() - 30 * HOUR_MS).toISOString(), second.id);
+  run(db, "UPDATE class_sessions SET starts_at=? WHERE id IN (SELECT session_id FROM session_members WHERE member_id=? AND session_id NOT IN (?,?))", new Date(Date.now() - 6 * HOUR_MS).toISOString(), member.id, first.id, second.id);
+  assert.equal((await student.request(`/members/${member.id}/renew`, "POST", { sessions: 2 })).status, 200);
+  const rows = rowsOf(db, member.id);
+  assert.equal(one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, 7);
+  assert.equal(rows.length, 7);
+  for (const r of rows.slice(5)) assert.ok(Date.parse(r.starts_at) >= Date.now() + HOUR_MS - 5000, `${r.starts_at} is at least an hour ahead`);
+});
+
+test("renewing after cancelling the last lesson puts the new lessons after the cancelled one", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { member } = await openCourse(db, student, tutor, learner.id, teacher.id);
+  const [, second] = rowsOf(db, member.id);
+  assert.equal((await student.request(`/sessions/${second.id}/cancel`, "POST")).status, 200);
+  assert.equal((await student.request(`/members/${member.id}/renew`, "POST", { sessions: 2 })).status, 200);
+  const rows = rowsOf(db, member.id);
+  assert.equal(rows.length, 4, "rows = sessions_total, the cancelled lesson keeps its row");
+  assert.equal(one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, 4);
+  for (const r of rows.slice(2)) assert.ok(r.starts_at > second.starts_at, "after the cancelled lesson");
+});
+
+test("group class: a renewing student shares the lessons others already have before new ones are made", async (t) => {
+  const { db, client } = await fixture(t);
+  const b = client(), a = client(), tutor = client();
+  const sb = await b.login("student"), sa = await a.login(extraStudent(db, "second-student")), teacher = await tutor.login("chau");
+  const { classId } = await openCourse(db, b, tutor, sb.id, teacher.id, { sessions: 5 });
+  const { member } = await openCourse(db, a, tutor, sa.id, teacher.id, { sessions: 2, class_id: classId });
+  const classLessons = () => one(db, "SELECT COUNT(*) n FROM class_sessions WHERE class_id=?", classId).n;
+  assert.equal(rowsOf(db, member.id).length, 2);
+  assert.equal(classLessons(), 5);
+  // Two more: the next two lessons the class already has, so nothing new is created.
+  assert.equal((await a.request(`/members/${member.id}/renew`, "POST", { sessions: 2 })).status, 200);
+  assert.equal(rowsOf(db, member.id).length, 4);
+  assert.equal(classLessons(), 5, "no new class lessons were needed");
+  // Three more: the class's last lesson is shared, the other two are new and come after it.
+  assert.equal((await a.request(`/members/${member.id}/renew`, "POST", { sessions: 3 })).status, 200);
+  const rows = rowsOf(db, member.id);
+  assert.equal(rows.length, 7);
+  assert.equal(one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, 7);
+  assert.equal(classLessons(), 7, "two lessons were created, one was shared");
+  const classLast = sessionsOf(db, classId).slice(0, 5).at(-1).starts_at;
+  assert.ok(rows[5].starts_at > classLast && rows[6].starts_at > rows[5].starts_at);
+  const bRows = one(db, "SELECT COUNT(*) n FROM session_members sm JOIN class_members m ON m.id=sm.member_id WHERE m.student_id=?", sb.id).n;
+  assert.equal(bRows, 5, "the other student's lessons are untouched");
+});
+
+test("a renewal that would double-book the student is refused and changes nothing", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), chau = client(), nam = client();
+  const learner = await student.login("student"), c = await chau.login("chau"), n = await nam.login("nam");
+  const { member } = await openCourse(db, student, chau, learner.id, c.id);
+  const last = rowsOf(db, member.id).at(-1).starts_at;
+  // A second class with another tutor already holds the hour the first renewal lesson would take.
+  const date = new Date(Date.parse(last) + 7 * DAY_MS + 7 * HOUR_MS).toISOString().slice(0, 10);
+  await openCourse(db, student, nam, learner.id, n.id, { sessions: 1, start_date: date });
+  const before = { total: one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, rows: rowsOf(db, member.id).length, money: one(db, "SELECT available,held FROM wallets WHERE user_id=?", learner.id) };
+  const clash = await student.request(`/members/${member.id}/renew`, "POST", { sessions: 2 });
+  assert.equal(clash.status, 409, JSON.stringify(clash.data));
+  assert.match(clash.data.error, /đã có buổi học khác/);
+  assert.equal(one(db, "SELECT sessions_total FROM class_members WHERE id=?", member.id).sessions_total, before.total);
+  assert.equal(rowsOf(db, member.id).length, before.rows);
+  assert.deepEqual(one(db, "SELECT available,held FROM wallets WHERE user_id=?", learner.id), before.money, "the money held for the renewal was rolled back");
+});
+
+test("startup repair gives a short active package the lessons it is missing, once, and tells both sides", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  const { classId, member } = await openCourse(db, student, tutor, learner.id, teacher.id);
+  // What the old renewal left behind: paid for 6 lessons, scheduled 2.
+  run(db, "UPDATE class_members SET sessions_total=6 WHERE id=?", member.id);
+  // An ended package is history and must not be touched, even if it looks short.
+  const other = (await client().login(extraStudent(db, "second-student"))).id;
+  const endedId = Number(run(db, "INSERT INTO class_members(class_id,student_id,sessions_total,rate,held,status) VALUES (?,?,5,100000,0,'ended')", classId, other).lastInsertRowid);
+  const notices = () => all(db, "SELECT user_id,subject,link FROM notifications WHERE kind='package_repaired' ORDER BY user_id");
+  migrateClasses(db);
+  const rows = rowsOf(db, member.id);
+  assert.equal(rows.length, 6, "the missing lessons were added");
+  assert.ok(rows.slice(2).every((r) => r.starts_at > rows[1].starts_at && Date.parse(r.starts_at) >= Date.now() + HOUR_MS - 5000));
+  assert.deepEqual(notices().map((x) => [x.user_id, x.subject, x.link]).sort(), [[learner.id, "4", `/classes/${classId}`], [teacher.id, "4", `/classes/${classId}`]].sort());
+  assert.equal(rowsOf(db, endedId).length, 0, "the ended package is left alone");
+  migrateClasses(db);
+  assert.equal(rowsOf(db, member.id).length, 6, "running it again changes nothing");
+  assert.equal(notices().length, 2, "and tells nobody twice");
+});

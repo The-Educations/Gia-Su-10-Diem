@@ -85,6 +85,7 @@ const templates: Record<string, [string, LucideIcon]> = {
   class_post_new: ["{actor} đăng thông báo ở lớp {subject}", Bell],
   renew_reminder: ["{actor} nhắc gia hạn lớp {subject}", BookOpen],
   package_renewed: ["{actor} đã gia hạn {subject} buổi", BookOpen],
+  package_repaired: ["Đã bổ sung {subject} buổi còn thiếu cho gói học", BookOpen],
   package_ending: ["{actor} đã kết thúc gói học sớm", BookOpen],
   package_ended: ["Gói học đã kết thúc. Bạn có thể để lại nhận xét", BookOpen],
   package_settled: ["Đã chuyển {money} học phí vào số dư", Wallet],

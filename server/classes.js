@@ -59,6 +59,25 @@ export function migrateClasses(db) {
   for (const [col, ddl] of [["reported", "INTEGER NOT NULL DEFAULT 0"], ["reported_reason", "TEXT"], ["reported_by", "INTEGER"], ["hidden", "INTEGER NOT NULL DEFAULT 0"], ["reply", "TEXT"], ["reply_at", "TEXT"]])
     if (!cm.includes(col)) db.exec(`ALTER TABLE class_members ADD COLUMN ${col} ${ddl}`);
   repairPublishedRatings(db);
+  repairShortPackages(db);
+}
+
+// Renewing used to schedule fewer lessons than were paid for. An active package can only be short because
+// of that, so schedule the missing lessons now (the money for them is still held) and tell both sides.
+// A package that cannot be completed (e.g. a clash) is left for an administrator; nothing is half written.
+function repairShortPackages(db) {
+  const short = all(db, `SELECT m.id,m.class_id,m.student_id,m.sessions_total,COUNT(sm.session_id) AS n FROM class_members m
+    LEFT JOIN session_members sm ON sm.member_id=m.id WHERE m.status='active' GROUP BY m.id HAVING n < m.sessions_total`);
+  for (const m of short) {
+    try {
+      const cls = one(db, "SELECT * FROM classes WHERE id=?", m.class_id);
+      const missing = m.sessions_total - m.n;
+      attachSessions(db, cls, m.id, missing, m.student_id);
+      for (const uid of [m.student_id, cls.tutor_id]) notify(db, uid, "package_repaired", { subject: String(missing), link: `/classes/${m.class_id}` });
+    } catch (e) {
+      console.error("repairShortPackages", m.id, e.message);
+    }
+  }
 }
 
 // Ended packages once averaged stars given to lessons that never happened (cancelled or reported).
@@ -124,22 +143,34 @@ function failOnMoveClash(db, session, rows, startsAt) {
     failOnClash(db, { tutorId: session.tutor_id, studentId, skipSession: session.id, slots: [{ at: startsAt, minutes: session.minutes, tutor: true }] }, "Không thể dời buổi học sang giờ này.");
 }
 
+// Gives a package `count` more lessons. Used when a student joins a class and when a package is renewed.
+//  - New lessons always come after the last lesson the package already has (any outcome), so a renewal
+//    never reuses lessons the student already holds.
+//  - A lesson the class already has (another student's, in a group class) is shared only if this
+//    package is not in it yet; the rest are created after every lesson the class has.
+//  - Nothing starts sooner than an hour from now, and nothing is written unless the whole set fits.
 function attachSessions(db, cls, memberId, count, studentId) {
-  const future = all(db, "SELECT id,starts_at FROM class_sessions WHERE class_id=? AND status='scheduled' AND starts_at>? ORDER BY starts_at", cls.id, new Date().toISOString());
-  const shared = future.slice(0, count), ids = shared.map((s) => s.id);
+  const ownLast = one(db, `SELECT MAX(cs.starts_at) AS at FROM session_members sm JOIN class_sessions cs ON cs.id=sm.session_id WHERE sm.member_id=?`, memberId)?.at;
+  const after = Math.max(ownLast ? Date.parse(ownLast) : 0, Date.now() + HOUR);
+  const shared = all(db, `SELECT cs.id,cs.starts_at FROM class_sessions cs WHERE cs.class_id=? AND cs.status='scheduled' AND cs.starts_at>?
+    AND NOT EXISTS (SELECT 1 FROM session_members sm WHERE sm.session_id=cs.id AND sm.member_id=?) ORDER BY cs.starts_at LIMIT ?`,
+    cls.id, new Date(after).toISOString(), memberId, count);
   let fresh = [];
-  if (ids.length < count) {
-    // New lessons start after the last shared one, and never sooner than an hour from now.
-    const after = Math.max(future.length ? Date.parse(future.at(-1).starts_at) : 0, Date.now() + HOUR);
-    const startDate = new Date(after + 7 * HOUR).toISOString().slice(0, 10);
-    fresh = lessonTimes(JSON.parse(cls.schedule), startDate, count - ids.length, after);
+  if (shared.length < count) {
+    const classLast = one(db, "SELECT MAX(starts_at) AS at FROM class_sessions WHERE class_id=? AND status='scheduled'", cls.id)?.at;
+    const base = Math.max(after, classLast ? Date.parse(classLast) : 0);
+    fresh = lessonTimes(JSON.parse(cls.schedule), new Date(base + 7 * HOUR).toISOString().slice(0, 10), count - shared.length, base);
   }
+  if (shared.length + fresh.length !== count) fail(409, "Không xếp đủ buổi học theo lịch của lớp.");
   failOnClash(db, { tutorId: cls.tutor_id, studentId, skipMember: memberId, slots: [
     ...shared.map((s) => ({ at: s.starts_at, minutes: cls.minutes, tutor: false })),
     ...fresh.map((at) => ({ at, minutes: cls.minutes, tutor: true })),
-  ] }, "Không thể nhận đề nghị này.");
+  ] }, "Không thể xếp thêm buổi học.");
+  const ids = shared.map((s) => s.id);
   for (const at of fresh) ids.push(Number(run(db, "INSERT INTO class_sessions(class_id,starts_at,minutes) VALUES (?,?,?)", cls.id, at, cls.minutes).lastInsertRowid));
-  for (const id of ids) run(db, "INSERT OR IGNORE INTO session_members(session_id,member_id) VALUES (?,?)", id, memberId);
+  // A plain INSERT: a duplicate row would be a bug above and must fail loudly, not be skipped.
+  for (const id of ids) run(db, "INSERT INTO session_members(session_id,member_id) VALUES (?,?)", id, memberId);
+  return ids.length;
 }
 
 // Called inside the transaction that accepts an offer.
