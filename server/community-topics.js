@@ -1,7 +1,7 @@
 import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
-import { proposalSchema } from "./proposals.js";
+import { proposalSchema, failUnlessTeaches } from "./proposals.js";
 import { settings, spendCredits } from "./wallet.js";
 
 // Every post has one topic the author picks. "Tìm gia sư" posts take tutors'
@@ -67,6 +67,7 @@ export function registerCommunityTopics(app, db, auth) {
     if (p.solved) fail(409, "Người đăng đã tìm được gia sư.");
     const { boost, ...rest } = z.object({ boost: z.number().int().min(0).max(50).default(0) }).passthrough().parse(req.body);
     const d = proposalSchema.parse({ ...rest, student_id: p.author_id });
+    failUnlessTeaches(db, req.user.id, d.subject_id, d.mode, true);
     const s = settings(db), cost = s.offer_credits + boost;
     const id = transaction(db, () => {
       if (one(db, "SELECT 1 FROM proposals WHERE post_id=? AND tutor_id=?", p.id, req.user.id)) fail(409, "Bạn đã gửi hồ sơ vào bài này.");

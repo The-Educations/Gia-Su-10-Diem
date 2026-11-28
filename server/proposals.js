@@ -2,7 +2,7 @@ import { all, one, run, transaction } from "./db.js";
 import { z } from "./validation.js";
 import { notify } from "./notifications.js";
 import { notifyParents } from "./family-notify.js";
-import { isLiveTutor } from "./tutor-visibility.js";
+import { isLiveTutor, publicView } from "./tutor-visibility.js";
 import { move, settings, spendCredits, wallet } from "./wallet.js";
 import { startClass } from "./classes.js";
 import { childrenOf } from "./family.js";
@@ -29,6 +29,19 @@ export const proposalSchema = z.object({
   start_date: date.refine((d) => d >= new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10), "Ngày bắt đầu không được ở quá khứ."),
   message: z.string().trim().max(2000).default(""),
 });
+
+// An offer is only valid for a subject and a mode the tutor publicly teaches. "Publicly" means the version
+// students see: while an edit awaits review that is the published snapshot, not the draft. Checked when the
+// offer is sent, not when it is answered: a tutor who drops a subject later still honours what was agreed.
+// `bySelf` is true when the tutor is the sender, so the message speaks to them.
+export function failUnlessTeaches(db, tutorId, subjectId, mode, bySelf) {
+  const t = publicView(one(db, "SELECT status,published,subjects,mode FROM tutors WHERE user_id=?", tutorId));
+  let subjects = [];
+  try { subjects = JSON.parse(t?.subjects || "[]"); } catch { /* treat as none */ }
+  if (!subjects.includes(subjectId)) fail(400, bySelf ? "Môn này chưa có trong hồ sơ của bạn." : "Gia sư không dạy môn này.");
+  if (t.mode !== "both" && t.mode !== mode)
+    fail(400, bySelf ? "Hồ sơ của bạn chưa nhận hình thức học này." : `Gia sư chỉ dạy ${t.mode === "online" ? "trực tuyến" : "trực tiếp"}.`);
+}
 
 export function proposalView(db, rows, viewer) {
   const fee = settings(db).fee_percent;
@@ -64,6 +77,7 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
     if (!one(db, "SELECT 1 FROM subjects WHERE id=? AND archived=0", d.subject_id)) fail(400, "Môn học không có trong danh mục.");
     const tutor = one(db, "SELECT t.status,t.published FROM tutors t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND u.status='active' AND u.role='tutor'", tutorId);
     if (!isLiveTutor(tutor)) fail(409, "Gia sư hiện chưa nhận đề nghị.");
+    failUnlessTeaches(db, tutorId, d.subject_id, d.mode, !byStudent);
     if (!one(db, "SELECT 1 FROM users WHERE id=? AND role='student' AND status='active'", studentId)) fail(409, "Tài khoản học sinh không hoạt động.");
     // A free trial is one 60-minute lesson, once per student and tutor, when the tutor offers trials.
     if (d.trial) {

@@ -421,7 +421,7 @@ test("startup repair refunds Xu once taken for a student's offer, and leaves tut
   run(db, "UPDATE wallets SET credits_free=credits_free-2 WHERE user_id=?", c.id);
   run(db, "INSERT INTO wallet_entries(user_id,kind,credits,ref) VALUES (?,'credits_spent',-2,?)", c.id, `proposal:${trial.data.id}`);
   // A tutor's own offer legitimately cost Xu.
-  const own = await linh.request("/proposals", "POST", baseOffer({ student_id: s.id }));
+  const own = await linh.request("/proposals", "POST", baseOffer({ student_id: s.id, subject_id: "tieng-anh" })); // Linh teaches English
   assert.equal(own.status, 201, JSON.stringify(own.data));
   const linhAfterOffer = xu(db, l.id), chauBefore = xu(db, c.id);
   migrateWallet(db);

@@ -12,6 +12,8 @@ import { createApi } from "../server/api.js";
 import { processPhoto } from "../server/photo.js";
 import { trustReader } from "../server/trust.js";
 import { migrateClasses } from "../server/classes.js";
+import { contentSnapshot } from "../server/tutor-visibility.js";
+import { wallet } from "../server/wallet.js";
 
 async function fixture(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "giasu-live-")), file = join(dir, "db.sqlite");
@@ -433,7 +435,7 @@ test("an offer cannot list weekly slots that overlap each other", async (t) => {
   assert.equal((await sent([{ weekday: 2, hour: 18 }, { weekday: 2, hour: 18 }])).status, 400, "same slot twice");
   assert.equal((await sent([{ weekday: 2, hour: 18, minute: 0 }, { weekday: 2, hour: 18, minute: 30 }])).status, 400, "second slot starts before the first ends");
   assert.equal((await sent([{ weekday: 2, hour: 18 }, { weekday: 4, hour: 18 }])).status, 201, "different days are fine");
-  const ok = await offer(student, (await client().login("linh")).id, { schedule: [{ weekday: 2, hour: 18 }, { weekday: 2, hour: 19 }] });
+  const ok = await offer(student, (await client().login("linh")).id, { subject_id: "tieng-anh", schedule: [{ weekday: 2, hour: 18 }, { weekday: 2, hour: 19 }] });
   assert.equal(ok.status, 201, "back to back lessons do not overlap");
 });
 
@@ -477,7 +479,7 @@ test("a student cannot be booked with two tutors at the same hour", async (t) =>
   const student = client(), chau = client(), linh = client();
   const learner = await student.login("student"), c = await chau.login("chau"), l = await linh.login("linh");
   fund(db, learner.id);
-  const p1 = await offer(student, c.id), p2 = await offer(student, l.id);
+  const p1 = await offer(student, c.id), p2 = await offer(student, l.id, { subject_id: "tieng-anh" }); // each tutor teaches a different subject
   assert.equal(p1.status, 201, JSON.stringify(p1.data)); assert.equal(p2.status, 201, JSON.stringify(p2.data));
   assert.equal((await chau.request(`/proposals/${p1.data.id}`, "PATCH", { action: "accept" })).status, 200);
   const clash = await linh.request(`/proposals/${p2.data.id}`, "PATCH", { action: "accept" });
@@ -531,4 +533,88 @@ test("a move cannot land on a booked hour, and a stale or clashing move cannot b
   run(db, "UPDATE class_sessions SET starts_at=? WHERE id=?", original, mine.id);
   assert.equal((await accept()).status, 200);
   assert.equal(one(db, "SELECT starts_at FROM class_sessions WHERE id=?", mine.id).starts_at, free);
+});
+
+// Lỗi 16: an offer is only valid for a subject and a mode the tutor publicly teaches.
+const xuOf = (db, id) => { const w = wallet(db, id); return w.credits_free + w.credits_paid; };
+const tutorOffers = (db, id, subjects, mode = "both") => run(db, "UPDATE tutors SET subjects=?,mode=? WHERE user_id=?", JSON.stringify(subjects), mode, id);
+
+test("a student's offer must be for a subject and mode the tutor teaches", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  fund(db, learner.id);
+  run(db, "UPDATE tutors SET accepts_trial=1 WHERE user_id=?", teacher.id);
+  const balance = () => one(db, "SELECT available,held FROM wallets WHERE user_id=?", learner.id);
+  const before = balance();
+  tutorOffers(db, teacher.id, ["toan"], "both");
+  const wrongSubject = await offer(student, teacher.id, { subject_id: "tieng-anh" });
+  assert.equal(wrongSubject.status, 400, JSON.stringify(wrongSubject.data));
+  assert.equal(wrongSubject.data.error, "Gia sư không dạy môn này.");
+  assert.deepEqual(balance(), before, "nothing was held");
+  assert.equal((await offer(student, teacher.id, { subject_id: "tieng-anh", trial: true })).status, 400, "a trial is checked too");
+  // Mode: an online-only tutor refuses an in-person offer, and the other way round.
+  tutorOffers(db, teacher.id, ["toan"], "online");
+  const inPerson = await offer(student, teacher.id, { mode: "offline" });
+  assert.equal(inPerson.status, 400, JSON.stringify(inPerson.data));
+  assert.equal(inPerson.data.error, "Gia sư chỉ dạy trực tuyến.");
+  tutorOffers(db, teacher.id, ["toan"], "offline");
+  assert.equal((await offer(student, teacher.id, { mode: "online" })).data.error, "Gia sư chỉ dạy trực tiếp.");
+  assert.deepEqual(balance(), before, "still nothing held");
+  // The right subject and mode go through, and "both" takes either mode.
+  tutorOffers(db, teacher.id, ["toan"], "both");
+  for (const mode of ["online", "offline"]) {
+    const ok = await offer(student, teacher.id, { mode });
+    assert.equal(ok.status, 201, `${mode}: ${JSON.stringify(ok.data)}`);
+    assert.equal((await student.request(`/proposals/${ok.data.id}`, "PATCH", { action: "withdraw" })).status, 200);
+  }
+});
+
+test("a tutor's own offer must be for a subject in their profile, and a refusal costs no Xu", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  tutorOffers(db, teacher.id, ["toan"], "online");
+  const before = xuOf(db, teacher.id);
+  const outside = await tutor.request("/proposals", "POST", { ...baseTutorOffer(learner.id), subject_id: "tieng-anh" });
+  assert.equal(outside.status, 400, JSON.stringify(outside.data));
+  assert.equal(outside.data.error, "Môn này chưa có trong hồ sơ của bạn.");
+  const offline = await tutor.request("/proposals", "POST", { ...baseTutorOffer(learner.id), mode: "offline" });
+  assert.equal(offline.data.error, "Hồ sơ của bạn chưa nhận hình thức học này.");
+  assert.equal(xuOf(db, teacher.id), before, "no Xu taken for a refused offer");
+  assert.equal((await tutor.request("/proposals", "POST", baseTutorOffer(learner.id))).status, 201);
+});
+const baseTutorOffer = (studentId) => ({ student_id: studentId, subject_id: "toan", mode: "online", area: "", level: "cap2", sessions: 2, minutes: 60, rate: 180000, message: "", schedule: [{ weekday: 2, hour: 18 }], start_date: new Date(Date.now() + DAY_MS).toISOString().slice(0, 10) });
+
+test("while an edit awaits review, only the published subjects can be offered", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  fund(db, learner.id);
+  // The tutor added English in a draft that is not approved yet: students still see Toán only.
+  const row = one(db, "SELECT * FROM tutors WHERE user_id=?", teacher.id);
+  run(db, "UPDATE tutors SET published=?,status='pending',subjects=? WHERE user_id=?", contentSnapshot(row), JSON.stringify(["toan", "tieng-anh"]), teacher.id);
+  const draft = await offer(student, teacher.id, { subject_id: "tieng-anh" });
+  assert.equal(draft.status, 400, JSON.stringify(draft.data));
+  assert.equal(draft.data.error, "Gia sư không dạy môn này.");
+  assert.equal((await offer(student, teacher.id, { subject_id: "toan" })).status, 201, "the published subject still works");
+});
+
+test("a pitch into a 'Tìm gia sư' post is checked the same way and costs no Xu when refused", async (t) => {
+  const { db, client } = await fixture(t);
+  const student = client(), tutor = client();
+  const learner = await student.login("student"), teacher = await tutor.login("chau");
+  tutorOffers(db, teacher.id, ["toan"], "online");
+  run(db, "UPDATE users SET display_name='Minh Anh' WHERE id=?", learner.id);
+  const post = await student.request("/community/posts", "POST", { title: "Cần tìm gia sư Toán lớp 9", body: "Em cần gia sư Toán ôn thi vào 10, học online tối thứ 3.", topic: "find_tutor" });
+  assert.equal(post.status, 201, JSON.stringify(post.data));
+  run(db, "UPDATE community_posts SET status='approved',published_at=CURRENT_TIMESTAMP WHERE id=?", post.data.id);
+  const pitch = { subject_id: "toan", mode: "online", sessions: 4, minutes: 90, rate: 180000, schedule: [{ weekday: 1, hour: 19, minute: 0 }], start_date: new Date(Date.now() + DAY_MS).toISOString().slice(0, 10), message: "Cô dạy Toán." };
+  const before = xuOf(db, teacher.id);
+  const wrong = await tutor.request(`/community/posts/${post.data.id}/pitches`, "POST", { ...pitch, subject_id: "tieng-anh" });
+  assert.equal(wrong.status, 400, JSON.stringify(wrong.data));
+  assert.equal(wrong.data.error, "Môn này chưa có trong hồ sơ của bạn.");
+  assert.equal((await tutor.request(`/community/posts/${post.data.id}/pitches`, "POST", { ...pitch, mode: "offline" })).status, 400);
+  assert.equal(xuOf(db, teacher.id), before, "no Xu taken");
+  assert.equal((await tutor.request(`/community/posts/${post.data.id}/pitches`, "POST", pitch)).status, 201);
 });
