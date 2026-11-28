@@ -31,6 +31,8 @@ const KIND: Record<string, string> = {
   platform_fee: "Phí nền tảng",
   lesson_payout: "Học phí đã nhận",
   lesson_refund: "Hoàn học phí",
+  lesson_paid: "Học phí đã trả cho gia sư",
+  credits_refunded: "Hoàn Xu",
 };
 
 // Back from SePay (old hosted-checkout links only): the balance updates when SePay's notice arrives.

@@ -85,6 +85,23 @@ export function migrateWallet(db) {
     CREATE INDEX IF NOT EXISTS gateway_events_invoice ON gateway_events(invoice);
     CREATE INDEX IF NOT EXISTS wallet_entries_ref ON wallet_entries(ref);
     CREATE INDEX IF NOT EXISTS deposits_user ON deposits(user_id)`);
+  repairStudentSentCredits(db);
+}
+
+// A student's free-trial request used to take Xu from the tutor. Give those Xu back, once per offer, as
+// paid Xu (free Xu are reset every month, so a refund there could vanish). Safe to run on every start:
+// an offer that already has a refund row is skipped, and a tutor's own offer is never touched.
+function repairStudentSentCredits(db) {
+  const taken = all(db, `SELECT e.user_id,e.credits,e.ref FROM wallet_entries e JOIN proposals p ON 'proposal:'||p.id=e.ref
+    WHERE e.kind='credits_spent' AND p.sender='student'
+    AND NOT EXISTS (SELECT 1 FROM wallet_entries r WHERE r.kind='credits_refunded' AND r.user_id=e.user_id AND r.ref=e.ref)`);
+  for (const e of taken) {
+    const n = -e.credits;
+    if (n <= 0) continue;
+    run(db, "INSERT OR IGNORE INTO wallets(user_id) VALUES (?)", e.user_id);
+    run(db, "UPDATE wallets SET credits_paid=credits_paid+? WHERE user_id=?", n, e.user_id);
+    run(db, "INSERT INTO wallet_entries(user_id,kind,credits,ref,note) VALUES (?,?,?,?,?)", e.user_id, "credits_refunded", n, e.ref, "Hoàn Xu bị trừ nhầm khi học sinh xin học thử");
+  }
 }
 
 const bankCode = (name) => banks.find((b) => b.name.toLowerCase() === String(name).toLowerCase())?.code || "";

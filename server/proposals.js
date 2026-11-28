@@ -84,8 +84,11 @@ export function registerProposals(app, db, auth, audit, { expireProposals }) {
       const pid = Number(run(db, `INSERT INTO proposals(sender,student_id,tutor_id,subject_id,level,mode,area,sessions,minutes,rate,total,schedule,start_date,message,expires_at,held,credits,trial)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, byStudent ? "student" : "tutor", studentId, tutorId, d.subject_id, d.level, d.mode, d.area, d.sessions, d.minutes, d.rate, total,
         JSON.stringify(d.schedule), d.start_date, d.message, expires, byStudent ? total : 0, byStudent ? 0 : s.offer_credits, Number(d.trial)).lastInsertRowid);
-      if (byStudent && total) move(db, studentId, "offer_hold", { amount: -total, held: total, ref: `proposal:${pid}` });
-      else spendCredits(db, tutorId, s.offer_credits, `proposal:${pid}`);
+      // Xu are the fee a tutor pays for sending an offer. A student's offer holds their own money
+      // (a free trial holds none) and never touches the tutor's Xu.
+      if (byStudent) {
+        if (total) move(db, studentId, "offer_hold", { amount: -total, held: total, ref: `proposal:${pid}` });
+      } else spendCredits(db, tutorId, s.offer_credits, `proposal:${pid}`);
       run(db, "INSERT OR IGNORE INTO inquiries(student_id,tutor_id) VALUES (?,?)", studentId, tutorId);
       const thread = one(db, "SELECT id FROM inquiries WHERE student_id=? AND tutor_id=?", studentId, tutorId);
       insertChatEvent(db, "inquiry", thread.id, req.user, "đã gửi đề nghị học", { kind: "proposal", id: pid });

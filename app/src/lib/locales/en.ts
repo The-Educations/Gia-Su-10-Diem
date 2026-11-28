@@ -338,6 +338,8 @@ export const en: Record<string, string> = {
   "Phí nền tảng": "Platform fee",
   "Học phí đã nhận": "Lesson fees received",
   "Hoàn học phí": "Lesson fee refund",
+  "Học phí đã trả cho gia sư": "Lesson fees paid to the tutor",
+  "Hoàn Xu": "Xu refunded",
   "“{subject}” đã được xác minh": "“{subject}” was verified",
   "“{subject}” cần bổ sung minh chứng": "“{subject}” needs more proof",
   "{actor} gửi bạn đề nghị {subject}": "{actor} sent you an offer for {subject}",
